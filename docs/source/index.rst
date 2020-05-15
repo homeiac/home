@@ -317,12 +317,45 @@ For cross compiling install the following
 
   sudo apt-get install gcc-arm-linux-gnueabi build-essential flex bison
 
+
+
+To resolve the 
+
+``ping: k3smaster1.local: Temporary failure in name resolution``
+
+problem.
+
+Install the following:
+
+.. code-block:: bash
+
+   apt install -y samba libnss-winbind
+   # modify /etc/nsswitch.conf line to add wins after the hosts line
+
+   hosts:          files dns wins
+   networks:       files
+
  
+Developing packer image for raspberry pi
+----------------------------------------
+
+ZFS compiling takes time and would be great if we had an image that ZFS was built in. Trying the instructions from https://github.com/solo-io/packer-builder-arm-image.
+
+``sudo apt install kpartx qemu-user-static``
+
+
 Content of scratch pad
 ----------------------
 
 .. code-block:: bash
 
+
+ # in some distributions the following might help with network issues
+ update-alternatives --set iptables /usr/sbin/iptables-legacy
+ update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+ update-alternatives --set arptables /usr/sbin/arptables-legacy
+ update-alternatives --set ebtables /usr/sbin/ebtables-legacy
+ 
  export SERVER_IP=192.168.0.43
  export IP=192.168.0.43
  export USER=pi
