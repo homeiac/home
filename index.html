@@ -1,0 +1,470 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Welcome to homeiac’s documentation! &#8212; homeiac 0.0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-homeiac-s-documentation">
+<h1>Welcome to homeiac’s documentation!<a class="headerlink" href="#welcome-to-homeiac-s-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="contents">
+<h2>Contents<a class="headerlink" href="#contents" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+</div>
+</div>
+<div class="section" id="home-infrastructure-as-code-homeiac">
+<h2>Home Infrastructure As code (homeiac)<a class="headerlink" href="#home-infrastructure-as-code-homeiac" title="Permalink to this headline">¶</a></h2>
+<p>Documentation on setting up home servers using IaC.</p>
+<div class="section" id="goal">
+<h3>Goal<a class="headerlink" href="#goal" title="Permalink to this headline">¶</a></h3>
+<p>Have home automation and other services available in a secure fashion while having the ability to manage them all via code.</p>
+</div>
+<div class="section" id="hardware">
+<h3>Hardware<a class="headerlink" href="#hardware" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li><p>2 Raspberry PIs - one master and other minion for running management and routing tasks</p></li>
+<li><p>One Windows PC for running heavy duty stuff</p></li>
+</ul>
+</div>
+<div class="section" id="setup">
+<h3>Setup<a class="headerlink" href="#setup" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="setup-master-raspberry-pi">
+<h4>Setup master Raspberry PI<a class="headerlink" href="#setup-master-raspberry-pi" title="Permalink to this headline">¶</a></h4>
+<ul class="simple">
+<li><p>Setup using Raspbian Buster Lite image from <a class="reference external" href="https://www.raspberrypi.org/downloads/raspbian/">https://www.raspberrypi.org/downloads/raspbian/</a></p></li>
+<li><p>change the default password for user PI</p></li>
+</ul>
+</div>
+<div class="section" id="setup-k3s-kubernetes">
+<h4>Setup k3s (Kubernetes)<a class="headerlink" href="#setup-k3s-kubernetes" title="Permalink to this headline">¶</a></h4>
+<p>Enable cgroup support by adding ‘cgroup_memory=1 cgroup_enable=memory’ in /boot/cmdline.txt</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">cgroup_memory</span><span class="o">=</span><span class="m">1</span> <span class="nv">cgroup_enable</span><span class="o">=</span>memory
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cat /boot/cmdline.txt
+dwc_otg.lpm_enable<span class="o">=</span><span class="m">0</span> <span class="nv">console</span><span class="o">=</span>serial0,115200 <span class="nv">console</span><span class="o">=</span>tty1 <span class="nv">root</span><span class="o">=</span><span class="nv">PARTUUID</span><span class="o">=</span>6f18a865-02 <span class="nv">rootfstype</span><span class="o">=</span>ext4 <span class="nv">elevator</span><span class="o">=</span>deadline fsck.repair<span class="o">=</span>yes rootwait <span class="nv">cgroup_memory</span><span class="o">=</span><span class="m">1</span> <span class="nv">cgroup_enable</span><span class="o">=</span>memory
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl -sfL https://get.k3s.io <span class="p">|</span> sh -
+</pre></div>
+</div>
+<p>The instructions are from <a class="reference external" href="https://opensource.com/article/20/3/kubernetes-raspberry-pi-k3s">https://opensource.com/article/20/3/kubernetes-raspberry-pi-k3s</a></p>
+</div>
+<div class="section" id="setup-helm">
+<h4>Setup helm<a class="headerlink" href="#setup-helm" title="Permalink to this headline">¶</a></h4>
+<p>From <a class="reference external" href="https://helm.sh/docs/intro/install/">https://helm.sh/docs/intro/install/</a></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+chmod <span class="m">700</span> get_helm.sh
+./get_helm.sh
+
+<span class="c1"># add the repos</span>
+helm repo add stable https://kubernetes-charts.storage.googleapis.com/
+helm repo add bitnami https://charts.bitnami.com/bitnami
+</pre></div>
+</div>
+</div>
+<div class="section" id="setup-cloudflare-for-dynamic-dns">
+<h4>Setup cloudflare for dynamic DNS<a class="headerlink" href="#setup-cloudflare-for-dynamic-dns" title="Permalink to this headline">¶</a></h4>
+<p>After setting up account in cloudflare, get the api token from <a class="reference external" href="https://dash.cloudflare.com/profile/api-tokens">https://dash.cloudflare.com/profile/api-tokens</a></p>
+<p>Use k8s yaml cloudflare-ddns-deployment.yaml to run <a class="reference external" href="https://hub.docker.com/r/oznu/cloudflare-ddns/">https://hub.docker.com/r/oznu/cloudflare-ddns/</a> image</p>
+</div>
+<div class="section" id="setup-minion-for-k3s">
+<h4>Setup minion for k3s<a class="headerlink" href="#setup-minion-for-k3s" title="Permalink to this headline">¶</a></h4>
+<p>Follow instructions in <a class="reference external" href="https://www.raspberrypi.org/documentation/hardware/raspberrypi/bootmodes/net_tutorial.md">https://www.raspberrypi.org/documentation/hardware/raspberrypi/bootmodes/net_tutorial.md</a></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo mkdir -p /nfs/client1
+sudo apt install rsync
+sudo rsync -xa --progress --exclude /nfs / /nfs/client1
+</pre></div>
+</div>
+<p>After many attempts and a all-nighter, was not able to make Raspberry Model B Rev 2 to work (either as a tftp client _or_ a k3s node (it was not able to start any pods) ).</p>
+</div>
+<div class="section" id="setup-letsencrypt-traefik">
+<h4>Setup LetsEncrypt + Traefik<a class="headerlink" href="#setup-letsencrypt-traefik" title="Permalink to this headline">¶</a></h4>
+<ul class="simple">
+<li><p>Traefik is already setup with k3s - so no additional work is required for that per se</p></li>
+</ul>
+<p>Following instructions on <a class="reference external" href="https://opensource.com/article/20/3/ssl-letsencrypt-k3s">https://opensource.com/article/20/3/ssl-letsencrypt-k3s</a> for setting up LetsEncrypt</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span> kubectl create namespace cert-manager
+ curl -sL <span class="se">\</span>
+https://github.com/jetstack/cert-manager/releases/download/v0.11.0/cert-manager.yaml <span class="p">|</span><span class="se">\</span>
+sed -r <span class="s1">&#39;s/(image:.*):(v.*)$/\1-arm:\2/g&#39;</span> &gt; cert-manager-arm.yaml
+ <span class="c1"># change example.com to home.minibloks.com... don&#39;t know whether this really made a difference</span>
+ <span class="c1"># changing this showed the padlock icon in chrome</span>
+ sed -r <span class="s1">&#39;s/example.com/home.minibloks.com/g&#39;</span> cert-manager-arm.yaml &gt; cert-manager-arm.yaml
+ kubectl apply -f cert-manager-arm.yaml
+</pre></div>
+</div>
+<p>Modify the letsencrypt-issuer-staging.yaml with the following Contents
+Required only if you want to testing… For prod you can skip the below</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">cert-manager.io/v1alpha2</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+<span class="nt">metadata</span><span class="p">:</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">letsencrypt-staging</span>
+<span class="nt">spec</span><span class="p">:</span>
+  <span class="nt">acme</span><span class="p">:</span>
+   <span class="c1"># The ACME server URL</span>
+   <span class="nt">server</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">https://acme-staging-v02.api.letsencrypt.org/directory</span>
+   <span class="c1"># Email address used for ACME registration</span>
+   <span class="nt">email</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">g_skumar@yahoo.com</span>
+   <span class="c1"># Name of a secret used to store the ACME account private key</span>
+   <span class="nt">privateKeySecretRef</span><span class="p">:</span>
+     <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">letsencrypt-staging</span>
+   <span class="c1"># Enable the HTTP-01 challenge provider</span>
+   <span class="nt">solvers</span><span class="p">:</span>
+   <span class="p p-Indicator">-</span> <span class="nt">http01</span><span class="p">:</span>
+       <span class="nt">ingress</span><span class="p">:</span>
+         <span class="nt">class</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">traefik</span>
+</pre></div>
+</div>
+<p>Run the command</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo kubectl apply -f letsencrypt-issuer-staging.yaml
+</pre></div>
+</div>
+<p>Create the certificate yaml le-test-certificate.yaml</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">cert-manager.io/v1alpha2</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Certificate</span>
+<span class="nt">metadata</span><span class="p">:</span>
+ <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">home-minibloks-net</span>
+ <span class="nt">namespace</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+ <span class="nt">secretName</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">home-minibloks-net-tls</span>
+ <span class="nt">issuerRef</span><span class="p">:</span>
+   <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">letsencrypt-staging</span>
+   <span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+ <span class="nt">commonName</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">home.minibloks.com</span>
+ <span class="nt">dnsNames</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">home.minibloks.com</span>
+</pre></div>
+</div>
+<p>Run the command</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo kubectl apply -f le-test-certificate.yaml
+</pre></div>
+</div>
+<p>Create the letsencrypt-issuer-prod.yaml</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">cert-manager.io/v1alpha2</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="nt">acme</span><span class="p">:</span>
+    <span class="c1"># The ACME server URL</span>
+    <span class="nt">server</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">https://acme-v02.api.letsencrypt.org/directory</span>
+    <span class="c1"># Email address used for ACME registration</span>
+    <span class="nt">email</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">g_skumar@yahoo.com</span>
+    <span class="c1"># Name of a secret used to store the ACME account private key</span>
+    <span class="nt">privateKeySecretRef</span><span class="p">:</span>
+    <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod</span>
+    <span class="c1"># Enable the HTTP-01 challenge provider</span>
+    <span class="nt">solvers</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="nt">http01</span><span class="p">:</span>
+        <span class="nt">ingress</span><span class="p">:</span>
+        <span class="nt">class</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">traefik</span>
+</pre></div>
+</div>
+<p>Apply it</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">sudo kubectl apply -f letsencrypt-issuer-prod.yaml</span>
+</pre></div>
+</div>
+<p>Create the sample site (optional):</p>
+<div class="highlight-html notranslate"><div class="highlight"><pre><span></span><span class="p">&lt;</span><span class="nt">html</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">head</span><span class="p">&gt;&lt;</span><span class="nt">title</span><span class="p">&gt;</span>K3S!<span class="p">&lt;/</span><span class="nt">title</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">style</span><span class="p">&gt;</span>
+    <span class="nt">html</span> <span class="p">{</span>
+      <span class="k">font-size</span><span class="p">:</span> <span class="mf">62.5</span><span class="kt">%</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="nt">body</span> <span class="p">{</span>
+      <span class="k">font-family</span><span class="p">:</span> <span class="kc">sans-serif</span><span class="p">;</span>
+      <span class="k">background-color</span><span class="p">:</span> <span class="kc">midnightblue</span><span class="p">;</span>
+      <span class="k">color</span><span class="p">:</span> <span class="kc">white</span><span class="p">;</span>
+      <span class="k">display</span><span class="p">:</span> <span class="kc">flex</span><span class="p">;</span>
+      <span class="k">flex-direction</span><span class="p">:</span> <span class="kc">column</span><span class="p">;</span>
+      <span class="k">justify-content</span><span class="p">:</span> <span class="kc">center</span><span class="p">;</span>
+      <span class="k">height</span><span class="p">:</span> <span class="mi">100</span><span class="kt">vh</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="nt">div</span> <span class="p">{</span>
+      <span class="k">text-align</span><span class="p">:</span> <span class="kc">center</span><span class="p">;</span>
+      <span class="k">font-size</span><span class="p">:</span> <span class="mi">8</span><span class="kt">rem</span><span class="p">;</span>
+      <span class="k">text-shadow</span><span class="p">:</span> <span class="mi">3</span><span class="kt">px</span> <span class="mi">3</span><span class="kt">px</span> <span class="mi">4</span><span class="kt">px</span> <span class="kc">dimgrey</span><span class="p">;</span>
+    <span class="p">}</span>
+  <span class="p">&lt;/</span><span class="nt">style</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">head</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">body</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">div</span><span class="p">&gt;</span>Hello from K3S!<span class="p">&lt;/</span><span class="nt">div</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">body</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">html</span><span class="p">&gt;</span>
+</pre></div>
+</div>
+<p>Create a configMap out of it.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo kubectl create configmap mysite-html --from-file index.html
+</pre></div>
+</div>
+<p>Deploy the site using the following yaml, which has the required traefik tls ingress changes</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Deployment</span>
+<span class="nt">metadata</span><span class="p">:</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx</span>
+  <span class="nt">labels</span><span class="p">:</span>
+    <span class="nt">app</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx</span>
+<span class="nt">spec</span><span class="p">:</span>
+  <span class="nt">replicas</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+  <span class="nt">selector</span><span class="p">:</span>
+    <span class="nt">matchLabels</span><span class="p">:</span>
+      <span class="nt">app</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx</span>
+  <span class="nt">template</span><span class="p">:</span>
+    <span class="nt">metadata</span><span class="p">:</span>
+      <span class="nt">labels</span><span class="p">:</span>
+        <span class="nt">app</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx</span>
+    <span class="nt">spec</span><span class="p">:</span>
+      <span class="nt">containers</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">nginx</span>
+        <span class="nt">image</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">nginx</span>
+        <span class="nt">ports</span><span class="p">:</span>
+        <span class="p p-Indicator">-</span> <span class="nt">containerPort</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">80</span>
+        <span class="nt">volumeMounts</span><span class="p">:</span>
+        <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">html-volume</span>
+          <span class="nt">mountPath</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">/usr/share/nginx/html</span>
+      <span class="nt">volumes</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">html-volume</span>
+        <span class="nt">configMap</span><span class="p">:</span>
+          <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-html</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Service</span>
+<span class="nt">metadata</span><span class="p">:</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx-service</span>
+<span class="nt">spec</span><span class="p">:</span>
+  <span class="nt">selector</span><span class="p">:</span>
+    <span class="nt">app</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx</span>
+  <span class="nt">ports</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="nt">protocol</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">TCP</span>
+      <span class="nt">port</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">80</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1beta1</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Ingress</span>
+<span class="nt">metadata</span><span class="p">:</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx-ingress</span>
+  <span class="nt">annotations</span><span class="p">:</span>
+    <span class="nt">kubernetes.io/ingress.class</span><span class="p">:</span> <span class="s">&quot;traefik&quot;</span>
+    <span class="nt">cert-manager.io/cluster-issuer</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod</span>
+<span class="nt">spec</span><span class="p">:</span>
+  <span class="nt">rules</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">host</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">home.minibloks.com</span>
+    <span class="nt">http</span><span class="p">:</span>
+      <span class="nt">paths</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="nt">path</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">/</span>
+        <span class="nt">backend</span><span class="p">:</span>
+          <span class="nt">serviceName</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mysite-nginx-service</span>
+          <span class="nt">servicePort</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">80</span>
+  <span class="nt">tls</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">hosts</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">home.minibloks.com</span>
+    <span class="nt">secretName</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">home-minibloks-com-tls</span>
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="section" id="structure">
+<h2>Structure<a class="headerlink" href="#structure" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>&lt;host-name&gt;/
+     /etc/
+         rc.local
+     /home/
+         ip_display.py
+     /&lt;folder&gt;/
+         files
+</pre></div>
+</div>
+<p>Open <a class="reference external" href="https://home.minibloks.com/">https://home.minibloks.com/</a> and profit!</p>
+</div>
+<div class="section" id="additional-hints">
+<h2>Additional Hints<a class="headerlink" href="#additional-hints" title="Permalink to this headline">¶</a></h2>
+<p>For cross compiling install the following</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo apt-get install gcc-arm-linux-gnueabi build-essential flex bison
+</pre></div>
+</div>
+<p>To resolve the</p>
+<p><code class="docutils literal notranslate"><span class="pre">ping:</span> <span class="pre">k3smaster1.local:</span> <span class="pre">Temporary</span> <span class="pre">failure</span> <span class="pre">in</span> <span class="pre">name</span> <span class="pre">resolution</span></code></p>
+<p>problem.</p>
+<p>Install the following:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>apt install -y samba libnss-winbind
+<span class="c1"># modify /etc/nsswitch.conf line to add wins after the hosts line</span>
+
+hosts:          files dns wins
+networks:       files
+</pre></div>
+</div>
+</div>
+<div class="section" id="developing-packer-image-for-raspberry-pi">
+<h2>Developing packer image for raspberry pi<a class="headerlink" href="#developing-packer-image-for-raspberry-pi" title="Permalink to this headline">¶</a></h2>
+<p>ZFS compiling takes time and would be great if we had an image that ZFS was built in. Trying the instructions from <a class="reference external" href="https://github.com/solo-io/packer-builder-arm-image">https://github.com/solo-io/packer-builder-arm-image</a>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt</span> <span class="pre">install</span> <span class="pre">kpartx</span> <span class="pre">qemu-user-static</span></code></p>
+</div>
+<div class="section" id="content-of-scratch-pad">
+<h2>Content of scratch pad<a class="headerlink" href="#content-of-scratch-pad" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># in some distributions the following might help with network issues</span>
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+update-alternatives --set arptables /usr/sbin/arptables-legacy
+update-alternatives --set ebtables /usr/sbin/ebtables-legacy
+
+<span class="nb">export</span> <span class="nv">SERVER_IP</span><span class="o">=</span><span class="m">192</span>.168.0.43
+<span class="nb">export</span> <span class="nv">IP</span><span class="o">=</span><span class="m">192</span>.168.0.43
+<span class="nb">export</span> <span class="nv">USER</span><span class="o">=</span>pi
+<span class="nb">export</span> <span class="nv">NEXT_SERVER_IP</span><span class="o">=</span><span class="m">192</span>.168.0.46
+<span class="nb">export</span> <span class="nv">NEXT_MASTER_SERVER_IP</span><span class="o">=</span><span class="m">192</span>.168.0.17
+
+curl -ssL https://get.k3sup.dev <span class="p">|</span> sudo sh
+curl -sLS https://dl.get-arkade.dev <span class="p">|</span> sh
+sudo install arkade /usr/local/bin/
+
+k3sup install <span class="se">\</span>
+ --ip <span class="nv">$SERVER_IP</span> <span class="se">\</span>
+ --user <span class="nv">$USER</span> <span class="se">\</span>
+ --cluster
+
+<span class="nb">export</span> <span class="nv">KUBECONFIG</span><span class="o">=</span><span class="sb">`</span><span class="nb">pwd</span><span class="sb">`</span>/kubeconfig
+kubectl get node
+
+k3sup join <span class="se">\</span>
+ --ip <span class="nv">$NEXT_SERVER_IP</span> <span class="se">\</span>
+ --user <span class="nv">$USER</span> <span class="se">\</span>
+ --server-user <span class="nv">$USER</span> <span class="se">\</span>
+ --server-ip <span class="nv">$SERVER_IP</span> <span class="se">\</span>
+ --server
+
+<span class="nb">export</span> <span class="nv">KUBECONFIG</span><span class="o">=</span><span class="sb">`</span><span class="nb">pwd</span><span class="sb">`</span>/kubeconfig
+kubectl get node
+
+adduser pi
+pi <span class="nv">ALL</span><span class="o">=(</span>ALL<span class="o">)</span> NOPASSWD:ALL
+pi@k3smaster1:~$ cp /vagrant/rp_id* .
+pi@k3smaster1:~$ mkdir .ssh
+pi@k3smaster1:~$ mv rp_id* .ssh/
+pi@k3smaster1:~$ <span class="nb">cd</span> .ssh/
+pi@k3smaster1:~/.ssh$ ls -lth
+pi@k3smaster1:~/.ssh$ chmod <span class="m">600</span> *
+pi@k3smaster1:~/.ssh$ mv rp_id_rsa.pub id_rsa.pub
+pi@k3smaster1:~/.ssh$ mv rp_idrsa id_rsa
+pi@k3smaster1:~/.ssh$ cat id_rsa.pub &gt;authorized_keys
+
+
+<span class="c1"># copy the keys and to authorized_keys in all the hosts</span>
+
+<span class="c1"># run this on the *real* master</span>
+k3sup join <span class="se">\</span>
+ --ip <span class="nv">$NEXT_MASTER_SERVER_IP</span> <span class="se">\</span>
+ --user <span class="nv">$USER</span> <span class="se">\</span>
+ --server-user <span class="nv">$USER</span> <span class="se">\</span>
+ --server-ip <span class="nv">$SERVER_IP</span> <span class="se">\</span>
+ --server
+
+kubectl get node
+
+docker run <span class="se">\</span>
+ -e <span class="nv">API_KEY</span><span class="o">=</span><span class="s2">&quot;xxxx&quot;</span> <span class="se">\</span>
+ -e <span class="nv">ZONE</span><span class="o">=</span>minibloks.com <span class="se">\</span>
+ -e <span class="nv">SUBDOMAIN</span><span class="o">=</span>home <span class="se">\</span>
+ oznu/cloudflare-ddns
+</pre></div>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">homeiac</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, gshiva.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
