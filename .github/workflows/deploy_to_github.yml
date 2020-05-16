@@ -1,0 +1,3 @@
+- name: Deploy to GitHub Pages - Python
+  uses: JacksonMaxfield/github-pages-deploy-action-python@2.1.0
+
