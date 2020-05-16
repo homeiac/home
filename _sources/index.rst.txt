@@ -311,6 +311,15 @@ Open https://home.minibloks.com/ and profit!
 Additional Hints
 ----------------
 
+Ability to run github actions locally totally rocks!!!
+
+See https://github.com/nektos/act 
+
+``brew install nektos/tap/act``
+
+then go to your folder and
+``act -s ACCESS_TOKEN=<access_token_secret>``
+
 For cross compiling install the following
 
 .. code-block:: bash
