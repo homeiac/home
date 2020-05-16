@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+# code modified, tweaked and tailored from code by bertwert 
+# on RPi forum thread topic 91796
+
+import RPi.GPIO as GPIO
+import time
+
+# GPIO ports for the 7seg pins
+# 7seg_segment_pins (11, 7, 4, 2, 1, 10, 5, 3) +  resistor inline
+
+segments = (11, 4, 23, 8, 7, 10, 18, 25)
+
+# GPIO ports for the digit 0-3 pins 
+# 7seg_digit_pins (12, 9, 8, 6) digits 0-3 respectively
+
+digits = (22, 27, 17, 24)
+
+# Confusingly,
+#   HIGH = Segment OFF
+#   LOW  = Segment ON
+
+num = {
+    ' ': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    '0': (GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.HIGH),
+    '1': (GPIO.HIGH, GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    '2': (GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.LOW),
+    '3': (GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
+    '4': (GPIO.HIGH, GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.HIGH, GPIO.LOW,  GPIO.LOW),
+    '5': (GPIO.LOW,  GPIO.HIGH, GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.LOW,  GPIO.LOW),
+    '6': (GPIO.LOW,  GPIO.HIGH, GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW),
+    '7': (GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    '8': (GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW),
+    '9': (GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.LOW,  GPIO.HIGH, GPIO.LOW,  GPIO.LOW)
+}
+
+alpha = {
+    'A': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH),
+    'a': (GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'b': (GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'C': (GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW),
+    'c': (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH),
+    'd': (GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'E': (GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH),
+    'F': (GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH),
+    'g': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'H': (GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH),
+    'h': (GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH),
+    'I': (GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW),
+    'i': (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW),
+    'J': (GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
+    'L': (GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.LOW),
+    'n': (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH),
+    'O': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
+    'o': (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'P': (GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH),
+    'r': (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH),
+    'S': (GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'U': (GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
+    'u': (GPIO.LOW, GPIO.LOW, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH, GPIO.LOW),
+    'y': (GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.HIGH),
+    'Z': (GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH, GPIO.LOW, GPIO.HIGH, GPIO.HIGH)
+}
+
+ 
+# Strobe a select pin high
+
+def strobe_high(pin):
+    GPIO.output(pin, GPIO.HIGH)
+    time.sleep(0.001)
+    GPIO.output(pin, GPIO.LOW)
+
+
+# Initialise the GPIO ports
+
+GPIO.setmode(GPIO.BCM)
+
+for segment in segments:
+    GPIO.setup(segment, GPIO.OUT, initial=GPIO.HIGH)
+
+for digit in digits:
+    GPIO.setup(digit, GPIO.OUT, initial=GPIO.LOW)
+ 
+try:
+    while True:
+
+        for digit in range(4):
+
+            for loop in range(7):
+                GPIO.output(segments[loop], num[tmstr[digit]][loop])
+
+            strobe_high(digits[digit])
+
+finally:
+    GPIO.cleanup()
+
+

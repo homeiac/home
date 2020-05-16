@@ -1,0 +1,6 @@
+[submodule "scripts/luma.led_matrix"]
+	path = scripts/luma.led_matrix
+	url = https://github.com/rm-hull/luma.led_matrix.git
+[submodule "scripts/pi_magazine"]
+	path = scripts/pi_magazine
+	url = https://github.com/simonmonk/pi_magazine
