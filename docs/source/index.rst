@@ -27,13 +27,13 @@ Setup
 *****
 
 Setup master Raspberry PI
-~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Setup using Raspbian Buster Lite image from https://www.raspberrypi.org/downloads/raspbian/ 
 - change the default password for user PI
 
 Setup k3s (Kubernetes)
-~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 Enable cgroup support by adding 'cgroup_memory=1 cgroup_enable=memory' in /boot/cmdline.txt
 
@@ -53,7 +53,7 @@ Enable cgroup support by adding 'cgroup_memory=1 cgroup_enable=memory' in /boot/
 The instructions are from https://opensource.com/article/20/3/kubernetes-raspberry-pi-k3s
 
 Setup helm
-~~~~~~~~~
+~~~~~~~~~~
 
 From https://helm.sh/docs/intro/install/
 
@@ -68,14 +68,14 @@ From https://helm.sh/docs/intro/install/
   helm repo add bitnami https://charts.bitnami.com/bitnami
 
 Setup cloudflare for dynamic DNS
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 After setting up account in cloudflare, get the api token from https://dash.cloudflare.com/profile/api-tokens
 
 Use k8s yaml cloudflare-ddns-deployment.yaml to run https://hub.docker.com/r/oznu/cloudflare-ddns/ image
 
 Setup minion for k3s
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 Follow instructions in https://www.raspberrypi.org/documentation/hardware/raspberrypi/bootmodes/net_tutorial.md
 
@@ -88,7 +88,7 @@ Follow instructions in https://www.raspberrypi.org/documentation/hardware/raspbe
 After many attempts and a all-nighter, was not able to make Raspberry Model B Rev 2 to work (either as a tftp client _or_ a k3s node (it was not able to start any pods) ).
 
 Setup LetsEncrypt + Traefik
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Traefik is already setup with k3s - so no additional work is required for that per se
 
