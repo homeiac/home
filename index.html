@@ -47,12 +47,33 @@
 <div class="section" id="hardware">
 <h3>Hardware<a class="headerlink" href="#hardware" title="Permalink to this headline">¶</a></h3>
 <ul class="simple">
-<li><p>2 Raspberry PIs - one master and other minion for running management and routing tasks</p></li>
+<li><p>1 Raspberry PI - for running backup and other monitoring services using <a class="reference external" href="https://balena.io/">https://balena.io/</a></p></li>
+<li><p>1 Raspberry PI - for running k3s and other development builds</p></li>
 <li><p>One Windows PC for running heavy duty stuff</p></li>
 </ul>
 </div>
 <div class="section" id="setup">
 <h3>Setup<a class="headerlink" href="#setup" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="setup-balena-managed-raspberry-pi">
+<h4>Setup Balena Managed Raspberry PI<a class="headerlink" href="#setup-balena-managed-raspberry-pi" title="Permalink to this headline">¶</a></h4>
+<ul>
+<li><p>Get the Balena image and follow instructions till the git clone part from <a class="reference external" href="https://www.balena.io/docs/learn/getting-started/raspberrypi3/nodejs/">https://www.balena.io/docs/learn/getting-started/raspberrypi3/nodejs/</a></p></li>
+<li><p>Add the homeiac application</p></li>
+<li><p>Conceptually application is a fleet of devices that you want a set of applications to be deployed</p></li>
+<li><p>Current understanding is that you cannot pick and choose what applications you want on a device. It is all or nothing</p></li>
+<li><p>Add your github ssh key so that it can talk to github repos</p></li>
+<li><p>Add <a class="reference external" href="https://github.com/marketplace/actions/balena-push">https://github.com/marketplace/actions/balena-push</a> to your github workflow after setting the BALENA_API_TOKEN (at the org level) and the BALENA_APPLICATION_NAME at the repo level (<a class="reference external" href="https://github.com/homeiac/home/settings/secrets">https://github.com/homeiac/home/settings/secrets</a>)</p></li>
+<li><p>This is the link to the workflow - <a class="reference external" href="https://github.com/homeiac/home/blob/master/.github/workflows/balena_cloud_push.yml">https://github.com/homeiac/home/blob/master/.github/workflows/balena_cloud_push.yml</a></p></li>
+<li><p>With this support, the goal of IaC for raspberry pi devices is achieved. There is no need for keeping OS and other services up to date. Everything is managed by Balena. All changes (unless you override using local mode) goes through github. The central docker-compose.yml controls what gets deployed. Each push to master automatically updates the devices.</p></li>
+<li><p>To disable wifi at runtime - Run the following from the cloud shell <a class="reference external" href="https://dashboard.balena-cloud.com/devices/">https://dashboard.balena-cloud.com/devices/</a></p>
+<p><code class="docutils literal notranslate"><span class="pre">nmcli</span> <span class="pre">radio</span> <span class="pre">wifi</span> <span class="pre">off</span></code></p>
+<ul class="simple">
+<li><p>(To be verified) - Move the resin-wifi-config to resin-wifi-config.ignore as follows
+<code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">/mnt/boot/system-connections</span> <span class="pre">&amp;&amp;</span> <span class="pre">mv</span> <span class="pre">resin-wifi-01</span> <span class="pre">resin-wifi-01.ignore</span></code></p></li>
+</ul>
+</li>
+</ul>
+</div>
 <div class="section" id="setup-master-raspberry-pi">
 <h4>Setup master Raspberry PI<a class="headerlink" href="#setup-master-raspberry-pi" title="Permalink to this headline">¶</a></h4>
 <ul class="simple">

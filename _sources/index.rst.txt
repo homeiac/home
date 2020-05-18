@@ -20,17 +20,37 @@ Have home automation and other services available in a secure fashion while havi
 Hardware
 ********
 
-- 2 Raspberry PIs - one master and other minion for running management and routing tasks
+- 1 Raspberry PI - for running backup and other monitoring services using https://balena.io/
+- 1 Raspberry PI - for running k3s and other development builds
 - One Windows PC for running heavy duty stuff
 
 Setup
 *****
+
+Setup Balena Managed Raspberry PI
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Get the Balena image and follow instructions till the git clone part from https://www.balena.io/docs/learn/getting-started/raspberrypi3/nodejs/
+- Add the homeiac application
+- Conceptually application is a fleet of devices that you want a set of applications to be deployed
+- Current understanding is that you cannot pick and choose what applications you want on a device. It is all or nothing
+- Add your github ssh key so that it can talk to github repos
+- Add https://github.com/marketplace/actions/balena-push to your github workflow after setting the BALENA_API_TOKEN (at the org level) and the BALENA_APPLICATION_NAME at the repo level (https://github.com/homeiac/home/settings/secrets)
+- This is the link to the workflow - https://github.com/homeiac/home/blob/master/.github/workflows/balena_cloud_push.yml
+- With this support, the goal of IaC for raspberry pi devices is achieved. There is no need for keeping OS and other services up to date. Everything is managed by Balena. All changes (unless you override using local mode) goes through github. The central docker-compose.yml controls what gets deployed. Each push to master automatically updates the devices.
+- To disable wifi at runtime - Run the following from the cloud shell https://dashboard.balena-cloud.com/devices/
+  
+  ``nmcli radio wifi off``
+  
+  *  (To be verified) - Move the resin-wifi-config to resin-wifi-config.ignore as follows
+     ``cd /mnt/boot/system-connections && mv resin-wifi-01 resin-wifi-01.ignore``
 
 Setup master Raspberry PI
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Setup using Raspbian Buster Lite image from https://www.raspberrypi.org/downloads/raspbian/ 
 - change the default password for user PI
+
 
 Setup k3s (Kubernetes)
 ~~~~~~~~~~~~~~~~~~~~~~
