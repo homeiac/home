@@ -1,6 +1,8 @@
 Welcome to homeiac's documentation!
 ===================================
 
+This page is published to https://homeiac.github.io/home/ 
+
 Contents
 ---------
 
