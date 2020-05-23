@@ -4,3 +4,6 @@
 [submodule "scripts/pi_magazine"]
 	path = scripts/pi_magazine
 	url = https://github.com/simonmonk/pi_magazine
+[submodule "raspberrypi-master/balena-pihole"]
+	path = raspberrypi-master/balena-pihole
+	url = https://github.com/klutchell/balena-pihole
