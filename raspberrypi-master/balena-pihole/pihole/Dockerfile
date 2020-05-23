@@ -27,7 +27,7 @@ RUN sed -i '/$AUTHORIZED_HOSTNAMES = array(/ a "balena-devices.com",' /var/www/h
 # otherwise dnsmasq will fail to start since balena is using 53 on some interfaces
 RUN echo "bind-interfaces" >> /etc/dnsmasq.conf
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+#SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN curl -fsSL https://github.com/jpmck/PADD/archive/v3.1.tar.gz | tar xz --strip-components 1 \
 	&& chmod +x padd.sh
 
