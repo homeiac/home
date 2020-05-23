@@ -7,7 +7,7 @@ volumes:
 
 services:
   pihole:
-    build: ./raspberrypi-master/pihole
+    build: ./raspberrypi-master/balena-pihole/pihole
     privileged: true
     volumes:
       - 'pihole_config:/etc/pihole'
@@ -19,7 +19,7 @@ services:
 
   # set pihole DNS1 and DNS2 service variables to 127.0.0.1#5053 to use dnscrypt-proxy for upstream DNS
   dnscrypt-proxy:
-    build: ./raspberrypi-master/dnscrypt-proxy
+    build: ./raspberrypi-master/balena-pihole/dnscrypt-proxy
     volumes:
       - 'dnscrypt_config:/config'
     ports:
