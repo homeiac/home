@@ -349,6 +349,18 @@ For cross compiling install the following
   sudo apt-get install gcc-arm-linux-gnueabi build-essential flex bison
 
 
+To get vcgencmd on ubuntu, follow the instructions in https://wiki.ubuntu.com/ARM/RaspberryPi 
+
+and add 
+
+``sudo add-apt-repository ppa:ubuntu-raspi2/ppa && sudo apt-get update``
+
+the command will fail. After that update
+
+``/etc/apt/sources.d/...focal.list``
+
+change the release name to ``bionic``
+
 
 To resolve the 
 
