@@ -1,4 +1,4 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-python:3-stretch-run
+FROM balenalib/%%BALENA_MACHINE_NAME%%-python:3.8.3-stretch-20200518
 
 RUN install_packages build-essential python3-dev libfreetype6-dev libjpeg-dev libtiff5
 
