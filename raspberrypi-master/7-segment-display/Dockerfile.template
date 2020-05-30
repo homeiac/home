@@ -1,5 +1,7 @@
 FROM balenalib/%%BALENA_MACHINE_NAME%%-python:3-buster-run
 
+RUN install_packages build-essential python3-dev libfreetype6-dev libjpeg-dev libtiff5
+
 RUN pip3 install --no-cache-dir --upgrade fauxmo luma.led_matrix netifaces
 
 COPY . /usr/src/app/
