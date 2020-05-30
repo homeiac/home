@@ -30,7 +30,7 @@ services:
     ports:
       - "8080:80"
   nodexporter:
-    image: prom/node-exporter:master
+    image: prom/node-exporter-linux-armv7:latest
     ports:
       - "9100:9100"
   ip_display:
