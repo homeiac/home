@@ -37,7 +37,5 @@ services:
     build: ./raspberrypi-master/7-segment-display
     privileged: true
     network_mode: host
-  osquery:
-    build: ./raspberrypi-master/osquery
 
 
