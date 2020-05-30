@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: home-minibloks-net
+  namespace: default
+spec:
+  secretName: home-minibloks-net-tls
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+  commonName: home.minibloks.com
+  dnsNames:
+  - home.minibloks.com
