@@ -335,6 +335,12 @@ Required only if you want to testing… For prod you can skip the below</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo apt-get install gcc-arm-linux-gnueabi build-essential flex bison
 </pre></div>
 </div>
+<p>To get vcgencmd on ubuntu, follow the instructions in <a class="reference external" href="https://wiki.ubuntu.com/ARM/RaspberryPi">https://wiki.ubuntu.com/ARM/RaspberryPi</a></p>
+<p>and add</p>
+<p><code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">add-apt-repository</span> <span class="pre">ppa:ubuntu-raspi2/ppa</span> <span class="pre">&amp;&amp;</span> <span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">update</span></code></p>
+<p>the command will fail. After that update</p>
+<p><code class="docutils literal notranslate"><span class="pre">/etc/apt/sources.d/...focal.list</span></code></p>
+<p>change the release name to <code class="docutils literal notranslate"><span class="pre">bionic</span></code></p>
 <p>To resolve the</p>
 <p><code class="docutils literal notranslate"><span class="pre">ping:</span> <span class="pre">k3smaster1.local:</span> <span class="pre">Temporary</span> <span class="pre">failure</span> <span class="pre">in</span> <span class="pre">name</span> <span class="pre">resolution</span></code></p>
 <p>problem.</p>
@@ -482,7 +488,7 @@ docker run <span class="se">\</span>
       &copy;2020, gshiva.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.3</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
