@@ -423,7 +423,7 @@ k3sup join <span class="se">\</span>
 kubectl get node
 
 adduser pi
-pi <span class="nv">ALL</span><span class="o">=(</span>ALL<span class="o">)</span> NOPASSWD:ALL
+<span class="nb">echo</span> <span class="s1">&#39;pi ALL=(ALL) NOPASSWD:ALL&#39;</span> &gt;&gt; visudo
 pi@k3smaster1:~$ cp /vagrant/rp_id* .
 pi@k3smaster1:~$ mkdir .ssh
 pi@k3smaster1:~$ mv rp_id* .ssh/
