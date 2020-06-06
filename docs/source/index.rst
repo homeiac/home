@@ -49,7 +49,7 @@ Setup Balena Managed Raspberry PI
      ``cd /mnt/boot/system-connections && mv resin-wifi-01 resin-wifi-01.ignore``
 
 Setup media / backup Raspberry PI
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Setup using Ubuntu 64 bit image from https://ubuntu.com/download/raspberry-pi
 - create user ``pi``
@@ -452,7 +452,7 @@ Content of scratch pad
  kubectl get node
 
  adduser pi
- pi ALL=(ALL) NOPASSWD:ALL
+ echo 'pi ALL=(ALL) NOPASSWD:ALL' >> visudo
  pi@k3smaster1:~$ cp /vagrant/rp_id* .
  pi@k3smaster1:~$ mkdir .ssh
  pi@k3smaster1:~$ mv rp_id* .ssh/
