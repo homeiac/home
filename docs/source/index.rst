@@ -22,7 +22,8 @@ Have home automation and other services available in a secure fashion while havi
 Hardware
 ********
 
-- 1 Raspberry PI - for running backup and other monitoring services using https://balena.io/
+- 1 Raspberry PI - for running monitoring/pi-hole services using https://balena.io/
+- 1 Raspberry PI 4 - for running backup / media server using ZFS
 - 1 Raspberry PI - for running k3s and other development builds
 - One Windows PC for running heavy duty stuff
 
@@ -47,11 +48,34 @@ Setup Balena Managed Raspberry PI
   *  (To be verified) - Move the resin-wifi-config to resin-wifi-config.ignore as follows
      ``cd /mnt/boot/system-connections && mv resin-wifi-01 resin-wifi-01.ignore``
 
-Setup master Raspberry PI
+Setup media / backup Raspberry PI
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- Setup using Raspbian Buster Lite image from https://www.raspberrypi.org/downloads/raspbian/ 
-- change the default password for user PI
+- Setup using Ubuntu 64 bit image from https://ubuntu.com/download/raspberry-pi
+- create user ``pi``
+- Upgrade OS and install zfs-dkms
+- Install node exporter using instructions from https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian
+   * Download node exporter 
+   * Unpack and install it under /usr/local/bin
+   * Install the systemd service
+
+.. code-block:: bash
+
+  cd ~
+  wget https://github.com/prometheus/node_exporter/releases/download/v1.0.0/node_exporter-1.0.0.linux-armv7.tar.gz
+  tar -xvzf node_exporter-1.0.0.linux-armv7.tar.gz
+  sudo cp node_exporter-1.0.0.linux-armv7/node_exporter /usr/local/bin
+  sudo chmod +x /usr/local/bin/node_exporter
+  sudo useradd -m -s /bin/bash node_exporter
+  sudo mkdir /var/lib/node_exporter
+  sudo chown -R node_exporter:node_exporter /var/lib/node_exporter
+  cd /etc/systemd/system/
+  sudo wget https://gist.githubusercontent.com/gshiva/9c476796c8da54afe9fb231e984f49a0/raw/b05e28a6ca1c89e815747e8f7e186a634518f9c1/node_exporter.service
+  sudo systemctl daemon-reload 
+  sudo systemctl enable node_exporter.service
+  sudo systemctl start node_exporter.service
+  systemctl status node_exporter.service
+  cd ~
 
 
 Setup k3s (Kubernetes)
