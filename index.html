@@ -48,7 +48,8 @@
 <div class="section" id="hardware">
 <h3>Hardware<a class="headerlink" href="#hardware" title="Permalink to this headline">¶</a></h3>
 <ul class="simple">
-<li><p>1 Raspberry PI - for running backup and other monitoring services using <a class="reference external" href="https://balena.io/">https://balena.io/</a></p></li>
+<li><p>1 Raspberry PI - for running monitoring/pi-hole services using <a class="reference external" href="https://balena.io/">https://balena.io/</a></p></li>
+<li><p>1 Raspberry PI 4 - for running backup / media server using ZFS</p></li>
 <li><p>1 Raspberry PI - for running k3s and other development builds</p></li>
 <li><p>One Windows PC for running heavy duty stuff</p></li>
 </ul>
@@ -75,12 +76,39 @@
 </li>
 </ul>
 </div>
-<div class="section" id="setup-master-raspberry-pi">
-<h4>Setup master Raspberry PI<a class="headerlink" href="#setup-master-raspberry-pi" title="Permalink to this headline">¶</a></h4>
+<div class="section" id="setup-media-backup-raspberry-pi">
+<h4>Setup media / backup Raspberry PI<a class="headerlink" href="#setup-media-backup-raspberry-pi" title="Permalink to this headline">¶</a></h4>
 <ul class="simple">
-<li><p>Setup using Raspbian Buster Lite image from <a class="reference external" href="https://www.raspberrypi.org/downloads/raspbian/">https://www.raspberrypi.org/downloads/raspbian/</a></p></li>
-<li><p>change the default password for user PI</p></li>
+<li><p>Setup using Ubuntu 64 bit image from <a class="reference external" href="https://ubuntu.com/download/raspberry-pi">https://ubuntu.com/download/raspberry-pi</a></p></li>
+<li><p>create user <code class="docutils literal notranslate"><span class="pre">pi</span></code></p></li>
+<li><p>Upgrade OS and install zfs-dkms</p></li>
+<li><dl class="simple">
+<dt>Install node exporter using instructions from <a class="reference external" href="https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian">https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian</a></dt><dd><ul>
+<li><p>Download node exporter</p></li>
+<li><p>Unpack and install it under /usr/local/bin</p></li>
+<li><p>Install the systemd service</p></li>
 </ul>
+</dd>
+</dl>
+</li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span> ~
+wget https://github.com/prometheus/node_exporter/releases/download/v1.0.0/node_exporter-1.0.0.linux-armv7.tar.gz
+tar -xvzf node_exporter-1.0.0.linux-armv7.tar.gz
+sudo cp node_exporter-1.0.0.linux-armv7/node_exporter /usr/local/bin
+sudo chmod +x /usr/local/bin/node_exporter
+sudo useradd -m -s /bin/bash node_exporter
+sudo mkdir /var/lib/node_exporter
+sudo chown -R node_exporter:node_exporter /var/lib/node_exporter
+<span class="nb">cd</span> /etc/systemd/system/
+sudo wget https://gist.githubusercontent.com/gshiva/9c476796c8da54afe9fb231e984f49a0/raw/b05e28a6ca1c89e815747e8f7e186a634518f9c1/node_exporter.service
+sudo systemctl daemon-reload
+sudo systemctl <span class="nb">enable</span> node_exporter.service
+sudo systemctl start node_exporter.service
+systemctl status node_exporter.service
+<span class="nb">cd</span> ~
+</pre></div>
+</div>
 </div>
 <div class="section" id="setup-k3s-kubernetes">
 <h4>Setup k3s (Kubernetes)<a class="headerlink" href="#setup-k3s-kubernetes" title="Permalink to this headline">¶</a></h4>
