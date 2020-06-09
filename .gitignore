@@ -93,3 +93,8 @@ ENV/
 docs/source/_build/
 .DS_Store
 
+pc-node/rp_id_rsa.pub
+pc-node/rp_idrsa
+pc-node2/rp_id_rsa.pub
+pc-node2/rp_idrsa
+pc-node/cloudflare-ddns-deployment.yaml
