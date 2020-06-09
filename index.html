@@ -4,6 +4,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to homeiac’s documentation! &#8212; homeiac 0.0.1 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -81,7 +82,31 @@
 <ul class="simple">
 <li><p>Setup using Ubuntu 64 bit image from <a class="reference external" href="https://ubuntu.com/download/raspberry-pi">https://ubuntu.com/download/raspberry-pi</a></p></li>
 <li><p>create user <code class="docutils literal notranslate"><span class="pre">pi</span></code></p></li>
-<li><p>Upgrade OS and install zfs-dkms</p></li>
+<li><dl class="simple">
+<dt>Upgrade OS and install zfs-dkms</dt><dd><ul>
+<li><p>Move /var and /home using the instructions from <a class="reference external" href="https://www.cyberciti.biz/faq/freebsd-linux-unix-zfs-automatic-mount-points-command/">https://www.cyberciti.biz/faq/freebsd-linux-unix-zfs-automatic-mount-points-command/</a></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>zpool create data /dev/sdb
+zfs create data/var
+<span class="nb">cd</span> /var
+cp -ax * /data/var
+<span class="nb">cd</span> .. <span class="o">&amp;&amp;</span> mv var var.old
+zfs <span class="nb">set</span> <span class="nv">mountpoint</span><span class="o">=</span>/var data/var
+zfs create data/home
+<span class="nb">cd</span> /home
+cp -ax * /data/home
+<span class="nb">cd</span> .. <span class="o">&amp;&amp;</span> mv home home.old
+zfs <span class="nb">set</span> <span class="nv">mountpoint</span><span class="o">=</span>/home data/home
+reboot
+rm -rf /home.old
+rm -rf /var.old
+</pre></div>
+</div>
+<ul class="simple">
 <li><dl class="simple">
 <dt>Install node exporter using instructions from <a class="reference external" href="https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian">https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian</a></dt><dd><ul>
 <li><p>Download node exporter</p></li>
@@ -516,7 +541,7 @@ docker run <span class="se">\</span>
       &copy;2020, gshiva.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.0</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
