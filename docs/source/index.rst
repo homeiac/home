@@ -54,6 +54,26 @@ Setup media / backup Raspberry PI
 - Setup using Ubuntu 64 bit image from https://ubuntu.com/download/raspberry-pi
 - create user ``pi``
 - Upgrade OS and install zfs-dkms
+   * Move /var and /home using the instructions from https://www.cyberciti.biz/faq/freebsd-linux-unix-zfs-automatic-mount-points-command/
+
+
+.. code-block:: bash
+
+  zpool create data /dev/sdb
+  zfs create data/var
+  cd /var
+  cp -ax * /data/var
+  cd .. && mv var var.old
+  zfs set mountpoint=/var data/var
+  zfs create data/home
+  cd /home
+  cp -ax * /data/home
+  cd .. && mv home home.old
+  zfs set mountpoint=/home data/home
+  reboot
+  rm -rf /home.old
+  rm -rf /var.old
+
 - Install node exporter using instructions from https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian
    * Download node exporter 
    * Unpack and install it under /usr/local/bin
