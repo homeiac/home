@@ -93,3 +93,5 @@ ENV/
 docs/source/_build/
 .DS_Store
 
+k8s/cloudflare_api_token.txt
+k8s/kubeconfig
