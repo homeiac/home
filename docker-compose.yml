@@ -35,11 +35,13 @@ services:
       - "9100:9100"
   display-driver:
     build: ./raspberrypi-master/display-driver
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
   fauxmo:
     build: ./raspberrypi-master/fauxmo
     depends_on:
       - display-driver
     privileged: true
+    dns:
+      - '127.0.0.1'
     network_mode: host

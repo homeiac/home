@@ -7,8 +7,8 @@
             "DEVICES": [
                 {
                     "port": 12340,
-                    "on_cmd": "http://display-driver:8000/time",
-                    "off_cmd": "http://display-driver:8000/alloff",
+                    "on_cmd": "http://localhost:8000/time",
+                    "off_cmd": "http://localhost:8000/alloff",
                     "method": "GET",
                     "name": "pi time",
                     "on_data": {
@@ -21,8 +21,8 @@
                 },
                 {
                     "port": 12341,
-                    "on_cmd": "http://display-driver:8000/uptime",
-                    "off_cmd": "http://display-driver:8000/alloff",
+                    "on_cmd": "http://localhost:8000/uptime",
+                    "off_cmd": "http://localhost:8000/alloff",
                     "on_data": {
                         "isOn": 1
                     },
@@ -35,8 +35,8 @@
                 {
                     "name": "pi memory",
                     "port": 12342,
-                    "on_cmd": "http://display-driver:8000/memory",
-                    "off_cmd": "http://display-driver:8000/alloff",
+                    "on_cmd": "http://localhost:8000/memory",
+                    "off_cmd": "http://localhost:8000/alloff",
                     "on_data": {
                         "isOn": 1
                     },
