@@ -8,5 +8,5 @@ COPY . /usr/src/app/
 
 WORKDIR /usr/src/app/
 
-CMD ["fauxmo","-c","config.json"]
+CMD ["fauxmo","-c","config.json","-v"]
 
