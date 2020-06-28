@@ -100,3 +100,16 @@ pc-node/rp_idrsa
 pc-node2/rp_id_rsa.pub
 pc-node2/rp_idrsa
 pc-node/cloudflare-ddns-deployment.yaml
+raspberrypi-master/display-driver/.venv/pyvenv.cfg
+raspberrypi-master/display-driver/.venv/bin/activate
+raspberrypi-master/display-driver/.venv/bin/activate.csh
+raspberrypi-master/display-driver/.venv/bin/activate.fish
+raspberrypi-master/display-driver/.venv/bin/chardetect
+raspberrypi-master/display-driver/.venv/bin/easy_install
+raspberrypi-master/display-driver/.venv/bin/easy_install-3.7
+raspberrypi-master/display-driver/.venv/bin/fauxmo
+raspberrypi-master/display-driver/.venv/bin/pip
+raspberrypi-master/display-driver/.venv/bin/pip3
+raspberrypi-master/display-driver/.venv/bin/pip3.7
+raspberrypi-master/display-driver/.venv/bin/python
+raspberrypi-master/display-driver/.venv/bin/python3

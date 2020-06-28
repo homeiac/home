@@ -33,13 +33,13 @@ services:
     image: prom/node-exporter-linux-armv7:latest
     ports:
       - "9100:9100"
-  display_driver:
-    build: ./raspberrypi-master/display_driver
+  display-driver:
+    build: ./raspberrypi-master/display-driver
     expose:
       - "8000"
   fauxmo:
     build: ./raspberrypi-master/fauxmo
     depends_on:
-      - display_driver
+      - display-driver
     privileged: true
     network_mode: host
