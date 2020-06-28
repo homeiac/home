@@ -135,6 +135,30 @@ systemctl status node_exporter.service
 </pre></div>
 </div>
 </div>
+<div class="section" id="setup-iscsi-server">
+<h4>Setup iscsi server<a class="headerlink" href="#setup-iscsi-server" title="Permalink to this headline">¶</a></h4>
+<p>The following steps is required to create the iscsi targets for k3s.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># install the targetcli to setup the iscsi targets</span>
+<span class="c1"># From https://linuxlasse.net/linux/howtos/ISCSI_and_ZFS_ZVOL</span>
+sudo apt-get install targetcli-fb open-iscsi
+
+<span class="c1"># create the sparse volumes for each netboot RPI for k3s /var/lib/rancher mount</span>
+<span class="c1"># k3s does not work over NFS</span>
+sudo zfs create -s -V 50g data/4ce07a49data
+sudo zfs create -s -V 50g data/7b1d489edata
+sudo zfs create -s -V 50g data/e44d4260data
+
+<span class="c1"># use target cli to create the targets</span>
+sudo targetcli
+
+<span class="c1"># *** VERY IMPORTANT ***</span>
+<span class="c1"># in order to restore the config after reboot enable the following service</span>
+<span class="c1"># and run it once</span>
+sudo systemctl <span class="nb">enable</span> rtslib-fb-targetctl
+sudo systemctl start rtslib-fb-targetctl
+</pre></div>
+</div>
+</div>
 <div class="section" id="setup-k3s-kubernetes">
 <h4>Setup k3s (Kubernetes)<a class="headerlink" href="#setup-k3s-kubernetes" title="Permalink to this headline">¶</a></h4>
 <p>Enable cgroup support by adding ‘cgroup_memory=1 cgroup_enable=memory’ in /boot/cmdline.txt</p>
@@ -480,6 +504,42 @@ docker run <span class="se">\</span>
 </pre></div>
 </div>
 </div>
+<div class="section" id="to-get-k3s-working-on-k3smaster">
+<h2>To get k3s working on k3smaster<a class="headerlink" href="#to-get-k3s-working-on-k3smaster" title="Permalink to this headline">¶</a></h2>
+<p>regular ZFS cannot be used for k3s as it relies on ext4, and you get these errors</p>
+<p><code class="docutils literal notranslate"><span class="pre">kube-system</span>&#160;&#160; <span class="pre">0s</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">Warning</span>&#160;&#160; <span class="pre">FailedCreatePodSandBox</span>&#160;&#160;&#160; <span class="pre">pod/helm-install-traefik-9v4w7</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">(combined</span> <span class="pre">from</span> <span class="pre">similar</span> <span class="pre">events):</span> <span class="pre">Failed</span> <span class="pre">to</span> <span class="pre">create</span> <span class="pre">pod</span> <span class="pre">sandbox:</span> <span class="pre">rpc</span> <span class="pre">error:</span> <span class="pre">code</span> <span class="pre">=</span> <span class="pre">Unknown</span> <span class="pre">desc</span> <span class="pre">=</span> <span class="pre">failed</span> <span class="pre">to</span> <span class="pre">create</span> <span class="pre">containerd</span> <span class="pre">task:</span> <span class="pre">failed</span> <span class="pre">to</span> <span class="pre">mount</span> <span class="pre">rootfs</span> <span class="pre">component</span> <span class="pre">&amp;{overlay</span> <span class="pre">overlay</span> <span class="pre">[workdir=/var/lib/rancher/k3s/agent/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/69/work</span> <span class="pre">upperdir=/var/lib/rancher/k3s/agent/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/69/fs</span> <span class="pre">lowerdir=/var/lib/rancher/k3s/agent/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/1/fs]}:</span> <span class="pre">invalid</span> <span class="pre">argument:</span> <span class="pre">unknown</span></code></p>
+<p>so a ZVOL for /var/lib/rancher needs to be created</p>
+<p>follow instructions in <a class="reference external" href="https://pthree.org/2012/12/21/zfs-administration-part-xiv-zvols/">https://pthree.org/2012/12/21/zfs-administration-part-xiv-zvols/</a></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>zfs create -V 30g data/rancher
+zfs list
+ls -l /dev/zvol/data/
+mkfs.ext4 /dev/zd64
+blkid
+vi /etc/fstab
+mkdir /var/lib/rancher
+mount -a
+</pre></div>
+</div>
+</div>
+<div class="section" id="zfs-backup">
+<h2>ZFS backup<a class="headerlink" href="#zfs-backup" title="Permalink to this headline">¶</a></h2>
+<p>Using <a class="reference external" href="https://github.com/oetiker/znapzend">https://github.com/oetiker/znapzend</a> for scheduled backups to pimaster</p>
+<p>Followed the <a class="reference external" href="https://github.com/Gregy/znapzend-debian">https://github.com/Gregy/znapzend-debian</a> instructions for the debian package. Remember the package is present in the parent directory.</p>
+<p>Installed it using</p>
+<p><code class="docutils literal notranslate"><span class="pre">dpkg</span> <span class="pre">-i</span> <span class="pre">z*.deb</span></code></p>
+<p>It kept saying <a class="reference external" href="mailto:pi&#37;&#52;&#48;pimaster&#46;local">pi<span>&#64;</span>pimaster<span>&#46;</span>local</a>:/data/backup was not present even though it was there.
+After hints from <a class="reference external" href="https://serverfault.com/questions/772805/host-key-verification-failed-on-znapzendzetup-create-command">https://serverfault.com/questions/772805/host-key-verification-failed-on-znapzendzetup-create-command</a></p>
+<p>Got it working.</p>
+<p>See also <a class="reference external" href="https://github.com/oetiker/znapzend#running-by-an-unprivileged-user">https://github.com/oetiker/znapzend#running-by-an-unprivileged-user</a></p>
+<p>Let the user <code class="docutils literal notranslate"><span class="pre">pi</span></code> in <code class="docutils literal notranslate"><span class="pre">pimaster.local</span></code> to have enough zfs permissions</p>
+<p>Also did <code class="docutils literal notranslate"><span class="pre">su</span> <span class="pre">&amp;&amp;</span> <span class="pre">passwd</span> <span class="pre">&amp;&amp;</span> <span class="pre">vi</span> <span class="pre">/etc/ssh/sshd_config</span> <span class="pre">&amp;&amp;</span> <span class="pre">echo</span> <span class="pre">&quot;Allowed</span> <span class="pre">Root</span> <span class="pre">Login</span> <span class="pre">GASP!&quot;</span> <span class="pre">&amp;&amp;</span> <span class="pre">echo</span> <span class="pre">&quot;added</span> <span class="pre">to</span> <span class="pre">authorized</span> <span class="pre">keys</span> <span class="pre">(0-oo)&quot;</span></code></p>
+<p>Reverted all of them once the <code class="docutils literal notranslate"><span class="pre">pi</span></code> user was working after the everything was made working using the <code class="docutils literal notranslate"><span class="pre">root</span></code> user.</p>
+</div>
+<div class="section" id="setting-up-router-network-for-2-4-ghz-devices">
+<h2>Setting up router network for 2.4 Ghz devices<a class="headerlink" href="#setting-up-router-network-for-2-4-ghz-devices" title="Permalink to this headline">¶</a></h2>
+<p>The PC has a third adapter and an attempt was made to route it through Windows shared internet connection and also through the k3smaster VM. Probably due to some firewall issues, it didn’t work.</p>
+<p>Adding the adapter to the pimaster and running dnsmasq there worked.</p>
+</div>
 <div class="section" id="indices-and-tables">
 <h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
@@ -541,7 +601,7 @@ docker run <span class="se">\</span>
       &copy;2020, gshiva.
       
       |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.0</a>
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.1</a>
       &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
       
       |
