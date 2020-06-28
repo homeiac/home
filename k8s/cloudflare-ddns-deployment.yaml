@@ -30,9 +30,9 @@ spec:
         - name: PROXIED
           value: "false"
         - name: SUBDOMAIN
-          value: subdomain
+          value: home
         - name: ZONE
-          value: example.com
+          value: minibloks.com
         image: oznu/cloudflare-ddns:latest
         imagePullPolicy: ""
         name: cloudflare-ddns
