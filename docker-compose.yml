@@ -36,6 +36,8 @@ services:
   ip_display:
     build: ./raspberrypi-master/7-segment-display
     privileged: true
+    dns:
+      - '127.0.0.1'
     network_mode: host
 
 
