@@ -95,3 +95,8 @@ docs/source/_build/
 
 k8s/cloudflare_api_token.txt
 k8s/kubeconfig
+pc-node/rp_id_rsa.pub
+pc-node/rp_idrsa
+pc-node2/rp_id_rsa.pub
+pc-node2/rp_idrsa
+pc-node/cloudflare-ddns-deployment.yaml
