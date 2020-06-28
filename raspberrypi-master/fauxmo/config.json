@@ -44,6 +44,45 @@
                         "isOn": 0
                     },
                     "use_fake_state": true
+                },
+                {
+                    "name": "pi disk",
+                    "port": 12343,
+                    "on_cmd": "http://localhost:8000/disk",
+                    "off_cmd": "http://localhost:8000/alloff",
+                    "on_data": {
+                        "isOn": 1
+                    },
+                    "off_data": {
+                        "isOn": 0
+                    },
+                    "use_fake_state": true
+                },
+                {
+                    "name": "pi cpu",
+                    "port": 12344,
+                    "on_cmd": "http://localhost:8000/cpu",
+                    "off_cmd": "http://localhost:8000/alloff",
+                    "on_data": {
+                        "isOn": 1
+                    },
+                    "off_data": {
+                        "isOn": 0
+                    },
+                    "use_fake_state": true
+                },
+                {
+                    "name": "pi clock",
+                    "port": 12345,
+                    "on_cmd": "http://localhost:8000/clock",
+                    "off_cmd": "http://localhost:8000/alloff",
+                    "on_data": {
+                        "isOn": 1
+                    },
+                    "off_data": {
+                        "isOn": 0
+                    },
+                    "use_fake_state": true
                 }
             ]
         }

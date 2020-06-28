@@ -37,6 +37,7 @@ services:
     build: ./raspberrypi-master/display-driver
     ports:
       - "8000:8000"
+    privileged: true
   fauxmo:
     build: ./raspberrypi-master/fauxmo
     depends_on:
