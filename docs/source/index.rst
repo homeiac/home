@@ -77,6 +77,32 @@ Setup media / backup Raspberry PI
   systemctl status node_exporter.service
   cd ~
 
+Setup iscsi server
+~~~~~~~~~~~~~~~~~~
+
+The following steps is required to create the iscsi targets for k3s.
+
+.. code-block:: bash
+
+  # install the targetcli to setup the iscsi targets
+  # From https://linuxlasse.net/linux/howtos/ISCSI_and_ZFS_ZVOL
+  sudo apt-get install targetcli-fb open-iscsi
+
+  # create the sparse volumes for each netboot RPI for k3s /var/lib/rancher mount
+  # k3s does not work over NFS
+  sudo zfs create -s -V 50g data/4ce07a49data
+  sudo zfs create -s -V 50g data/7b1d489edata
+  sudo zfs create -s -V 50g data/e44d4260data
+
+  # use target cli to create the targets
+  sudo targetcli
+
+  # *** VERY IMPORTANT ***
+  # in order to restore the config after reboot enable the following service
+  # and run it once
+  sudo systemctl enable rtslib-fb-targetctl
+  sudo systemctl start rtslib-fb-targetctl
+
 
 Setup k3s (Kubernetes)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -482,7 +508,60 @@ Content of scratch pad
   -e SUBDOMAIN=home \
   oznu/cloudflare-ddns
 
+To get k3s working on k3smaster
+-------------------------------
 
+regular ZFS cannot be used for k3s as it relies on ext4, and you get these errors
+
+``kube-system   0s          Warning   FailedCreatePodSandBox    pod/helm-install-traefik-9v4w7                 (combined from similar events): Failed to create pod sandbox: rpc error: code = Unknown desc = failed to create containerd task: failed to mount rootfs component &{overlay overlay [workdir=/var/lib/rancher/k3s/agent/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/69/work upperdir=/var/lib/rancher/k3s/agent/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/69/fs lowerdir=/var/lib/rancher/k3s/agent/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/1/fs]}: invalid argument: unknown``
+
+so a ZVOL for /var/lib/rancher needs to be created
+
+follow instructions in https://pthree.org/2012/12/21/zfs-administration-part-xiv-zvols/
+
+.. code-block:: bash
+
+  zfs create -V 30g data/rancher
+  zfs list
+  ls -l /dev/zvol/data/
+  mkfs.ext4 /dev/zd64
+  blkid
+  vi /etc/fstab
+  mkdir /var/lib/rancher
+  mount -a
+
+
+
+ZFS backup
+----------
+
+Using https://github.com/oetiker/znapzend for scheduled backups to pimaster
+
+Followed the https://github.com/Gregy/znapzend-debian instructions for the debian package. Remember the package is present in the parent directory.
+
+Installed it using 
+
+``dpkg -i z*.deb``
+
+It kept saying pi@pimaster.local:/data/backup was not present even though it was there.
+After hints from https://serverfault.com/questions/772805/host-key-verification-failed-on-znapzendzetup-create-command 
+
+Got it working.
+
+See also https://github.com/oetiker/znapzend#running-by-an-unprivileged-user
+
+Let the user ``pi`` in ``pimaster.local`` to have enough zfs permissions
+
+Also did ``su && passwd && vi /etc/ssh/sshd_config && echo "Allowed Root Login GASP!" && echo "added to authorized keys (0-oo)"``
+
+Reverted all of them once the ``pi`` user was working after the everything was made working using the ``root`` user.
+
+Setting up router network for 2.4 Ghz devices
+---------------------------------------------
+
+The PC has a third adapter and an attempt was made to route it through Windows shared internet connection and also through the k3smaster VM. Probably due to some firewall issues, it didn't work.
+
+Adding the adapter to the pimaster and running dnsmasq there worked.
 
 
 
