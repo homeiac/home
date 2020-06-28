@@ -1,0 +1,779 @@
+commit 7858849b43a8d17906c54ce1ed2d5a6eb0e61b2f
+Author: Kumar Gopal <kumar.gopal@bd.com>
+Date:   Wed May 21 20:35:07 2025 -0700
+
+    Commit for installing k3s
+
+diff --git a/proxmox/homelab/pyproject.toml b/proxmox/homelab/pyproject.toml
+index b2c5a77..c886a72 100644
+--- a/proxmox/homelab/pyproject.toml
++++ b/proxmox/homelab/pyproject.toml
+@@ -11,6 +11,8 @@ python = "^3.11"
+ proxmoxer = "^2.2.0"
+ requests = "^2.32.3"
+ dotenv = "^0.9.9"
++paramiko = "^3.5.1"
++python-dotenv = "^1.1.0"
+
+
+ [tool.poetry.group.dev.dependencies]
+diff --git a/proxmox/homelab/scripts/distribute_img.py b/proxmox/homelab/scripts/distribute_img.py
+new file mode 100644
+index 0000000..642e75a
+--- /dev/null
++++ b/proxmox/homelab/scripts/distribute_img.py
+@@ -0,0 +1,74 @@
++#!/usr/bin/env python3
++import os
++import sys
++import paramiko
++
++from homelab.config import Config  # assumes Config loads .env itself
++
++# ─── Configuration ───────────────────────────────────────────────────────────
++pve_ips = Config.PVE_IPS
++if len(pve_ips) < 2:
++    print("❌ ERROR: PVE_IPS must contain at least two comma-separated entries.", file=sys.stderr)
++    sys.exit(1)
++
++PRIMARY_IP = pve_ips[1]  # jump/primary host (e.g. 192.168.1.122)
++SSH_USER   = os.getenv("SSH_USER", "root")
++SSH_KEY    = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
++
++ISO_URL     = Config.ISO_URL
++IMAGE_NAME  = Config.ISO_NAME
++REMOTE_DIR  = "/var/lib/vz/template/iso"
++REMOTE_PATH = f"{REMOTE_DIR}/{IMAGE_NAME}"
++
++# ─── Helper Functions ─────────────────────────────────────────────────────────
++def ssh_connect(host):
++    print(f"🔑 SSH → {host} as {SSH_USER}")
++    client = paramiko.SSHClient()
++    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
++    client.connect(hostname=host, username=SSH_USER, key_filename=SSH_KEY)
++    return client
++
++def exec_on(ssh, cmd):
++    peer = ssh.get_transport().getpeername()[0]
++    print(f"[{peer}]$ {cmd}")
++    stdin, stdout, stderr = ssh.exec_command(cmd)
++    out = stdout.read().decode().strip()
++    err = stderr.read().decode().strip()
++    if out:
++        print(out)
++    if err:
++        print(f"ERROR: {err}", file=sys.stderr)
++    return out, err
++
++# ─── Main Flow ────────────────────────────────────────────────────────────────
++def main():
++    # 1) Connect to primary/jump host
++    ssh = ssh_connect(PRIMARY_IP)
++
++    # 2) Ensure ISO directory exists
++    exec_on(ssh, f"mkdir -p {REMOTE_DIR}")
++
++    # 3) Download ISO on primary if missing
++    status, _ = exec_on(ssh, f"test -f {REMOTE_PATH} && echo exists || echo missing")
++    if "missing" in status:
++        print(f"⬇️  Downloading {IMAGE_NAME} on {PRIMARY_IP}")
++        exec_on(ssh, f"curl -L {ISO_URL} -o {REMOTE_PATH}")
++    else:
++        print(f"ℹ️  {IMAGE_NAME} already present on {PRIMARY_IP}; skipping download.")
++
++    # 4) Distribute to every host in Config.get_nodes()
++    for node in Config.get_nodes():
++        host = node["name"]
++        print(f"➡️  SCP → {host}:{REMOTE_DIR}")
++        scp_cmd = (
++            f"scp -o StrictHostKeyChecking=no "
++            f"{REMOTE_PATH} "
++            f"{SSH_USER}@{host}:{REMOTE_DIR}/"
++        )
++        exec_on(ssh, scp_cmd)
++
++    ssh.close()
++    print("✅ All hosts have the cloud-init image.")
++
++if __name__ == "__main__":
++    main()
+diff --git a/proxmox/homelab/scripts/distribute_img_and_customized_snippets.py b/proxmox/homelab/scripts/distribute_img_and_customized_snippets.py
+new file mode 100644
+index 0000000..6357a7d
+--- /dev/null
++++ b/proxmox/homelab/scripts/distribute_img_and_customized_snippets.py
+@@ -0,0 +1,276 @@
++#!/usr/bin/env python3
++"""distribute_img_snippets.py
++
++Distributes the Ubuntu cloud-init image **and** the snippet files needed to
++custom-init each VM.  The primary (jump) host seeded with SSH access is used
++as a hop to copy artefacts to every other Proxmox node.
++
++Key improvements
++----------------
++* `install-k3sup-qemu-agent.yaml` is treated as a *template*; the placeholder
++  ``{{ host_name }}`` is rendered per-host so that each VM receives a snippet
++  containing its own hostname.
++* Helper `render_template` keeps templating dependency-free.
++* Helper `upload_regular_file` removes SFTP boiler-plate.
++* `upload_snippets_to_primary` now uploads one **rendered** snippet per host
++  (named ``<host>-install-k3sup-qemu-agent.yaml``) and copies every other
++  snippet only once.
++* `distribute_snippets_to_hosts` recognises the per-host filenames and copies
++  the right one to each target node.
++"""
++
++import os
++import sys
++import argparse
++import tempfile
++import paramiko
++
++from pathlib import Path
++
++# Bootstrap project path so we can import Config
++SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
++PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
++SRC_DIR = os.path.join(PROJECT_ROOT, "src")
++sys.path.insert(0, SRC_DIR)
++
++from homelab.config import Config  # type: ignore
++
++# ─────────────────────────────────────────────────────────────────────────────
++# Constants
++# ─────────────────────────────────────────────────────────────────────────────
++ISO_URL = os.getenv(
++    "UBUNTU_IMG_URL",
++    "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
++)
++IMAGE_NAME = os.path.basename(ISO_URL)
++LOCAL_IMG_DIR = PROJECT_ROOT
++REMOTE_ISO_DIR = "/var/lib/vz/template/iso"
++LOCAL_SNIPPET_DIR = os.path.join(PROJECT_ROOT, "snippets")
++REMOTE_SNIPPET_DIR = "/var/lib/vz/snippets"
++TEMPLATE_SNIPPET = "install-k3sup-qemu-agent.yaml"  # the special one
++
++
++# ─────────────────────────────────────────────────────────────────────────────
++# Utility helpers
++# ─────────────────────────────────────────────────────────────────────────────
++def ssh_connect(host: str):
++    """Return a connected Paramiko SSHClient using env vars for auth."""
++    user = os.getenv("SSH_USER", "root")
++    key = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
++    client = paramiko.SSHClient()
++    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
++    client.connect(hostname=host, username=user, key_filename=key)
++    return client
++
++
++
++def render_template(src_path: str, vm_name: str) -> str:
++    """
++    Read *src_path* and replace every {{ vm_name }} (with or without spaces)
++    by *vm_name*.  No third-party libs, no loops.
++    """
++    text = Path(src_path).read_text(encoding="utf-8")
++    return (
++        text.replace("{{ vm_name }}", vm_name)
++            .replace("{{vm_name}}", vm_name)  # handles the tight form too
++    )
++
++
++def upload_regular_file(ssh: paramiko.SSHClient, local_path: str, remote_path: str):
++    """Copy a single file to *already connected* host using SFTP."""
++    sftp = ssh.open_sftp()
++    sftp.put(local_path, remote_path)
++    sftp.close()
++
++
++def file_exists(ssh: paramiko.SSHClient, remote_path: str) -> bool:
++    stdin, stdout, _ = ssh.exec_command(
++        f"test -f {remote_path} && echo exists || echo missing"
++    )
++    return "exists" in stdout.read().decode()
++
++
++def remote_file_exists(
++    ssh: paramiko.SSHClient, user: str, host: str, remote_path: str
++) -> bool:
++    test = (
++        f"ssh -o StrictHostKeyChecking=no {user}@{host} "
++        f"test -f {remote_path} && echo exists || echo missing"
++    )
++    stdin, stdout, _ = ssh.exec_command(test)
++    return "exists" in stdout.read().decode()
++
++
++# ─────────────────────────────────────────────────────────────────────────────
++# Image distribution
++# ─────────────────────────────────────────────────────────────────────────────
++def distribute_img(primary: str, *, force: bool = False):
++    ssh = ssh_connect(primary)
++    user = os.getenv("SSH_USER", "root")
++
++    # ensure ISO dir
++    ssh.exec_command(f"mkdir -p {REMOTE_ISO_DIR}")
++
++    # download on primary if missing
++    check_cmd = f"test -f {REMOTE_ISO_DIR}/{IMAGE_NAME} && echo exists || echo missing"
++    stdin, out, _ = ssh.exec_command(check_cmd)
++    if "missing" in out.read().decode():
++        print(f"⬇️  Downloading {IMAGE_NAME} on {primary}")
++        ssh.exec_command(f"curl -L {ISO_URL} -o {REMOTE_ISO_DIR}/{IMAGE_NAME}")
++    else:
++        print(f"ℹ️  {IMAGE_NAME} already on {primary}")
++
++    # copy from primary to every other node
++    for host in Config.get_nodes():
++        host_name = host["name"]
++        remote_path = f"{REMOTE_ISO_DIR}/{IMAGE_NAME}"
++
++        exists = remote_file_exists(ssh, user, host_name, remote_path)
++        if exists:
++            print(f"ℹ️  Skipping {IMAGE_NAME} on {host_name}: already exists")
++            continue
++
++        print(f"➡️  Copying {IMAGE_NAME} to {host_name}:{REMOTE_ISO_DIR}")
++        scp_cmd = f"scp -o StrictHostKeyChecking=no {remote_path} {user}@{host_name}:{REMOTE_ISO_DIR}/"
++        ssh.exec_command(scp_cmd)
++
++    ssh.close()
++
++
++# ─────────────────────────────────────────────────────────────────────────────
++# Snippet distribution
++# ─────────────────────────────────────────────────────────────────────────────
++def distribute_snippets(primary: str, *, force: bool = False):
++    if not os.path.isdir(LOCAL_SNIPPET_DIR):
++        print(f"ℹ️  No snippets directory at {LOCAL_SNIPPET_DIR}; skipping.")
++        return
++
++    ssh = ssh_connect(primary)
++    user = os.getenv("SSH_USER", "root")
++
++    # ensure remote snippet dir on primary
++    ssh.exec_command(f"mkdir -p {REMOTE_SNIPPET_DIR}")
++
++    upload_snippets_to_primary(ssh, force)
++    distribute_snippets_to_hosts(ssh, user, force)
++
++    ssh.close()
++
++
++def upload_snippets_to_primary(ssh: paramiko.SSHClient, force: bool):
++    """Upload all snippets to the primary.
++
++    • Plain snippets are copied **once**.
++    • TEMPLATE_SNIPPET is rendered once **per host**, saved as
++      ``<host>-TEMPLATE_SNIPPET`` so we keep them separate.
++    """
++    snippets = os.listdir(LOCAL_SNIPPET_DIR)
++    hosts = Config.get_nodes()
++
++    # 1. Handle template snippet per host
++    template_src = os.path.join(LOCAL_SNIPPET_DIR, TEMPLATE_SNIPPET)
++    for host in hosts:
++        host_name = host["name"]
++        rendered = render_template(template_src, host_name)
++        with tempfile.NamedTemporaryFile("w+", delete=False, encoding="utf-8") as tmp:
++            tmp.write(rendered)
++            tmp_path = tmp.name
++
++        remote_path = f"{REMOTE_SNIPPET_DIR}/{host_name}-{TEMPLATE_SNIPPET}"
++        if not force and file_exists(ssh, remote_path):
++            print(f"ℹ️  Skipping rendered snippet for {host_name}: already exists")
++        else:
++            print(f"⬆️  Uploading {host_name}-{TEMPLATE_SNIPPET} to primary")
++            upload_regular_file(ssh, tmp_path, remote_path)
++        os.unlink(tmp_path)
++
++    # 2. Copy every other snippet exactly once
++    for fname in snippets:
++        if fname == TEMPLATE_SNIPPET:
++            continue  # already handled
++        local_path = os.path.join(LOCAL_SNIPPET_DIR, fname)
++        remote_path = f"{REMOTE_SNIPPET_DIR}/{fname}"
++
++        if not force and file_exists(ssh, remote_path):
++            print(f"ℹ️  Skipping {fname} on primary: already exists")
++            continue
++        print(f"⬆️  Uploading snippet {fname} to primary")
++        upload_regular_file(ssh, local_path, remote_path)
++
++
++def distribute_snippets_to_hosts(ssh: paramiko.SSHClient, user: str, force: bool):
++    """
++    Copy snippets from the primary to each node.
++
++    · For TEMPLATE_SNIPPET we **keep a host-specific copy on the primary**
++      (e.g.  node1-install-k3sup-qemu-agent.yaml) but deliver it to the
++      target host under its original name:  install-k3sup-qemu-agent.yaml.
++
++    · All other snippets are copied verbatim.
++    """
++    for host in Config.get_nodes():
++        host_name = host["name"]
++
++        for fname in os.listdir(LOCAL_SNIPPET_DIR):
++            # ── decide the source filename on PRIMARY and the target filename on HOST ──
++            if fname == TEMPLATE_SNIPPET:
++                remote_fname_primary = f"{host_name}-{TEMPLATE_SNIPPET}"
++                remote_fname_target = TEMPLATE_SNIPPET  # ← un-prefixed on host
++            else:
++                remote_fname_primary = remote_fname_target = fname
++
++            remote_path_primary = f"{REMOTE_SNIPPET_DIR}/{remote_fname_primary}"
++            remote_path_target = f"{REMOTE_SNIPPET_DIR}/{remote_fname_target}"
++
++            # skip if the (un-prefixed) file is already on the host
++            if not force and remote_file_exists(
++                ssh, user, host_name, remote_path_target
++            ):
++                print(
++                    f"ℹ️  Skipping {remote_fname_target} on {host_name}: already exists"
++                )
++                continue
++
++            print(
++                f"➡️  Copying {remote_fname_target} to {host_name}:{REMOTE_SNIPPET_DIR}"
++            )
++            scp_cmd = (
++                f"scp -o StrictHostKeyChecking=no {remote_path_primary} "
++                f"{user}@{host_name}:{remote_path_target}"
++            )
++            stdin, stdout, stderr = ssh.exec_command(scp_cmd)
++            if stdout.channel.recv_exit_status() == 0:
++                print(f"✅ {remote_fname_target} copied to {host_name}")
++            else:
++                err = stderr.read().decode().strip()
++                print(f"❌ Failed to copy {remote_fname_target} to {host_name}: {err}")
++
++
++# ─────────────────────────────────────────────────────────────────────────────
++# CLI entry-point
++# ─────────────────────────────────────────────────────────────────────────────
++def main():
++    parser = argparse.ArgumentParser(
++        description="Distribute cloud-init image and snippets"
++    )
++    parser.add_argument(
++        "-f", "--force", action="store_true", help="Overwrite even if files exist"
++    )
++    args = parser.parse_args()
++
++    nodes = Config.PVE_IPS  # type: ignore
++    if len(nodes) < 2:
++        print("❌ Need at least two PVE_IPS (primary + targets).", file=sys.stderr)
++        sys.exit(1)
++
++    primary = nodes[1]
++    print(f"🔑 Using primary/jump host: {primary}")
++
++    distribute_img(primary, force=args.force)
++    distribute_snippets(primary, force=args.force)
++
++    print("🎉 Image and snippets distributed to all nodes.")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/proxmox/homelab/scripts/distribute_img_snippets.py b/proxmox/homelab/scripts/distribute_img_snippets.py
+new file mode 100644
+index 0000000..978814c
+--- /dev/null
++++ b/proxmox/homelab/scripts/distribute_img_snippets.py
+@@ -0,0 +1,179 @@
++#!/usr/bin/env python3
++import os
++import sys
++import argparse
++import paramiko
++
++# Bootstrap project path so we can import Config
++SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
++PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
++SRC_DIR = os.path.join(PROJECT_ROOT, "src")
++sys.path.insert(0, SRC_DIR)
++
++from homelab.config import Config
++
++# Constants
++ISO_URL = os.getenv(
++    "ISO_URL",
++    "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
++)
++IMAGE_NAME = os.path.basename(ISO_URL)
++LOCAL_IMG_DIR = PROJECT_ROOT
++REMOTE_ISO_DIR = "/var/lib/vz/template/iso"
++LOCAL_SNIPPET_DIR = os.path.join(PROJECT_ROOT, "snippets")
++REMOTE_SNIPPET_DIR = "/var/lib/vz/snippets"
++
++
++def ssh_connect(host):
++    user = os.getenv("SSH_USER", "root")
++    key = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
++    client = paramiko.SSHClient()
++    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
++    client.connect(hostname=host, username=user, key_filename=key)
++    return client
++
++
++def distribute_img(primary, force=False):
++    ssh = ssh_connect(primary)
++    user = os.getenv("SSH_USER", "root")
++
++    # ensure ISO dir
++    ssh.exec_command(f"mkdir -p {REMOTE_ISO_DIR}")
++
++    # download if missing
++    check_cmd = f"test -f {REMOTE_ISO_DIR}/{IMAGE_NAME} && echo exists || echo missing"
++    stdin, out, _ = ssh.exec_command(check_cmd)
++    if "missing" in out.read().decode():
++        print(f"⬇️  Downloading {IMAGE_NAME} on {primary}")
++        ssh.exec_command(f"curl -L {ISO_URL} -o {REMOTE_ISO_DIR}/{IMAGE_NAME}")
++    else:
++        print(f"ℹ️  {IMAGE_NAME} already on {primary}")
++
++    # scp to all hosts
++    for host in Config.get_nodes():
++        remote_path = f"{REMOTE_ISO_DIR}/{IMAGE_NAME}"
++        # skip if exists and not forcing
++        if not force:
++            test = f"ssh -o StrictHostKeyChecking=no {user}@{host} test -f {remote_path} && echo exists || echo missing"
++            stdin, out, _ = ssh.exec_command(test)
++            if "exists" in out.read().decode():
++                print(f"ℹ️  Skipping {IMAGE_NAME} on {host}: already exists")
++                continue
++        print(f"➡️  Copying {IMAGE_NAME} to {host}:{REMOTE_ISO_DIR}")
++        scp_cmd = (
++            f"scp -o StrictHostKeyChecking=no "
++            f"{remote_path} {user}@{host}:{REMOTE_ISO_DIR}/"
++        )
++        ssh.exec_command(scp_cmd)
++
++    ssh.close()
++
++
++def distribute_snippets(primary, force=False):
++    if not os.path.isdir(LOCAL_SNIPPET_DIR):
++        print(f"ℹ️  No snippets directory at {LOCAL_SNIPPET_DIR}; skipping.")
++        return
++
++    ssh = ssh_connect(primary)
++    user = os.getenv("SSH_USER", "root")
++
++    # ensure snippets dir
++    ssh.exec_command(f"mkdir -p {REMOTE_SNIPPET_DIR}")
++
++    upload_snippets_to_primary(ssh, force)
++    distribute_snippets_to_hosts(ssh, user, force)
++
++    ssh.close()
++
++
++def render_template(src_path: str, context: dict) -> str:
++    """Read src_path, replace all {{ key }} with context[key], and return the result."""
++    text = open(src_path).read()
++    for key, val in context.items():
++        text = text.replace(f"{{{{ {key} }}}}", val)
++    return text
++
++
++def upload_snippets_to_primary(ssh, force):
++    for fname in os.listdir(LOCAL_SNIPPET_DIR):
++        local_path = os.path.join(LOCAL_SNIPPET_DIR, fname)
++        remote_path = f"{REMOTE_SNIPPET_DIR}/{fname}"
++        if not force and file_exists(ssh, remote_path):
++            print(f"ℹ️  Skipping upload of {fname} on primary: already exists")
++            continue
++        print(f"⬆️  Uploading snippet {fname} to primary:{REMOTE_SNIPPET_DIR}")
++        sftp = ssh.open_sftp()
++        sftp.put(local_path, remote_path)
++        sftp.close()
++
++
++def distribute_snippets_to_hosts(ssh, user, force):
++    for host in Config.get_nodes():
++        host_name = host["name"]
++        for fname in os.listdir(LOCAL_SNIPPET_DIR):
++            remote_path = f"{REMOTE_SNIPPET_DIR}/{fname}"
++
++            if not force and remote_file_exists(ssh, user, host_name, remote_path):
++                print(f"ℹ️  Skipping {fname} on {host_name}: already exists")
++                continue
++            print(f"➡️  Copying snippet {fname} to {host_name}:{REMOTE_SNIPPET_DIR}")
++            scp_cmd = (
++                f"scp -o StrictHostKeyChecking=no "
++                f"{remote_path} {user}@{host_name}:{REMOTE_SNIPPET_DIR}/"
++            )
++            try:
++                print(f"🔄 Executing SCP command: {scp_cmd}")
++                stdin, stdout, stderr = ssh.exec_command(scp_cmd)
++                exit_status = stdout.channel.recv_exit_status()
++                if exit_status == 0:
++                    print(
++                        f"✅ Successfully copied snippet {fname} to {host}:{REMOTE_SNIPPET_DIR}"
++                    )
++                else:
++                    error_message = stderr.read().decode().strip()
++                    print(
++                        f"❌ Failed to copy snippet {fname} to {host}:{REMOTE_SNIPPET_DIR}. Error: {error_message}"
++                    )
++            except Exception as e:
++                print(
++                    f"❌ Exception occurred while copying snippet {fname} to {host}:{REMOTE_SNIPPET_DIR}: {e}"
++                )
++
++
++def file_exists(ssh, remote_path):
++    test = f"test -f {remote_path} && echo exists || echo missing"
++    stdin, out, _ = ssh.exec_command(test)
++    return "exists" in out.read().decode()
++
++
++def remote_file_exists(ssh, user, host, remote_path):
++    test = f"ssh -o StrictHostKeyChecking=no {user}@{host} test -f {remote_path} && echo exists || echo missing"
++    stdin, out, _ = ssh.exec_command(test)
++    return "exists" in out.read().decode()
++
++
++def main():
++    parser = argparse.ArgumentParser(
++        description="Distribute cloud-init image and snippets"
++    )
++    parser.add_argument(
++        "-f", "--force", action="store_true", help="Overwrite even if files exist"
++    )
++    args = parser.parse_args()
++
++    nodes = Config.PVE_IPS
++    if len(nodes) < 2:
++        print("❌ Need at least two PVE_IPS (primary + targets).", file=sys.stderr)
++        sys.exit(1)
++
++    primary = nodes[1]
++    print(f"🔑 Using primary/jump host: {primary}")
++
++    distribute_img(primary, force=args.force)
++    distribute_snippets(primary, force=args.force)
++
++    print("🎉 Image and snippets distributed to all nodes.")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/proxmox/homelab/scripts/remote_executor.py b/proxmox/homelab/scripts/remote_executor.py
+new file mode 100644
+index 0000000..7aea8fa
+--- /dev/null
++++ b/proxmox/homelab/scripts/remote_executor.py
+@@ -0,0 +1,58 @@
++#!/usr/bin/env python3
++import os
++import sys
++import argparse
++import paramiko
++
++# Ensure we can import our library
++SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
++PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
++SRC_DIR = os.path.join(PROJECT_ROOT, "src")
++sys.path.insert(0, SRC_DIR)
++
++from homelab.config import Config
++
++
++def run_on_host(hostname, user, key_path, commands):
++    ssh = paramiko.SSHClient()
++    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
++    ssh.connect(hostname=hostname, username=user, key_filename=key_path)
++    for cmd in commands:
++        print(f"\n[{hostname}]$ {cmd}")
++        stdin, stdout, stderr = ssh.exec_command(cmd)
++        out = stdout.read().decode().strip()
++        err = stderr.read().decode().strip()
++        if out:
++            print(out)
++        if err:
++            print(f"ERROR: {err}", file=sys.stderr)
++    ssh.close()
++
++
++def main():
++    parser = argparse.ArgumentParser(
++        description="SSH into all nodes from Config.get_nodes() and run commands."
++    )
++    parser.add_argument(
++        "-c", "--cmd", action="append", required=True,
++        help="Command to run on each host (repeatable)"
++    )
++    args = parser.parse_args()
++
++    # Load nodes from environment via Config
++    nodes = Config.get_nodes()
++    if not nodes:
++        print("❌ No nodes found. Please set NODE_1, NODE_2, etc. in your environment.", file=sys.stderr)
++        sys.exit(1)
++
++    # SSH credentials (defaults)
++    ssh_user = os.getenv("SSH_USER", "root")
++    ssh_key = os.getenv("SSH_KEY_PATH", os.path.expanduser("~/.ssh/id_rsa"))
++
++    for node in nodes:
++        hostname = node["name"]
++        print(f"\n=== Connecting to {hostname} ===")
++        run_on_host(hostname, ssh_user, ssh_key, args.cmd)
++
++if __name__ == "__main__":
++    main()
+diff --git a/proxmox/homelab/snippets/install-k3sup-qemu-agent.yaml b/proxmox/homelab/snippets/install-k3sup-qemu-agent.yaml
+new file mode 100644
+index 0000000..29bb621
+--- /dev/null
++++ b/proxmox/homelab/snippets/install-k3sup-qemu-agent.yaml
+@@ -0,0 +1,125 @@
++#cloud-config
++
++# Proxmox will pass the VM’s name into the metadata as 'hostname'
++hostname: "k3s-vm-{{ vm_name }}"
++preserve_hostname: false     # allow Cloud-Init to change it
++
++############################################################
++# 1) SSH & User Setup
++############################################################
++
++############################################################
++# Enable password login & define ubuntu user with SSH keys
++############################################################
++ssh_pwauth: true
++
++users:
++  - name: ubuntu
++    gecos: Ubuntu User
++    lock_passwd: false
++    passwd: $6oj78MG2zz.I                          # simple fallback password
++    shell: /bin/bash
++    sudo: ALL=(ALL) NOPASSWD:ALL
++    ssh-authorized-keys:
++      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCrf+FIETUTHBKDMe5OioHgzCaGBrI7B0TmL7i6Zz5UO7FK/wkVCLDNS4ol7De2QkI0HLFFTdvq9LNTDPamIEqjhMzwEeDIhgoxCrymyk2dy7TLNXNWQBkTGDBxId4EhB26Tfa6STlj4Iwr170vocWuTZ9Km2u8EaBPGv2u+Au1qXb9Fl0N9uu47phiHHWvP0aXK3nf9K6XSQQaru7UlVDOdUBhGWvXNcPAGp/xBdgc4fInkCdCr3z2Y40Jq3Cxs6vpQCW3DuJyEPupo8EOUArClaJOPht8wftnkxny/6WD70tcai/teObWLyQEidv4Ed++IlnevbhTx2hTbv/IdlSAzBtW1jZNlUlbalrEx0nDUtOAgFmsMFwtssrJpWbbpaRtfuaUn8KHHm2GS8kHrbypTcGKkRU+5GTlfs16AY8K6ypIfOskSulOpJCelji10h1ykck9o1wivqqoRoUP6MZQC+d1Uu1KwFklM7UZpBnGT0lpnimnKROCbGZfPwgJryBvCb55+3kLrC3iUmZJWzVVmtzGfH/cZhOGLe6rcGgReuJAxokgOIreP2pgVgrla7wMwo2frFQYmb1ajCSO4ChrozXe6DEyFCAkITqO/z5Dj6GGOaR00hXw2MFYUefdj+dK7od7CzDv1bzhLqmWDBKDv6h2skQFl/I4sDSmv5TpxQ== root@pve
++
++
++############################################################
++# Install essential packages & enable guest agent
++############################################################
++package_update: true
++package_upgrade: false
++packages:
++  - qemu-guest-agent
++  - curl
++  - nfs-common
++
++############################################################
++# Grow root partition to fill enlarged disk
++############################################################
++growpart:
++  mode: auto
++  devices:
++    - /
++  ignore_growroot_disabled: false
++resize_rootfs: true
++
++write_files:
++  # Add the private key
++  - path: /home/ubuntu/.ssh/id_rsa
++    permissions: '0600'
++    owner: ubuntu:ubuntu
++    content: |
++      -----BEGIN RSA PRIVATE KEY-----
++      b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
++      NhAAAAAwEAAQAAAQEA0OYYK73dF4MulaRXJtDyxlE1ZSlrcn/O3MUUpQiRFsxo6+Y9IwZp
++      YkerOCnH3EqGy5umefC0eIcyeiXy1pRGm6HW5MQxqGtnnbDJSEnoW0OVnmEVh9nOsDT5hp
++      lyoJhBSGHSgyVH9cQf3iSMpQdI+hZLqco2Zmag1o60Dtfyux44gWqdzpgP0Xd3Gclzon8y
++      N48lw5nrNrNSoYOsRHX45A0paZhpYete+KKv7uh7hUsxxmtVoYkdSumvI17hv1roMI41L5
++      P8pnQvtDfVTtbrys3YlN0U/JgQLyBPRUvI3+TH0rZ0wq2qu9WsNUiL713k7GlJRwDcW4wt
++      MKgZ3KAgwwAAA9CyGMbfshjG3wAAAAdzc2gtcnNhAAABAQDQ5hgrvd0Xgy6VpFcm0PLGUT
++      VlKWtyf87cxRSlCJEWzGjr5j0jBmliR6s4KcfcSobLm6Z58LR4hzJ6JfLWlEabodbkxDGo
++      a2edsMlISehbQ5WeYRWH2c6wNPmGmXKgmEFIYdKDJUf1xB/eJIylB0j6FkupyjZmZqDWjr
++      QO1/K7HjiBap3OmA/Rd3cZyXOifzI3jyXDmes2s1Khg6xEdfjkDSlpmGlh6174oq/u6HuF
++      SzHGa1WhiR1K6a8jXuG/WugwjjUvk/ymdC+0N9VO1uvKzdiU3RT8mBAvIE9FS8jf5MfStn
++      TCraq71aw1SIvvXeTsaUlHANxbjC0wqBncoCDDAAAAAwEAAQAAAQA7u8/lkiEKfCRx/dA9
++      9Tm2o7oU90cWMp3AW0qP9mcmkcTez7NjtI2l4MCBCtFvmI/64MM10zKH1IEGlJtf6H5YOm
++      rsd32Ln0q9uLOVzCx5DFZYN4Kkmg+UK1G+v1obue3Q+MftYFe3WyGRr/nXpsGjYYS5RG1R
++      0r7jG2M5a16pSnJauGA2BVnaet+tzNcoUkCsUssP3Ksd8BoauFORN1VCZpQY0S5svLNMWT
++      cV5jGVXD8ksgch/H9YusEbT+GnMJhTIwI5SX2F3xtugpRQZb398aFx6Gr6cwD3AulhynVf
++      B5DJIcTbfiLgWROqkFKfyI294ssthjbMFdXwLWoBixMhAAAAgAsC3ky4pwdocQf4q2yXbA
++      C3emY0M/zvVivJdyWkRM64fBuhQpwowQcTebNCEDiBUTGZT9TWVE1GaLdis3MhNQ3EZzHp
++      tPRA1hkAS54fqMwuNrH5OKGkBfTfUVGVnyUea8Mwmc+kibMel8d9TvOMzsgs6oC5PZk40l
++      KPzfF2x8/KAAAAgQD4xP+q0jKA8RM3JLDHm4YVKQL01pU1zyPv0TlxnU46qeWqO0xbzCy6
++      fF5I/cNM69OJHQqP9ags7DXmpXvfTZaT2cufZ19OjgE2pzFfT87DYfbDWMGStqhqIbOFon
++      iHdlz92qTBj2hFFxsPKKAtR2a3Q9epIZsavStL4YnbShOPLQAAAIEA1vhuu+2fNSfonnrM
++      prYHQJgJDrzvy2PM6a/2ikz0nljPmPr4Z+H7n3+l5FvKNZmNPFjtpI7QXTNzjZ0S+PMFMl
++      reDTn5rrSN1tKVv+MG3lGRUBdOwFzN4zl37ei3EkpDGxqDfjwHEn+SnW/VfPsyf86ztTvW
++      Jsj9rScS9U+m5a8AAAAYMTAzODEwNTRAQ0EyMzUtTS05WFFRTDlWAQID
++      -----END RSA PRIVATE KEY-----
++
++  # Add the public key
++  - path: /home/ubuntu/.ssh/id_rsa.pub
++    permissions: '0644'
++    owner: ubuntu:ubuntu
++    content: |
++      ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDQ5hgrvd0Xgy6VpFcm0PLGUTVlKWtyf87cxRSlCJEWzGjr5j0jBmliR6s4KcfcSobLm6Z58LR4hzJ6JfLWlEabodbkxDGoa2edsMlISehbQ5WeYRWH2c6wNPmGmXKgmEFIYdKDJUf1xB/eJIylB0j6FkupyjZmZqDWjrQO1/K7HjiBap3OmA/Rd3cZyXOifzI3jyXDmes2s1Khg6xEdfjkDSlpmGlh6174oq/u6HuFSzHGa1WhiR1K6a8jXuG/WugwjjUvk/ymdC+0N9VO1uvKzdiU3RT8mBAvIE9FS8jf5MfStnTCraq71aw1SIvvXeTsaUlHANxbjC0wqBncoCDD 10381054@CA235-M-9XQQL9V
++
++############################################################
++# Kubernetes pre-flight: disable swap, load modules, sysctl
++############################################################
++runcmd:
++  # 1) Turn off swap and disable it permanently
++  - swapoff -a
++  - sed -i '/\\sswap\\s/s/^/#/' /etc/fstab
++
++  # 2) Load required kernel modules
++  - modprobe overlay
++  - modprobe br_netfilter
++
++  # 3) Persist sysctl params for k8s networking
++  - |
++    cat << 'EOF' > /etc/sysctl.d/99-kubernetes.conf
++    net.bridge.bridge-nf-call-iptables  = 1
++    net.bridge.bridge-nf-call-ip6tables = 1
++    net.ipv4.ip_forward                 = 1
++    EOF
++  - sysctl --system
++
++  # 4) Enable & start the QEMU guest agent
++  - systemctl enable --now qemu-guest-agent
++
++  # 5) Install k3sup for k3s bootstrapping
++  - curl -sLS https://get.k3sup.dev | sudo sh
++
++  # 6) Generate an ED25519 keypair and append its public key
++  - mkdir -p /home/ubuntu/.ssh
++  - chown ubuntu:ubuntu /home/ubuntu/.ssh
++  - su - ubuntu -c "ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''"
++  - su - ubuntu -c "cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys"
++  # Ensure the custom keys are added to authorized_keys
++  - su - ubuntu -c "cat /home/ubuntu/.ssh/id_rsa_custom.pub >> /home/ubuntu/.ssh/authorized_keys"
++  - chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
++  - chmod 600 /home/ubuntu/.ssh/authorized_keys
++  - chmod 600 /home/ubuntu/.ssh/id_ed25519*
++
+diff --git a/proxmox/homelab/src/homelab/config.py b/proxmox/homelab/src/homelab/config.py
+index 6217944..ffa6f3f 100644
+--- a/proxmox/homelab/src/homelab/config.py
++++ b/proxmox/homelab/src/homelab/config.py
+@@ -14,6 +14,13 @@ class Config:
+         "https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso",
+     )
+
++    # Comma-separated Proxmox node IPs, e.g. "192.168.86.194,192.168.1.122,192.168.4.122"
++    PVE_IPS = [
++        ip.strip()
++        for ip in os.getenv("PVE_IPS", "").split(",")
++        if ip.strip()
++    ]
++
+     @staticmethod
+     def get_nodes():
+         """Dynamically loads nodes from environment variables."""
