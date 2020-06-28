@@ -1,0 +1,12 @@
+FROM balenalib/%%BALENA_MACHINE_NAME%%-python:3.8.3-stretch-20200518
+
+RUN install_packages build-essential python3-dev libfreetype6-dev libjpeg-dev libtiff5
+
+RUN pip3 install --no-cache-dir --upgrade fauxmo
+
+COPY . /usr/src/app/
+
+WORKDIR /usr/src/app/
+
+CMD ["fauxmo","-c","config.json"]
+
