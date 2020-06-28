@@ -38,7 +38,7 @@ services:
     expose:
       - "8000"
   fauxmo:
-    build: /raspberrypi-master/fauxmo
+    build: ./raspberrypi-master/fauxmo
     depends_on:
       - display_driver
     privileged: true
