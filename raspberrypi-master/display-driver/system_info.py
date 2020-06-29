@@ -51,9 +51,7 @@ async def show_cpu(request): # print the cpu
     return web.Response(content_type='text/html', text=cpu_string)
 
 async def show_clock(request): # print the clock
-    clock_string = clock.clock()
-    print('clock= ' + clock_string)
-    show_message_vp(request, clock_string)
+    clock_string = clock.clock(app['seg'], 10)
     return web.Response(content_type='text/html', text=clock_string)
 
 async def show_disk(request): # print the disk
