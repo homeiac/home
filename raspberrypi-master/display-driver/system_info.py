@@ -17,7 +17,7 @@ from luma.core.virtual import viewport, sevensegment
 
 def show_message_vp(request, msg):
     device = request.app['device']
-    delay = 0.5
+    delay = request.app['delay']
     # Implemented with virtual viewport
     width = device.width
     padding = " " * width
@@ -33,8 +33,8 @@ def show_message_vp(request, msg):
 
 def show_message_alt(request, msg):
     seg = request.ap['seg']
-    delay = 0.1
-    # Does same as above but does 
+    delay = request.app['delay']
+    # Does same as above but does
     # string slicing itself
     width = seg.device.width
     padding = " " * width
@@ -102,6 +102,7 @@ def setup(app): # create the display device and store it
     app['serial'] = spi(port=0, device=0, gpio=noop())
     app['device'] = max7219(app['serial'], cascaded=1)
     app['seg'] = sevensegment(app['device'])
+    app['delay'] = 0.3
 
 
 if __name__ == '__main__':
