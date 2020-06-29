@@ -15,5 +15,5 @@ jobs:
       - name: Balena Deploy
         uses: bekriebel/balena-cli-action@v1.0.1
         with:
-          api-token: ${{secrets.BALENA_API_TOKEN}}
-          application-name: ${{secrets.BALENA_APPLICATION_NAME}}
+          balena_api_token: ${{secrets.BALENA_API_TOKEN}}
+          balena_command: "deploy ${{secrets.BALENA_APPLICATION_NAME}} --logs"
