@@ -13,13 +13,13 @@ def clock(seg, seconds):
     interval = 0.5
     for i in range(int(seconds / interval)):
         now = datetime.now()
-        seg.text = now.strftime("%H-%M-%S") + "\n"
+        seg.text = now.strftime("%H-%M-%S")
 
         # calculate blinking dot
         if i % 2 == 0:
-            seg.text = now.strftime("%H-%M-%S") + "\n"
+            seg.text = now.strftime("%H-%M-%S")
         else:
-            seg.text = now.strftime("%H %M %S") + "\n"
+            seg.text = now.strftime("%H %M %S")
 
         time.sleep(interval)
 
