@@ -100,7 +100,7 @@ def setup(app): # create the display device and store it
     app['serial'] = spi(port=0, device=0, gpio=noop())
     app['device'] = max7219(app['serial'], cascaded=1)
     app['seg'] = sevensegment(app['device'])
-    app['delay'] = 0.05
+    app['delay'] = 0.1
 
 
 if __name__ == '__main__':
