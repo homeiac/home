@@ -23,5 +23,5 @@ def clock(seg, seconds):
 
         time.sleep(interval)
 
-    return datetime.now()
+    return datetime.now().strftime("%H-%M-%S")
 
