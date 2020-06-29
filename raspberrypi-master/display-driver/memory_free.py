@@ -1,5 +1,5 @@
-import psutil 
-import platform 
+import psutil
+import platform
 from datetime import datetime
 
 def get_size(bytes, suffix="B"):
@@ -17,5 +17,5 @@ def get_size(bytes, suffix="B"):
 
 def get_memory():
     svmem = psutil.virtual_memory()
-    memory_string = "mem Free " + str(get_size(svmem.used)) +  " used " + str(svmem.percent) + "o|o"
+    memory_string = "free " + str(get_size(svmem.used)) +  " used " + str(svmem.percent)
     return memory_string
