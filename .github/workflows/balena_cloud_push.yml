@@ -10,11 +10,10 @@ jobs:
   balena-push:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-node@v1
-      with:
-         node-version: '12'
-    - uses: theaccordance/balena-push@v1.0.0
-      with:
-        api-token: ${{secrets.BALENA_API_TOKEN}}
-        application-name: ${{secrets.BALENA_APPLICATION_NAME}}
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Balena Deploy
+        uses: bekriebel/balena-cli-action@v1.0.1
+        with:
+          api-token: ${{secrets.BALENA_API_TOKEN}}
+          application-name: ${{secrets.BALENA_APPLICATION_NAME}}
