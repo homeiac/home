@@ -19,7 +19,7 @@ def get_diskfree():
     df = ""
     try:
         partition_usage = psutil.disk_usage("/")
-        df = "disk Free| " + str(get_size(partition_usage.free)) + " | " + str(partition_usage.percent) + " o|o used"
+        df = "Free " + str(get_size(partition_usage.free)) + " | " + str(partition_usage.percent) + " o|o"
     except PermissionError:
         print("unable to get disk usage information")
     return df
