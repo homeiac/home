@@ -45,10 +45,19 @@ def show_message_alt(request, msg):
         time.sleep(delay)
 
 async def show_cpu(request): # print the cpu
+    """Send the CPU response and then display on 7 segment display."""
     cpu_string = cpu_load.get_CPU()
     print('cpu= ' + cpu_string)
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=cpu_string)
+    await resp.prepare(request)
+    await resp.write_eof()
+
     show_message_vp(request, cpu_string)
-    return web.Response(content_type='text/html', text=cpu_string)
+    return resp
+
+
 
 async def show_clock(request): # print the clock
     clock_string = clock.clock(app['seg'], 10)
