@@ -34,7 +34,8 @@ def show_message_vp(request, msg):
 def show_message_alt(request, msg):
     seg = request.ap['seg']
     delay = 0.1
-    # Does same as above but does string slicing itself
+    # Does same as above but does 
+    # string slicing itself
     width = seg.device.width
     padding = " " * width
     msg = padding + msg + padding
