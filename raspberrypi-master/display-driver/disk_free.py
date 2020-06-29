@@ -1,5 +1,5 @@
-import psutil 
-import platform 
+import psutil
+import platform
 from datetime import datetime
 
 def get_size(bytes, suffix="B"):
@@ -16,13 +16,10 @@ def get_size(bytes, suffix="B"):
         bytes /= factor
 
 def get_diskfree():
-    partitions = psutil.disk_partitions()
     df = ""
-    for partition in partitions:
-        try:
-            partition_usage = psutil.disk_usage(partition.mountpoint)
-        except PermissionError:
-            continue 
-        if partition.mountpoint == "/":
-            df = "disk Free| " + str(get_size(partition_usage.free)) + " | " + str(partition_usage.percent) + " o|o used"
+    try:
+        partition_usage = psutil.disk_usage("/")
+        df = "disk Free| " + str(get_size(partition_usage.free)) + " | " + str(partition_usage.percent) + " o|o used"
+    except PermissionError:
+        print("unable to get disk usage information")
     return df
