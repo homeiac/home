@@ -22,7 +22,7 @@ def clock(seg, seconds):
             seg.text = now.strftime("%H %M %S")
 
         time.sleep(interval)
-    
+
     seg.text = ""
 
     return datetime.now().strftime("%H-%M-%S")

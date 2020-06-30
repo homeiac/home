@@ -1,6 +1,6 @@
 import time
 import asyncio
-from datetime import timedelta
+from datetime import datetime
 from aiohttp import web
 import netifaces as ni
 import get_time
@@ -60,29 +60,59 @@ async def show_cpu(request): # print the cpu
 
 
 async def show_clock(request): # print the clock
-    clock_string = clock.clock(app['seg'], 10)
-    return web.Response(content_type='text/html', text=clock_string)
+    """Send the current time and then display blinking clock on the 7 segment display."""
+    clock_string = datetime.now().strftime("%H-%M-%S")
+    print('time now = ' + clock_string)
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=clock_string)
+    await resp.prepare(request)
+    await resp.write_eof()
+    clock.clock(app['seg'], 10)
+    return resp
 
 async def show_disk(request): # print the disk
+    """Send the disk  usage and then display disk usage data on the 7 segment display."""
     disk_string = disk_free.get_diskfree()
     print('disk= ' + disk_string)
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=disk_string)
+    await resp.prepare(request)
+    await resp.write_eof()
+
     show_message_vp(request, disk_string)
-    return web.Response(content_type='text/html', text=disk_string)
+    return resp
 
 
 async def show_memory(request): # print the memory
+    """Send the memory  usage and then display memory usage data on the 7 segment display."""
     memory_string = memory_free.get_memory()
     print('memory= ' + memory_string)
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=memory_string)
+    await resp.prepare(request)
+    await resp.write_eof()
+
     show_message_vp(request, memory_string)
-    return web.Response(content_type='text/html', text=memory_string)
+    return resp
 
 async def show_time(request): # print the time
+    """Send the current time and then display current time on the 7 segment display."""
     time_string = get_time.get_time()
     print('time= ' + time_string)
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=time_string)
+    await resp.prepare(request)
+    await resp.write_eof()
+
     show_message_vp(request, time_string)
-    return web.Response(content_type='text/html', text=time_string)
+    return resp
 
 async def show_ip(request):
+    """Send the ip address and then display ip address on the 7 segment display."""
     for interface in ni.interfaces():
         if interface == ni.gateways()['default'][ni.AF_INET][1]:
             try:
@@ -90,8 +120,15 @@ async def show_ip(request):
             except KeyError:
                 pass
     print(routingIPAddr)
+
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=routingIPAddr)
+    await resp.prepare(request)
+    await resp.write_eof()
+
     show_message_vp(request, routingIPAddr)
-    return web.Response(content_type='text/html', text=routingIPAddr)
+    return resp
 
 
 async def all_off(request): # turn off everything
@@ -100,10 +137,17 @@ async def all_off(request): # turn off everything
     return web.Response(content_type='text/html', text='everything is off')
 
 async def show_uptime(request): # print the uptime
+    """Send the uptime and then display it on the 7 segment display."""
     uptime_string = up_time.get_uptime()
     print('uptime= ' + uptime_string)
+
+    # explicitly send the response
+    resp = web.Response(content_type='text/html', text=uptime_string)
+    await resp.prepare(request)
+    await resp.write_eof()
+
     show_message_vp(request, uptime_string)
-    return web.Response(content_type='text/html', text=uptime_string)
+    return resp
 
 def setup(app): # create the display device and store it
     app['serial'] = spi(port=0, device=0, gpio=noop())
