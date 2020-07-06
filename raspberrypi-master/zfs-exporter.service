@@ -1,0 +1,11 @@
+[Unit]
+Description=Start zfs exporter  service
+After=zfs-mount.service
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/zfs_exporter
+
+[Install]
+WantedBy=multi-user.target
