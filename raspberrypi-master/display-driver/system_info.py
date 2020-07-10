@@ -5,7 +5,7 @@ from aiohttp import web
 import netifaces as ni
 from get_time import get_time
 from memory_free import get_memory
-from disk_free import get_disk_free
+from disk_free import get_diskfree
 import cpu_load
 from clock import clock
 
