@@ -47,7 +47,7 @@ services:
       - '127.0.0.1'
     network_mode: host
   arm_exporter:
-    image: carlosed/arm_exporter:latest
+    image: carlosedp/arm_exporter:latest
     ports:
       - "9243:9243"
     privileged: true
