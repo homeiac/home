@@ -54,9 +54,3 @@ services:
       - '--collector.textfile.directory=/etc/rpi_exporter/'
     ports:
       - 9243:9243
-    networks:
-      - monitoring
-
-networks:
-  monitoring:
-    driver: overlay
