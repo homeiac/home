@@ -3,13 +3,13 @@ import asyncio
 from datetime import datetime
 from aiohttp import web
 import netifaces as ni
-import get_time
-import memory_free
-import disk_free
+from get_time import get_time
+from memory_free import get_memory_free
+from disk_free import get_disk_free
 import cpu_load
-import clock
+from clock import clock
 
-import up_time
+from up_time import get_uptime
 
 from luma.led_matrix.device import max7219
 from luma.core.interface.serial import spi, noop
