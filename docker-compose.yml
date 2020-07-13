@@ -46,11 +46,3 @@ services:
     dns:
       - '127.0.0.1'
     network_mode: host
-  arm_exporter:
-    image: carlosedp/arm_exporter
-    environment:
-      - NODE_ID={{.Node.ID}}
-    command:
-      - '--collector.textfile.directory=/etc/rpi_exporter/'
-    ports:
-      - 9243:9243
