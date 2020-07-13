@@ -73,7 +73,7 @@ async def show_clock(request): # print the clock
 
 async def show_disk(request): # print the disk
     """Send the disk  usage and then display disk usage data on the 7 segment display."""
-    disk_string = disk_free.get_diskfree()
+    disk_string = get_diskfree()
     print('disk= ' + disk_string)
 
     # explicitly send the response
@@ -87,7 +87,7 @@ async def show_disk(request): # print the disk
 
 async def show_memory(request): # print the memory
     """Send the memory  usage and then display memory usage data on the 7 segment display."""
-    memory_string = memory_free.get_memory()
+    memory_string = get_memory()
     print('memory= ' + memory_string)
 
     # explicitly send the response
@@ -138,7 +138,7 @@ async def all_off(request): # turn off everything
 
 async def show_uptime(request): # print the uptime
     """Send the uptime and then display it on the 7 segment display."""
-    uptime_string = up_time.get_uptime()
+    uptime_string = get_uptime()
     print('uptime= ' + uptime_string)
 
     # explicitly send the response
