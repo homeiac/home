@@ -11,10 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: push
+        working-directory: ./
         run: |
            curl -L -o /tmp/balena.zip https://github.com/balena-io/balena-cli/releases/download/v11.28.5/balena-cli-v11.28.5-linux-x64-standalone.zip
            unzip /tmp/balena.zip -d /opt
            rm /tmp/balena.zip
+           echo "working directory ls"
+           ls -R
            export PATH=$PATH:/opt/balena-cli
            balena login --token ${{secrets.BALENA_API_TOKEN}}
            echo "balena login completed"
