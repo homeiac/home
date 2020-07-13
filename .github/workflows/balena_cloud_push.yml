@@ -17,5 +17,7 @@ jobs:
            rm /tmp/balena.zip
            export PATH=$PATH:/opt/balena-cli
            balena login --token ${{secrets.BALENA_API_TOKEN}}
+           echo "balena login completed"
+           echo "running balena push ${{secrets.BALENA_APPLICATION_NAME}}"
            balena push ${{secrets.BALENA_APPLICATION_NAME}}
-
+           echo "${{secrets.BALENA_APPLICATION_NAME}} push complete"
