@@ -6,14 +6,11 @@ on:
     branches:
       - master
 
-jobs:
-  balena-push:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Balena Deploy
-        uses: bekriebel/balena-cli-action@v1.0.1
-        with:
-          balena_api_token: ${{secrets.BALENA_API_TOKEN}}
-          balena_command: "deploy ${{secrets.BALENA_APPLICATION_NAME}} --logs"
+run: |
+        curl -L -o /tmp/balena.zip https://github.com/balena-io/balena-cli/releases/download/v11.28.5/balena-cli-v11.28.5-linux-x64-standalone.zip
+        unzip /tmp/balena.zip -d /opt
+        rm /tmp/balena.zip
+        export PATH=$PATH:/opt/balena-cli
+        balena login --token ${{secrets.BALENA_API_TOKEN}}
+        balena push ${{secrets.BALENA_APPLICATION_NAME}}
+
