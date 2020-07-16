@@ -5,6 +5,9 @@ on:
     # Only run workflow for pushes to specific branches
     branches:
       - master
+    paths-ignore:
+    - 'docs/**'
+    - 'k8s/**'
 
 jobs:
   balena_push:
