@@ -1,7 +1,7 @@
 Welcome to homeiac's documentation!
 ===================================
 
-This page is published to https://homeiac.github.io/home/ 
+This page is published to https://homeiac.github.io/home/
 
 Contents
 ---------
@@ -12,7 +12,7 @@ Contents
 Home Infrastructure As code (homeiac)
 -------------------------------------
 
-Documentation on setting up home servers using IaC. 
+Documentation on setting up home servers using IaC.
 
 Goal
 ****
@@ -42,9 +42,9 @@ Setup Balena Managed Raspberry PI
 - This is the link to the workflow - https://github.com/homeiac/home/blob/master/.github/workflows/balena_cloud_push.yml
 - With this support, the goal of IaC for raspberry pi devices is achieved. There is no need for keeping OS and other services up to date. Everything is managed by Balena. All changes (unless you override using local mode) goes through github. The central docker-compose.yml controls what gets deployed. Each push to master automatically updates the devices.
 - To disable wifi at runtime - Run the following from the cloud shell https://dashboard.balena-cloud.com/devices/
-  
+
   ``nmcli radio wifi off``
-  
+
   *  (To be verified) - Move the resin-wifi-config to resin-wifi-config.ignore as follows
      ``cd /mnt/boot/system-connections && mv resin-wifi-01 resin-wifi-01.ignore``
 
@@ -75,7 +75,7 @@ Setup media / backup Raspberry PI
   rm -rf /var.old
 
 - Install node exporter using instructions from https://linuxhit.com/prometheus-node-exporter-on-raspberry-pi-how-to-install/#3-node-exporter-setup-on-raspberry-pi-running-raspbian
-   * Download node exporter 
+   * Download node exporter
    * Unpack and install it under /usr/local/bin
    * Install the systemd service
 
@@ -91,7 +91,7 @@ Setup media / backup Raspberry PI
   sudo chown -R node_exporter:node_exporter /var/lib/node_exporter
   cd /etc/systemd/system/
   sudo wget https://gist.githubusercontent.com/gshiva/9c476796c8da54afe9fb231e984f49a0/raw/b05e28a6ca1c89e815747e8f7e186a634518f9c1/node_exporter.service
-  sudo systemctl daemon-reload 
+  sudo systemctl daemon-reload
   sudo systemctl enable node_exporter.service
   sudo systemctl start node_exporter.service
   systemctl status node_exporter.service
@@ -154,7 +154,7 @@ From https://helm.sh/docs/intro/install/
   curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
   chmod 700 get_helm.sh
   ./get_helm.sh
-  
+
   # add the repos
   helm repo add stable https://kubernetes-charts.storage.googleapis.com/
   helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -221,7 +221,7 @@ Required only if you want to testing... For prod you can skip the below
         ingress:
           class: traefik
 
-Run the command 
+Run the command
 
 .. code-block:: bash
 
@@ -405,7 +405,7 @@ Additional Hints
 
 Ability to run github actions locally totally rocks!!!
 
-See https://github.com/nektos/act 
+See https://github.com/nektos/act
 
 ``brew install nektos/tap/act``
 
@@ -419,9 +419,9 @@ For cross compiling install the following
   sudo apt-get install gcc-arm-linux-gnueabi build-essential flex bison
 
 
-To get vcgencmd on ubuntu, follow the instructions in https://wiki.ubuntu.com/ARM/RaspberryPi 
+To get vcgencmd on ubuntu, follow the instructions in https://wiki.ubuntu.com/ARM/RaspberryPi
 
-and add 
+and add
 
 ``sudo add-apt-repository ppa:ubuntu-raspi2/ppa && sudo apt-get update``
 
@@ -432,7 +432,7 @@ the command will fail. After that update
 change the release name to ``bionic``
 
 
-To resolve the 
+To resolve the
 
 ``ping: k3smaster1.local: Temporary failure in name resolution``
 
@@ -448,7 +448,7 @@ Install the following:
    hosts:          files dns wins
    networks:       files
 
- 
+
 Developing packer image for raspberry pi
 ----------------------------------------
 
@@ -468,7 +468,7 @@ Content of scratch pad
  update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
  update-alternatives --set arptables /usr/sbin/arptables-legacy
  update-alternatives --set ebtables /usr/sbin/ebtables-legacy
- 
+
  export SERVER_IP=192.168.0.43
  export IP=192.168.0.43
  export USER=pi
@@ -512,7 +512,7 @@ Content of scratch pad
 
  # copy the keys and to authorized_keys in all the hosts
 
- # run this on the *real* master 
+ # run this on the *real* master
  k3sup join \
   --ip $NEXT_MASTER_SERVER_IP \
   --user $USER \
@@ -559,12 +559,12 @@ Using https://github.com/oetiker/znapzend for scheduled backups to pimaster
 
 Followed the https://github.com/Gregy/znapzend-debian instructions for the debian package. Remember the package is present in the parent directory.
 
-Installed it using 
+Installed it using
 
 ``dpkg -i z*.deb``
 
 It kept saying pi@pimaster.local:/data/backup was not present even though it was there.
-After hints from https://serverfault.com/questions/772805/host-key-verification-failed-on-znapzendzetup-create-command 
+After hints from https://serverfault.com/questions/772805/host-key-verification-failed-on-znapzendzetup-create-command
 
 Got it working.
 
@@ -583,7 +583,47 @@ The PC has a third adapter and an attempt was made to route it through Windows s
 
 Adding the adapter to the pimaster and running dnsmasq there worked.
 
+Adding plugins to grafana
+-------------------------
 
+For installing a grafana plugin, ideally it should be added to the values.yaml during helm deployment. If missed, then the simplest way is to exec into the grafana container and use grafana cli to install the plugin from https://github.com/helm/charts/issues/9564
+
+Specifically https://github.com/helm/charts/issues/9564#issuecomment-523666632
+
+For anyone still wondering how to add new plugins without helm upgrade. If you are using persistent volumes you can access the grafana server pod to run grafana-cli plugins install <plugin-id>.
+
+``kubectl exec -it grafana-pod-id -n grafana -- grafana-cli plugins install <plugin-id>``
+
+Finally, delete the pod to restart the server:
+
+``kubectl delete pod grafana-pod-id -n grafana``
+
+For status map plugin the following actually works without requiring a Grunt build
+
+``git clone git@github.com:flant/grafana-statusmap.git /var/lib/grafana/plugins/flant-statusmap-panel``
+
+Fixing netplan dropping static IP when the link is disconnected problem
+-----------------------------------------------------------------------
+
+Whenever the 2.4G private wireless network goes down or the cable is unplugged, netplan removes the static ip which is good. It doesn't bring it back up when the Access Point is back up again or when the network cable is plugged back in. It is a "known" problem and https://askubuntu.com/questions/1046420/why-is-netplan-networkd-not-bringing-up-a-static-ethernet-interface/1048041#1048041 had the solution
+
+Remove the eth1 stanza from the netplan config and add something like this systemd config in /etc/systemd/network/10-eth1.network
+
+.. code-block:: bash
+
+  [Match]
+  Name=eth1
+
+  [Link]
+  RequiredForOnline=no
+
+  [Network]
+  ConfigureWithoutCarrier=true
+  Address=192.168.3.1/24
+  Gateway=192.168.0.1
+  DNS=192.168.0.17
+  DNS=8.8.8.8
+  DNS=1.1.1.1
 
 Indices and tables
 ------------------
