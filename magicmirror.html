@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Magic Mirror &#8212; homeiac 0.0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="magic-mirror">
+<h1>Magic Mirror<a class="headerlink" href="#magic-mirror" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="setup">
+<h2>Setup<a class="headerlink" href="#setup" title="Permalink to this headline">¶</a></h2>
+<p>HP x360 laptop which had a hinge to allow tablet mode like operation was very convenient for Magic Mirror setup. This allowed the display to be setup without opening up the laptop. Also additional cost of screen and or screen plus adapter was avoided. To avoid issues with using the built-in camera, sound, mic the native windows 10 with an upgrade to Pro (to allow for RDP) was used.</p>
+</div>
+<div class="section" id="goals">
+<h2>Goals<a class="headerlink" href="#goals" title="Permalink to this headline">¶</a></h2>
+<ul>
+<li><p>Setup the hardware for Magic Mirror</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Acrylic mirror <a class="reference external" href="https://www.amazon.com/dp/B07CWG8DRK/ref=cm_sw_r_tw_dp_x_ohjuFbN4G54XM">https://www.amazon.com/dp/B07CWG8DRK/ref=cm_sw_r_tw_dp_x_ohjuFbN4G54XM</a> (12” x 18”)</p></li>
+<li><p>Strips of wood for the frame plus a thicker one for supporting a laptop at the bottom</p></li>
+<li><p>Paint the wood strips black</p></li>
+<li><p>Attach the acrylic sheet to the wood strips (Use a frame, gluing shows through the mirror)</p></li>
+<li><p>Mount the laptop</p></li>
+<li><p>Black craft tape to cover areas where there are gaps</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><dl class="simple">
+<dt>Windows 10 setup</dt><dd><ul class="simple">
+<li><p>Upgraded home to Pro version to enable Remote Desktop / RDP</p></li>
+<li><p>Used physical keyboard plus mouse to fix the display mode to portrait only</p></li>
+<li><p>Used a DOS script to run <code class="docutils literal notranslate"><span class="pre">tscon.exe</span> <span class="pre">2</span> <span class="pre">/dest:console</span></code> to let the display be on the screen once RDP session is done</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Next Steps</dt><dd><ul class="simple">
+<li><p>Script to turn display on/off</p></li>
+<li><p>Determine server platform to run various commands based on sensor input</p></li>
+<li><p>Use PIR or built-in camera to trigger display on/off</p></li>
+<li><p>Train face recognition models</p></li>
+<li><p>Display message based on who is in front</p></li>
+<li><p>Integrate voice to the display</p></li>
+<li><p>Integrate work calendar to the display</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">homeiac</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, gshiva.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.2.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/magicmirror.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
