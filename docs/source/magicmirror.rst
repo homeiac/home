@@ -32,4 +32,5 @@ Goals
     * Display message based on who is in front
     * Integrate voice to the display
     * Integrate work calendar to the display
+    * Add Minority Report interface
 
