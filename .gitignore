@@ -81,6 +81,9 @@ celerybeat-schedule
 # dotenv
 .env
 
+# any iso files
+*.iso
+
 # virtualenv
 venv/
 ENV/
