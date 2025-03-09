@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "homelab"
+version = "0.1.0"
+description = ""
+authors = ["Kumar Gopal <kumar.gopal@bd.com>"]
+readme = "README.md"
+packages = [{include = "homelab", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+proxmoxer = "^2.2.0"
+requests = "^2.32.3"
+dotenv = "^0.9.9"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
