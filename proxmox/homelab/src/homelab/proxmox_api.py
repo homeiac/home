@@ -27,13 +27,29 @@ class ProxmoxClient:
 
     def get_storage_content(self, storage):
         """Retrieve storage content."""
+        print(f"host: {self.host}")
         return self.proxmox.nodes(self.host).storage(storage).content.get()
 
+    def iso_exists(self, storage):
+        """Check if the ISO already exists in Proxmox storage."""
+        try:
+            storage_content = self.proxmox.nodes(self.host).storage(storage).content.get()
+            for item in storage_content:
+                if item.get("volid", "").endswith(f"iso/{Config.ISO_NAME}"):
+                    print(f"✅ ISO {Config.ISO_NAME} already exists in storage {storage}. Skipping upload.")
+                    return True
+            return False
+        except Exception as e:
+            print(f"⚠️ Error checking ISO existence: {e}")
+            return False
+
     def upload_iso(self, storage, iso_path):
-        """Upload an ISO to Proxmox storage."""
+        """Upload an ISO to Proxmox storage (only if it does not exist)."""
+        if self.iso_exists(storage):
+            return  # Skip upload if ISO is already present
+
         with open(iso_path, "rb") as iso_file:
             self.proxmox.nodes(self.host).storage(storage).upload.post(
                 content="iso",
-                filename=Config.ISO_NAME,
-                file=iso_file
+                filename=iso_file
             )
