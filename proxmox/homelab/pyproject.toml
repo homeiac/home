@@ -11,6 +11,8 @@ python = "^3.11"
 proxmoxer = "^2.2.0"
 requests = "^2.32.3"
 dotenv = "^0.9.9"
+paramiko = "^3.5.1"
+python-dotenv = "^1.1.0"
 
 
 [tool.poetry.group.dev.dependencies]
