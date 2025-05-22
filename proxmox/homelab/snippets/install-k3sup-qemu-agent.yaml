@@ -1,0 +1,101 @@
+#cloud-config
+
+# Proxmox will pass the VM’s name into the metadata as 'hostname'
+hostname: "k3s-vm-{{ vm_name }}"
+preserve_hostname: false     # allow Cloud-Init to change it
+
+############################################################
+# 1) SSH & User Setup
+############################################################
+
+############################################################
+# Enable password login & define ubuntu user with SSH keys
+############################################################
+ssh_pwauth: true
+
+users:
+  - name: ubuntu
+    gecos: Ubuntu User
+    lock_passwd: false
+    passwd: <not sure if this works>                         # simple fallback password
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh-authorized-keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCrf+FIETUTHBKDMe5OioHgzCaGBrI7B0TmL7i6Zz5UO7FK/wkVCLDNS4ol7De2QkI0HLFFTdvq9LNTDPamIEqjhMzwEeDIhgoxCrymyk2dy7TLNXNWQBkTGDBxId4EhB26Tfa6STlj4Iwr170vocWuTZ9Km2u8EaBPGv2u+Au1qXb9Fl0N9uu47phiHHWvP0aXK3nf9K6XSQQaru7UlVDOdUBhGWvXNcPAGp/xBdgc4fInkCdCr3z2Y40Jq3Cxs6vpQCW3DuJyEPupo8EOUArClaJOPht8wftnkxny/6WD70tcai/teObWLyQEidv4Ed++IlnevbhTx2hTbv/IdlSAzBtW1jZNlUlbalrEx0nDUtOAgFmsMFwtssrJpWbbpaRtfuaUn8KHHm2GS8kHrbypTcGKkRU+5GTlfs16AY8K6ypIfOskSulOpJCelji10h1ykck9o1wivqqoRoUP6MZQC+d1Uu1KwFklM7UZpBnGT0lpnimnKROCbGZfPwgJryBvCb55+3kLrC3iUmZJWzVVmtzGfH/cZhOGLe6rcGgReuJAxokgOIreP2pgVgrla7wMwo2frFQYmb1ajCSO4ChrozXe6DEyFCAkITqO/z5Dj6GGOaR00hXw2MFYUefdj+dK7od7CzDv1bzhLqmWDBKDv6h2skQFl/I4sDSmv5TpxQ== root@pve
+
+
+############################################################
+# Install essential packages & enable guest agent
+############################################################
+package_update: true
+package_upgrade: false
+packages:
+  - qemu-guest-agent
+  - curl
+  - nfs-common
+
+############################################################
+# Grow root partition to fill enlarged disk
+############################################################
+growpart:
+  mode: auto
+  devices:
+    - /
+  ignore_growroot_disabled: false
+resize_rootfs: true
+
+write_files:
+  # Add the private key
+  - path: /home/ubuntu/.ssh/id_rsa
+    permissions: '0600'
+    owner: ubuntu:ubuntu
+    content: |
+      -----BEGIN RSA PRIVATE KEY-----
+      <Put the private key here. Note: Not sure if this even works as intended. Needs confirmation.>
+      -----END RSA PRIVATE KEY-----
+
+  # Add the public key
+  - path: /home/ubuntu/.ssh/id_rsa.pub
+    permissions: '0644'
+    owner: ubuntu:ubuntu
+    content: |
+      <ssh-rsa public key here>
+
+############################################################
+# Kubernetes pre-flight: disable swap, load modules, sysctl
+############################################################
+runcmd:
+  # 1) Turn off swap and disable it permanently
+  - swapoff -a
+  - sed -i '/\\sswap\\s/s/^/#/' /etc/fstab
+
+  # 2) Load required kernel modules
+  - modprobe overlay
+  - modprobe br_netfilter
+
+  # 3) Persist sysctl params for k8s networking
+  - |
+    cat << 'EOF' > /etc/sysctl.d/99-kubernetes.conf
+    net.bridge.bridge-nf-call-iptables  = 1
+    net.bridge.bridge-nf-call-ip6tables = 1
+    net.ipv4.ip_forward                 = 1
+    EOF
+  - sysctl --system
+
+  # 4) Enable & start the QEMU guest agent
+  - systemctl enable --now qemu-guest-agent
+
+  # 5) Install k3sup for k3s bootstrapping
+  - curl -sLS https://get.k3sup.dev | sudo sh
+
+  # 6) Generate an ED25519 keypair and append its public key
+  - mkdir -p /home/ubuntu/.ssh
+  - chown ubuntu:ubuntu /home/ubuntu/.ssh
+  - su - ubuntu -c "ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''"
+  - su - ubuntu -c "cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys"
+  # Ensure the custom keys are added to authorized_keys
+  - su - ubuntu -c "cat /home/ubuntu/.ssh/id_rsa_custom.pub >> /home/ubuntu/.ssh/authorized_keys"
+  - chown ubuntu:ubuntu /home/ubuntu/.ssh/authorized_keys
+  - chmod 600 /home/ubuntu/.ssh/authorized_keys
+  - chmod 600 /home/ubuntu/.ssh/id_ed25519*
+
