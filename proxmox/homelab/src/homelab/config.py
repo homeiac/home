@@ -14,6 +14,13 @@ class Config:
         "https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso",
     )
 
+    # Comma-separated Proxmox node IPs, e.g. "192.168.86.194,192.168.1.122,192.168.4.122"
+    PVE_IPS = [
+        ip.strip()
+        for ip in os.getenv("PVE_IPS", "").split(",")
+        if ip.strip()
+    ]
+
     @staticmethod
     def get_nodes():
         """Dynamically loads nodes from environment variables."""
