@@ -259,3 +259,4 @@ graph TD
 
 - [Frigate VA-API Acceleration](./guides/frigate-vaapi-acceleration.md)
 - [MA90 packer-MAAS build](./guides/packer-maas-ma90.md)
+- [K3s NVIDIA GPU Passthrough Guide — Proxmox VE + K3s](./guides/nvidia-RTX-3070-k3s-PCI-passthrough.md)
