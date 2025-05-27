@@ -254,3 +254,7 @@ graph TD
     NAT -- "Delivers traffic to LAN Interface" --> LAN
     LAN -- "Routes traffic to Container" --> CT
 ```
+
+## Guides
+
+- [Frigate VA-API Acceleration](./guides/frigate-vaapi-acceleration.md)
