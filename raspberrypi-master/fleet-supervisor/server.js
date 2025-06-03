@@ -12,7 +12,9 @@ const fleetSubscriber = new cote.Subscriber({ name: 'Fleet subscriber' })
 // On audio playback, set this server as the master
 // Pi 1/2 family is not powerful enough to run snapcast-server, don't attempt to connect
 // If Client Only mode is activated, don't attempt to connect
-if ((process.env.BALENA_DEVICE_TYPE !== 'raspberry-pi' || process.env.BALENA_DEVICE_TYPE !== 'raspberry-pi2') && !process.env.CLIENT_ONLY_MULTI_ROOM) {
+// Only connect if the device is powerful enough to run the server
+// (i.e. not a Raspberry Pi 1 or 2) and multi-room mode is enabled.
+if ((process.env.BALENA_DEVICE_TYPE !== 'raspberry-pi' && process.env.BALENA_DEVICE_TYPE !== 'raspberry-pi2') && !process.env.CLIENT_ONLY_MULTI_ROOM) {
   snapcastServer.connect()
   snapcastServer.onPlayback((data) => {
     fleetPublisher.publish('fleet-update', { master: getIPAddress() })
