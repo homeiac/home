@@ -5,7 +5,8 @@
 
 place to hold all the home infrastructure as code code
 
-* [Ollama GPU Server Guide](proxmox/guides/ollama-gpu-server.md)
-* [Docs Workflow Guide](docs/source/md/docs_workflow_guide.md) - docs deploy from `master` to the `gh-pages` branch
-* [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
+* [Ollama GPU Server Guide](proxmox_guides_ollama-gpu-server.md)
+* [Docs Workflow Guide](docs_workflow_guide.md) - docs deploy from `master` to the `gh-pages` branch
+* [Docs Build Guide](docs_build_guide.md) - build docs locally before pushing
+* [Docs Symlink Guide](docs_symlink_guide.md) - fix broken markdown links
 * [Project Documentation](https://homeiac.github.io/home/)

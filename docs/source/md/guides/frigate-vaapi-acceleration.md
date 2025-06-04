@@ -1,0 +1,1 @@
+../../../../proxmox/guides/frigate-vaapi-acceleration.md
