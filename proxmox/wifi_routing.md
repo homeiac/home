@@ -65,7 +65,7 @@ This guide explains how to configure a Proxmox cluster with two hosts and an OPN
 
 ## Network Topology Diagram
 
-```mermaid
+```{mermaid}
 graph TD
     %% WiFi Network Block
     subgraph WiFi Network 192.168.86.X
@@ -207,7 +207,7 @@ graph TD
 
 ## Step 4: Configure the OPNsense VM on Host 1
 
-### 4.1 Create the OPNsense VM and Assign Interfaces
+### 4.1 Create OPNsense VM with Required Interfaces
 
 1. **Install OPNsense VM on Host 1** (if not already installed).
 2. **Configure OPNsense Interfaces in Proxmox:**
@@ -231,7 +231,7 @@ graph TD
 4. **Verify:**
    - Go to **Interfaces > Overview** and confirm that OPT1 is active with IP 10.10.10.254.
 
-### 4.3 Configure the Static Route in OPNsense
+### 4.3 Add a Static Route in OPNsense
 
 1. **Navigate to System > Routing > Static Routes.**
 2. **Add a New Static Route:**

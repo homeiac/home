@@ -57,4 +57,4 @@ Kyle Harding <https://klutchell.dev>
 
 ## License
 
-[MIT License](./LICENSE)
+[MIT License](../../../LICENSE)
