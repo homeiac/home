@@ -1,0 +1,1 @@
+../../../proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md
