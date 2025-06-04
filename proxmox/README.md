@@ -33,24 +33,23 @@ This are the nodes on the cluster:
 <!-- markdownlint-enable MD013 -->
 
 <!-- markdownlint-disable MD013 -->
-```{mermaid}
-graph TD
-    subgraph homeCluster [Home lab Proxmox Cluster]
-      pve["pve<br>IPs: 192.168.86.194, 192.168.1.122, 192.168.4.122, 10.10.10.1<br>Board: BOSGAME DNB10M<br>CPU: N100 @2.8<br>Mem: 15.37GB<br>GPU: Alder UHD"]
-      rapid["rapid-civet<br>IPs: 192.168.4.11<br>Board: HP 8000<br>CPU: i3-4030U @1.9<br>Mem: 3.75GB<br>GPU: Haswell IG (0b)"]
-      still["still-fawn<br>IPs: 192.168.4.17, 192.168.4.195<br>Board: ASUS B85M R2.0<br>CPU: i5-4460 @3.2<br>Mem: 15.53GB<br>GPU: NVIDIA RTX3070 (a1)"]
-      chief["chief-horse<br>IPs: 192.168.4.19, 192.168.4.197<br>Board: Intel D34010WYK<br>CPU: i3-4010U @1.7<br>Mem: 7.66GB<br>GPU: Haswell IG (09)"]
-    end
-<!-- markdownlint-enable MD013 -->
+.. mermaid::
+   graph TD
+      subgraph homeCluster [Home lab Proxmox Cluster]
+         pve["pve<br>IPs: 192.168.86.194, 192.168.1.122, 192.168.4.122, 10.10.10.1<br>Board: BOSGAME DNB10M<br>CPU: N100 @2.8<br>Mem: 15.37GB<br>GPU: Alder UHD"]
+         rapid["rapid-civet<br>IPs: 192.168.4.11<br>Board: HP 8000<br>CPU: i3-4030U @1.9<br>Mem: 3.75GB<br>GPU: Haswell IG (0b)"]
+         still["still-fawn<br>IPs: 192.168.4.17, 192.168.4.195<br>Board: ASUS B85M R2.0<br>CPU: i5-4460 @3.2<br>Mem: 15.53GB<br>GPU: NVIDIA RTX3070 (a1)"]
+         chief["chief-horse<br>IPs: 192.168.4.19, 192.168.4.197<br>Board: Intel D34010WYK<br>CPU: i3-4010U @1.7<br>Mem: 7.66GB<br>GPU: Haswell IG (09)"]
+      end
+   <!-- markdownlint-enable MD013 -->
 
-    subgraph pve_VMs [pve Key VMs]
-      opnsense["OPNsense VM"]
-      maas["Ubuntu MAAS VM"]
-    end
+      subgraph pve_VMs [pve Key VMs]
+         opnsense["OPNsense VM"]
+         maas["Ubuntu MAAS VM"]
+      end
 
-    pve --> opnsense
-    pve --> maas
-```
+      pve --> opnsense
+      pve --> maas
 
 ## Install Proxmox server
 
@@ -208,54 +207,53 @@ Follow instructions and enable the WiFi interface
 This network diagram shows how other Proxmox cluster hosts can access
 the Wifi network.
 
-```{mermaid}
+.. mermaid::
 
-graph TD
-    %% WiFi Network Block
-    subgraph WiFi_Network [WiFi Network 192.168.86.X]
-      WR[WiFi Router: 192.168.86.1]
-      WD[WiFi Device: 192.168.86.100]
-    end
+   graph TD
+      %% WiFi Network Block
+      subgraph WiFi_Network [WiFi Network 192.168.86.X]
+         WR[WiFi Router: 192.168.86.1]
+         WD[WiFi Device: 192.168.86.100]
+      end
 
-    %% Host1 Proxmox Block
-    subgraph Host1_Proxmox [Host1 Proxmox - Intel N100 with 2 NICS and 1 Wireless NIC]
-      B1[vmbr1 LAN Bridge: 192.168.4.X]
-      B2[vmbr2 NAT Bridge: 10.10.10.1/24]
-      DNSM[DNSMasquerade Rule: iptables NAT from 10.10.10.0/24 via physical interface]
-    end
+      %% Host1 Proxmox Block
+      subgraph Host1_Proxmox [Host1 Proxmox - Intel N100 with 2 NICS and 1 Wireless NIC]
+         B1[vmbr1 LAN Bridge: 192.168.4.X]
+         B2[vmbr2 NAT Bridge: 10.10.10.1/24]
+         DNSM[DNSMasquerade Rule: iptables NAT from 10.10.10.0/24 via physical interface]
+      end
 
-    %% OPNsense VM Block on Host1
-    subgraph OPNsense_VM [OPNsense VM running on Host 1]
-      LAN[LAN Interface: 192.168.4.1]
-      NAT[OPT1 NAT Interface: 10.10.10.254]
-      STATIC[Static Route: Dest 192.168.86.0/24 via Gateway 10.10.10.1]
-    end
+      %% OPNsense VM Block on Host1
+      subgraph OPNsense_VM [OPNsense VM running on Host 1]
+         LAN[LAN Interface: 192.168.4.1]
+         NAT[OPT1 NAT Interface: 10.10.10.254]
+         STATIC[Static Route: Dest 192.168.86.0/24 via Gateway 10.10.10.1]
+      end
 
-    %% Host2 Proxmox Block
-    subgraph Host2_Proxmox [Host2 Proxmox]
-      H2B[vmbr0 LAN Bridge: 192.168.4.X]
-      CT[Container: IP 192.168.4.10, GW 192.168.4.1]
-    end
+      %% Host2 Proxmox Block
+      subgraph Host2_Proxmox [Host2 Proxmox]
+         H2B[vmbr0 LAN Bridge: 192.168.4.X]
+         CT[Container: IP 192.168.4.10, GW 192.168.4.1]
+      end
 
-    %% Connections
-    B1 --- LAN
-    B2 --- DNSM
-    H2B --- CT
+      %% Connections
+      B1 --- LAN
+      B2 --- DNSM
+      H2B --- CT
 
-    %% Outbound Traffic Flow
-    CT -- "Traffic from 192.168.4.10" --> LAN
-    LAN -- "Uses Static Route" --> STATIC
-    STATIC -- "Routes traffic via NAT Bridge" --> B2
-    B2 -- "DNSMasquerade translates traffic" --> DNSM
-    DNSM -- "Forwards traffic to WiFi Router" --> WR
+      %% Outbound Traffic Flow
+      CT -- "Traffic from 192.168.4.10" --> LAN
+      LAN -- "Uses Static Route" --> STATIC
+      STATIC -- "Routes traffic via NAT Bridge" --> B2
+      B2 -- "DNSMasquerade translates traffic" --> DNSM
+      DNSM -- "Forwards traffic to WiFi Router" --> WR
 
-    %% Return Traffic Flow (Simplified)
-    WR -- "Return traffic" --> DNSM
-    DNSM -- "Forwards to NAT Bridge" --> B2
-    B2 -- "Delivers traffic to OPNsense NAT Interface" --> NAT
-    NAT -- "Delivers traffic to LAN Interface" --> LAN
-    LAN -- "Routes traffic to Container" --> CT
-```
+      %% Return Traffic Flow (Simplified)
+      WR -- "Return traffic" --> DNSM
+      DNSM -- "Forwards to NAT Bridge" --> B2
+      B2 -- "Delivers traffic to OPNsense NAT Interface" --> NAT
+      NAT -- "Delivers traffic to LAN Interface" --> LAN
+      LAN -- "Routes traffic to Container" --> CT
 
 ## Guides
 

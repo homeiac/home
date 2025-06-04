@@ -65,7 +65,7 @@ This guide explains how to configure a Proxmox cluster with two hosts and an OPN
 
 ## Network Topology Diagram
 
-```{mermaid}
+.. mermaid::
 graph TD
     %% WiFi Network Block
     subgraph WiFi Network 192.168.86.X
@@ -111,7 +111,6 @@ graph TD
     B2 -- "Delivers traffic to NAT Interface" --> NAT
     NAT -- "Sends traffic to LAN Interface" --> LAN
     LAN -- "Routes traffic to Container" --> CT
-```
 
 ---
 

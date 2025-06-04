@@ -65,53 +65,54 @@ This guide explains how to configure a Proxmox cluster with two hosts and an OPN
 
 ## Network Topology Diagram
 
-```{mermaid}
-graph TD
-    %% WiFi Network Block
-    subgraph WiFi Network 192.168.86.X
-      WR[WiFi Router: 192.168.86.1]
-      WD[WiFi Device: 192.168.86.100]
-    end
+.. mermaid::
 
-    %% Host1 Proxmox Block
-    subgraph Host1 Proxmox
-      B1[vmbr1 LAN Bridge: 192.168.4.X]
-      B2[vmbr2 NAT Bridge: 10.10.10.1/24]
-      DNSM[DNSMasquerade Rule: iptables NAT from 10.10.10.0/24]
-    end
+    graph TD
+        %% WiFi Network Block
+        subgraph WiFi Network 192.168.86.X
+        WR[WiFi Router: 192.168.86.1]
+        WD[WiFi Device: 192.168.86.100]
+        end
 
-    %% OPNsense VM Block on Host1
-    subgraph OPNsense VM
-      LAN[OPNsense LAN Interface: 192.168.4.1]
-      NAT[OPNsense NAT Interface OPT1: 10.10.10.254]
-      STATIC[Static Route: 192.168.86.0/24 via Gateway 10.10.10.1]
-    end
+        %% Host1 Proxmox Block
+        subgraph Host1 Proxmox
+        B1[vmbr1 LAN Bridge: 192.168.4.X]
+        B2[vmbr2 NAT Bridge: 10.10.10.1/24]
+        DNSM[DNSMasquerade Rule: iptables NAT from 10.10.10.0/24]
+        end
 
-    %% Host2 Proxmox Block
-    subgraph Host2 Proxmox
-      H2B[vmbr0 LAN Bridge: 192.168.4.X]
-      CT[Container: 192.168.4.10, GW 192.168.4.1]
-    end
+        %% OPNsense VM Block on Host1
+        subgraph OPNsense VM
+        LAN[OPNsense LAN Interface: 192.168.4.1]
+        NAT[OPNsense NAT Interface OPT1: 10.10.10.254]
+        STATIC[Static Route: 192.168.86.0/24 via Gateway 10.10.10.1]
+        end
 
-    %% Connections and Traffic Flow
-    B1 --- LAN
-    B2 --- DNSM
-    H2B --- CT
+        %% Host2 Proxmox Block
+        subgraph Host2 Proxmox
+        H2B[vmbr0 LAN Bridge: 192.168.4.X]
+        CT[Container: 192.168.4.10, GW 192.168.4.1]
+        end
 
-    CT -- "Traffic from 192.168.4.10" --> LAN
-    LAN -- "Uses Static Route" --> STATIC
-    STATIC -- "Routes traffic via NAT Bridge" --> NAT
-    NAT -- "Rewrites source to 10.10.10.254" --> B2
-    B2 -- "DNSMasquerade processes traffic" --> DNSM
-    DNSM -- "Forwards traffic to WiFi Router" --> WR
+        %% Connections and Traffic Flow
+        B1 --- LAN
+        B2 --- DNSM
+        H2B --- CT
 
-    %% Return Flow (Simplified)
-    WR -- "Return traffic" --> DNSM
-    DNSM -- "Forwards return traffic to NAT Bridge" --> B2
-    B2 -- "Delivers traffic to NAT Interface" --> NAT
-    NAT -- "Sends traffic to LAN Interface" --> LAN
-    LAN -- "Routes traffic to Container" --> CT
-```
+        CT -- "Traffic from 192.168.4.10" --> LAN
+        LAN -- "Uses Static Route" --> STATIC
+        STATIC -- "Routes traffic via NAT Bridge" --> NAT
+        NAT -- "Rewrites source to 10.10.10.254" --> B2
+        B2 -- "DNSMasquerade processes traffic" --> DNSM
+        DNSM -- "Forwards traffic to WiFi Router" --> WR
+
+        %% Return Flow (Simplified)
+        WR -- "Return traffic" --> DNSM
+        DNSM -- "Forwards return traffic to NAT Bridge" --> B2
+        B2 -- "Delivers traffic to NAT Interface" --> NAT
+        NAT -- "Sends traffic to LAN Interface" --> LAN
+        LAN -- "Routes traffic to Container" --> CT
+
 
 ---
 
