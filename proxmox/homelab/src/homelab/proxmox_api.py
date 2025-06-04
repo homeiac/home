@@ -13,19 +13,12 @@ class ProxmoxClient:
         self.user, self.token_name = user_token.split('!')
 
         # Initialize ProxmoxAPI with API token
-        # self.proxmox = ProxmoxAPI(
-        #    host,
-        #    user=self.user,
-        #    token_name=self.token_name,
-        #    token_value=self.api_token,
-        #    verify_ssl=False
-        # )
-
         self.proxmox = ProxmoxAPI(
-             host,
-             user="root@pam",
-             password="elder137berry",
-             verify_ssl=False
+           host,
+           user=self.user,
+           token_name=self.token_name,
+           token_value=self.api_token,
+           verify_ssl=False
         )
 
     def get_node_status(self):
