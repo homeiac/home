@@ -15,7 +15,6 @@ paramiko = "^3.5.1"
 python-dotenv = "^1.1.0"
 requests-toolbelt = "^1.0.0"
 pyudev = "^0.24.3"
-paramiko = "^3.5.1"
 
 
 [tool.poetry.group.dev.dependencies]
