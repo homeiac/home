@@ -47,7 +47,7 @@ disk\_size   = "16G"     # avoid space issues
 
 ```
 
-### `my-amd-changes.sh` (only the lines you added)
+### `my-amd-changes.sh`
 
 ```bash
 #!/bin/bash
