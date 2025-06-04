@@ -33,7 +33,7 @@ This are the nodes on the cluster:
 <!-- markdownlint-enable MD013 -->
 
 <!-- markdownlint-disable MD013 -->
-```mermaid
+```{mermaid}
 graph TD
     subgraph homeCluster [Home lab Proxmox Cluster]
       pve["pve<br>IPs: 192.168.86.194, 192.168.1.122, 192.168.4.122, 10.10.10.1<br>Board: BOSGAME DNB10M<br>CPU: N100 @2.8<br>Mem: 15.37GB<br>GPU: Alder UHD"]
@@ -185,7 +185,7 @@ Need to build a custom image so that proxmox cluster is installed.
 1. Since KVM is not installed on the Ubuntu MAAS, switching to building the
    image on the proxmox host itself
 1. Build the image
-   1. Create the [my-changes.sh](my-changes.sh) file in the `debian` directory
+   1. Create the `my-changes.sh` file in the `debian` directory
    1. it seemed that it ran out of disk space. Increased in deb*.pkr.hcl from
       4gb to 16GB
    1. You have to reboot (technically only restart maas service) in order for
@@ -201,15 +201,14 @@ Need to build a custom image so that proxmox cluster is installed.
 
 ## Adding the wifi interface
 
-Follow instructions plus turn on the interface [enable wifi
-interface](enable_network_interface.jpg)
+Follow instructions and enable the WiFi interface
 
 ## Network diagram to enable WiFi device access on all Proxmox VMs and LXC
 
 This network diagram shows how other Proxmox cluster hosts can access
 the Wifi network.
 
-```mermaid
+```{mermaid}
 
 graph TD
     %% WiFi Network Block

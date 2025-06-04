@@ -9,7 +9,7 @@ it into Ubuntu MAAS for ATOPNUC MA90 (AMD A9-9400 / Radeon R5).
 
 ## 1  The Curtin error that started it all
 
-```log
+```text
 
 grub-install.real: warning: this GPT partition label contains no BIOS Boot Partition; embedding wont be possible.
 grub-install.real: warning: Embedding is not possible.  GRUB can only be installed in this setup by using blocklists.
@@ -45,7 +45,7 @@ SERIES      = bookworm  # always build Debian 12
 disk\_size   = "16G"     # avoid space issues
 -var customize\_script=my-amd-changes.sh
 
-````
+```
 
 ### `my-amd-changes.sh` (only the lines you added)
 
@@ -87,7 +87,7 @@ grub-install \
   --bootloader-id=Proxmox \
   --recheck
 
-````
+```
 
 ‣ **Uncertainty:** creating the ESP in this script *may* have been what finally
 satisfied GRUB. The exact block that did it has not been isolated.
