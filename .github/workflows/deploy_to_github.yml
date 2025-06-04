@@ -1,3 +1,4 @@
+name: Deploy Docs Codex Generated Workflow
 on:
   push:
     branches:
