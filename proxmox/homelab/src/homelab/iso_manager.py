@@ -32,3 +32,6 @@ class IsoManager:
                 for item in client.get_storage_content(node["storage"])
             ):
                 client.upload_iso(node["storage"], Config.ISO_NAME)
+                print(f"Uploaded {Config.ISO_NAME} to {node['name']} storage {node['storage']}.")
+            else:
+                print(f"ISO {Config.ISO_NAME} already exists in {node['name']} storage {node['storage']}. Skipping upload.")
