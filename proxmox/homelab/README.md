@@ -18,7 +18,6 @@ homelab/  # Project Root
 │   │   ├── iso_manager.py
 │   │   ├── vm_manager.py
 │   │   ├── main.py
-│   │   ├── utils.py
 │   │   ├── .env  <-- Environment variables file
 │── tests/
 │── .gitignore
