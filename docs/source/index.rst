@@ -11,6 +11,7 @@ Contents
 
    magicmirror
    homeiac
+   markdown_docs
 
 Indices and tables
 ------------------
