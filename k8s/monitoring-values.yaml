@@ -3,9 +3,25 @@ grafana:
     type: NodePort
     nodePort: 30080         # Access Grafana at http://<nodeIP>:30080
   adminPassword: "admin"    # Demo password; change later
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    storageClassName: longhorn
 
 prometheus:
   prometheusSpec:
+    # Retain 30 days of raw data (adjust as needed)
+    retention: 30d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: longhorn
+          resources:
+            requests:
+              storage: 100Gi
     additionalScrapeConfigs:
       - job_name: "proxmox-node-exporter"
         static_configs:
