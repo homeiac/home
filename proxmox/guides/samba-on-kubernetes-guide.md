@@ -158,6 +158,65 @@ kubectl -n samba exec -it $POD -- testparm -s
 
 ## Missteps & Key Errors
 
+### Resolving Write Permission Denied
+
+**Main issue:**
+Writes were failing because Samba was mapping file operations to the `nobody`
+user, but the host directory was owned by `root` (and the share defaulted to
+read-only), causing a permissions mismatch.
+
+**Changes introduced to fix it:**
+
+1. **Init Container: Align HostPath Ownership & Permissions**
+
+   ```yaml
+   initContainers:
+     - name: init-perms
+       image: busybox
+       command:
+         - sh
+         - -c
+         - |
+           chown nobody:nogroup /mnt/smb_data
+           chmod 0770 /mnt/smb_data
+       volumeMounts:
+         - name: share
+           mountPath: /mnt/smb_data
+    ```
+
+Ensures the underlying directory is owned by `nobody:nogroup` with `rwx` for owner/group **before** Samba starts.
+
+1. **Enable Write Mode in the Share**
+
+   ```ini
+   [secure]
+       writable = yes               # allow writes (alias for read only = no)
+   ```
+
+1. **Force All Operations to ‘nobody’**
+
+   ```ini
+       force user = nobody          # map SMB actions to the Linux nobody user
+   ```
+
+1. **Define Creation Masks for Files & Directories**
+
+   ```ini
+       create mask = 0770           # new files get rwx for owner/group only
+       directory mask = 0770        # new directories get rwx for owner/group only
+   ```
+
+1. **Restrict Access to Authenticated Users**
+
+   ```ini
+       valid users = sambauser,alice
+   ```
+
+   Prevents guest or unauthorized users from bypassing your write-enabled configuration.
+
+**Together**, these steps align Samba’s user mapping, share settings, and
+filesystem permissions—eliminating “Permission denied” on write.
+
 1. **Pod-only binding**
 
    ```bash
