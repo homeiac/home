@@ -121,7 +121,7 @@ sudo crictl info | grep -A3 '"nvidia"'
 nvidia-smi
 ```
 
-**NVIDIA Common Missteps From Blogs**
+### NVIDIA Common Missteps From Blogs
 
 * Editing `/etc/containerd/config.toml` (K3s ignores this file).
 * Forgetting to run `nvidia-ctk` *before* K3s starts.
