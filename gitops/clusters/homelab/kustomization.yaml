@@ -2,10 +2,6 @@ resources:
   # keep Flux itself
   - flux-system
 
-  # add infrastructure pieces under homelab/
-  - infrastructure/metallb        # MetalLB we just made
-  # - infrastructure/ingress      # (we'll add this later)
-
 # optional:  common labels you want propagated
 # commonLabels:
 #   environment: homelab
