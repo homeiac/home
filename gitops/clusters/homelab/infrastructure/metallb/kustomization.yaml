@@ -1,4 +1,3 @@
 resources:
   - helmrelease.yaml
-  - address-pool.yaml
 
