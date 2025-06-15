@@ -20,12 +20,13 @@ flux bootstrap github \
 ```
 
 This installs Flux controllers and commits:
+
 - `gotk-components.yaml` & `gotk-sync.yaml` under `flux-system`
 - A `GitRepository` and initial `Kustomization`
 
 ## 3. Repository Layout
 
-```
+```text
 gitops/
 └── clusters/
     └── homelab/
@@ -37,6 +38,7 @@ gitops/
 ```
 
 `flux-system/kustomization.yaml`:
+
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -77,10 +79,12 @@ flux resume kustomization homelab -n flux-system
 
 - **Build failures** → check `path` and `apiVersion`.  
 - **Missing CRDs** → use `dependsOn` in Kustomization:
+
   ```yaml
   spec:
     dependsOn:
       - name: metallb
         namespace: flux-system
-  ```  
+  ```
+
 - **No sync** → verify `GitRepository` URL, branch, and path.

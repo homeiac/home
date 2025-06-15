@@ -7,6 +7,8 @@ place to hold all the home infrastructure as code code
 
 * [Ollama GPU Server Guide](./proxmox_guides_ollama-gpu-server.md)
 * [Proxmox WiFi Routing Guide](./proxmox_wifi_routing.md)
+* [Flux Bootstrap Guide](./proxmox_guides_flux-guide.md)
+* [MetalLB Setup Guide](./proxmox_guides_metallb-guide.md)
 * [Docs Workflow Guide](docs_workflow_guide.md) - documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs_build_guide.md) - build docs locally before pushing
 * [Docs Symlink Guide](docs_symlink_guide.md) - fix broken markdown links
