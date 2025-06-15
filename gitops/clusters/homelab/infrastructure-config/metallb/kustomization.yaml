@@ -1,4 +1,0 @@
-resources:
-  - address-pool.yaml
-  - metallb-config.kustomization.yaml   # the CR we just renamed
-
