@@ -4,5 +4,5 @@ resources:
   # keep Flux itself
   - flux-system
   - infrastructure/metallb               #(chart + CRDs)
-#  - infrastructure-config/metallb-config        #(address-pool)
+  - infrastructure-config/metallb-config        #(address-pool)
 
