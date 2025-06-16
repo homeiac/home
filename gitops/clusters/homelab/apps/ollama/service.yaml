@@ -10,6 +10,6 @@ spec:
   ports:
     - port: 80
       targetPort: 11434
-      nodePort: 30080
+      nodePort: 31080
       protocol: TCP
 
