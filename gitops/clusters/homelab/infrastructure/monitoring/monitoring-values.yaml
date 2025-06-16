@@ -1,7 +1,7 @@
 grafana:
   service:
     type: NodePort
-    nodePort: 30080         # Access Grafana at http://<nodeIP>:30080
+    nodePort: 32080         # Access Grafana at http://<nodeIP>:30080
   adminPassword: "admin"    # Demo password; change later
   persistence:
     enabled: true
