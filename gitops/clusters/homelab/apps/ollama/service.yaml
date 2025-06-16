@@ -4,6 +4,7 @@ metadata:
   name: ollama
   namespace: ollama
 spec:
+  type: NodePort
   selector:
     app: ollama-gpu
   ports:
