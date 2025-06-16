@@ -9,7 +9,7 @@ place to hold all the home infrastructure as code code
 * [Proxmox WiFi Routing Guide](./proxmox_wifi_routing.md)
 * [Flux Bootstrap Guide](./proxmox_guides_flux-guide.md)
 * [MetalLB Setup Guide](./proxmox_guides_metallb-guide.md)
-* [Monitoring Setup Guide](./proxmox_guides_monitoring-guide.md) - deployed via Flux
+* [Monitoring Setup Guide](./proxmox/guides/monitoring-guide.md) - deployed via Flux
 * [Docs Workflow Guide](docs_workflow_guide.md) - documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs_build_guide.md) - build docs locally before pushing
 * [Docs Symlink Guide](docs_symlink_guide.md) - fix broken markdown links
