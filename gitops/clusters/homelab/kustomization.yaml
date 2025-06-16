@@ -4,7 +4,7 @@ resources:
   # keep Flux itself
   - flux-system
   - infrastructure/metallb               #(chart + CRDs)
-  - infrastructure/monitoring            #(kube-prometheus-stack)
+#  - infrastructure/monitoring            #(kube-prometheus-stack)
   - infrastructure-config/metallb-config        #(address-pool)
   - apps/ollama
 
