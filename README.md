@@ -5,11 +5,11 @@
 
 place to hold all the home infrastructure as code code
 
-* [Ollama GPU Server Guide](docs/source/md/proxmox_guides_ollama-gpu-server.md) - deploy via Flux
+* [Ollama GPU Server Guide](proxmox/guides/ollama-gpu-server.md) - deploy via Flux
 * [Ollama Service Guide](proxmox/guides/ollama-service-guide.md)
-* [Proxmox WiFi Routing Guide](docs/source/md/proxmox_wifi_routing.md)
-* [Flux Bootstrap Guide](docs/source/md/proxmox_guides_flux-guide.md)
-* [MetalLB Setup Guide](docs/source/md/proxmox_guides_metallb-guide.md)
+* [Proxmox WiFi Routing Guide](proxmox/guides/wifi_routing.md)
+* [Flux Bootstrap Guide](proxmox/guides/flux-guide.md)
+* [MetalLB Setup Guide](proxmox/guides/metallb-guide.md)
 * [Monitoring Setup Guide](proxmox/guides/monitoring-guide.md) - deployed via Flux
 * [Homelab Local DNS Resolution Guide](docs/source/md/homelab_local_dns_resolution_guide.md)
 * [Docs Workflow Guide](docs/source/md/docs_workflow_guide.md) - documentation is deployed from `master` using `make -C docs html`
