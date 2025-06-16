@@ -14,5 +14,6 @@ place to hold all the home infrastructure as code code
 * [Docs Workflow Guide](docs_workflow_guide.md) - documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs_build_guide.md) - build docs locally before pushing
 * [Docs Symlink Guide](docs_symlink_guide.md) - fix broken markdown links
+* [Docs Publishing Guide](docs_publishing_guide.md) - update the `gh-pages` branch
 * [Project Documentation](https://homeiac.github.io/home/)
 
