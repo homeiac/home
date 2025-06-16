@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-gpu
+  namespace: ollama
+  labels:
+    app: ollama-gpu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama-gpu
+  template:
+    metadata:
+      labels:
+        app: ollama-gpu
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+        - name: ollama
+          image: ollama/ollama:0.7.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"
+            - name: OLLAMA_PORT
+              value: "11434"
+          ports:
+            - containerPort: 11434
+          resources:
+            limits:
+              nvidia.com/gpu: "1"

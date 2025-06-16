@@ -5,7 +5,7 @@
 
 place to hold all the home infrastructure as code code
 
-* [Ollama GPU Server Guide](./proxmox_guides_ollama-gpu-server.md)
+* [Ollama GPU Server Guide](./proxmox_guides_ollama-gpu-server.md) - deploy via Flux
 * [Proxmox WiFi Routing Guide](./proxmox_wifi_routing.md)
 * [Flux Bootstrap Guide](./proxmox_guides_flux-guide.md)
 * [MetalLB Setup Guide](./proxmox_guides_metallb-guide.md)
