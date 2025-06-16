@@ -26,3 +26,10 @@ prometheus:
 ```
 
 Apply the Helm chart with these values to ensure data stays on each node's local disk.
+
+## Deploy with Flux
+
+The monitoring stack is now managed through Flux. The manifests live under
+`gitops/clusters/homelab/infrastructure/monitoring`. Flux applies the
+`kube-prometheus-stack` chart using the same `k8s/monitoring-values.yaml` file,
+so existing Grafana dashboards and Prometheus data remain intact.
