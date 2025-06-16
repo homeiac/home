@@ -1,6 +1,10 @@
 # Production-Ready Monitoring Setup
 
+<<<<<<< ours
 This guide describes how to deploy a Prometheus and Grafana monitoring stack on a k3s + Proxmox homelab. The Helm chart values are stored in `k8s/monitoring-values.yaml`.
+=======
+This guide shows how to deploy Prometheus and Grafana using the `kube-prometheus-stack` Helm chart. The default values are stored in `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml`.
+>>>>>>> theirs
 
 ## 1. Deploy Prometheus & Grafana
 
@@ -15,11 +19,14 @@ helm install prom-stack prometheus-community/kube-prometheus-stack \
 
 ## 2. Enable Persistence with local-path
 
-Prometheus writes heavily, so use node local storage while Grafana can remain on Longhorn.
+Prometheus generates a large write load, so running it on distributed storage like Longhorn is discouraged.
+Use node-local storage instead. Grafana can remain on Longhorn because it has lighter write requirements. 
+Update `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` so only 
+Prometheus claims `local-path` storage:
 
 ```yaml
-# k8s/monitoring-values.yaml
-
+# gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml
+>>>>>>> theirs
 grafana:
   persistence:
     enabled: true
@@ -127,3 +134,13 @@ additionalPrometheusRules:
 - Add nightly drift checks via CI/cron.
 - Create recording rules for rollups and downsampling.
 - Integrate Thanos for long-term storage.
+=======
+Apply the Helm chart with these values to ensure data stays on each node's local disk.
+
+## Deploy with Flux
+
+The monitoring stack is now managed through Flux. The manifests live under
+`gitops/clusters/homelab/infrastructure/monitoring`. Flux applies the
+`kube-prometheus-stack` chart using the same
+`gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` file,
+so existing Grafana dashboards and Prometheus data remain intact.
