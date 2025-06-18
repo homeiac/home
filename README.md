@@ -16,5 +16,6 @@ place to hold all the home infrastructure as code code
 * [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
 * [Docs Symlink Guide](docs/source/md/docs_symlink_guide.md) - fix broken markdown links
 * [Docs Publishing Guide](docs/source/md/docs_publishing_guide.md) - update the `gh-pages` branch
+* [Python Tests Guide](docs/source/md/guides/python_tests_guide.md)
 * [Project Documentation](https://homeiac.github.io/home/)
 
