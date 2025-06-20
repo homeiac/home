@@ -29,8 +29,7 @@ Setup Balena Managed Raspberry PI
 - Add your github ssh key so that it can talk to github repos
 - Add https://github.com/marketplace/actions/balena-push to your github workflow after setting the BALENA_API_TOKEN (at the org level) and the BALENA_APPLICATION_NAME at the repo level (https://github.com/homeiac/home/settings/secrets)
 - This is the link to the workflow - https://github.com/homeiac/home/blob/master/.github/workflows/balena_cloud_push.yml
-- With this support, the goal of IaC for raspberry pi devices is achieved. There is no need for keeping OS and other services up to date. Everything is managed by Balena. All changes (unless you override using local mode) goes through github. The central docker-compose.yml controls what gets deployed. Each push to master automatically updates the devices.
-- To disable wifi at runtime - Run the following from the cloud shell https://dashboard.balena-cloud.com/devices/
+- With this support, the goal of IaC for raspberry pi devices is achieved. There is no need for keeping OS and other services up to date. Everything is managed by Balena. All changes (unless you override using local mode) go through GitHub. Balena Cloud handles the container configuration for each device. Each push to master automatically updates the devices.
 
   ``nmcli radio wifi off``
 
