@@ -26,3 +26,10 @@ docker run --gpus all --restart unless-stopped -p 8080:8080 \
 
 View logs with `docker logs -f stable-diffusion-webui` if you encounter startup issues.
 
+## Kubernetes Deployment
+
+The manifests in `gitops/clusters/homelab/apps/stable-diffusion/` create
+persistent volumes for models, outputs, extensions and localizations. The
+deployment mounts these PVCs and sets `fsGroup: 1000` so the container user can
+write to them.
+

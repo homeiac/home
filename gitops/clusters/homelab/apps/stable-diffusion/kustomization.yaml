@@ -3,6 +3,9 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - pvc.yaml
+  - outputs-pvc.yaml
+  - extensions-pvc.yaml
+  - localizations-pvc.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml
