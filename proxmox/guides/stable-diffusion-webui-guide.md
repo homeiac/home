@@ -37,3 +37,7 @@ docker logs -f stable-diffusion-webui
 The Kubernetes manifests expose the web UI on port `8080` inside the
 container. A service forwards traffic from port `80` to `8080` so you can
 access the interface via the cluster ingress.
+
+PVCs store models, outputs, extensions and localizations. The deployment mounts
+each claim and sets `fsGroup: 1000` so the container user can write to these
+paths.

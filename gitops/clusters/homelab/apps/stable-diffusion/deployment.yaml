@@ -16,6 +16,9 @@ spec:
         app: stable-diffusion-webui
     spec:
       runtimeClassName: nvidia
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
       nodeSelector:
         nvidia.com/gpu.present: "true"
       containers:
@@ -30,7 +33,22 @@ spec:
           volumeMounts:
             - mountPath: /app/stable-diffusion-webui/models
               name: models
+            - mountPath: /app/stable-diffusion-webui/outputs
+              name: outputs
+            - mountPath: /app/stable-diffusion-webui/extensions
+              name: extensions
+            - mountPath: /app/stable-diffusion-webui/localizations
+              name: localizations
       volumes:
         - name: models
           persistentVolumeClaim:
             claimName: sd-models
+        - name: outputs
+          persistentVolumeClaim:
+            claimName: sd-outputs
+        - name: extensions
+          persistentVolumeClaim:
+            claimName: sd-extensions
+        - name: localizations
+          persistentVolumeClaim:
+            claimName: sd-localizations
