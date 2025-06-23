@@ -24,6 +24,7 @@ See the [Ubuntu MAAS and Proxmox Overview](docs/source/md/maas_proxmox_overview.
 
 * [Ollama GPU Server Guide](proxmox/guides/ollama-gpu-server.md) - deploy via Flux
 * [Ollama Service Guide](proxmox/guides/ollama-service-guide.md)
+* [Stable Diffusion Web UI Guide](proxmox/guides/stable-diffusion-webui-guide.md)
 * [Proxmox WiFi Routing Guide](proxmox/guides/wifi_routing.md)
 * [Flux Bootstrap Guide](proxmox/guides/flux-guide.md)
 * [MetalLB Setup Guide](proxmox/guides/metallb-guide.md)
