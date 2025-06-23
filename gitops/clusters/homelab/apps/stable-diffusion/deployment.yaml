@@ -23,7 +23,7 @@ spec:
           image: universonic/stable-diffusion-webui:full
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 7860
+            - containerPort: 8080
           resources:
             limits:
               nvidia.com/gpu: "1"

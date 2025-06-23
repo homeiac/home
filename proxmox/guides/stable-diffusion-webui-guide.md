@@ -31,3 +31,9 @@ Check logs if the container fails to start:
 ```bash
 docker logs -f stable-diffusion-webui
 ```
+
+## Kubernetes Deployment
+
+The Kubernetes manifests expose the web UI on port `8080` inside the
+container. A service forwards traffic from port `80` to `8080` so you can
+access the interface via the cluster ingress.
