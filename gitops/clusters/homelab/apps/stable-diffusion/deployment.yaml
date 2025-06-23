@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stable-diffusion-webui
+  namespace: stable-diffusion
+  labels:
+    app: stable-diffusion-webui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stable-diffusion-webui
+  template:
+    metadata:
+      labels:
+        app: stable-diffusion-webui
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+        - name: webui
+          image: ghcr.io/automatic1111/stable-diffusion-webui:master
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7860
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - mountPath: /stable-diffusion-webui/models
+              name: models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: sd-models

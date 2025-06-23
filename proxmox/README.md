@@ -263,3 +263,4 @@ graph TD
 - [MA90 packer-MAAS build](./guides/packer-maas-ma90.md)
 - [K3s NVIDIA GPU Passthrough Guide — Proxmox VE + K3s](./guides/nvidia-RTX-3070-k3s-PCI-passthrough.md)
 - [Ollama GPU Server Guide](./guides/ollama-gpu-server.md)
+- [Stable Diffusion Web UI Guide](./guides/stable-diffusion-webui-guide.md)
