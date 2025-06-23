@@ -20,7 +20,7 @@ spec:
         nvidia.com/gpu.present: "true"
       containers:
         - name: webui
-          image: ghcr.io/automatic1111/stable-diffusion-webui:master
+          image: universonic/stable-diffusion-webui:full
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7860
@@ -28,7 +28,7 @@ spec:
             limits:
               nvidia.com/gpu: "1"
           volumeMounts:
-            - mountPath: /stable-diffusion-webui/models
+            - mountPath: /app/stable-diffusion-webui/models
               name: models
       volumes:
         - name: models
