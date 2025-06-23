@@ -7,4 +7,5 @@ resources:
   - infrastructure/monitoring            #(kube-prometheus-stack)
   - infrastructure-config/metallb-config        #(address-pool)
   - apps/ollama
+  - apps/stable-diffusion
 
