@@ -29,6 +29,7 @@ See the [Ubuntu MAAS and Proxmox Overview](docs/source/md/maas_proxmox_overview.
 * [Flux Bootstrap Guide](proxmox/guides/flux-guide.md)
 * [MetalLB Setup Guide](proxmox/guides/metallb-guide.md)
 * [Monitoring Setup Guide](proxmox/guides/monitoring-guide.md) - deployed via Flux
+* [OpenCloud File Manager Guide](proxmox/guides/opencloud-filemanager-guide.md) - deploy OpenCloud on k3s with Flux
 * [Homelab Local DNS Resolution Guide](docs/source/md/homelab_local_dns_resolution_guide.md)
 * [Docs Workflow Guide](docs/source/md/docs_workflow_guide.md) - documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
