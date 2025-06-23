@@ -24,6 +24,15 @@ docker run --gpus all --restart unless-stopped -p 8080:8080 \
   --name stable-diffusion-webui -d universonic/stable-diffusion-webui:full
 ```
 
+If you run the container with the `--share` or `--listen` options, extension installation is disabled by default.
+Pass `--enable-insecure-extension-access` through the `COMMANDLINE_ARGS` environment variable to re-enable the extensions tab:
+
+```bash
+docker run --gpus all --restart unless-stopped -p 8080:8080 \
+  -e COMMANDLINE_ARGS="--enable-insecure-extension-access" \
+  --name stable-diffusion-webui -d universonic/stable-diffusion-webui:full
+```
+
 View logs with `docker logs -f stable-diffusion-webui` if you encounter startup issues.
 
 ## Kubernetes Deployment

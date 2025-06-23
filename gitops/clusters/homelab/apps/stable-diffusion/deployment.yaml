@@ -25,6 +25,9 @@ spec:
         - name: webui
           image: universonic/stable-diffusion-webui:full
           imagePullPolicy: IfNotPresent
+          env:
+            - name: COMMANDLINE_ARGS
+              value: "--enable-insecure-extension-access"
           ports:
             - containerPort: 8080
           resources:

@@ -26,6 +26,15 @@ docker run --gpus all --restart unless-stopped -p 8080:8080 \
   --name stable-diffusion-webui -d universonic/stable-diffusion-webui:full
 ```
 
+When using `--share` or `--listen`, extensions are disabled for security.
+Set `COMMANDLINE_ARGS="--enable-insecure-extension-access"` to allow installing extensions anyway:
+
+```bash
+docker run --gpus all --restart unless-stopped -p 8080:8080 \
+  -e COMMANDLINE_ARGS="--enable-insecure-extension-access" \
+  --name stable-diffusion-webui -d universonic/stable-diffusion-webui:full
+```
+
 Check logs if the container fails to start:
 
 ```bash
