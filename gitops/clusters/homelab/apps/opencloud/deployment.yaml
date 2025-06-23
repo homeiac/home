@@ -17,6 +17,10 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-still-fawn
+      hostAliases: # map domain locally to fix login errors (see issue #54)
+        - ip: "127.0.0.1"
+          hostnames:
+            - opencloud.app.homelab
       initContainers:
         - name: init-perms
           image: busybox
