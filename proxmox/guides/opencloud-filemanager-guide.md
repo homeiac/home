@@ -35,3 +35,15 @@ hostAliases:
 ```
 
 Apply the updated deployment manifest to update the running pod. This maps the domain to `127.0.0.1` inside the container so token verification works.
+
+## Removing the Deployment
+
+To delete the OpenCloud resources from the cluster, remove the `apps/opencloud` entry from `gitops/clusters/homelab/kustomization.yaml` and delete the directory `gitops/clusters/homelab/apps/opencloud`. Commit the changes so Flux applies them:
+
+```bash
+git rm -r gitops/clusters/homelab/apps/opencloud
+sed -i '/apps\/opencloud/d' gitops/clusters/homelab/kustomization.yaml
+git commit -m "Remove OpenCloud" && git push
+```
+
+Flux will then prune the OpenCloud Deployment, Service and related objects from the cluster.
