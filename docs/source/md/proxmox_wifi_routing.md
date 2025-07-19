@@ -1,1 +1,0 @@
-../../../proxmox/wifi_routing.md
