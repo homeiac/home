@@ -2,7 +2,7 @@ grafana:
   service:
     type: NodePort
     nodePort: 32080         # Access Grafana at http://<nodeIP>:30080
-  adminPassword: "admin"    # Demo password; change later
+  adminPassword: "admin"    # Demo password; change later; don't forget
   persistence:
     enabled: true
     accessModes:
@@ -35,7 +35,7 @@ prometheus:
     additionalScrapeConfigs:
       - job_name: "proxmox-node-exporter"
         static_configs:
-          - targets: 
+          - targets:
               - 192.168.4.122:9100   # pve
               - 192.168.4.17:9100    # still-fawn
               - 192.168.4.19:9100    # chief-horse
@@ -43,5 +43,5 @@ prometheus:
       - job_name: "proxmox-pve-exporter"
         metrics_path: /pve
         static_configs:
-          - targets: 
+          - targets:
               - 192.168.4.122:9221   # pve-proxmox-metrics
