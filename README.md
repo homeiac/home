@@ -47,3 +47,8 @@ for details on bare metal installs and container provisioning.
 * [Python Tests Guide](docs/source/md/guides/python_tests_guide.md)
 * [Agent Guidelines](docs/source/md/guides/agents_guidelines.md)
 * [Project Documentation](https://homeiac.github.io/home/)
+
+## Proxmox Network Guides
+
+* [2.5 GbE Migration Guide](proxmox/guides/2.5gbe-migration.md) — step-by-step migration from 1 GbE to 2.5 GbE,
+  with lessons learned.
