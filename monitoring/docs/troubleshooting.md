@@ -45,6 +45,7 @@ with kind PersistentVolumeClaim: PersistentVolumeClaim \
 - Confirming `monitoring-values.yaml` contained the correct `local-path` storage class.
 - Verifying the Flux `Kustomization` applied successfully.
 - Restarting the Helm Controller.
+- Pushing a commit that only touched unrelated files.
 
 None of these resolved the issue.
 
@@ -56,7 +57,8 @@ None of these resolved the issue.
    kubectl delete helmrelease kube-prometheus-stack -n monitoring
    ```
 
-2. Wait for Flux to recreate the release from Git. The new PVC is created with the `local-path` storage class.
+2. Push a dummy commit to `monitoring-values.yaml` to force Flux to reconcile.
+3. Wait for Flux to recreate the release from Git. The new PVC is created with the `local-path` storage class.
 
 ### Important Note on Grafana Dashboards
 
