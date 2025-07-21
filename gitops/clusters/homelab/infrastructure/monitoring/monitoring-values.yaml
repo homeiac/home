@@ -8,7 +8,7 @@ grafana:
     accessModes:
       - ReadWriteOnce
     size: 10Gi
-    storageClassName: longhorn
+    storageClassName: local-path
   affinity:
     nodeAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
