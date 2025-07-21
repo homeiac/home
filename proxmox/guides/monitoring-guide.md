@@ -18,9 +18,9 @@ helm install prom-stack prometheus-community/kube-prometheus-stack \
 ## 2. Enable Persistence with local-path
 
 Prometheus generates a large write load, so running it on distributed storage like Longhorn is discouraged.
-Use node-local storage instead. Grafana can remain on Longhorn because it has lighter write requirements.
-Update `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` so only
-Prometheus claims `local-path` storage. Grafana prefers running on node
+Use node-local storage instead. Grafana's persistent volume now also uses node-local storage for simplicity.
+Update `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` so
+both Prometheus and Grafana claim `local-path` storage. Grafana prefers running on node
 `k3s-vm-still-fawn` but can fall back to any healthy node:
 
 ```yaml
@@ -31,7 +31,7 @@ grafana:
     accessModes:
       - ReadWriteOnce
     size: 10Gi
-    storageClassName: longhorn
+    storageClassName: local-path
   affinity:
     nodeAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
