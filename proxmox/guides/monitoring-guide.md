@@ -1,6 +1,8 @@
 # Production-Ready Monitoring Setup
 
-This guide shows how to deploy Prometheus and Grafana using the `kube-prometheus-stack` Helm chart. The default values are stored in `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml`.
+This guide shows how to deploy Prometheus and Grafana using the
+`kube-prometheus-stack` Helm chart. The default values live in
+`gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml`.
 
 ## 1. Deploy Prometheus & Grafana
 
@@ -18,11 +20,11 @@ helm install prom-stack prometheus-community/kube-prometheus-stack \
 Prometheus generates a large write load, so running it on distributed storage like Longhorn is discouraged.
 Use node-local storage instead. Grafana can remain on Longhorn because it has lighter write requirements.
 Update `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` so only
-Prometheus claims `local-path` storage:
+Prometheus claims `local-path` storage. Grafana prefers running on node
+`k3s-vm-still-fawn` but can fall back to any healthy node:
 
 ```yaml
 # gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml
->>>>>>> theirs
 grafana:
   persistence:
     enabled: true
@@ -30,6 +32,16 @@ grafana:
       - ReadWriteOnce
     size: 10Gi
     storageClassName: longhorn
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - k3s-vm-still-fawn
 
 prometheus:
   prometheusSpec:
@@ -48,11 +60,13 @@ Apply the chart with these values to persist data locally.
 
 ## 3. Install and Configure Exporters
 
-**Node Exporter**
-- Run as a systemd service on Proxmox hosts and as a DaemonSet on k3s.
-- Metrics available on port `9100`.
+### Node Exporter
 
-**Proxmox PVE Exporter**
+- Run as a systemd service on Proxmox hosts and as a DaemonSet on k3s.
+  - Metrics available on port `9100`.
+
+### Proxmox PVE Exporter
+
 - Install via `pipx` to `/usr/local/bin/pve_exporter`.
 - Configure `/etc/pve_exporter/config.yaml`:
 
