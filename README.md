@@ -39,6 +39,7 @@ for details on bare metal installs and container provisioning.
 * [Flux Bootstrap Guide](proxmox/guides/flux-guide.md)
 * [MetalLB Setup Guide](proxmox/guides/metallb-guide.md)
 * [Monitoring Setup Guide](proxmox/guides/monitoring-guide.md) - deployed via Flux
+* [Monitoring Troubleshooting](monitoring/docs/troubleshooting.md) - fix common issues
 * [Docs Workflow Guide](docs/source/md/docs_workflow_guide.md)
   * documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
