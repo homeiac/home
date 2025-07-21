@@ -108,8 +108,9 @@ helm upgrade prom-stack prometheus-community/kube-prometheus-stack \
 
 - **Node Exporter Full** (1860)
 - **SMART / Disk Health** (13654)
-- **Proxmox via Prometheus** (10347)
-- (Optional) **Proxmox VE Node** (10048) and **Cluster Summary** (10049)
+- **Proxmox via Prometheus** (10347) — recommended for Proxmox metrics
+- **Do not import** **Proxmox VE Node** (10048) as it requires InfluxDB
+- (Optional) **Cluster Summary** (10049)
 
 ## 6. Set up Alerting
 
