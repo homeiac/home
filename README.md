@@ -40,6 +40,7 @@ for details on bare metal installs and container provisioning.
 * [MetalLB Setup Guide](proxmox/guides/metallb-guide.md)
 * [Monitoring Setup Guide](proxmox/guides/monitoring-guide.md) - deployed via Flux
 * [Monitoring Troubleshooting](monitoring/docs/troubleshooting.md) - fix common issues
+* [K3s Too Many Open Files Runbook](docs/source/md/runbooks/too-many-open-files-k3s.md) - troubleshoot descriptor errors
 * [Docs Workflow Guide](docs/source/md/docs_workflow_guide.md)
   * documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
