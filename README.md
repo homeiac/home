@@ -54,3 +54,4 @@ for details on bare metal installs and container provisioning.
 
 * [2.5 GbE Migration Guide](proxmox/guides/2.5gbe-migration.md) — step-by-step migration from 1 GbE to 2.5 GbE,
   with lessons learned.
+* [Flint 3 VLAN40 Split Guide](docs/source/md/runbooks/flint3-vlan40-guide.md) — bridge Wi-Fi while isolating Proxmox
