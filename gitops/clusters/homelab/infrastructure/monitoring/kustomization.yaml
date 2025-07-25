@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
+  - prometheus-storage-class.yaml
 
 configMapGenerator:
   - name: monitoring-values
