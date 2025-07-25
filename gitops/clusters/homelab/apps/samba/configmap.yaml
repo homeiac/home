@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: samba-volumes
+  namespace: samba
+data:
+  SAMBA_VOLUME_CONFIG_secure: '[secure]; path=/shares; browseable=yes; writable=yes; valid users=sambauser,alice; force user=nobody; create mask=0770; directory mask=0770'

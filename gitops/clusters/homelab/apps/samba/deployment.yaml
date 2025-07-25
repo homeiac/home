@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: samba
+  namespace: samba
+spec:
+  replicas: 0  # Start with 0 replicas for safe migration
+  selector:
+    matchLabels:
+      app: samba
+  template:
+    metadata:
+      labels:
+        app: samba
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      initContainers:
+      - name: init-perms
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          chown nobody:nogroup /mnt/smb_data
+          chmod 0770 /mnt/smb_data
+        volumeMounts:
+        - name: share
+          mountPath: /mnt/smb_data
+      containers:
+      - name: smbd
+        image: ghcr.io/servercontainers/samba:latest
+        env:
+        - name: MODEL
+          value: TimeCapsule
+        - name: AVAHI_NAME
+          value: StorageServer
+        - name: SAMBA_CONF_LOG_LEVEL
+          value: "3"
+        - name: SAMBA_GLOBAL_CONFIG_interfaces
+          value: lo eth0
+        - name: SAMBA_GLOBAL_CONFIG_bind_SPACE_interfaces_SPACE_only
+          value: "yes"
+        envFrom:
+        - secretRef:
+            name: samba-users
+        - configMapRef:
+            name: samba-volumes
+        ports:
+        - containerPort: 445
+          protocol: TCP
+        - containerPort: 139
+          protocol: TCP
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: share
+          mountPath: /shares
+      volumes:
+      - name: share
+        hostPath:
+          path: /mnt/smb_data
+          type: Directory
