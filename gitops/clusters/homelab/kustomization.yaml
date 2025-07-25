@@ -8,4 +8,5 @@ resources:
   - infrastructure-config/metallb-config        #(address-pool)
   - apps/ollama
   - apps/stable-diffusion
+  - apps/samba
 

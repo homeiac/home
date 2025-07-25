@@ -67,6 +67,45 @@ This is a homelab infrastructure management repository that follows Infrastructu
 - Update relevant files in `docs/source/md/` or `proxmox/guides/` as appropriate
 - Ensure documentation reflects the current state after changes
 
+### DNS Configuration
+The homelab uses a layered DNS approach with OPNsense Unbound DNS and the `.homelab` domain:
+
+#### Network Architecture
+- **Domain**: `homelab` (e.g., `service.homelab`)
+- **DNS Server**: OPNsense Unbound DNS
+- **HTTP Services**: Traefik LoadBalancer at `192.168.4.50`
+- **Non-HTTP Services**: Direct MetalLB LoadBalancer IPs (`192.168.4.50-70` pool)
+
+#### Service DNS Patterns
+- **HTTP/HTTPS**: Use Traefik IngressRoute → `service.homelab` → `192.168.4.50`
+- **TCP/Raw Ports**: Use MetalLB LoadBalancer → `service.homelab` → `192.168.4.5X`
+
+#### DNS Configuration Process
+1. **Deploy service** with MetalLB LoadBalancer (gets IP from pool)
+2. **Add DNS Override** in OPNsense: 
+   - Navigate: Services → Unbound DNS → Overrides
+   - Add Host Override: `service.homelab` → `192.168.4.5X`
+3. **Test resolution**: `nslookup service.homelab` should return the LoadBalancer IP
+4. **Update documentation** with DNS access instructions
+
+#### Service Deployment Format
+Always end service deployments with DNS configuration:
+
+```yaml
+# Example: After deploying service with MetalLB LoadBalancer
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-service
+spec:
+  type: LoadBalancer
+  # MetalLB assigns IP from pool (e.g., 192.168.4.53)
+```
+
+**Required DNS Update:**
+- OPNsense Unbound DNS Override: `example.homelab` → `192.168.4.53`
+- Client access: `example.homelab:port` instead of IP address
+
 ### Making Changes
 1. For Kubernetes resources: modify files in `gitops/clusters/homelab/`
 2. For Proxmox automation: work in `proxmox/homelab/src/homelab/`
