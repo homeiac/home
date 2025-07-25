@@ -123,6 +123,9 @@ spec:
 - Start with short summary (under 50 characters)
 - Add blank line followed by detailed explanation
 - All checks must pass before merging
+- **NEVER use `git add .` blindly** - always review files being staged first with `git status`
+- Use selective staging: `git add specific-file.yaml` or `git add directory/`
+- Verify staged changes with `git diff --cached` before committing
 
 ### GitOps Deployment
 - Changes to `gitops/` are automatically deployed by Flux

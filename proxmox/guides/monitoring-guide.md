@@ -5,6 +5,7 @@ This guide shows how to deploy Prometheus and Grafana using the
 `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml`.
 
 **📧 For Email Alerting Setup**: See [Monitoring and Alerting Guide](monitoring-alerting-guide.md)
+**🗂️ For Storage Migration**: See [Prometheus 2TB Storage Migration Guide](prometheus-2tb-migration-guide.md)
 
 ## 1. Deploy Prometheus & Grafana
 
@@ -23,7 +24,7 @@ Prometheus generates a large write load and requires significant disk space for 
 Both Prometheus and Grafana are configured to run on `k3s-vm-still-fawn` which has access to a 2TB drive.
 
 ### Prometheus Storage (2TB Drive)
-Prometheus uses a hostPath volume pointing directly to the 2TB drive at `/mnt/smb_data/prometheus`:
+Prometheus uses a custom StorageClass that provisions storage on the 2TB drive at `/mnt/smb_data/prometheus`:
 
 ```yaml
 # gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml
@@ -32,16 +33,28 @@ prometheus:
     retention: 30d
     nodeSelector:
       kubernetes.io/hostname: k3s-vm-still-fawn
-    volumes:
-      - name: prometheus-storage
-        hostPath:
-          path: /mnt/smb_data/prometheus
-          type: Directory
-    volumeMounts:
-      - name: prometheus-storage
-        mountPath: /prometheus
-    storage:
-      disableMountSubPath: true
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: prometheus-2tb-storage
+          resources:
+            requests:
+              storage: 500Gi
+```
+
+The custom StorageClass is defined in `prometheus-storage-class.yaml`:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: prometheus-2tb-storage
+provisioner: rancher.io/local-path
+parameters:
+  nodePath: /mnt/smb_data/prometheus
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
 ```
 
 ### Grafana Storage (Local Path)
