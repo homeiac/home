@@ -1,0 +1,33 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: k3s-cpu-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: k3s-node-cpu
+      rules:
+        - alert: K3sNodeHighCPU
+          expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 90
+          for: 1h
+          labels:
+            severity: critical
+            service: k3s-cluster
+          annotations:
+            summary: "K3s node {{ $labels.instance }} has high CPU usage"
+            description: "K3s node {{ $labels.instance }} has been running at {{ $value | humanizePercentage }} CPU usage for more than 1 hour."
+            runbook_url: "https://prometheus.io/docs/alerting/rules/"
+        
+        - alert: K3sNodeCriticalCPU
+          expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 95
+          for: 1h
+          labels:
+            severity: critical
+            service: k3s-cluster
+          annotations:
+            summary: "K3s node {{ $labels.instance }} has critical CPU usage"
+            description: "K3s node {{ $labels.instance }} has been running at {{ $value | humanizePercentage }} CPU usage for more than 1 hour. Immediate attention required."
+            runbook_url: "https://prometheus.io/docs/alerting/rules/"

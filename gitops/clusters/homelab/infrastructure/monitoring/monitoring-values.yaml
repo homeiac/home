@@ -26,16 +26,14 @@ prometheus:
     retention: 30d
     nodeSelector:
       kubernetes.io/hostname: k3s-vm-still-fawn
-    volumes:
-      - name: prometheus-storage
-        hostPath:
-          path: /mnt/smb_data/prometheus
-          type: Directory
-    volumeMounts:
-      - name: prometheus-storage
-        mountPath: /prometheus
-    storage:
-      disableMountSubPath: true
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: prometheus-2tb-storage
+          resources:
+            requests:
+              storage: 500Gi
     additionalScrapeConfigs:
       - job_name: "proxmox-node-exporter"
         static_configs:
