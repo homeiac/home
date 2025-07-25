@@ -4,6 +4,8 @@ This guide shows how to deploy Prometheus and Grafana using the
 `kube-prometheus-stack` Helm chart. The default values live in
 `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml`.
 
+**📧 For Email Alerting Setup**: See [Monitoring and Alerting Guide](monitoring-alerting-guide.md)
+
 ## 1. Deploy Prometheus & Grafana
 
 Install the `kube-prometheus-stack` chart and expose Grafana on NodePort `30080`:
@@ -15,16 +17,37 @@ helm install prom-stack prometheus-community/kube-prometheus-stack \
   -n monitoring --create-namespace
 ```
 
-## 2. Enable Persistence with local-path
+## 2. Storage Configuration
 
-Prometheus generates a large write load, so running it on distributed storage like Longhorn is discouraged.
-Use node-local storage instead. Grafana's persistent volume now also uses node-local storage for simplicity.
-Update `gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` so
-both Prometheus and Grafana claim `local-path` storage. Grafana prefers running on node
-`k3s-vm-still-fawn` but can fall back to any healthy node:
+Prometheus generates a large write load and requires significant disk space for time-series data.
+Both Prometheus and Grafana are configured to run on `k3s-vm-still-fawn` which has access to a 2TB drive.
+
+### Prometheus Storage (2TB Drive)
+Prometheus uses a hostPath volume pointing directly to the 2TB drive at `/mnt/smb_data/prometheus`:
 
 ```yaml
 # gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    nodeSelector:
+      kubernetes.io/hostname: k3s-vm-still-fawn
+    volumes:
+      - name: prometheus-storage
+        hostPath:
+          path: /mnt/smb_data/prometheus
+          type: Directory
+    volumeMounts:
+      - name: prometheus-storage
+        mountPath: /prometheus
+    storage:
+      disableMountSubPath: true
+```
+
+### Grafana Storage (Local Path)
+Grafana uses local-path storage with node affinity:
+
+```yaml
 grafana:
   persistence:
     enabled: true
@@ -42,21 +65,9 @@ grafana:
                 operator: In
                 values:
                   - k3s-vm-still-fawn
-
-prometheus:
-  prometheusSpec:
-    retention: 30d
-    storageSpec:
-      volumeClaimTemplate:
-        spec:
-          accessModes: ["ReadWriteOnce"]
-          storageClassName: local-path
-          resources:
-            requests:
-              storage: 100Gi
 ```
 
-Apply the chart with these values to persist data locally.
+This configuration ensures Prometheus data is stored on the large 2TB drive while keeping Grafana's smaller configuration data on local storage.
 
 ## 3. Install and Configure Exporters
 
@@ -145,13 +156,11 @@ additionalPrometheusRules:
 - Add nightly drift checks via CI/cron.
 - Create recording rules for rollups and downsampling.
 - Integrate Thanos for long-term storage.
-=======
-Apply the Helm chart with these values to ensure data stays on each node's local disk.
 
 ## Deploy with Flux
 
 The monitoring stack is now managed through Flux. The manifests live under
 `gitops/clusters/homelab/infrastructure/monitoring`. Flux applies the
-`kube-prometheus-stack` chart using the same
-`gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml` file,
-so existing Grafana dashboards and Prometheus data remain intact.
+`kube-prometheus-stack` chart using the values from
+`gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml`,
+ensuring Prometheus data is stored on the 2TB drive and existing Grafana dashboards remain intact.
