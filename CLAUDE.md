@@ -22,7 +22,14 @@ This is a homelab infrastructure management repository that follows Infrastructu
 - Code formatting: `black --check`
 - Coverage: `coverage run -m pytest` then `coverage html`
 
+### SSH Access Patterns
+- **Proxmox Hosts**: `ssh root@<hostname>.maas` (e.g., `ssh root@still-fawn.maas`)
+- **K3s VMs**: `ssh ubuntu@k3s-vm-<proxmox-host-name>` (e.g., `ssh ubuntu@k3s-vm-still-fawn`)
+- **Host Commands**: Use `lshw`, `nvidia-smi`, etc. on individual hosts for hardware verification
+
 ### Kubernetes/GitOps
+- **Kubernetes Cluster Access**: `export KUBECONFIG=~/kubeconfig` (available on pve host and Mac)
+- **Preferred Terminal**: Use Mac terminal when using Claude Code for kubectl commands
 - All Kubernetes manifests are managed via GitOps using Flux
 - Main GitOps configuration: `gitops/clusters/homelab/kustomization.yaml`
 - Test MetalLB LoadBalancer: `proxmox/homelab/scripts/metallb-smoketest.sh`
