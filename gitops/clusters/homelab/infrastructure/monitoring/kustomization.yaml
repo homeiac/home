@@ -4,7 +4,6 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  - cpu-alerting-rules.yaml
 
 configMapGenerator:
   - name: monitoring-values
