@@ -26,9 +26,9 @@ This are the nodes on the cluster:
 
 | Node       | IPs                                     | Model         | CPU         | Mem  | GPU                 |
 |------------|-----------------------------------------|---------------|-------------|------|---------------------|
-| rapid-civet| 192.168.4.11                            | HP 260 G1 DM   | i3-4030U@1.9|3.75  | Haswell IG (0b)     |
-| still-fawn | 192.168.4.17,192.168.4.195              | ASUS B85M-G R2.0     | i5-4460@3.2 |15.53 | NVIDIA RTX3070 (a1) |
-| chief-horse| 192.168.4.19,192.168.4.197              | Intel NUC D34010WYK | i3-4010U@1.7|7.66  | Haswell IG (09)     |
+| rapid-civet| 192.168.4.11                            | HP 260 G1 DM   | i3-4030U@1.9|3.75  | Haswell IG model-0b |
+| still-fawn | 192.168.4.17,192.168.4.195              | ASUS B85M-G R2.0     | i5-4460@3.2 |15.53 | NVIDIA RTX3070 model-a1 |
+| chief-horse| 192.168.4.19,192.168.4.197              | Intel NUC D34010WYK | i3-4010U@1.7|7.66  | Haswell IG model-09 |
 | pve        | 192.168.86.194,192.168.1.122,192.168.4.122,10.10.10.1 | BOSGAME DNB10M | N100@2.8   |15.37 | Alder UHD |
 <!-- markdownlint-enable MD013 -->
 
@@ -37,9 +37,9 @@ This are the nodes on the cluster:
 graph TD
     subgraph homeCluster [Home lab Proxmox Cluster]
       pve["pve<br>IPs: 192.168.86.194, 192.168.1.122, 192.168.4.122, 10.10.10.1<br>Board: BOSGAME DNB10M<br>CPU: N100 @2.8<br>Mem: 15.37GB<br>GPU: Alder UHD"]
-      rapid["rapid-civet<br>IPs: 192.168.4.11<br>Board: HP 8000<br>CPU: i3-4030U @1.9<br>Mem: 3.75GB<br>GPU: Haswell IG (0b)"]
-      still["still-fawn<br>IPs: 192.168.4.17, 192.168.4.195<br>Board: ASUS B85M R2.0<br>CPU: i5-4460 @3.2<br>Mem: 15.53GB<br>GPU: NVIDIA RTX3070 (a1)"]
-      chief["chief-horse<br>IPs: 192.168.4.19, 192.168.4.197<br>Board: Intel D34010WYK<br>CPU: i3-4010U @1.7<br>Mem: 7.66GB<br>GPU: Haswell IG (09)"]
+      rapid["rapid-civet<br>IPs: 192.168.4.11<br>Board: HP 8000<br>CPU: i3-4030U @1.9<br>Mem: 3.75GB<br>GPU: Haswell IG model-0b"]
+      still["still-fawn<br>IPs: 192.168.4.17, 192.168.4.195<br>Board: ASUS B85M R2.0<br>CPU: i5-4460 @3.2<br>Mem: 15.53GB<br>GPU: NVIDIA RTX3070 model-a1"]
+      chief["chief-horse<br>IPs: 192.168.4.19, 192.168.4.197<br>Board: Intel D34010WYK<br>CPU: i3-4010U @1.7<br>Mem: 7.66GB<br>GPU: Haswell IG model-09"]
     end
 <!-- markdownlint-enable MD013 -->
 

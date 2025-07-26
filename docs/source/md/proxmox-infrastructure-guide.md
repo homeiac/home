@@ -13,7 +13,7 @@ graph TB
     subgraph "Proxmox Cluster - 5 Nodes"
         subgraph "pve - Primary Node"
             pve_hw[Intel N100 @ 2.8GHz<br/>4 cores, 16GB DDR4-2667<br/>BOSGAME DNB10M<br/>340GB local storage<br/>Multiple network interfaces]
-            pve_nets[Network Interfaces:<br/>- enp1s0 → vmbr0 (WAN)<br/>- enx803f5df89175 → vmbr25gbe (2.5GbE USB)<br/>- wlan0 (WiFi backup)]
+            pve_nets[Network Interfaces:<br/>- enp1s0 → vmbr0 WAN<br/>- enx803f5df89175 → vmbr25gbe 2.5GbE USB<br/>- wlan0 WiFi backup]
         end
         
         subgraph "still-fawn - GPU Node"
@@ -49,7 +49,7 @@ graph TB
         Internet --> ISP
         Internet --> GoogleMesh
         
-        GoogleMesh --> Flint3[GL.iNet Flint 3 (GL-BE9300)<br/>WiFi 7 Router/Bridge<br/>4-Port Gigabit Switch]
+        GoogleMesh --> Flint3[GL.iNet Flint 3 GL-BE9300<br/>WiFi 7 Router/Bridge<br/>4-Port Gigabit Switch]
         
         subgraph "Flint 3 Port Configuration"
             Flint3 --> Bridge86[Ports 1-2: Bridge Mode<br/>192.168.86.x subnet<br/>WiFi → Wired Bridge]
@@ -76,14 +76,14 @@ graph TB
     end
     
     subgraph "VM Network Assignment"
-        vmbr0 --> opnsense[OPNsense VM (101)<br/>Bridge: vmbr0<br/>Acts as 192.168.4.1 gateway]
-        vmbr25gbe --> maas[Ubuntu MAAS VM (102)<br/>IP: 192.168.4.53<br/>DHCP/DNS for .maas domain]
+        vmbr0 --> opnsense[OPNsense VM-101<br/>Bridge: vmbr0<br/>Acts as 192.168.4.1 gateway]
+        vmbr25gbe --> maas[Ubuntu MAAS VM-102<br/>IP: 192.168.4.53<br/>DHCP/DNS for .maas domain]
         vmbr25gbe --> k3s_nodes[K3s VMs<br/>still-fawn: 192.168.4.236<br/>pve: 192.168.4.238<br/>chief-horse: 192.168.4.237]
     end
     
     subgraph "LXC Network Assignment"
-        vmbr0 --> lxc_wan[LXC containers on WAN<br/>docker (100), cloudflared (111)]
-        vmbr25gbe --> lxc_lan[LXC containers on LAN<br/>docker (112), frigate (113)<br/>proxmox-backup-server (103)]
+        vmbr0 --> lxc_wan[LXC containers on WAN<br/>docker LXC-100, cloudflared LXC-111]
+        vmbr25gbe --> lxc_lan[LXC containers on LAN<br/>docker LXC-112, frigate LXC-113<br/>proxmox-backup-server LXC-103]
     end
 ```
 
@@ -129,7 +129,7 @@ Features:
 graph TB
     subgraph "K3s Cluster VMs"
         subgraph "k3s-vm-still-fawn (VM 108)"
-            sf_vm[Host: still-fawn node<br/>CPU: 4 cores (host passthrough)<br/>RAM: 16GB<br/>Storage: 400GB from local-2TB-zfs<br/>IP: 192.168.4.236]
+            sf_vm[Host: still-fawn node<br/>CPU: 4 cores with host passthrough<br/>RAM: 16GB<br/>Storage: 400GB from local-2TB-zfs<br/>IP: 192.168.4.236]
             sf_gpu_pt[GPU Passthrough:<br/>hostpci0=still-fawn-nVidia<br/>RTX 3070 8GB accessible]
             sf_ci[Cloud-Init:<br/>install-k3sup-qemu-agent.yaml<br/>User: ubuntu]
         end
