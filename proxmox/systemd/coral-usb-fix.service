@@ -1,0 +1,14 @@
+[Unit]
+Description=Coral TPU USB Auto-mapping for Frigate LXC
+After=multi-user.target
+Before=pve-container@113.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/coral-usb-fix.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

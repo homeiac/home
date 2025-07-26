@@ -130,6 +130,16 @@ Proxmox Host (192.168.4.x)
 - **Verify**: Frigate RTSP port 8554 accessible
 - **Test**: Direct access to Frigate web interface
 
+### Coral TPU USB Mapping Issues After Reboot
+- **Problem**: Frigate container fails to start after Proxmox host reboot due to USB device mapping changes
+- **Cause**: Coral TPU USB device appears on different bus/device numbers after reboot
+- **Solution**: Automated via systemd service (see Coral TPU Automation section)
+- **Manual Fix**: 
+  1. Run Python script to initialize Coral: `cd ~/code && python3 coral/pycoral/examples/classify_image.py --model test_data/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite --labels test_data/inat_bird_labels.txt --input test_data/parrot.jpg`
+  2. Check device: `lsusb | grep -i google`
+  3. Update LXC config: `vim /etc/pve/lxc/113.conf` (change dev0 line)
+  4. Start container: `pct start 113`
+
 ## Key Features Enabled
 - Live camera streaming in Home Assistant
 - Motion detection sensors per camera
@@ -150,6 +160,44 @@ Proxmox Host (192.168.4.x)
 - MQTT provides lightweight sensor data
 - No GPU required for Home Assistant (handled by Frigate)
 - LXC containers provide better resource efficiency than VMs
+
+## Coral TPU Automation
+
+### Automated USB Mapping Fix
+The Frigate container uses a Google Coral TPU for hardware acceleration. After Proxmox host reboots, the USB device mapping can change, causing the container to fail to start. This is now automated via a systemd service.
+
+### Installation
+1. **Copy script to Proxmox host**:
+   ```bash
+   scp proxmox/scripts/coral-usb-fix.sh root@fun-bedbug.maas:/usr/local/bin/
+   chmod +x /usr/local/bin/coral-usb-fix.sh
+   ```
+
+2. **Install systemd service**:
+   ```bash
+   scp proxmox/systemd/coral-usb-fix.service root@fun-bedbug.maas:/etc/systemd/system/
+   systemctl enable coral-usb-fix.service
+   ```
+
+### How It Works
+- **On Boot**: Service runs automatically before Frigate container starts
+- **Device Check**: Looks for Google Coral TPU in `lsusb` output
+- **Initialization**: If missing, runs Python script to initialize Coral TPU
+- **USB Mapping**: Updates `/etc/pve/lxc/113.conf` with correct device path
+- **Logging**: All operations logged to `/var/log/coral-usb-fix.log`
+
+### Manual Operation
+```bash
+# Run manually (for testing)
+/usr/local/bin/coral-usb-fix.sh
+
+# Check service status
+systemctl status coral-usb-fix.service
+
+# View logs
+journalctl -u coral-usb-fix.service
+cat /var/log/coral-usb-fix.log
+```
 
 ## Next Steps
 - Configure motion detection automations
