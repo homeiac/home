@@ -36,6 +36,7 @@ This is a homelab infrastructure management repository that follows Infrastructu
 
 ### Documentation Quality
 - Validate Markdown: `markdownlint`
+- **Mermaid Diagrams**: Ensure compliance with Mermaid.js syntax - parentheses are not allowed in node/edge descriptions
 
 ### GitHub Issues and Git Workflow
 - Create GitHub issue before starting work: `gh issue create --title "Brief description" --body "Detailed description"`
