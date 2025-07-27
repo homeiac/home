@@ -54,8 +54,8 @@ alertmanager:
   config:
     global:
       smtp_smarthost: 'smtppro.zoho.com:587'
-      smtp_from_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-from
-      smtp_auth_username_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-username
+      smtp_from: 'homeiac.alerts@minibloks.com'
+      smtp_auth_username: 'homeiac.alerts@minibloks.com'
       smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-password
     route:
       group_by: ['alertname', 'instance']
@@ -66,7 +66,7 @@ alertmanager:
     receivers:
       - name: 'email-notifications'
         email_configs:
-          - to_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-to
+          - to: 'homeiac.alerts@minibloks.com'
             subject: '🚨 K3s Cluster Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             body: |
               {{ range .Alerts }}
