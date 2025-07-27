@@ -83,6 +83,14 @@ alertmanager:
   alertmanagerSpec:
     secrets:
       - alertmanager-smtp-secret
+    volumes:
+      - name: smtp-secret-volume
+        secret:
+          secretName: alertmanager-smtp-secret
+    volumeMounts:
+      - name: smtp-secret-volume
+        mountPath: /etc/alertmanager/secrets
+        readOnly: true
     storage:
       volumeClaimTemplate:
         spec:
