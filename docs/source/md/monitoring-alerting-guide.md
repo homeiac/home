@@ -45,53 +45,118 @@ Minimal alert set designed to prevent alert fatigue:
 
 ## Email Alert Setup
 
-### Prerequisites
-1. **Gmail Setup (Recommended)**:
-   - Enable 2-Factor Authentication: https://myaccount.google.com/security
-   - Generate App Password: https://myaccount.google.com/apppasswords
-   - Select "Mail" → "Kubernetes Alertmanager"
-   - Copy the 16-character password (remove spaces)
+### Final Working Configuration ✅
 
-2. **Yahoo Alternative**:
-   - Go to Yahoo Account Security settings
-   - Enable 2-step verification if required
-   - Generate app password for mail applications
+**Email alerting is successfully configured using Grafana Unified Alerting with Yahoo SMTP**
 
-### Configuration Steps
+- **Platform**: Grafana Unified Alerting (not Prometheus Alertmanager)
+- **SMTP Provider**: Yahoo Mail (`smtp.mail.yahoo.com:587`)
+- **Destination**: `g_skumar@yahoo.com`
+- **Authentication**: Yahoo app password stored in Kubernetes secret
+- **Security**: Credentials never stored in GitOps repository
 
-1. **Update Email Settings**:
-   ```bash
-   # Edit monitoring values
-   vim gitops/clusters/homelab/infrastructure/monitoring/monitoring-values.yaml
-   
-   # Replace "your-email@gmail.com" with your actual email
-   # For Yahoo: change smtp_smarthost to 'smtp.mail.yahoo.com:587'
-   ```
+### Prerequisites: Yahoo App Password
 
-2. **Create SMTP Secret**:
-   ```bash
-   kubectl create secret generic alertmanager-smtp-secret \
-     --from-literal=smtp-password='YOUR_16_CHAR_APP_PASSWORD' \
-     -n monitoring
-   ```
+1. **Generate Yahoo App Password**:
+   - Go to Yahoo Account Security: https://login.yahoo.com/account/security
+   - Enable 2-step verification if not already enabled
+   - Generate app password for "Mail" applications
+   - Copy the 16-character password (no spaces)
 
-3. **Verify Setup**:
-   ```bash
-   # Check secret exists
-   kubectl get secret alertmanager-smtp-secret -n monitoring
-   
-   # Check Alertmanager pods
-   kubectl get pods -n monitoring | grep alertmanager
-   
-   # View Alertmanager logs
-   kubectl logs -n monitoring -l app.kubernetes.io/name=alertmanager
-   ```
+### Implementation: Manual Secret Creation
 
-4. **Test Alerting** (Optional):
-   ```bash
-   kubectl patch prometheusrule k3s-cpu-alerts -n monitoring --type='merge' \
-     -p='{"spec":{"groups":[{"name":"k3s-node-cpu","rules":[{"alert":"TestAlert","expr":"up","for":"0s","labels":{"severity":"critical"},"annotations":{"summary":"Test alert - you can ignore this"}}]}]}}'
-   ```
+**IMPORTANT**: The SMTP secret must be created manually and is NOT managed by GitOps:
+
+```bash
+# Create secret with Yahoo credentials (replace YOUR_APP_PASSWORD)
+kubectl create secret generic smtp-credentials \
+  --from-literal=user='g_skumar@yahoo.com' \
+  --from-literal=pass='YOUR_YAHOO_APP_PASSWORD' \
+  -n monitoring
+```
+
+### Grafana Configuration
+
+The email alerting is configured in `monitoring-values.yaml` with:
+
+```yaml
+grafana:
+  smtp:
+    enabled: true
+    existingSecret: smtp-credentials
+    userKey: user
+    passwordKey: pass
+    host: smtp.mail.yahoo.com:587
+    fromAddress: g_skumar@yahoo.com
+    skipVerify: false
+  grafana.ini:
+    unified_alerting:
+      enabled: true
+    alerting:
+      enabled: false  # Legacy alerting disabled
+    smtp:
+      enabled: true
+      host: smtp.mail.yahoo.com:587
+      user: $__file{/etc/secrets/smtp-credentials/user}
+      password: $__file{/etc/secrets/smtp-credentials/pass}
+      from_address: g_skumar@yahoo.com
+      skip_verify: false
+  extraSecretMounts:
+    - name: smtp-credentials
+      secretName: smtp-credentials
+      mountPath: /etc/secrets/smtp-credentials
+      readOnly: true
+```
+
+### Usage: Creating Email Alerts in Grafana
+
+1. **Access Grafana**: `http://<node-ip>:32080` (admin/admin)
+2. **Contact Points**: Alerting → Contact Points → Add contact point
+   - **Name**: `email-notifications`
+   - **Type**: `Email`
+   - **Addresses**: `g_skumar@yahoo.com`
+3. **Notification Policies**: Configure routing to email contact point
+4. **Alert Rules**: Create rules that will trigger email notifications
+
+### Troubleshooting and Lessons Learned
+
+#### What Didn't Work (Documented for Reference)
+
+1. **Prometheus Alertmanager via Helm Values**:
+   - **Issue**: kube-prometheus-stack ignores custom alertmanager config in helm values
+   - **Error**: Configuration parsing errors, secrets not properly mounted
+   - **Lesson**: Helm values approach for alertmanager is unreliable in kube-prometheus-stack
+
+2. **AlertmanagerConfig CRD Approach**:
+   - **Issue**: CRD not picked up by prometheus-operator despite correct selectors
+   - **Error**: Configuration never merged into alertmanager runtime config
+   - **Lesson**: AlertmanagerConfig CRD support in kube-prometheus-stack can be inconsistent
+
+3. **Zoho SMTP Configuration**:
+   - **Issue**: "554 5.7.8 Access Restricted" error
+   - **Cause**: Zoho requires app-specific passwords, complex authentication
+   - **Lesson**: Yahoo SMTP is more reliable for automated systems
+
+#### What Worked: Grafana Unified Alerting
+
+- **Reliable**: Direct SMTP configuration in Grafana
+- **Secure**: File-based credential mounting from Kubernetes secrets
+- **User-Friendly**: Web UI for creating and managing alert rules
+- **Flexible**: Supports multiple notification channels and complex routing
+
+#### Key Technical Details
+
+1. **Secret Mounting**: Uses `extraSecretMounts` to mount credentials as files
+2. **File-Based Auth**: Grafana reads credentials from mounted files using `$__file{}` syntax
+3. **Configuration Reload**: Requires Helm release upgrade and pod restart for config changes
+4. **Unified Alerting**: Must disable legacy alerting and enable unified alerting
+
+### Security Notes
+
+- **Never commit SMTP passwords** to Git repositories
+- **Use app passwords** instead of account passwords for third-party applications
+- **Rotate credentials** regularly and update the Kubernetes secret
+- **Secret is cluster-local** and not managed by GitOps for security
 
 ## Adding New Alert Rules
 
