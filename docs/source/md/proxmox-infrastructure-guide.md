@@ -81,6 +81,15 @@ graph TB
         vmbr25gbe --> k3s_nodes[K3s VMs<br/>still-fawn: 192.168.4.236<br/>pve: 192.168.4.238<br/>chief-horse: 192.168.4.237]
     end
     
+    subgraph "Multi-Network VM Configuration"
+        subgraph "Home Assistant VM-116 (chief-horse)"
+            ha_vm[Home Assistant OS<br/>Triple-Network Configuration<br/>192.168.4.253]
+            ha_vm --> ha_net0[net0: vmbr0<br/>Homelab 192.168.4.x]
+            ha_vm --> ha_net1[net1: vmbr1<br/>ATT Primary 192.168.1.x]
+            ha_vm --> ha_net2[net2: vmbr2<br/>Google Mesh 192.168.86.x]
+        end
+    end
+    
     subgraph "LXC Network Assignment"
         vmbr0 --> lxc_wan[LXC containers on WAN<br/>docker LXC-100, cloudflared LXC-111]
         vmbr25gbe --> lxc_lan[LXC containers on LAN<br/>docker LXC-112, frigate LXC-113<br/>proxmox-backup-server LXC-103]
@@ -176,6 +185,67 @@ graph TB
 - **Resources**: 2 cores, 4GB RAM, 200GB disk
 - **Network**: bridge=vmbr25gbe, IP=192.168.4.237
 - **Role**: Worker node
+
+### Home Assistant VM
+
+#### Home Assistant OS (VM 116)
+```yaml
+Location: chief-horse.maas
+Purpose: Home automation and smart home management
+Resources:
+  - CPU: 2 cores (host passthrough)
+  - RAM: 2GB
+  - Storage: 40GB
+Network Configuration (Triple-Homed):
+  - net0: virtio, bridge=vmbr0, MAC=02:86:5F:DF:2B:0B
+    Purpose: Homelab network access (192.168.4.x)
+    IP: 192.168.4.253
+  - net1: virtio, bridge=vmbr1, MAC=BC:24:11:21:F4:AB
+    Purpose: ATT primary network access (192.168.1.x)
+    IP: Dynamic DHCP from ATT router
+  - net2: virtio, bridge=vmbr2, MAC=BC:24:11:BD:9A:ED
+    Purpose: Google Mesh WiFi network access (192.168.86.x)
+    IP: Dynamic DHCP via Flint 3 bridge
+Features:
+  - Multi-network access for device discovery across subnets
+  - Integration with Frigate NVR (192.168.4.240)
+  - MQTT broker for IoT device communication
+  - Web interface at http://192.168.4.253:8123
+Management: Home Assistant OS with HACS community store
+```
+
+#### chief-horse Network Bridge Configuration
+
+The chief-horse node hosts the Home Assistant VM with a unique triple-network configuration requiring three dedicated bridge interfaces:
+
+```bash
+# vmbr0 - Homelab Network Bridge (192.168.4.0/24)
+auto vmbr0
+iface vmbr0 inet static
+    address 192.168.4.19/24
+    gateway 192.168.4.1
+    bridge-ports enx803f5df88f6b  # USB-C 2.5GbE adapter
+    bridge-stp off
+    bridge-fd 0
+
+# vmbr1 - ATT Primary Network Bridge (192.168.1.0/24)  
+auto vmbr1
+iface vmbr1 inet manual
+    bridge-ports eno1              # Onboard Ethernet
+    bridge-stp off
+    bridge-fd 0
+    # Provides access to ATT router and primary network devices
+
+# vmbr2 - Google Mesh WiFi Network Bridge (192.168.86.0/24)
+auto vmbr2
+iface vmbr2 inet manual
+    bridge-ports enx008b20105b82   # USB Ethernet adapter
+    bridge-stp off  
+    bridge-fd 0
+    # Connected to Flint 3 VLAN 1 for Google Mesh access
+```
+
+This configuration enables Home Assistant to discover and manage smart devices across three separate network segments while maintaining network isolation and security.
 
 ## LXC Container Configurations
 
@@ -337,6 +407,43 @@ graph TB
 #   - Ubuntu MAAS (192.168.4.53)
 #   - All K3s VMs (192.168.4.236, 192.168.4.237, 192.168.4.238)
 #   - LXC containers on LAN network
+```
+
+#### chief-horse Multi-Network Bridge Configuration
+
+The chief-horse node requires additional bridge configurations to support the Home Assistant VM's multi-network access:
+
+#### vmbr0 - Homelab Bridge (192.168.4.0/24) on chief-horse
+```bash
+# Interface: vmbr0 (chief-horse specific configuration)
+# Purpose: Primary homelab network access
+# Physical: enx803f5df88f6b (USB-C 2.5GbE adapter)
+# Gateway: 192.168.4.1 (OPNsense VM)
+# Host IP: 192.168.4.19
+# Connected VMs:
+#   - Home Assistant VM-116 (net0: 192.168.4.253)
+```
+
+#### vmbr1 - ATT Primary Network Bridge (192.168.1.0/24)
+```bash
+# Interface: vmbr1
+# Purpose: ATT primary wired/wireless network access
+# Physical: eno1 (onboard Ethernet)
+# Gateway: ATT router (dynamic)
+# Connected VMs:
+#   - Home Assistant VM-116 (net1: dynamic DHCP)
+# Note: Provides access to ATT router and primary network devices
+```
+
+#### vmbr2 - Google Mesh WiFi Bridge (192.168.86.0/24)
+```bash
+# Interface: vmbr2
+# Purpose: Google Mesh WiFi network access
+# Physical: enx008b20105b82 (USB Ethernet adapter)
+# Connection: Connected to Flint 3 VLAN 1 for Google Mesh access
+# Connected VMs:
+#   - Home Assistant VM-116 (net2: dynamic DHCP via Flint 3 bridge)
+# Note: Enables Home Assistant to discover WiFi-connected smart devices
 ```
 
 ### DNS and Service Discovery
