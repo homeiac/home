@@ -48,48 +48,32 @@ prometheus:
           - targets:
               - 192.168.4.122:9221   # pve-proxmox-metrics
 
-alertmanager:
-  enabled: true
-  templateFiles: {}
-  config:
-    global:
-      smtp_smarthost: 'smtppro.zoho.com:587'
-      smtp_from: 'homeiac.alerts@minibloks.com'
-      smtp_auth_username: 'homeiac.alerts@minibloks.com'
-      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-password
-    route:
-      group_by: ['alertname', 'instance']
-      group_wait: 30s
-      group_interval: 5m
-      repeat_interval: 24h
-      receiver: 'email-notifications'
-    receivers:
-      - name: 'email-notifications'
-        email_configs:
-          - to: 'homeiac.alerts@minibloks.com'
-            subject: '🚨 K3s Cluster Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-            body: |
-              {{ range .Alerts }}
-              Alert: {{ .Annotations.summary }}
-              Description: {{ .Annotations.description }}
-              Severity: {{ .Labels.severity }}
-              Instance: {{ .Labels.instance }}
-              Time: {{ .StartsAt }}
-              {{ end }}
-    inhibit_rules:
-      - source_match:
-          severity: 'critical'
-        target_match:
-          severity: 'warning'
-        equal: ['alertname', 'instance']
-  alertmanagerSpec:
-    secrets:
-      - alertmanager-smtp-secret
-    storage:
-      volumeClaimTemplate:
-        spec:
-          accessModes: ["ReadWriteOnce"]
-          storageClassName: local-path
-          resources:
-            requests:
-              storage: 1Gi
+grafana:
+  service:
+    type: NodePort
+    nodePort: 32080
+  adminPassword: "admin"
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    storageClassName: local-path
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - k3s-vm-still-fawn
+  smtp:
+    enabled: true
+    existingSecret: smtp-credentials
+    userKey: user
+    passwordKey: pass
+    host: smtppro.zoho.com:587
+    fromAddress: homeiac.alerts@minibloks.com
+    skipVerify: false
