@@ -52,9 +52,9 @@ alertmanager:
   config:
     global:
       smtp_smarthost: 'smtp.mail.yahoo.com:587'
-      smtp_from_file: /etc/alertmanager/secrets/smtp-from
-      smtp_auth_username_file: /etc/alertmanager/secrets/smtp-username
-      smtp_auth_password_file: /etc/alertmanager/secrets/smtp-password
+      smtp_from_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-from
+      smtp_auth_username_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-username
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-password
     route:
       group_by: ['alertname', 'instance']
       group_wait: 30s
@@ -64,7 +64,7 @@ alertmanager:
     receivers:
       - name: 'email-notifications'
         email_configs:
-          - to_file: /etc/alertmanager/secrets/smtp-to
+          - to_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-to
             subject: '🚨 K3s Cluster Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             body: |
               {{ range .Alerts }}
@@ -83,14 +83,6 @@ alertmanager:
   alertmanagerSpec:
     secrets:
       - alertmanager-smtp-secret
-    volumes:
-      - name: smtp-secret-volume
-        secret:
-          secretName: alertmanager-smtp-secret
-    volumeMounts:
-      - name: smtp-secret-volume
-        mountPath: /etc/alertmanager/secrets
-        readOnly: true
     storage:
       volumeClaimTemplate:
         spec:
