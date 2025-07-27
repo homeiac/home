@@ -51,9 +51,9 @@ prometheus:
 alertmanager:
   config:
     global:
-      smtp_smarthost: 'smtp.gmail.com:587'
-      smtp_from: 'your-email@gmail.com'
-      smtp_auth_username: 'your-email@gmail.com'
+      smtp_smarthost: 'smtp.mail.yahoo.com:587'
+      smtp_from_file: /etc/alertmanager/secrets/smtp-from
+      smtp_auth_username_file: /etc/alertmanager/secrets/smtp-username
       smtp_auth_password_file: /etc/alertmanager/secrets/smtp-password
     route:
       group_by: ['alertname', 'instance']
@@ -64,7 +64,7 @@ alertmanager:
     receivers:
       - name: 'email-notifications'
         email_configs:
-          - to: 'g_skumar@yahoo.com'
+          - to_file: /etc/alertmanager/secrets/smtp-to
             subject: '🚨 K3s Cluster Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
             body: |
               {{ range .Alerts }}
