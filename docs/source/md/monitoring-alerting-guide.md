@@ -29,9 +29,19 @@ The storage is mounted from the still-fawn node's 20TB ZFS pool, providing ample
 
 ## Current Alerting Rules
 
-### CPU Monitoring
+### CPU Monitoring (`cpu-alerting-rules.yaml`)
 - **K3sNodeHighCPU**: Triggers when CPU usage > 90% for 1 hour
 - **K3sNodeCriticalCPU**: Triggers when CPU usage > 95% for 1 hour
+
+### Essential Homelab Alerts (`essential-alerting-rules.yaml`)
+Minimal alert set designed to prevent alert fatigue:
+
+- **NodeDown**: Node completely unreachable for 10+ minutes
+- **DiskAlmostFull**: Root filesystem > 98% full for 1+ hour  
+- **MemoryCritical**: Memory usage > 98% for 30+ minutes
+- **K3sClusterDegraded**: <50% of K3s nodes ready for 15+ minutes
+
+**Alert Philosophy**: Only critical issues that require immediate attention. No warning-level alerts to avoid homelab alert fatigue.
 
 ## Email Alert Setup
 
