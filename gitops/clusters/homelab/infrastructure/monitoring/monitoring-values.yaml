@@ -49,6 +49,8 @@ prometheus:
               - 192.168.4.122:9221   # pve-proxmox-metrics
 
 alertmanager:
+  enabled: true
+  templateFiles: {}
   config:
     global:
       smtp_smarthost: 'smtp.mail.yahoo.com:587'
