@@ -20,7 +20,7 @@ This guide covers the full end-to-end setup and gotchas for local DNS resolution
    - **Services → Unbound DNS → Overrides → Host Overrides**
      - **Host:** `*`
      - **Domain:** `app.homelab`
-     - **IP:** `192.168.4.50`
+     - **IP:** `192.168.4.82`
 4. **Reboot Required**
    - A **full OPNsense reboot** reliably applies these overrides.
    - `service unbound onerestart` or the GUI *Apply* button did **not** always reload the wildcard override.
@@ -82,7 +82,7 @@ option domain-name-servers 192.168.4.53, 192.168.4.1;
 
 ```bash
 host opnsense.homelab 127.0.0.1      # → 192.168.4.1
-host test.app.homelab 127.0.0.1     # → 192.168.4.50
+host test.app.homelab 127.0.0.1     # → 192.168.4.82
 host somehost.maas 127.0.0.1        # → MAAS record IP
 ```
 
@@ -90,7 +90,7 @@ host somehost.maas 127.0.0.1        # → MAAS record IP
 
 ```bash
 dig opnsense.homelab @192.168.4.53 +short   # → 192.168.4.1
-dig test.app.homelab @192.168.4.53 +short    # → 192.168.4.50
+dig test.app.homelab @192.168.4.53 +short    # → 192.168.4.82
 ```
 
 ### On macOS

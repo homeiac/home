@@ -150,7 +150,7 @@ graph TB
         pve_vm --> k3s_cluster
         ch_vm --> k3s_cluster
         
-        k3s_cluster --> metallb[MetalLB LoadBalancer<br/>Pool: 192.168.4.50-70<br/>L2 Advertisement]
+        k3s_cluster --> metallb[MetalLB LoadBalancer<br/>Pool: 192.168.4.80-120<br/>L2 Advertisement]
         k3s_cluster --> longhorn[Longhorn Storage<br/>Default StorageClass<br/>Distributed across nodes]
         k3s_cluster --> flux[Flux GitOps<br/>Manages applications<br/>Syncs from Git repository]
     end
@@ -348,16 +348,16 @@ graph TB
         
         subgraph "DNS Resolution Chain"
             client --> opnsense_dns[OPNsense Unbound DNS<br/>192.168.4.1:53<br/>Primary DNS server]
-            opnsense_dns --> wildcard[*.app.homelab<br/>→ 192.168.4.50<br/>Traefik LoadBalancer]
+            opnsense_dns --> wildcard[*.app.homelab<br/>→ 192.168.4.82<br/>Traefik LoadBalancer]
             opnsense_dns --> maas_dns[MAAS DNS<br/>192.168.4.53:53<br/>*.maas domain]
             opnsense_dns --> upstream[Upstream DNS<br/>ISP/Internet DNS]
         end
         
         subgraph "Service Access Patterns"
-            wildcard --> traefik[Traefik Ingress<br/>192.168.4.50<br/>HTTP/HTTPS proxy]
+            wildcard --> traefik[Traefik Ingress<br/>192.168.4.82<br/>HTTP/HTTPS proxy]
             traefik --> k3s_services[K3s Services<br/>- ollama.app.homelab<br/>- stable-diffusion.app.homelab]
             
-            opnsense_dns --> direct_services[Direct Service Access<br/>- samba.homelab → 192.168.4.53<br/>- monitoring services<br/>- management interfaces]
+            opnsense_dns --> direct_services[Direct Service Access<br/>- samba.homelab → 192.168.4.120<br/>- monitoring services<br/>- management interfaces]
         end
         
         subgraph "MAAS Integration"
