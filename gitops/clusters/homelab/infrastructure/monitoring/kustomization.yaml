@@ -5,6 +5,8 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - prometheus-storage-class.yaml
+  - cpu-alerting-rules.yaml
+  - essential-alerting-rules.yaml
 
 configMapGenerator:
   - name: monitoring-values
