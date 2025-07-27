@@ -74,8 +74,8 @@ grafana:
     existingSecret: smtp-credentials
     userKey: user
     passwordKey: pass
-    host: smtppro.zoho.com:587
-    fromAddress: homeiac.alerts@minibloks.com
+    host: smtp.mail.yahoo.com:587
+    fromAddress: g_skumar@yahoo.com
     skipVerify: false
   grafana.ini:
     unified_alerting:
@@ -84,10 +84,10 @@ grafana:
       enabled: false
     smtp:
       enabled: true
-      host: smtppro.zoho.com:587
+      host: smtp.mail.yahoo.com:587
       user: $__file{/etc/secrets/smtp-credentials/user}
       password: $__file{/etc/secrets/smtp-credentials/pass}
-      from_address: homeiac.alerts@minibloks.com
+      from_address: g_skumar@yahoo.com
       skip_verify: false
   extraSecretMounts:
     - name: smtp-credentials
