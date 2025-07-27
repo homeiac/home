@@ -2,7 +2,7 @@
 
 ## Overview
 
-The GL.iNet Flint 3 (GL-BE9300) serves as a critical wireless-wired bridge in the homelab network, extending both the Google Mesh WiFi network (192.168.86.x) and the internal lab network (192.168.4.x) through VLAN configuration.
+The GL.iNet Flint 3 (GL-BE9300) configured in extender mode serves as a critical wireless-wired bridge in the homelab network, extending both the Google Mesh WiFi network (192.168.86.x) and the internal lab network (192.168.4.x) through VLAN configuration.
 
 ## Network Architecture
 

@@ -24,7 +24,7 @@ LAN4 form a dedicated 192.168.4.x switch.
 
 The goal is to let Home Assistant running in a Proxmox VM access devices on the
 wireless 192.168.86.x network. Proxmox cannot bridge Wi-Fi adapters, so a Flint
-3 router bridges Wi-Fi to wired. The default LAN is 192.168.8.0/24. Ports LAN1 and LAN2 must keep access to Wi-Fi while LAN3
+3 router configured in extender mode bridges Wi-Fi to wired. Ports LAN1 and LAN2 must keep access to Wi-Fi while LAN3
 and LAN4 join a Proxmox/OPNsense subnet at 192.168.4.0/24.
 
 ### Homelab topology
