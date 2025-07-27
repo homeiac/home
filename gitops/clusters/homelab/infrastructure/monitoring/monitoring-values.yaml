@@ -53,7 +53,7 @@ alertmanager:
   templateFiles: {}
   config:
     global:
-      smtp_smarthost: 'smtp.mail.yahoo.com:587'
+      smtp_smarthost: 'smtppro.zoho.com:587'
       smtp_from_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-from
       smtp_auth_username_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-username
       smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp-secret/smtp-password
