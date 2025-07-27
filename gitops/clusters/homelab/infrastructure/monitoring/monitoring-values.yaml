@@ -77,3 +77,20 @@ grafana:
     host: smtppro.zoho.com:587
     fromAddress: homeiac.alerts@minibloks.com
     skipVerify: false
+  grafana.ini:
+    unified_alerting:
+      enabled: true
+    alerting:
+      enabled: false
+    smtp:
+      enabled: true
+      host: smtppro.zoho.com:587
+      user: $__file{/etc/secrets/smtp-credentials/user}
+      password: $__file{/etc/secrets/smtp-credentials/pass}
+      from_address: homeiac.alerts@minibloks.com
+      skip_verify: false
+  extraSecretMounts:
+    - name: smtp-credentials
+      secretName: smtp-credentials
+      mountPath: /etc/secrets/smtp-credentials
+      readOnly: true

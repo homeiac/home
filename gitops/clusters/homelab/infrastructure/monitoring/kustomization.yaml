@@ -7,7 +7,6 @@ resources:
   - prometheus-storage-class.yaml
   - cpu-alerting-rules.yaml
   - essential-alerting-rules.yaml
-  - email-receiver.yaml
 
 configMapGenerator:
   - name: monitoring-values
