@@ -4,7 +4,7 @@ metadata:
   name: samba
   namespace: samba
 spec:
-  replicas: 0  # Start with 0 replicas for safe migration
+  replicas: 1
   selector:
     matchLabels:
       app: samba
