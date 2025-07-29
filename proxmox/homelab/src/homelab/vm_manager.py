@@ -8,30 +8,29 @@ Provision Ubuntu cloud-init VMs on Proxmox via API + CLI, using a pre-downloaded
 import os
 import sys
 import time
-from urllib.parse import quote
+from typing import Any, Optional
+
 import paramiko
 
+from homelab.config import Config
 from homelab.proxmox_api import ProxmoxClient
 from homelab.resource_manager import ResourceManager
-from homelab.config import Config
 
 
 class VMManager:
     """Handles cloud-init VM creation on Proxmox using a raw .img disk."""
 
     @staticmethod
-    def vm_exists(proxmox, node_name: str) -> int | None:
+    def vm_exists(proxmox: Any, node_name: str) -> Optional[int]:
         """Return existing vmid if a VM matching the name template exists, else None."""
-        expected = Config.VM_NAME_TEMPLATE.format(
-            node=node_name.replace("_", "-")
-        )
+        expected = Config.VM_NAME_TEMPLATE.format(node=node_name.replace("_", "-"))
         for vm in proxmox.nodes(node_name).qemu.get():
             if vm.get("name") == expected:
                 return int(vm["vmid"])
         return None
 
     @staticmethod
-    def get_next_available_vmid(proxmox) -> int:
+    def get_next_available_vmid(proxmox: Any) -> int:
         """Find the next free VMID, skipping existing QEMU VMs and LXC containers."""
         used = set()
         for n in proxmox.nodes.get():
@@ -46,12 +45,12 @@ class VMManager:
         raise RuntimeError("No available VMIDs found")
 
     @staticmethod
-    def _import_disk_via_cli(host: str, vmid: int, img_path: str, storage: str):
+    def _import_disk_via_cli(host: str, vmid: int, img_path: str, storage: str) -> None:
         """
         SSH into the Proxmox host and run 'qm importdisk' to import the cloud-init image.
         """
         ssh_user = os.getenv("SSH_USER", "root")
-        ssh_key  = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
+        ssh_key = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
 
         print(f"💾 Importing {os.path.basename(img_path)} → {storage} on {host}")
         ssh = paramiko.SSHClient()
@@ -71,12 +70,12 @@ class VMManager:
         ssh.close()
 
     @staticmethod
-    def _resize_disk_via_cli(host: str, vmid: int, disk: str, size: str):
+    def _resize_disk_via_cli(host: str, vmid: int, disk: str, size: str) -> None:
         """
         SSH into the Proxmox host and run 'qm resize' to grow the VM disk.
         """
         ssh_user = os.getenv("SSH_USER", "root")
-        ssh_key  = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
+        ssh_key = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
 
         print(f"🔧 Resizing {disk} of VM {vmid} on {host} → {size}")
         ssh = paramiko.SSHClient()
@@ -95,18 +94,17 @@ class VMManager:
 
         ssh.close()
 
-
     @staticmethod
-    def create_or_update_vm():
+    def create_or_update_vm() -> None:
         """
         Loop through all nodes in Config.get_nodes(), create missing VMs
         using a cloud-init .img, and start them.
         """
         for idx, node in enumerate(Config.get_nodes()):
-            name      = node["name"]
-            storage   = node["img_storage"]
-            client    = ProxmoxClient(name)
-            proxmox   = client.proxmox
+            name = node["name"]
+            storage = node["img_storage"]
+            client = ProxmoxClient(name)
+            proxmox = client.proxmox
 
             if not storage:
                 print(f"⚠️  Skipping node {name!r}: no storage defined.")
@@ -119,16 +117,14 @@ class VMManager:
                 continue
 
             # 2) Calculate resources
-            status     = client.get_node_status()
+            status = client.get_node_status()
             cpus, memb = ResourceManager.calculate_vm_resources(
-                status,
-                node.get("cpu_ratio", 1.0),
-                node.get("memory_ratio", 1.0)
+                status, node.get("cpu_ratio", 1.0), node.get("memory_ratio", 1.0)
             )
             mem_mb = memb // (1024 * 1024)
 
             # 3) Allocate VMID & name
-            vmid   = VMManager.get_next_available_vmid(proxmox)
+            vmid = VMManager.get_next_available_vmid(proxmox)
             vmname = Config.VM_NAME_TEMPLATE.format(node=name)
             print(f"🆕 Creating VM {vmname!r} on {name!r}: {cpus} CPUs, {mem_mb}MB RAM (vmid={vmid})")
 
@@ -149,13 +145,7 @@ class VMManager:
 
             # 5) Import the raw .img via CLI on the Proxmox host
             img_path = f"/var/lib/vz/template/iso/{Config.ISO_NAME}"
-            VMManager._import_disk_via_cli(
-                host=name,
-                vmid=vmid,
-                img_path=img_path,
-                storage=storage
-            )
-
+            VMManager._import_disk_via_cli(host=name, vmid=vmid, img_path=img_path, storage=storage)
 
             # 6) Attach imported disk, cloud-init drive, enable guest agent
             proxmox.nodes(name).qemu(vmid).config.post(
@@ -164,15 +154,10 @@ class VMManager:
                 ide2=f"{storage}:cloudinit",
                 boot="c",
                 bootdisk="scsi0",
-                agent=1
+                agent=1,
             )
 
-            VMManager._resize_disk_via_cli(
-                 host=name,
-                 vmid=vmid,
-                 disk="scsi0",
-                 size=os.getenv("VM_DISK_SIZE", "200G")
-             )
+            VMManager._resize_disk_via_cli(host=name, vmid=vmid, disk="scsi0", size=os.getenv("VM_DISK_SIZE", "200G"))
 
             cloud_cfg = "user=local:snippets/install-k3sup-qemu-agent.yaml"
 
@@ -182,7 +167,7 @@ class VMManager:
                 cipassword=Config.CLOUD_PASSWORD,
                 sshkeys=Config.SSH_PUBKEY,
                 ipconfig0=Config.CLOUD_IP_CONFIG,
-                cicustom=cloud_cfg
+                cicustom=cloud_cfg,
             )
 
             # 8) Start the VM

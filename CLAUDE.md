@@ -14,13 +14,14 @@ This is a homelab infrastructure management repository that follows Infrastructu
 - Clean docs build: `make -C docs clean && make -C docs html`
 
 ### Python Development (Proxmox automation)
-- Run tests: `pytest proxmox/homelab/tests`
-- Install Python dependencies: `pip install -r docs/requirements.txt`
-- The Python code uses Poetry for dependency management (see `proxmox/homelab/pyproject.toml`)
-- Type checking: `mypy`
-- Code style: `flake8`
-- Code formatting: `black --check`
-- Coverage: `coverage run -m pytest` then `coverage html`
+- **Run tests**: `pytest proxmox/homelab/tests` (from repository root)
+- **Test with coverage**: `coverage run -m pytest proxmox/homelab/tests` then `coverage html`
+- **Install dependencies**: `cd proxmox/homelab && poetry install` (Poetry is required)
+- **Type checking**: `mypy proxmox/homelab/src` (ensure type hints on all functions)
+- **Code style**: `flake8 proxmox/homelab/src` (must pass before commit)
+- **Code formatting**: `black proxmox/homelab/src` (auto-format code)
+- **Import sorting**: `isort proxmox/homelab/src` (organize imports)
+- **Documentation dependencies**: `pip install -r docs/requirements.txt` (only for docs)
 
 ### SSH Access Patterns
 - **Proxmox Hosts**: `ssh root@<hostname>.maas` (e.g., `ssh root@still-fawn.maas`)
@@ -140,9 +141,143 @@ spec:
 - Flux monitors the repository and applies changes to the cluster
 - Key applications managed: monitoring stack, MetalLB, Ollama, Stable Diffusion
 
+## Python Development Best Practices
+
+### Code Quality Standards
+All Python code in `proxmox/homelab/` must follow these standards:
+
+#### Testing Requirements
+- **100% test coverage**: Every function must have unit tests
+- **Mock external calls**: Use `unittest.mock` for Proxmox API, SSH, file operations
+- **Test file naming**: `test_<module_name>.py` in `proxmox/homelab/tests/`
+- **Run before commit**: `pytest proxmox/homelab/tests` must pass
+
+#### Testing Patterns and Examples
+```python
+# Mock Proxmox API calls
+from unittest import mock
+import pytest
+
+def test_vm_creation(monkeypatch, tmp_path):
+    # Setup test environment
+    ssh_key = tmp_path / "id_rsa.pub"
+    ssh_key.write_text("ssh-rsa AAAA")
+    monkeypatch.setenv("SSH_PUBKEY_PATH", str(ssh_key))
+    monkeypatch.setenv("API_TOKEN", "user!token=abc")
+    
+    # Mock Proxmox API
+    proxmox = mock.MagicMock()
+    proxmox.nodes.return_value.qemu.create.return_value = {"status": "success"}
+    
+    # Test the function
+    result = vm_manager.create_vm(proxmox, "test-vm")
+    assert result is not None
+
+# Mock SSH operations
+@mock.patch('paramiko.SSHClient')
+def test_ssh_command_execution(mock_ssh):
+    mock_client = mock.MagicMock()
+    mock_ssh.return_value = mock_client
+    mock_client.exec_command.return_value = (None, mock.MagicMock(), mock.MagicMock())
+    
+    result = manager.execute_ssh_command("host", "command")
+    mock_client.connect.assert_called_once()
+
+# Mock file operations
+@mock.patch('builtins.open', mock.mock_open(read_data="config data"))
+def test_config_loading():
+    result = config.load_config("/fake/path")
+    assert "config data" in result
+```
+
+#### Code Style Requirements
+- **Type hints**: All functions must have complete type annotations
+- **Docstrings**: Google-style docstrings for all classes and public methods
+- **Error handling**: Explicit exception handling with meaningful messages
+- **Logging**: Use Python logging module, not print statements
+
+#### Example Function Structure
+```python
+from typing import Dict, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+class MonitoringManager:
+    """Manages external monitoring deployment and configuration."""
+    
+    def deploy_uptime_kuma(self, node: str, config: Dict[str, str]) -> Optional[str]:
+        """Deploy Uptime Kuma container on specified node.
+        
+        Args:
+            node: Proxmox node name (e.g., 'pve', 'still-fawn')
+            config: Container configuration including ports and volumes
+            
+        Returns:
+            Container ID if successful, None if failed
+            
+        Raises:
+            ProxmoxAPIError: If Proxmox API call fails
+            SSHConnectionError: If SSH connection fails
+        """
+        try:
+            logger.info(f"Deploying Uptime Kuma on node {node}")
+            # Implementation here
+            return container_id
+        except Exception as e:
+            logger.error(f"Failed to deploy on {node}: {e}")
+            raise
+```
+
+#### Dependency Management
+- **Poetry only**: Use `poetry add <package>` for new dependencies
+- **Development dependencies**: `poetry add --group dev <package>` for testing tools
+- **Lock file**: Always commit `poetry.lock` changes
+- **Environment**: Use `.env` files for configuration, never hardcode secrets
+
+#### Testing Configuration
+```python
+# conftest.py - shared test fixtures
+import pytest
+from unittest import mock
+import tempfile
+import os
+
+@pytest.fixture
+def mock_proxmox():
+    """Mock Proxmox API client for testing."""
+    with mock.patch('homelab.proxmox_api.ProxmoxAPI') as mock_api:
+        yield mock_api.return_value
+
+@pytest.fixture
+def temp_ssh_key(tmp_path, monkeypatch):
+    """Create temporary SSH key for testing."""
+    key_file = tmp_path / "id_rsa.pub"
+    key_file.write_text("ssh-rsa AAAA test@example.com")
+    monkeypatch.setenv("SSH_PUBKEY_PATH", str(key_file))
+    return str(key_file)
+
+@pytest.fixture
+def mock_env(monkeypatch):
+    """Set up test environment variables."""
+    monkeypatch.setenv("API_TOKEN", "test!token=secret")
+    monkeypatch.setenv("NODE_1", "test-node")
+    monkeypatch.setenv("STORAGE_1", "local-zfs")
+```
+
+#### Pre-commit Checklist
+Before committing Python code, ensure:
+1. `pytest proxmox/homelab/tests` passes (100% success)
+2. `coverage run -m pytest proxmox/homelab/tests && coverage report` shows 100% coverage
+3. `mypy proxmox/homelab/src` passes with no errors
+4. `flake8 proxmox/homelab/src` passes with no violations
+5. `black proxmox/homelab/src` formats code consistently
+6. `isort proxmox/homelab/src` organizes imports properly
+
 ## Important Files
 - `AGENTS.md` - AI agent contribution guidelines
 - `proxmox/homelab/pyproject.toml` - Python dependencies and project config
+- `proxmox/homelab/tests/conftest.py` - Shared test fixtures and configuration
 - `gitops/clusters/homelab/kustomization.yaml` - Main GitOps apps and infrastructure
 - `docs/requirements.txt` - Documentation build dependencies
 - `proxmox/guides/monitoring-guide.md` - Monitoring stack setup via Flux

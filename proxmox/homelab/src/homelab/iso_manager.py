@@ -1,14 +1,16 @@
 import os
+
 import requests
-from homelab.proxmox_api import ProxmoxClient
+
 from homelab.config import Config
+from homelab.proxmox_api import ProxmoxClient
 
 
 class IsoManager:
     """Handles ISO download and upload to Proxmox."""
 
     @staticmethod
-    def download_iso():
+    def download_iso() -> None:
         """Download ISO if not already present."""
         if not os.path.isfile(Config.ISO_NAME):
             print(f"Downloading {Config.ISO_NAME} from {Config.ISO_URL}...")
@@ -22,7 +24,7 @@ class IsoManager:
             print(f"ISO {Config.ISO_NAME} already exists locally. Skipping download.")
 
     @staticmethod
-    def upload_iso_to_nodes():
+    def upload_iso_to_nodes() -> None:
         """Upload ISO to each node's storage."""
         nodes = Config.get_nodes()
         for node in nodes:
@@ -34,4 +36,7 @@ class IsoManager:
                 client.upload_iso(node["storage"], Config.ISO_NAME)
                 print(f"Uploaded {Config.ISO_NAME} to {node['name']} storage {node['storage']}.")
             else:
-                print(f"ISO {Config.ISO_NAME} already exists in {node['name']} storage {node['storage']}. Skipping upload.")
+                print(
+                    f"ISO {Config.ISO_NAME} already exists in {node['name']} "
+                    f"storage {node['storage']}. Skipping upload."
+                )
