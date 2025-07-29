@@ -14,14 +14,16 @@ This is a homelab infrastructure management repository that follows Infrastructu
 - Clean docs build: `make -C docs clean && make -C docs html`
 
 ### Python Development (Proxmox automation)
-- **Run tests**: `pytest proxmox/homelab/tests` (from repository root)
-- **Test with coverage**: `coverage run -m pytest proxmox/homelab/tests` then `coverage html`
+- **IMPORTANT**: Always use Poetry to run Python commands from `proxmox/homelab/` directory
+- **Run tests**: `poetry run pytest tests/` (from proxmox/homelab directory)
+- **Test with coverage**: `poetry run coverage run -m pytest` then `poetry run coverage html`
 - **Install dependencies**: `cd proxmox/homelab && poetry install` (Poetry is required)
-- **Type checking**: `mypy proxmox/homelab/src` (ensure type hints on all functions)
-- **Code style**: `flake8 proxmox/homelab/src` (must pass before commit)
-- **Code formatting**: `black proxmox/homelab/src` (auto-format code)
-- **Import sorting**: `isort proxmox/homelab/src` (organize imports)
-- **Documentation dependencies**: `pip install -r docs/requirements.txt` (only for docs)
+- **Type checking**: `poetry run mypy src/` (ensure type hints on all functions)
+- **Code style**: `poetry run flake8 src/` (must pass before commit)
+- **Code formatting**: `poetry run black src/` (auto-format code)
+- **Import sorting**: `poetry run isort src/` (organize imports)
+- **Execute scripts**: `poetry run python script_name.py` (never use system Python)
+- **Documentation dependencies**: `pip install -r docs/requirements.txt` (only for docs, outside Poetry)
 
 ### SSH Access Patterns
 - **Proxmox Hosts**: `ssh root@<hostname>.maas` (e.g., `ssh root@still-fawn.maas`)
