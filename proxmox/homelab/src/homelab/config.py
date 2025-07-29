@@ -1,8 +1,8 @@
-from urllib.parse import quote
-from dotenv import load_dotenv
 import os
+from typing import Any, Dict, List
+from urllib.parse import quote
 
-import urllib
+from dotenv import load_dotenv
 
 
 class Config:
@@ -27,7 +27,7 @@ class Config:
     with open(_SSH_PATH) as _f:
         raw_ssh = _f.read().strip()
 
-    SSH_PUBKEY = quote(raw_ssh, safe='')
+    SSH_PUBKEY = quote(raw_ssh, safe="")
 
     # Ensure ipconfig0 is correctly formatted
     _raw_ip = os.getenv("CLOUD_IP_CONFIG", "dhcp").strip()
@@ -36,33 +36,38 @@ class Config:
     VM_START_TIMEOUT = int(os.getenv("VM_START_TIMEOUT", "180"))
 
     # Comma-separated Proxmox node IPs, e.g. "192.168.86.194,192.168.1.122,192.168.4.122"
-    PVE_IPS = [
-        ip.strip()
-        for ip in os.getenv("PVE_IPS", "").split(",")
-        if ip.strip()
-    ]
+    PVE_IPS = [ip.strip() for ip in os.getenv("PVE_IPS", "").split(",") if ip.strip()]
 
     @staticmethod
-    def get_nodes():
+    def get_nodes() -> List[Dict[str, Any]]:
         """Dynamically loads nodes from environment variables."""
         nodes = []
         index = 1
         while os.getenv(f"NODE_{index}"):
+            cpu_ratio_str = os.getenv(f"CPU_RATIO_{index}")
+            memory_ratio_str = os.getenv(f"MEMORY_RATIO_{index}")
+
+            if cpu_ratio_str is None or memory_ratio_str is None:
+                break
+
             nodes.append(
                 {
                     "name": os.getenv(f"NODE_{index}"),
                     "storage": os.getenv(f"STORAGE_{index}"),
                     "img_storage": os.getenv(f"IMG_STORAGE_{index}"),
-                    "cpu_ratio": float(os.getenv(f"CPU_RATIO_{index}")),
-                    "memory_ratio": float(os.getenv(f"MEMORY_RATIO_{index}")),
+                    "cpu_ratio": float(cpu_ratio_str),
+                    "memory_ratio": float(memory_ratio_str),
                 }
             )
-            print(f"NODE_{index}: storage={os.getenv(f'STORAGE_{index}')}, cpu_ratio={os.getenv(f'CPU_RATIO_{index}')}, memory_ratio={os.getenv(f'MEMORY_RATIO_{index}')}")
+            print(
+                f"NODE_{index}: storage={os.getenv(f'STORAGE_{index}')}, "
+                f"cpu_ratio={os.getenv(f'CPU_RATIO_{index}')}, memory_ratio={os.getenv(f'MEMORY_RATIO_{index}')}"
+            )
             index += 1
         return nodes
 
     @staticmethod
-    def get_network_ifaces_for(index: int) -> list[str]:
+    def get_network_ifaces_for(index: int) -> List[str]:
         """
         Reads NETWORK_IFACES_<index+1> from the environment, splits by comma,
         and returns a list of bridge names (e.g. ['vmbr0','vmbr1']).
