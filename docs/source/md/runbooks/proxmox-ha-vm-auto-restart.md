@@ -95,20 +95,25 @@ When you use `qm stop`, HA may interpret this as intentional and change the stat
 ha-manager set vm:<VMID> --state started
 ```
 
-## Production Implementation - MAAS VM Example
+## Production Implementation - Critical Infrastructure VMs
 
 Based on July 29, 2025 OOM incident implementation:
 
 ```bash
-# MAAS VM (VMID 102) - Production configuration
+# MAAS VM (VMID 102) - DHCP/PXE Services
 ha-manager add vm:102 --state started --max_restart 3 --max_relocate 1
 
-# Verify it's working
-ha-manager status | grep vm:102
-# Output: service vm:102 (pve, started)
+# OPNsense VM (VMID 101) - Router/Firewall/Gateway  
+ha-manager add vm:101 --state started --max_restart 3 --max_relocate 1
+
+# Verify both are under HA management
+ha-manager status | grep 'vm:10[12]'
+# Output: 
+# service vm:101 (pve, started)
+# service vm:102 (pve, started)
 ```
 
-**Result**: MAAS VM will now automatically restart within 1-2 minutes of any crash, OOM kill, or unexpected shutdown.
+**Result**: Both critical infrastructure VMs will automatically restart within 1-2 minutes of any crash, OOM kill, or unexpected shutdown.
 
 ## Managing Intentional Maintenance
 
@@ -132,13 +137,13 @@ ha-manager set vm:<VMID> --state started
 # List all HA-managed VMs
 ha-manager config
 
-# Disable HA for multiple VMs
-for vmid in 102 103 104; do
+# Disable HA for critical infrastructure VMs
+for vmid in 101 102; do
     ha-manager set vm:$vmid --state stopped
 done
 
 # Re-enable after maintenance
-for vmid in 102 103 104; do
+for vmid in 101 102; do
     ha-manager set vm:$vmid --state started
 done
 ```
@@ -202,22 +207,32 @@ ha-manager add vm:<VMID> --state started --max_restart 3
 
 ### Uptime Kuma Integration
 
-Add monitors for:
+Add monitors for critical infrastructure VMs:
 ```bash
-# VM availability (ping)
+# OPNsense VM availability (ping)
+Monitor: OPNsense Gateway
+Type: Ping  
+Hostname: 192.168.4.1
+
+# OPNsense Web Interface
+Monitor: OPNsense WebUI
+Type: HTTP
+URL: https://192.168.4.1
+
+# MAAS VM availability (ping)
 Monitor: MAAS VM
 Type: Ping
 Hostname: 192.168.4.53
 
-# Service availability (HTTP)
+# MAAS Service availability (HTTP)
 Monitor: MAAS Service  
 Type: HTTP
 URL: http://192.168.4.53:5240/MAAS/
 
-# HA status (custom script)
-Monitor: MAAS HA Status
+# HA status monitoring (custom script)
+Monitor: Critical VMs HA Status
 Type: Push
-# Script: curl uptime-kuma-push-url with ha-manager status
+# Script: curl uptime-kuma-push-url with ha-manager status for VMs 101,102
 ```
 
 ### Alerting on HA Events
@@ -268,16 +283,22 @@ ha-manager set vm:<VMID> --state started  # Reset after test
 
 ## Summary
 
-**Problem Solved**: MAAS VM OOM outage duration reduced from 40+ minutes to <2 minutes
+**Problem Solved**: Critical infrastructure VM outages reduced from 40+ minutes to <2 minutes
 
 **Implementation**: 
 ```bash
-ha-manager add vm:102 --state started --max_restart 3 --max_relocate 1
+# Critical Infrastructure VMs under HA management
+ha-manager add vm:101 --state started --max_restart 3 --max_relocate 1  # OPNsense
+ha-manager add vm:102 --state started --max_restart 3 --max_relocate 1  # MAAS
 ```
+
+**Protected Services**:
+- **VM 101 (OPNsense)**: Router, Firewall, Gateway, DHCP for homelab network
+- **VM 102 (MAAS)**: DHCP/PXE for bare metal provisioning
 
 **Key Learning**: Proxmox HA is the built-in solution for automatic VM restart after crashes - no custom scripts needed when you have a proper cluster setup.
 
-**Next Steps**: Apply HA configuration to other critical VMs in the homelab infrastructure.
+**Next Steps**: Consider adding other critical VMs (K3s control plane, monitoring) to HA management.
 
 ---
 
