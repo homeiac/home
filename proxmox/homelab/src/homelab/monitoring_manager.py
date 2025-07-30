@@ -8,6 +8,8 @@ Ensures idempotent operations - running multiple times won't create duplicate in
 
 import json
 import logging
+import socket
+import subprocess
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,6 +20,95 @@ from homelab.config import Config
 from homelab.proxmox_api import ProxmoxClient
 
 logger = logging.getLogger(__name__)
+
+
+def check_network_connectivity() -> bool:
+    """
+    Check if the current host is connected to the homelab network (192.168.4.x).
+    
+    Returns:
+        bool: True if connected to homelab network, False otherwise
+    """
+    try:
+        # Get all network interfaces and their IP addresses
+        result = subprocess.run(['ifconfig'], capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            # Try alternative command on Linux
+            result = subprocess.run(['ip', 'addr'], capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                logger.warning("Could not determine network interfaces")
+                return False
+        
+        output = result.stdout
+        
+        # Check if any interface has a 192.168.4.x IP address
+        import re
+        ip_pattern = r'inet (?:addr:)?(\d+\.\d+\.\d+\.\d+)'
+        matches = re.findall(ip_pattern, output)
+        
+        homelab_ips = [ip for ip in matches if ip.startswith('192.168.4.')]
+        
+        if homelab_ips:
+            logger.info(f"Found homelab network IPs: {homelab_ips}")
+            return True
+        else:
+            logger.warning(f"No homelab network (192.168.4.x) IPs found. Available IPs: {matches}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error checking network connectivity: {e}")
+        return False
+
+
+def validate_network_prerequisites() -> None:
+    """
+    Validate that all network prerequisites are met before attempting deployment.
+    
+    Raises:
+        RuntimeError: If network prerequisites are not met
+    """
+    logger.info("Checking network prerequisites...")
+    
+    if not check_network_connectivity():
+        error_msg = """
+❌ NETWORK CONNECTIVITY ERROR ❌
+
+The MonitoringManager requires connection to the homelab network (192.168.4.x) 
+to communicate with Proxmox nodes.
+
+Current situation:
+- No network interface found with IP address in 192.168.4.x range
+- Cannot reach Proxmox nodes (pve.maas, fun-bedbug.maas, etc.)
+
+PREREQUISITES:
+1. Connect to the homelab network (192.168.4.x subnet)
+2. Ensure you can reach Proxmox nodes:
+   - ping pve.maas
+   - ping fun-bedbug.maas
+3. Verify SSH access:
+   - ssh root@pve.maas
+   - ssh root@fun-bedbug.maas
+
+ALTERNATIVE DEPLOYMENT:
+If you cannot connect to the homelab network, you can deploy directly 
+on each Proxmox node using the deployment script:
+
+1. Copy script to Proxmox node:
+   scp proxmox/homelab/scripts/deploy_uptime_kuma.sh root@NODE:/tmp/
+   
+2. Run on each node:
+   # On pve:
+   /tmp/deploy_uptime_kuma.sh 100
+   
+   # On fun-bedbug:
+   /tmp/deploy_uptime_kuma.sh 112
+
+Please resolve network connectivity and try again.
+"""
+        logger.error("Network prerequisites not met")
+        raise RuntimeError(error_msg.strip())
+    
+    logger.info("✅ Network prerequisites satisfied")
 
 
 class MonitoringManager:
@@ -66,13 +157,38 @@ systemctl start docker
         """Get SSH client connection to the Proxmox node."""
         if not self.ssh_client:
             import os
+            import socket
 
             ssh_user = os.getenv("SSH_USER", "root")
             ssh_key = os.path.expanduser(os.getenv("SSH_KEY_PATH", "~/.ssh/id_rsa"))
 
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.ssh_client.connect(hostname=self.node_name, username=ssh_user, key_filename=ssh_key)
+            
+            # Try connecting with .maas suffix first, then without
+            hostname = self.node_name
+            if not hostname.endswith('.maas'):
+                hostname = f"{self.node_name}.maas"
+                
+            try:
+                # Resolve hostname to IP for better paramiko compatibility
+                resolved_ip = socket.gethostbyname(hostname)
+                logger.debug(f"Resolved {hostname} -> {resolved_ip}")
+                self.ssh_client.connect(hostname=resolved_ip, username=ssh_user, key_filename=ssh_key, timeout=10)
+            except Exception as e:
+                logger.debug(f"Failed to connect to {hostname}: {e}")
+                # Try without .maas suffix
+                if hostname.endswith('.maas'):
+                    hostname = self.node_name
+                    try:
+                        resolved_ip = socket.gethostbyname(hostname)
+                        logger.debug(f"Resolved {hostname} -> {resolved_ip}")
+                        self.ssh_client.connect(hostname=resolved_ip, username=ssh_user, key_filename=ssh_key, timeout=10)
+                    except Exception as e2:
+                        logger.debug(f"Failed to connect to {hostname}: {e2}")
+                        raise e2
+                else:
+                    raise
 
         return self.ssh_client
 
@@ -84,26 +200,51 @@ systemctl start docker
         return stdout.read().decode().strip(), stderr.read().decode().strip(), exit_code
 
     def _find_docker_lxc(self) -> Optional[int]:
-        """Find existing Docker LXC container on the node."""
+        """Find existing Docker LXC container on the node using direct SSH approach."""
+        return self._find_docker_lxc_ssh_simple()
+    
+    def _find_docker_lxc_ssh(self) -> Optional[int]:
+        """Find Docker LXC container using SSH commands as fallback."""
         try:
-            for container in self.client.proxmox.nodes(self.node_name).lxc.get():
-                container_config = self.client.proxmox.nodes(self.node_name).lxc(container["vmid"]).config.get()
-                hostname = container_config.get("hostname", "")
+            # First ensure we have a working SSH connection
+            ssh_client = self._get_ssh_client()
+            
+            # Get list of all LXC containers
+            stdout, stderr, exit_code = self._execute_command("pct list | grep -v VMID | awk '{print $1, $4}'")
+            if exit_code != 0:
+                logger.warning(f"Failed to list LXC containers via SSH: {stderr}")
+                return None
                 
-                # Check if this is a Docker container by hostname pattern or by checking for Docker installation
-                if "docker" in hostname.lower():
-                    return int(container["vmid"])
-                
-                # Alternative: check if Docker is installed in the container
-                if container.get("status") == "running":
-                    stdout, stderr, exit_code = self._execute_command(
-                        f"pct exec {container['vmid']} -- which docker 2>/dev/null"
-                    )
-                    if exit_code == 0:  # Docker found
-                        return int(container["vmid"])
-                        
+            # Check each running container for Docker
+            for line in stdout.split('\n'):
+                if not line.strip():
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 2:
+                    vmid = parts[0]
+                    status = parts[1] if len(parts) > 1 else ""
+                    
+                    # Only check running containers
+                    if status == "running":
+                        # Check if Docker is installed
+                        docker_stdout, docker_stderr, docker_exit = self._execute_command(
+                            f"pct exec {vmid} -- which docker 2>/dev/null"
+                        )
+                        if docker_exit == 0:
+                            logger.info(f"Found Docker in LXC container {vmid}")
+                            return int(vmid)
+                            
+                        # Also check for docker in container name/hostname
+                        name_stdout, name_stderr, name_exit = self._execute_command(
+                            f"pct config {vmid} | grep hostname | cut -d: -f2 | tr -d ' '"
+                        )
+                        if name_exit == 0 and "docker" in name_stdout.lower():
+                            logger.info(f"Found Docker LXC by hostname: {vmid}")
+                            return int(vmid)
+                            
         except Exception as e:
-            logger.warning(f"Error finding Docker LXC: {e}")
+            logger.warning(f"SSH-based Docker LXC search failed: {e}")
             
         return None
 
@@ -228,16 +369,15 @@ systemctl start docker
         return None
 
     def deploy_uptime_kuma(self) -> Dict[str, Any]:
-        """Deploy Uptime Kuma in a declarative, idempotent way."""
+        """Deploy Uptime Kuma in a declarative, idempotent way using SSH-only approach."""
         logger.info(f"Deploying Uptime Kuma on {self.node_name}")
         
-        # Find or create Docker LXC container
+        # Use simplified approach to find Docker LXC container
         docker_vmid = self._find_docker_lxc()
         if not docker_vmid:
-            logger.info(f"No Docker LXC found on {self.node_name}, creating one")
-            docker_vmid = self._create_docker_lxc()
-        else:
-            logger.info(f"Found existing Docker LXC {docker_vmid} on {self.node_name}")
+            raise RuntimeError(f"No Docker LXC container found on {self.node_name}")
+            
+        logger.info(f"Found Docker LXC {docker_vmid} on {self.node_name}")
 
         config = self.UPTIME_KUMA_CONFIG
         container_name = config["name"]
@@ -256,7 +396,9 @@ systemctl start docker
             else:
                 # Container exists but not running, start it
                 logger.info(f"Starting existing Uptime Kuma container in {docker_vmid}")
-                self._execute_command(f"pct exec {docker_vmid} -- docker start {container_name}")
+                stdout, stderr, exit_code = self._execute_command(f"pct exec {docker_vmid} -- docker start {container_name}")
+                if exit_code != 0:
+                    logger.error(f"Failed to start container: {stderr}")
         else:
             # Create and start new Uptime Kuma container
             logger.info(f"Creating new Uptime Kuma container in {docker_vmid}")
@@ -286,6 +428,36 @@ systemctl start docker
             "container_ip": ip,
             "url": f"http://{ip}:{config['port']}" if ip else None,
         }
+    
+    def _find_docker_lxc_ssh_simple(self) -> Optional[int]:
+        """Simplified SSH-based Docker LXC discovery using known container IDs."""
+        # Known Docker LXC containers based on homelab setup
+        known_docker_containers = {
+            "pve": 100,
+            "fun-bedbug": 112,
+        }
+        
+        if self.node_name in known_docker_containers:
+            expected_vmid = known_docker_containers[self.node_name]
+            logger.info(f"Checking expected Docker LXC {expected_vmid} on {self.node_name}")
+            
+            try:
+                # Check if the container exists and has Docker
+                stdout, stderr, exit_code = self._execute_command(f"pct status {expected_vmid}")
+                if exit_code == 0 and "running" in stdout:
+                    # Verify Docker is installed
+                    docker_stdout, docker_stderr, docker_exit = self._execute_command(
+                        f"pct exec {expected_vmid} -- which docker 2>/dev/null"
+                    )
+                    if docker_exit == 0:
+                        logger.info(f"Confirmed Docker LXC {expected_vmid} on {self.node_name}")
+                        return expected_vmid
+                        
+            except Exception as e:
+                logger.warning(f"Failed to verify expected Docker LXC {expected_vmid}: {e}")
+        
+        # Fallback to general discovery if known container not found
+        return self._find_docker_lxc_ssh()
 
     def _wait_for_uptime_kuma_ready(self, vmid: int, port: int, timeout: int = 120) -> None:
         """Wait for Uptime Kuma to be ready to accept connections."""
@@ -361,6 +533,9 @@ systemctl start docker
 
 def deploy_monitoring_to_all_nodes() -> List[Dict[str, Any]]:
     """Deploy monitoring infrastructure to all configured nodes."""
+    # Check network prerequisites first
+    validate_network_prerequisites()
+    
     results = []
     
     for node_config in Config.get_nodes():
@@ -379,6 +554,42 @@ def deploy_monitoring_to_all_nodes() -> List[Dict[str, Any]]:
                 "node": node_name,
                 "status": "failed",
                 "error": str(e),
+            })
+    
+    return results
+
+
+def deploy_monitoring_to_docker_nodes() -> List[Dict[str, Any]]:
+    """Deploy monitoring infrastructure specifically to nodes with Docker LXC containers."""
+    # Check network prerequisites first
+    validate_network_prerequisites()
+    
+    results = []
+    
+    # Known Docker LXC deployments based on homelab setup
+    docker_nodes = [
+        {"name": "pve", "expected_lxc": 100},
+        {"name": "fun-bedbug", "expected_lxc": 112},
+    ]
+    
+    for node_config in docker_nodes:
+        node_name = node_config["name"]
+        logger.info(f"Deploying monitoring to Docker node {node_name}")
+        
+        try:
+            with MonitoringManager(node_name) as manager:
+                result = manager.deploy_uptime_kuma()
+                result["node"] = node_name
+                result["expected_lxc"] = node_config["expected_lxc"]
+                results.append(result)
+                logger.info(f"Successfully deployed to {node_name}: {result['status']}")
+        except Exception as e:
+            logger.error(f"Failed to deploy monitoring to {node_name}: {e}")
+            results.append({
+                "node": node_name,
+                "status": "failed",
+                "error": str(e),
+                "expected_lxc": node_config["expected_lxc"],
             })
     
     return results
@@ -408,20 +619,58 @@ def get_monitoring_status_all_nodes() -> List[Dict[str, Any]]:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
-    # Deploy to all nodes
-    results = deploy_monitoring_to_all_nodes()
+    print("=== Uptime Kuma Deployment Manager ===")
+    print("")
+    print("This script attempts to deploy Uptime Kuma to Docker LXC containers")
+    print("across the homelab infrastructure using SSH connections.")
+    print("")
+    
+    # Deploy to Docker nodes specifically (pve and fun-bedbug)
+    print("=== Attempting Deployment to Docker Nodes ===")
+    results = deploy_monitoring_to_docker_nodes()
     
     print("\n=== Deployment Results ===")
+    failed_nodes = []
     for result in results:
         print(f"Node: {result['node']} - Status: {result['status']}")
         if result.get("url"):
             print(f"  URL: {result['url']}")
+        if result.get("vmid"):
+            print(f"  Docker LXC: {result['vmid']}")
         if result.get("error"):
             print(f"  Error: {result['error']}")
+            failed_nodes.append(result['node'])
     
-    print("\n=== Current Status ===")
-    statuses = get_monitoring_status_all_nodes()
-    for status in statuses:
-        print(f"Node: {status['node']}")
-        if status.get("uptime_kuma", {}).get("url"):
-            print(f"  Uptime Kuma: {status['uptime_kuma']['url']}")
+    # Provide alternative deployment instructions if network connectivity fails
+    if failed_nodes:
+        print(f"\n⚠️  Network connectivity issues detected for nodes: {', '.join(failed_nodes)}")
+        print("\n=== Alternative Deployment Method ===")
+        print("If SSH connectivity from this machine is limited, you can deploy directly")
+        print("on each Proxmox node using the deployment script:")
+        print("")
+        print("1. Copy the deployment script to each Proxmox node:")
+        print("   scp proxmox/homelab/scripts/deploy_uptime_kuma.sh root@NODE.maas:/tmp/")
+        print("")
+        print("2. Run the script on each node:")
+        for node in failed_nodes:
+            expected_lxc = {"pve": 100, "fun-bedbug": 112}.get(node, "???")
+            print(f"   # On {node}:")
+            print(f"   chmod +x /tmp/deploy_uptime_kuma.sh")
+            print(f"   /tmp/deploy_uptime_kuma.sh {expected_lxc}")
+            print("")
+        
+        print("3. The script will:")
+        print("   - Verify Docker LXC container is running")
+        print("   - Deploy/start Uptime Kuma container") 
+        print("   - Provide access URL for web interface")
+        print("   - Give next steps for configuration")
+    else:
+        print("\n✅ All deployments successful!")
+        
+    print(f"\n=== MonitoringManager Class Available ===")
+    print("You can also use the MonitoringManager class directly:")
+    print("")
+    print("from homelab.monitoring_manager import MonitoringManager")
+    print("with MonitoringManager('node-name') as manager:")
+    print("    result = manager.deploy_uptime_kuma()")
+    print("    print(f'Deployed: {result}')")
