@@ -124,7 +124,7 @@ class UptimeKumaClient:
             {
                 "name": f"MAAS Server{instance_suffix}",
                 "type": MonitorType.HTTP,
-                "url": "http://192.168.4.2:5240/MAAS/",
+                "url": "http://192.168.4.53:5240/MAAS/",
                 "method": "GET",
                 "interval": 300 * base_interval_multiplier,
                 "maxretries": 2,
