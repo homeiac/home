@@ -20,7 +20,7 @@ This guide covers the full end-to-end setup and gotchas for local DNS resolution
    - **Services → Unbound DNS → Overrides → Host Overrides**
      - **Host:** `*`
      - **Domain:** `app.homelab`
-     - **IP:** `192.168.4.82`
+     - **IP:** `192.168.4.80` (Traefik LoadBalancer - routes to backend services)
 4. **Reboot Required**
    - A **full OPNsense reboot** reliably applies these overrides.
    - `service unbound onerestart` or the GUI *Apply* button did **not** always reload the wildcard override.
@@ -82,7 +82,7 @@ option domain-name-servers 192.168.4.53, 192.168.4.1;
 
 ```bash
 host opnsense.homelab 127.0.0.1      # → 192.168.4.1
-host test.app.homelab 127.0.0.1     # → 192.168.4.82
+host test.app.homelab 127.0.0.1     # → 192.168.4.80
 host somehost.maas 127.0.0.1        # → MAAS record IP
 ```
 
@@ -90,7 +90,7 @@ host somehost.maas 127.0.0.1        # → MAAS record IP
 
 ```bash
 dig opnsense.homelab @192.168.4.53 +short   # → 192.168.4.1
-dig test.app.homelab @192.168.4.53 +short    # → 192.168.4.82
+dig test.app.homelab @192.168.4.53 +short    # → 192.168.4.80
 ```
 
 ### On macOS
@@ -103,7 +103,54 @@ dig somehost.maas +short
 
 ---
 
-## 6. Final Gotchas & Lessons Learned
+## 6. Troubleshooting Common Issues
+
+### Issue: `*.app.homelab` domains all route to the same service
+
+**Symptoms:**
+- `ollama.app.homelab` and `stable-diffusion.app.homelab` both return the same response
+- One service works but the other doesn't
+
+**Root Cause:**
+The wildcard DNS override `*.app.homelab` is pointing to a specific service's LoadBalancer IP instead of Traefik's LoadBalancer IP.
+
+**Diagnosis:**
+```bash
+# Check what IP the domains resolve to
+nslookup ollama.app.homelab
+nslookup stable-diffusion.app.homelab
+
+# Both should return 192.168.4.80 (Traefik), not individual service IPs
+```
+
+**Fix:**
+1. **Navigate to**: Services → Unbound DNS → Overrides → Host Overrides
+2. **Find**: `*.app.homelab` entry  
+3. **Change IP to**: `192.168.4.80` (Traefik LoadBalancer)
+4. **Reboot OPNsense** to apply changes
+
+**Verification:**
+```bash
+# Test Host header routing works
+curl -H "Host: ollama.app.homelab" -I http://192.168.4.80
+curl -H "Host: stable-diffusion.app.homelab" -I http://192.168.4.80
+
+# Should return different responses indicating proper routing
+```
+
+---
+
+## 7. Service IP Reference
+
+- **Traefik LoadBalancer**: `192.168.4.80` (routes based on Host header)
+- **Ollama LoadBalancer**: `192.168.4.81` (direct access)
+- **Stable Diffusion LoadBalancer**: `192.168.4.82` (direct access)
+
+**Important**: All `*.app.homelab` DNS entries should point to Traefik (`192.168.4.80`), not individual service IPs.
+
+---
+
+## 8. Final Gotchas & Lessons Learned
 
 - MAAS DNS limitations: no wildcard support for subdomains.
 - OPNsense Host Overrides: supports wildcards (`Host=*`, `Domain=app.homelab`).
