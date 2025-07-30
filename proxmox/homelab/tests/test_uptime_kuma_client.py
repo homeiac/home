@@ -25,9 +25,11 @@ def mock_uptime_kuma_api():
 @pytest.fixture
 def uptime_kuma_client():
     """Create UptimeKumaClient instance for testing."""
-    with mock.patch('src.homelab.uptime_kuma_client.UptimeKumaApi'):
+    with mock.patch('src.homelab.uptime_kuma_client.UptimeKumaApi') as mock_api:
         client = UptimeKumaClient("http://test:3001", "testuser", "testpass")
         client.authenticated = True  # Skip actual authentication for tests
+        # Ensure the mocked api is available on the client
+        client.api = mock_api.return_value
         return client
 
 
@@ -57,18 +59,22 @@ def test_uptime_kuma_client_init_with_env_vars(monkeypatch):
 
 def test_connect_success(uptime_kuma_client, mock_uptime_kuma_api):
     """Test successful connection."""
-    mock_uptime_kuma_api.login.return_value = None
+    # Reset authentication state for the test
+    uptime_kuma_client.authenticated = False
+    uptime_kuma_client.api.login.return_value = None
     
     result = uptime_kuma_client.connect()
     
     assert result is True
     assert uptime_kuma_client.authenticated is True
-    mock_uptime_kuma_api.login.assert_called_once_with("testuser", "testpass")
+    uptime_kuma_client.api.login.assert_called_once_with("testuser", "testpass")
 
 
 def test_connect_failure(uptime_kuma_client, mock_uptime_kuma_api):
     """Test connection failure."""
-    mock_uptime_kuma_api.login.side_effect = Exception("Connection failed")
+    # Reset authentication state for the test
+    uptime_kuma_client.authenticated = False
+    uptime_kuma_client.api.login.side_effect = Exception("Connection failed")
     
     result = uptime_kuma_client.connect()
     
@@ -80,13 +86,13 @@ def test_disconnect(uptime_kuma_client, mock_uptime_kuma_api):
     """Test disconnect."""
     uptime_kuma_client.disconnect()
     
-    mock_uptime_kuma_api.disconnect.assert_called_once()
+    uptime_kuma_client.api.disconnect.assert_called_once()
     assert uptime_kuma_client.authenticated is False
 
 
 def test_monitor_exists_true(uptime_kuma_client, mock_uptime_kuma_api):
     """Test monitor exists returns True when monitor found."""
-    mock_uptime_kuma_api.get_monitors.return_value = [
+    uptime_kuma_client.api.get_monitors.return_value = [
         {"name": "Test Monitor", "id": 1},
         {"name": "Another Monitor", "id": 2}
     ]
@@ -98,7 +104,7 @@ def test_monitor_exists_true(uptime_kuma_client, mock_uptime_kuma_api):
 
 def test_monitor_exists_false(uptime_kuma_client, mock_uptime_kuma_api):
     """Test monitor exists returns False when monitor not found."""
-    mock_uptime_kuma_api.get_monitors.return_value = [
+    uptime_kuma_client.api.get_monitors.return_value = [
         {"name": "Other Monitor", "id": 1}
     ]
     
@@ -132,10 +138,10 @@ def test_create_homelab_monitors_not_authenticated():
 def test_create_homelab_monitors_primary_instance(uptime_kuma_client, mock_uptime_kuma_api):
     """Test creating monitors for primary instance."""
     # Mock monitor doesn't exist
-    mock_uptime_kuma_api.get_monitors.return_value = []
+    uptime_kuma_client.api.get_monitors.return_value = []
     
     # Mock successful monitor creation
-    mock_uptime_kuma_api.add_monitor.return_value = {"monitorID": 123}
+    uptime_kuma_client.api.add_monitor.return_value = {"monitorID": 123}
     
     result = uptime_kuma_client.create_homelab_monitors(is_secondary_instance=False)
     
@@ -148,10 +154,10 @@ def test_create_homelab_monitors_primary_instance(uptime_kuma_client, mock_uptim
 def test_create_homelab_monitors_secondary_instance(uptime_kuma_client, mock_uptime_kuma_api):
     """Test creating monitors for secondary instance."""
     # Mock monitor doesn't exist
-    mock_uptime_kuma_api.get_monitors.return_value = []
+    uptime_kuma_client.api.get_monitors.return_value = []
     
     # Mock successful monitor creation
-    mock_uptime_kuma_api.add_monitor.return_value = {"monitorID": 123}
+    uptime_kuma_client.api.add_monitor.return_value = {"monitorID": 123}
     
     result = uptime_kuma_client.create_homelab_monitors(is_secondary_instance=True)
     
@@ -164,24 +170,25 @@ def test_create_homelab_monitors_secondary_instance(uptime_kuma_client, mock_upt
 def test_create_homelab_monitors_already_exists(uptime_kuma_client, mock_uptime_kuma_api):
     """Test creating monitors when they already exist."""
     # Mock monitor already exists
-    mock_uptime_kuma_api.get_monitors.return_value = [
-        {"name": "OPNsense Gateway", "id": 1}
+    uptime_kuma_client.api.get_monitors.return_value = [
+        {"name": "MAAS Server", "id": 1}
     ]
     
     result = uptime_kuma_client.create_homelab_monitors()
     
-    # First monitor should be marked as already_exists
-    assert result[0]["status"] == "already_exists"
-    assert result[0]["name"] == "OPNsense Gateway"
+    # MAAS Server monitor should be marked as already_exists
+    maas_result = next(r for r in result if "MAAS Server" in r["name"])
+    assert maas_result["status"] == "already_exists"
+    assert "MAAS Server" in maas_result["name"]
 
 
 def test_create_homelab_monitors_creation_failure(uptime_kuma_client, mock_uptime_kuma_api):
     """Test monitor creation failure."""
     # Mock monitor doesn't exist
-    mock_uptime_kuma_api.get_monitors.return_value = []
+    uptime_kuma_client.api.get_monitors.return_value = []
     
     # Mock failed monitor creation
-    mock_uptime_kuma_api.add_monitor.return_value = {"error": "Creation failed"}
+    uptime_kuma_client.api.add_monitor.return_value = {"error": "Creation failed"}
     
     result = uptime_kuma_client.create_homelab_monitors()
     
@@ -210,37 +217,37 @@ def test_context_manager_connection_failure(mock_uptime_kuma_api):
 
 def test_setup_monitoring_for_instance_success():
     """Test setup monitoring for single instance success."""
-    with mock.patch.object(UptimeKumaClient, '__enter__') as mock_enter:
-        with mock.patch.object(UptimeKumaClient, '__exit__'):
-            mock_client = MagicMock()
-            mock_client.create_homelab_monitors.return_value = [
-                {"name": "Test Monitor", "status": "created", "monitor_id": 1}
-            ]
-            mock_enter.return_value = mock_client
-            
-            result = setup_monitoring_for_instance("http://test:3001")
-            
-            assert len(result) == 1
-            assert result[0]["status"] == "created"
+    with mock.patch('src.homelab.uptime_kuma_client.UptimeKumaClient') as mock_client_class:
+        mock_client = MagicMock()
+        mock_client.create_homelab_monitors.return_value = [
+            {"name": "Test Monitor", "status": "created", "monitor_id": 1}
+        ]
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        
+        result = setup_monitoring_for_instance("http://test:3001")
+        
+        assert len(result) == 1
+        assert result[0]["status"] == "created"
 
 
 def test_setup_monitoring_for_instance_secondary():
     """Test setup monitoring for secondary instance."""
-    with mock.patch.object(UptimeKumaClient, '__enter__') as mock_enter:
-        with mock.patch.object(UptimeKumaClient, '__exit__'):
-            mock_client = MagicMock()
-            mock_client.create_homelab_monitors.return_value = []
-            mock_enter.return_value = mock_client
-            
-            setup_monitoring_for_instance("http://test:3001", is_secondary=True)
-            
-            # Verify secondary flag was passed
-            mock_client.create_homelab_monitors.assert_called_once_with(is_secondary_instance=True)
+    with mock.patch('src.homelab.uptime_kuma_client.UptimeKumaClient') as mock_client_class:
+        mock_client = MagicMock()
+        mock_client.create_homelab_monitors.return_value = []
+        mock_client_class.return_value.__enter__.return_value = mock_client
+        
+        setup_monitoring_for_instance("http://test:3001", is_secondary=True)
+        
+        # Verify secondary flag was passed
+        mock_client.create_homelab_monitors.assert_called_once_with(is_secondary_instance=True)
 
 
 def test_setup_monitoring_for_instance_failure():
     """Test setup monitoring failure."""
-    with mock.patch.object(UptimeKumaClient, '__enter__', side_effect=Exception("Connection failed")):
+    with mock.patch('src.homelab.uptime_kuma_client.UptimeKumaClient') as mock_client_class:
+        mock_client_class.return_value.__enter__.side_effect = Exception("Connection failed")
+        
         result = setup_monitoring_for_instance("http://test:3001")
         
         assert result == []
@@ -262,10 +269,8 @@ def test_setup_monitoring_for_all_instances_success(monkeypatch):
         
         # Verify secondary flag passed correctly
         calls = mock_setup.call_args_list
-        assert calls[0][0] == ("http://pve:3001",)
-        assert calls[0][1] == {"is_secondary": False}
-        assert calls[1][0] == ("http://funbedbug:3001",)
-        assert calls[1][1] == {"is_secondary": True}
+        assert calls[0] == mock.call("http://pve:3001", False)
+        assert calls[1] == mock.call("http://funbedbug:3001", True)
 
 
 def test_setup_monitoring_for_all_instances_no_env_vars(monkeypatch):

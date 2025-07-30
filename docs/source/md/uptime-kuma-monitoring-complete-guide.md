@@ -167,8 +167,8 @@ spec:
 cat proxmox/homelab/.env | grep "_IP"
 
 # Test core services
-curl -s http://192.168.4.2:5240/MAAS/  # MAAS server
-ping 192.168.4.1                       # OPNsense gateway
+curl -s http://192.168.4.53:5240/MAAS/  # MAAS server
+ping 192.168.4.1                        # OPNsense gateway
 ```
 
 ## Uptime Kuma Installation & Configuration
@@ -330,7 +330,7 @@ FUN-BEDBUG:
 
 #### Core Infrastructure
 - **OPNsense Gateway**: `192.168.4.1` (PING, 60s interval)
-- **MAAS Server**: `http://192.168.4.2:5240/MAAS/` (HTTP, 300s interval)
+- **MAAS Server**: `http://192.168.4.53:5240/MAAS/` (HTTP, 300s interval)
 
 #### Proxmox Nodes  
 - **Proxmox pve**: `pve.maas` (PING, 120s interval)
@@ -412,6 +412,7 @@ Check monitor health in web interface:
    # Test HTTP endpoints
    curl -I http://ollama.app.homelab
    curl -I http://stable-diffusion.app.homelab
+   curl -I http://192.168.4.53:5240/MAAS/
    
    # Test ping targets
    ping -c 3 192.168.4.1
