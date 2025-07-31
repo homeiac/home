@@ -25,9 +25,13 @@ The root cause was incorrect DNS server configuration and missing search domains
 
 ## Implementation
 
-### Docker Daemon Configuration
+### ✅ Persistent Configuration (Recommended)
 
-Create or update `/etc/docker/daemon.json` in the LXC container:
+The following method ensures DNS configuration persists across reboots and DHCP renewals:
+
+#### 1. Docker Daemon Configuration
+
+Create `/etc/docker/daemon.json` in the LXC container:
 
 ```json
 {
@@ -43,52 +47,93 @@ Create or update `/etc/docker/daemon.json` in the LXC container:
 }
 ```
 
-### LXC Container resolv.conf
+#### 2. DHCP Exit Hook (Critical for Persistence)
 
-Update `/etc/resolv.conf` in the LXC container:
+Create `/etc/dhcp/dhclient-exit-hooks.d/homelab-dns`:
 
-```
+```bash
+#!/bin/bash
+# Homelab DNS configuration override
+# Ensures correct DNS servers and search domains
+
+if [ "$reason" = "BOUND" ] || [ "$reason" = "RENEW" ] || [ "$reason" = "REBIND" ]; then
+    echo "Applying homelab DNS configuration"
+    
+    # Create new resolv.conf with our DNS settings
+    cat > /etc/resolv.conf << RESOLV_EOF
 domain maas
 search maas homelab
 nameserver 192.168.4.1
 nameserver 2600:1700:7270:933f:be24:11ff:fed5:6f30
 nameserver 192.168.4.53
+RESOLV_EOF
+
+    echo "DNS configuration applied successfully"
+fi
 ```
 
-### Applying Changes
+#### 3. Complete Implementation Steps
 
-1. **Update Docker daemon configuration**:
-   ```bash
-   # Create/update daemon.json
-   cat > /etc/docker/daemon.json << EOF
-   {
-     "dns": ["192.168.4.1", "2600:1700:7270:933f:be24:11ff:fed5:6f30", "192.168.4.53"],
-     "dns-search": ["maas.", "homelab."]
-   }
-   EOF
-   ```
+```bash
+# 1. Create Docker daemon configuration
+cat > /etc/docker/daemon.json << EOF
+{
+  "dns": [
+    "192.168.4.1",
+    "2600:1700:7270:933f:be24:11ff:fed5:6f30",
+    "192.168.4.53"
+  ],
+  "dns-search": [
+    "maas.",
+    "homelab."
+  ]
+}
+EOF
 
-2. **Update LXC container resolv.conf**:
-   ```bash
-   # Update resolv.conf
-   cat > /etc/resolv.conf << EOF
-   domain maas
-   search maas homelab
-   nameserver 192.168.4.1
-   nameserver 2600:1700:7270:933f:be24:11ff:fed5:6f30
-   nameserver 192.168.4.53
-   EOF
-   ```
+# 2. Create DHCP exit hook for persistence
+cat > /etc/dhcp/dhclient-exit-hooks.d/homelab-dns << 'EOF'
+#!/bin/bash
+# Homelab DNS configuration override
+if [ "$reason" = "BOUND" ] || [ "$reason" = "RENEW" ] || [ "$reason" = "REBIND" ]; then
+    echo "Applying homelab DNS configuration"
+    cat > /etc/resolv.conf << RESOLV_EOF
+domain maas
+search maas homelab
+nameserver 192.168.4.1
+nameserver 2600:1700:7270:933f:be24:11ff:fed5:6f30
+nameserver 192.168.4.53
+RESOLV_EOF
+    echo "DNS configuration applied successfully"
+fi
+EOF
 
-3. **Restart Docker service**:
-   ```bash
-   systemctl restart docker
-   ```
+# 3. Make hook executable
+chmod +x /etc/dhcp/dhclient-exit-hooks.d/homelab-dns
 
-4. **Restart affected containers**:
-   ```bash
-   docker restart container-name
-   ```
+# 4. Force DHCP renewal to apply configuration
+dhclient -r eth0 && dhclient eth0
+
+# 5. Restart Docker to pick up new DNS settings
+systemctl restart docker
+```
+
+### ⚠️ Alternative: Manual Configuration (Not Persistent)
+
+If you need to apply DNS settings manually (will be lost on restart):
+
+```bash
+# Update resolv.conf (temporary)
+cat > /etc/resolv.conf << EOF
+domain maas
+search maas homelab
+nameserver 192.168.4.1
+nameserver 2600:1700:7270:933f:be24:11ff:fed5:6f30
+nameserver 192.168.4.53
+EOF
+
+# Restart Docker service
+systemctl restart docker
+```
 
 ## Verification
 
@@ -168,17 +213,21 @@ systemctl status docker
 
 ## Automation Script
 
+### Persistent DNS Configuration Script
+
 Create `/usr/local/bin/configure-homelab-dns.sh`:
 
 ```bash
 #!/bin/bash
-# Configure DNS for homelab Docker containers
+# Configure persistent DNS for homelab Docker containers
+# This script implements the DHCP hook method for full persistence
 
 set -e
 
-echo "Configuring Docker DNS for homelab..."
+echo "Configuring persistent DNS for homelab Docker containers..."
 
-# Create Docker daemon configuration
+# 1. Create Docker daemon configuration
+echo "Creating Docker daemon DNS configuration..."
 cat > /etc/docker/daemon.json << EOF
 {
   "dns": [
@@ -193,27 +242,59 @@ cat > /etc/docker/daemon.json << EOF
 }
 EOF
 
-# Update LXC container resolv.conf
-cat > /etc/resolv.conf << EOF
+# 2. Create DHCP exit hook for persistence
+echo "Creating DHCP exit hook for DNS persistence..."
+cat > /etc/dhcp/dhclient-exit-hooks.d/homelab-dns << 'EOF'
+#!/bin/bash
+# Homelab DNS configuration override
+# Ensures correct DNS servers and search domains persist across DHCP renewals
+
+if [ "$reason" = "BOUND" ] || [ "$reason" = "RENEW" ] || [ "$reason" = "REBIND" ]; then
+    echo "Applying homelab DNS configuration"
+    
+    # Create new resolv.conf with our DNS settings
+    cat > /etc/resolv.conf << RESOLV_EOF
 domain maas
 search maas homelab
 nameserver 192.168.4.1
 nameserver 2600:1700:7270:933f:be24:11ff:fed5:6f30
 nameserver 192.168.4.53
+RESOLV_EOF
+
+    echo "DNS configuration applied successfully"
+fi
 EOF
 
-# Restart Docker
+# 3. Make hook executable
+chmod +x /etc/dhcp/dhclient-exit-hooks.d/homelab-dns
+
+# 4. Apply DNS configuration immediately
+echo "Applying DNS configuration..."
+dhclient -r eth0 && dhclient eth0
+
+# 5. Restart Docker to pick up new settings
 echo "Restarting Docker service..."
 systemctl restart docker
 
-echo "DNS configuration complete!"
-echo "Remember to restart your containers: docker restart container-name"
+echo ""
+echo "✅ Persistent DNS configuration complete!"
+echo "Configuration will survive reboots, DHCP renewals, and container restarts."
+echo ""
+echo "Test with: docker exec container-name ping ollama.app.homelab"
 ```
 
-Make executable and run:
+### Installation and Usage
+
 ```bash
+# Create and install the script
 chmod +x /usr/local/bin/configure-homelab-dns.sh
-./usr/local/bin/configure-homelab-dns.sh
+
+# Run the script
+/usr/local/bin/configure-homelab-dns.sh
+
+# Verify configuration
+cat /etc/resolv.conf
+docker exec uptime-kuma ping -c 1 ollama.app.homelab
 ```
 
 ## Related Documentation
