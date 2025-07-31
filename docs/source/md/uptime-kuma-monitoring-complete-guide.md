@@ -303,27 +303,29 @@ Using official uptime-kuma-api library
 
 === Configuring all instances ===
 
-PVE:
+FUN-BEDBUG (Primary):
   ✅ OPNsense Gateway: created
   ✅ MAAS Server: created
   ✅ Proxmox pve Node: created
   ✅ Proxmox still-fawn Node: created
   ✅ Proxmox fun-bedbug Node: created
+  ✅ Proxmox chief-horse Node: created
   ✅ Ollama GPU Server: created
   ✅ Stable Diffusion WebUI: created
   ✅ Samba File Server: created
+  ✅ K3s VM - pve: created
   ✅ K3s VM - still-fawn: created
+  ✅ K3s VM - chief-horse: created
   ✅ Internet - Google DNS: created
   ✅ Internet - Cloudflare DNS: created
   ✅ DNS Resolution Test: created
 
-FUN-BEDBUG:
-  ✅ OPNsense Gateway (Secondary): created
-  ✅ MAAS Server (Secondary): created
-  [... all monitors with (Secondary) suffix ...]
+PVE (Redundant):
+  ✅ All identical monitors (no Secondary suffix)
+  ✅ Same configuration for redundant alerting
 
 🎉 Monitor configuration complete!
-📊 Summary: 24 created, 0 existing, 0 failed
+📊 Summary: 15 monitors per instance, 30 total monitors
 ```
 
 ### Monitors Created
@@ -333,9 +335,10 @@ FUN-BEDBUG:
 - **MAAS Server**: `http://192.168.4.53:5240/MAAS/` (HTTP, 300s interval)
 
 #### Proxmox Nodes  
-- **Proxmox pve**: `pve.maas` (PING, 120s interval)
+- **Proxmox pve**: `192.168.4.122` (PING, 120s interval)
 - **Proxmox still-fawn**: `still-fawn.maas` (PING, 120s interval)
 - **Proxmox fun-bedbug**: `fun-bedbug.maas` (PING, 120s interval)
+- **Proxmox chief-horse**: `chief-horse.maas` (PING, 120s interval)
 
 #### Kubernetes Services (via Traefik)
 - **Ollama GPU Server**: `http://ollama.app.homelab` (HTTP, 300s interval)
@@ -345,7 +348,9 @@ FUN-BEDBUG:
 - **Samba File Server**: `192.168.4.120:445` (PORT, 300s interval)
 
 #### Network Health
-- **K3s VM**: `k3s-vm-still-fawn` (PING, 120s interval)
+- **K3s VM - pve**: `k3s-vm-pve` (PING, 120s interval)
+- **K3s VM - still-fawn**: `k3s-vm-still-fawn` (PING, 120s interval)
+- **K3s VM - chief-horse**: `k3s-vm-chief-horse` (PING, 120s interval)
 - **Internet - Google DNS**: `8.8.8.8` (PING, 120s interval)  
 - **Internet - Cloudflare DNS**: `1.1.1.1` (PING, 120s interval)
 - **DNS Resolution Test**: `google.com` via `8.8.8.8` (DNS, 300s interval)
