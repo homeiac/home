@@ -86,6 +86,52 @@ class UptimeKumaClient:
             logger.error(f"Error checking if monitor exists: {e}")
             return False
 
+    def get_monitor_by_name(self, name: str) -> Dict[str, Any]:
+        """
+        Get monitor details by name.
+
+        Args:
+            name: Monitor name to find
+
+        Returns:
+            Monitor dictionary if found, empty dict otherwise
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated to Uptime Kuma")
+            return {}
+
+        try:
+            monitors = self.api.get_monitors()
+            for monitor in monitors:
+                if monitor.get("name") == name:
+                    return monitor
+            return {}
+        except Exception as e:
+            logger.error(f"Error getting monitor by name: {e}")
+            return {}
+
+    def update_monitor(self, monitor_id: int, **config: Any) -> bool:
+        """
+        Update an existing monitor.
+
+        Args:
+            monitor_id: ID of monitor to update
+            **config: Monitor configuration parameters
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        if not self.authenticated:
+            logger.error("Not authenticated to Uptime Kuma")
+            return False
+
+        try:
+            result = self.api.edit_monitor(monitor_id, **config)
+            return result is not None
+        except Exception as e:
+            logger.error(f"Error updating monitor {monitor_id}: {e}")
+            return False
+
     def create_homelab_monitors(self, is_secondary_instance: bool = False) -> List[Dict[str, Any]]:
         """
         Create comprehensive monitoring setup for homelab infrastructure.
@@ -135,7 +181,7 @@ class UptimeKumaClient:
             {
                 "name": f"Proxmox pve Node{instance_suffix}",
                 "type": MonitorType.PING,
-                "hostname": "pve.maas",
+                "hostname": "192.168.4.122",
                 "interval": 120 * base_interval_multiplier,
                 "maxretries": 3,
                 "retryInterval": base_retry_delay,
@@ -158,6 +204,15 @@ class UptimeKumaClient:
                 "maxretries": 3,
                 "retryInterval": base_retry_delay,
                 "description": "Proxmox fun-bedbug node connectivity",
+            },
+            {
+                "name": f"Proxmox chief-horse Node{instance_suffix}",
+                "type": MonitorType.PING,
+                "hostname": "chief-horse.maas",
+                "interval": 120 * base_interval_multiplier,
+                "maxretries": 3,
+                "retryInterval": base_retry_delay,
+                "description": "Proxmox chief-horse node connectivity",
             },
             # Kubernetes Services via Traefik Ingress (from actual ingress configs)
             {
@@ -193,6 +248,15 @@ class UptimeKumaClient:
             },
             # K3s VM Health
             {
+                "name": f"K3s VM - pve{instance_suffix}",
+                "type": MonitorType.PING,
+                "hostname": "k3s-vm-pve",
+                "interval": 120 * base_interval_multiplier,
+                "maxretries": 3,
+                "retryInterval": base_retry_delay,
+                "description": "K3s VM on pve node",
+            },
+            {
                 "name": f"K3s VM - still-fawn{instance_suffix}",
                 "type": MonitorType.PING,
                 "hostname": "k3s-vm-still-fawn",
@@ -200,6 +264,15 @@ class UptimeKumaClient:
                 "maxretries": 3,
                 "retryInterval": base_retry_delay,
                 "description": "K3s VM on still-fawn node",
+            },
+            {
+                "name": f"K3s VM - chief-horse{instance_suffix}",
+                "type": MonitorType.PING,
+                "hostname": "k3s-vm-chief-horse",
+                "interval": 120 * base_interval_multiplier,
+                "maxretries": 3,
+                "retryInterval": base_retry_delay,
+                "description": "K3s VM on chief-horse node",
             },
             # External Connectivity
             {
@@ -232,36 +305,74 @@ class UptimeKumaClient:
             },
         ]
 
-        # Create monitors
+        # Create or update monitors (idempotent)
         for monitor_config in monitors_config:
             monitor_name = monitor_config["name"]
-
+            
             # Check if monitor already exists
-            if self.monitor_exists(monitor_name):
-                logger.info(f"Monitor '{monitor_name}' already exists, skipping")
-                results.append({"name": monitor_name, "status": "already_exists", "monitor_id": None})
-                continue
-
-            # Create the monitor
-            logger.info(f"Creating monitor: {monitor_name}")
-            try:
-                # Remove 'name' from config since it's passed separately
-                config = monitor_config.copy()
-                config.pop("name")
-
-                result = self.api.add_monitor(name=monitor_name, **config)
-
-                if result and result.get("monitorID"):
-                    monitor_id = result["monitorID"]
-                    logger.info(f"✅ Successfully created monitor '{monitor_name}' with ID {monitor_id}")
-                    results.append({"name": monitor_name, "status": "created", "monitor_id": monitor_id})
+            existing_monitor = self.get_monitor_by_name(monitor_name)
+            
+            if existing_monitor:
+                # Monitor exists, check if update is needed
+                monitor_id = existing_monitor.get("id")
+                needs_update = False
+                
+                # Compare key configuration fields
+                config_fields = ["hostname", "url", "port", "interval", "maxretries", "retryInterval", "type", "method", "description"]
+                for field in config_fields:
+                    if field in monitor_config:
+                        existing_value = existing_monitor.get(field)
+                        new_value = monitor_config[field]
+                        
+                        # Special handling for MonitorType enum
+                        if field == "type" and hasattr(new_value, 'value'):
+                            new_value = new_value.value
+                            
+                        if existing_value != new_value:
+                            logger.info(f"Monitor '{monitor_name}' field '{field}' differs: {existing_value} -> {new_value}")
+                            needs_update = True
+                            break
+                
+                if needs_update:
+                    logger.info(f"Updating monitor: {monitor_name}")
+                    try:
+                        # Remove 'name' from config since it's not needed for update
+                        config = monitor_config.copy()
+                        config.pop("name")
+                        
+                        if self.update_monitor(monitor_id, **config):
+                            logger.info(f"✅ Successfully updated monitor '{monitor_name}' (ID: {monitor_id})")
+                            results.append({"name": monitor_name, "status": "updated", "monitor_id": monitor_id})
+                        else:
+                            logger.error(f"❌ Failed to update monitor '{monitor_name}'")
+                            results.append({"name": monitor_name, "status": "update_failed", "monitor_id": monitor_id})
+                    except Exception as e:
+                        logger.error(f"❌ Error updating monitor '{monitor_name}': {e}")
+                        results.append({"name": monitor_name, "status": "update_failed", "monitor_id": monitor_id})
                 else:
-                    logger.error(f"❌ Failed to create monitor '{monitor_name}': {result}")
-                    results.append({"name": monitor_name, "status": "failed", "monitor_id": None})
+                    logger.info(f"Monitor '{monitor_name}' is up to date")
+                    results.append({"name": monitor_name, "status": "up_to_date", "monitor_id": monitor_id})
+            else:
+                # Monitor doesn't exist, create it
+                logger.info(f"Creating monitor: {monitor_name}")
+                try:
+                    # Remove 'name' from config since it's passed separately
+                    config = monitor_config.copy()
+                    config.pop("name")
 
-            except Exception as e:
-                logger.error(f"❌ Error creating monitor '{monitor_name}': {e}")
-                results.append({"name": monitor_name, "status": "failed", "monitor_id": None})
+                    result = self.api.add_monitor(name=monitor_name, **config)
+
+                    if result and result.get("monitorID"):
+                        monitor_id = result["monitorID"]
+                        logger.info(f"✅ Successfully created monitor '{monitor_name}' with ID {monitor_id}")
+                        results.append({"name": monitor_name, "status": "created", "monitor_id": monitor_id})
+                    else:
+                        logger.error(f"❌ Failed to create monitor '{monitor_name}': {result}")
+                        results.append({"name": monitor_name, "status": "failed", "monitor_id": None})
+
+                except Exception as e:
+                    logger.error(f"❌ Error creating monitor '{monitor_name}': {e}")
+                    results.append({"name": monitor_name, "status": "failed", "monitor_id": None})
 
         return results
 
