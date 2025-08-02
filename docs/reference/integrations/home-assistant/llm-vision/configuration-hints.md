@@ -1,9 +1,193 @@
-# LLM Vision Integration Configuration Hints
+# LLM Vision Integration Configuration Guide
 
 **Integration**: Home Assistant LLM Vision  
 **Repository**: https://github.com/valentinfrlch/ha-llmvision  
 **Last Updated**: August 2, 2025  
 **Based on**: Real-world debugging session and configuration fixes
+
+## Three Approaches to Using LLM Vision
+
+LLM Vision can be configured in three different ways, each with specific use cases:
+
+1. **Manual Service Calls** - Direct service calls for testing or simple setups
+2. **Custom YAML Automations** - Write your own automation logic  
+3. **Blueprint Automations** - Use provided template for complex multi-camera setups
+
+### When to Use Each Approach:
+- **Manual Service Calls**: Testing, development, simple one-off analysis
+- **Custom YAML Automations**: Single camera or simple motion → camera mapping
+- **Blueprint Automations**: Multi-camera setups with automatic camera selection logic
+
+## Approach 1: Manual Service Calls
+
+### Use Case
+Perfect for testing, development, or simple analysis where you want direct control over which camera and prompt to use.
+
+### Setup Requirements
+1. LLM Vision integration installed and configured with AI provider
+2. Camera entities available in Home Assistant
+3. No automation configuration needed
+
+### Service Call Examples
+```yaml
+# Basic image analysis
+action: llmvision.image_analyzer
+data:
+  message: "Who's at the door?"
+  image_entity: camera.front_door
+  provider: your_provider_id
+
+# Multiple camera analysis
+action: llmvision.image_analyzer  
+data:
+  message: "Describe any activity in these cameras"
+  image_entity:
+    - camera.front_door
+    - camera.driveway
+  provider: your_provider_id
+
+# Stream analysis with specific model
+action: llmvision.stream_analyzer
+data:
+  message: "Monitor for package deliveries"
+  image_entity: camera.front_porch
+  provider: your_provider_id
+  model: gemma3:4b
+```
+
+### Verification Steps
+```bash
+# 1. Test service call via Home Assistant API
+TOKEN=$(grep HOME_ASSISTANT_TOKEN proxmox/homelab/.env | cut -d'=' -f2)
+URL=$(grep HOME_ASSISTANT_URL proxmox/homelab/.env | cut -d'=' -f2)
+
+# 2. Call LLM Vision service directly
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Describe what you see",
+    "image_entity": "camera.your_camera",
+    "provider": "your_provider_id"
+  }' \
+  "$URL/api/services/llmvision/image_analyzer?return_response=true"
+
+# Expected: JSON response with analysis results
+
+# 3. Verify camera entity exists
+curl -H "Authorization: Bearer $TOKEN" "$URL/api/states/camera.your_camera" | jq '.entity_id'
+# Expected: "camera.your_camera"
+
+# 4. Verify provider ID  
+curl -H "Authorization: Bearer $TOKEN" "$URL/api/config/integrations" | jq '.[] | select(.domain == "llmvision")'
+# Expected: Integration details with provider configuration
+```
+
+### Integration GUI Configuration
+**Location**: Home Assistant → Settings → Devices & Services → LLM Vision
+**Required Settings**:
+- AI Provider (Ollama, OpenAI, etc.)  
+- API endpoint/credentials
+- Default model selection
+
+**Note**: Manual service calls require no automation configuration - just the integration setup.
+
+## Approach 2: Custom YAML Automations
+
+### Use Case
+Single camera setups or simple motion → camera mapping where you want to write your own automation logic.
+
+### Configuration Example
+```yaml
+# Example: Front door motion triggers analysis
+- alias: "Front Door LLM Analysis"
+  description: "Analyze front door camera when motion detected"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.front_door_motion
+      to: 'on'
+  condition:
+    - condition: state
+      entity_id: camera.front_door
+      state: 'recording'  # or 'streaming'
+  action:
+    - action: llmvision.image_analyzer
+      data:
+        message: "Describe any people, vehicles, or packages at the front door. If no activity is visible, explain why (lighting, angle, etc.)"
+        image_entity: camera.front_door
+        provider: "01K1KDVH6Y1GMJ69MJF77WGJEA"  # Your provider ID
+        model: "gemma3:4b"
+    - action: logbook.log  
+      data:
+        name: "LLM Vision Analysis"
+        message: "Front door motion triggered image analysis"
+
+# Example: Multi-camera with conditional logic
+- alias: "Driveway Activity Analysis"  
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.driveway_motion
+      to: 'on'
+  action:
+    - choose:
+        - conditions:
+            - condition: sun
+              after: sunset
+          sequence:
+            - action: llmvision.image_analyzer
+              data:
+                message: "Analyze nighttime activity in driveway. Look for vehicles, people, or security concerns."
+                image_entity: camera.driveway_ir
+        - conditions:
+            - condition: sun  
+              before: sunset
+          sequence:
+            - action: llmvision.image_analyzer
+              data:
+                message: "Analyze daytime driveway activity. Describe vehicles, deliveries, or people."
+                image_entity: camera.driveway_color
+```
+
+### Verification Steps
+```bash
+# 1. Validate automation syntax
+ssh -p 22222 root@homeassistant.maas "python3 -c 'import yaml; yaml.safe_load(open(\"/mnt/data/supervisor/homeassistant/automations.yaml\"))'"
+# Expected: No output (valid YAML)
+
+# 2. Check automation is loaded
+TOKEN=$(grep HOME_ASSISTANT_TOKEN proxmox/homelab/.env | cut -d'=' -f2)
+URL=$(grep HOME_ASSISTANT_URL proxmox/homelab/.env | cut -d'=' -f2)
+curl -H "Authorization: Bearer $TOKEN" "$URL/api/states" | jq '.[] | select(.entity_id == "automation.front_door_llm_analysis")'
+# Expected: Automation entity details
+
+# 3. Test motion sensor trigger
+curl -H "Authorization: Bearer $TOKEN" "$URL/api/states/binary_sensor.front_door_motion" | jq '{state: .state, last_changed: .last_changed}'
+# Expected: Motion sensor state and timing
+
+# 4. Manual automation test
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -d '{"entity_id": "automation.front_door_llm_analysis"}' \
+  "$URL/api/services/automation/trigger"
+
+# 5. Check automation execution
+curl -H "Authorization: Bearer $TOKEN" "$URL/api/states/automation.front_door_llm_analysis" | jq '.attributes.last_triggered'
+# Expected: Recent timestamp
+```
+
+### Advantages of Custom YAML
+- **Full control** over automation logic
+- **Simple to understand** - direct motion sensor → camera mapping
+- **Easy to customize** - conditional logic, multiple triggers, etc.
+- **No blueprint dependencies** - self-contained automation
+
+### Disadvantages  
+- **Manual camera mapping** - you handle all the logic
+- **Repetitive configuration** - need separate automation per camera
+- **No automatic camera selection** - must specify camera explicitly
+
+## Approach 3: Blueprint Automations (Advanced Multi-Camera)
+
+### Use Case
+Complex multi-camera setups where you want automatic camera selection based on which motion sensor triggered.
 
 ## Critical Configuration Requirements
 
