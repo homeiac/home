@@ -489,4 +489,32 @@ Year 3: Advanced Intelligence
 
 ---
 
+## 🎯 **AI Assistant Precision Requirements**
+
+### **CRITICAL: No Assumptions or Fabrication**
+AI assistants working with this architecture MUST follow these precision requirements:
+
+**Never Make Up:**
+- Service names, entity IDs, or API endpoints
+- User interface elements or menu paths
+- Configuration syntax or parameters
+- File paths or system commands
+
+**Always Verify:**
+- Use exact terminology from the user's environment
+- Ask for confirmation of UI elements before referencing them
+- Check actual available options before suggesting them
+- Verify entity names exist before using them
+
+**Example Correct Approach:**
+```
+Assistant: "What tabs do you see under Developer Tools?"
+User: "I see Actions, States, Events..."
+Assistant: "Go to Developer Tools → Actions and search for 'llm'"
+```
+
+**This prevents frustration and builds trust through precision.**
+
+---
+
 This architecture transforms your existing excellent homelab foundation into an **AI-first, conversational, self-managing system** that respects your technology preferences while providing unlimited extensibility through AI-driven evolution.
