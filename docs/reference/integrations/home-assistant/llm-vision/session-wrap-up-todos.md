@@ -93,7 +93,21 @@ self.image_entities = [image_entity_param] if isinstance(image_entity_param, str
 
 ## LOW PRIORITY ENHANCEMENTS
 
-### 5. Frigate Event Snapshot Integration  
+### 5. Implement LLM Vision Memory Functionality for Person Recognition
+**Context**: Enable LLM Vision to recognize and remember family members, friends, strangers, and pets
+**Key Use Cases**:
+- Family member identification and personalized responses
+- Stranger detection and security alerts
+- Pet (dog) recognition for automated actions
+- Friend/guest identification for appropriate notifications
+**Implementation Areas**:
+- Configure LLM Vision memory database for face enrollment
+- Set up person recognition training with family photos
+- Create Home Assistant automations based on recognized persons
+- Test memory accuracy with live camera feeds
+**Reference**: LLM Vision memory documentation and API endpoints
+
+### 6. Frigate Event Snapshot Integration  
 **Current Issue**: Fast movement missed because LLM analyzes live camera feed instead of triggered event snapshot
 **Evidence**: Screenshot in `~/Downloads/triggered_events_pics.png` shows Frigate event snapshots with bounding boxes
 **Solution**: Modify blueprint template or create custom automation to use Frigate event snapshots
