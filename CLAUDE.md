@@ -295,7 +295,9 @@ Before committing Python code, ensure:
 2. **Documentation First** - Read official docs thoroughly before any action
 3. **User Context Awareness** - Users are experts in some areas, novices in others
 4. **Step-by-Step Verification** - Simple validation after each step
-5. **Continuous Learning** - Update process based on real-world results
+5. **Visual Output Verification** - Don't trust API responses, verify actual system outputs
+6. **Systematic SRE Process** - Full RCA, runbooks, and documentation for every complex debugging session
+7. **Continuous Learning** - Update process based on real-world results
 
 ### **Standard Operating Procedure**
 
@@ -353,6 +355,7 @@ EXAMPLES:
 3. **Request User Access Tokens for Configuration Verification**
    - Get API tokens/credentials needed to inspect actual configurations
    - "I need your [API token/credentials] to verify your current configuration before proceeding"
+   - **Home Assistant**: API token stored in `proxmox/homelab/.env` as `HA_TOKEN`
    - Never assume configurations are correct - always verify actual state
    - Document access patterns in `docs/reference/<tool>-access-requirements.md`
 
@@ -369,27 +372,80 @@ EXAMPLES:
    - Account for novice users missing "optional" critical fields
    - Document in `docs/reference/<tool>-implementation-plan.md`
 
-#### **Phase 2: Systematic Implementation**
+#### **Phase 2: Systematic Implementation with Visual Verification**
 3. **Proceed Step-by-Step with Verification**
    - One step at a time with clear success criteria
    - Simple verification after each step
+   - **CRITICAL**: Visual verification of actual system outputs (images, files, database entries)
    - User confirms before proceeding to next step
    
-4. **Continuously Update Based on Results**  
+4. **Visual Output Verification Protocol (MANDATORY)**
+   - Download and inspect actual system outputs, don't trust API success responses
+   - For Home Assistant: Download captured images to verify camera mapping correctness
+   - For databases: Query actual data entries to verify content quality
+   - For file systems: Inspect generated files to confirm expected outputs
+   - **Example**: `ssh root@system "cat /path/to/output.jpg" > /tmp/verify.jpg` then visual inspection
+   
+5. **Configuration Validation Requirements**
+   - **Home Assistant**: Full restart required for new automation input fields, not just reload
+   - **Array Dependencies**: Blueprint templates with array logic require exact index alignment
+   - **Backup First**: Always backup configuration files before ANY modification
+   - **Syntax Validation**: Run configuration syntax check after EVERY change
+   
+6. **Continuously Update Based on Results**  
    - Read additional docs when issues arise
    - Update reference materials with new findings
    - Revise plan based on actual results, not assumptions
 
-#### **Phase 3: Process Improvement**
+#### **Phase 3: Complete SRE Documentation (MANDATORY for Complex Issues)**
+For any debugging session requiring >1 hour or revealing systemic issues:
+
 5. **Document Process Learnings**
    - Update CLAUDE.md with methodology improvements
    - Update architecture docs with real-world insights
    - Create reusable patterns for similar integrations
 
+6. **Create Integration-Specific Configuration Hints**
+   - Location: `docs/reference/integrations/<system>/<tool>/configuration-hints.md`
+   - Content: Array alignment requirements, restart protocols, validation methods
+   - **Example**: `docs/reference/integrations/home-assistant/llm-vision/configuration-hints.md`
+
+7. **Complete SRE Process Documentation**
+   - **Action Log**: Detailed command history with timestamps and outputs
+   - **Root Cause Analysis**: Technical deep dive with prevention strategies  
+   - **Troubleshooting Runbook**: Step-by-step resolution guide for future issues
+   - **GitHub Issue**: Document fixes with proper commit references
+   - **Validation Protocols**: System-specific restart and verification requirements
+
+8. **Process Learning Integration**
+   - Add discovered validation requirements to system-specific protocols
+   - Update backup and rollback procedures based on failure patterns
+   - Create monitoring checks for configuration drift prevention
+
 ### **Reference File Pattern**
 - `docs/reference/<tool>-reference.md` - Tool-specific interface and capabilities
 - `docs/reference/<tool>-verification-plan.md` - Step-by-step validation approach
+- `docs/reference/integrations/<system>/<tool>/configuration-hints.md` - Integration-specific gotchas and requirements
+- `docs/reference/integrations/<system>/validation-protocols.md` - System-wide validation methodology
 - Always check/create these before starting any integration work
+
+### **Integration Documentation Structure**
+```
+docs/reference/integrations/
+├── home-assistant/
+│   ├── validation-protocols.md           # HA-specific restart requirements, syntax validation
+│   ├── llm-vision/
+│   │   └── configuration-hints.md        # Array alignment, camera mapping requirements
+│   ├── frigate/
+│   │   └── configuration-hints.md        # Camera integration specifics
+│   └── ...
+├── kubernetes/
+│   ├── validation-protocols.md           # K8s deployment validation
+│   └── ...
+└── proxmox/
+    ├── validation-protocols.md           # VM/container validation
+    └── ...
+```
 
 ### **AI-First Infrastructure Investigation Requirements**
 **Before asking user for any system state information, investigate comprehensively using modular patterns:**
