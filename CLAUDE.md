@@ -285,6 +285,127 @@ Before committing Python code, ensure:
 - `proxmox/guides/monitoring-guide.md` - Monitoring stack setup via Flux
 - `docs/source/md/monitoring-alerting-guide.md` - Email alerting configuration
 
+## AI-First Homelab Methodology
+
+### **CRITICAL Process: Complex Integration Management**
+**Goal**: Make complex homelab integrations "fun experiments" through systematic AI assistance
+
+**Core Principles:**
+1. **Assume Nothing** - Never fabricate commands, UI elements, or capabilities
+2. **Documentation First** - Read official docs thoroughly before any action
+3. **User Context Awareness** - Users are experts in some areas, novices in others
+4. **Step-by-Step Verification** - Simple validation after each step
+5. **Continuous Learning** - Update process based on real-world results
+
+### **Standard Operating Procedure**
+
+#### **Phase 0: Self-Prompting (MANDATORY FIRST STEP)**
+**Create Integration-Specific Prompt Using Standard Format:**
+
+```
+PERSONA: [Role-specific expert - e.g., "Home Assistant Integration Specialist", "Kubernetes Networking Expert", "Proxmox Storage Guru"]
+
+CONTEXT: 
+- User's homelab setup: [relevant infrastructure details]
+- Integration being added: [specific tool/service]
+- User's expertise level: [expert in X, novice in Y]
+- Previous integration attempts: [any known issues]
+
+TASK:
+- Primary goal: [specific integration objective]
+- Success criteria: [measurable outcomes]
+- Constraints: [time, cost, complexity limits]
+- Documentation requirements: [what must be updated]
+
+FORMAT:
+- Step-by-step approach with verification points
+- Reference documentation for each step
+- Simple validation commands/checks
+- Clear success/failure indicators
+
+TONE:
+- Systematic and methodical
+- Never assume user knowledge
+- Explain technical decisions
+- Encourage experimentation within safe boundaries
+
+EXAMPLES:
+- [2-3 specific examples of successful similar integrations]
+- [Common failure patterns and how to avoid them]
+```
+
+#### **Phase 1: Research & Planning (MANDATORY)**
+1. **Read Official Documentation Thoroughly**
+   - Main project documentation
+   - GitHub repositories and README files  
+   - Community forums and known issues
+   - Create `docs/reference/<tool>-reference.md` with findings
+   
+2. **Create High-Level Plan Based on Real Documentation**
+   - Not assumptions or hallucinations
+   - Include verification steps for each phase
+   - Account for different user expertise levels
+   - Document in `docs/reference/<tool>-verification-plan.md`
+
+#### **Phase 2: Systematic Implementation**
+3. **Proceed Step-by-Step with Verification**
+   - One step at a time with clear success criteria
+   - Simple verification after each step
+   - User confirms before proceeding to next step
+   
+4. **Continuously Update Based on Results**  
+   - Read additional docs when issues arise
+   - Update reference materials with new findings
+   - Revise plan based on actual results, not assumptions
+
+#### **Phase 3: Process Improvement**
+5. **Document Process Learnings**
+   - Update CLAUDE.md with methodology improvements
+   - Update architecture docs with real-world insights
+   - Create reusable patterns for similar integrations
+
+### **Reference File Pattern**
+- `docs/reference/<tool>-reference.md` - Tool-specific interface and capabilities
+- `docs/reference/<tool>-verification-plan.md` - Step-by-step validation approach
+- Always check/create these before starting any integration work
+
+### **AI-First Infrastructure Investigation Requirements**
+**Before asking user for any system state information, investigate comprehensively using modular patterns:**
+
+#### **Investigation Flow**
+1. **GitOps Configuration**: Check existing deployments and configurations
+2. **Kubernetes Layer**: Reference `docs/reference/kubernetes-investigation-commands.md`
+3. **Virtualization Layer**: Reference `docs/reference/proxmox-investigation-commands.md`  
+4. **Network Layer**: Reference `docs/reference/network-investigation-commands-safe.md`
+5. **Present Complete Findings**: Show investigation results before asking questions
+
+#### **Investigation Patterns**
+- **General Methodology**: `docs/reference/infrastructure-investigation-patterns.md`
+- **Expected Output Format**: Present findings in structured format
+- **Safety Guidelines**: Never run external scanning, always start with read-only commands
+- **Modular Approach**: Use layer-specific reference documents for commands
+
+#### **AI Assistant Requirements**
+- Complete infrastructure investigation before asking questions
+- Present findings: "I found X running with Y configuration, but Z is missing"
+- Ask only targeted questions based on investigation results
+- Update reference materials with new patterns discovered
+
+#### **Example Investigation Output**
+```
+Investigation Results for <service-name>:
+
+GitOps Status: [Found/Not Found] - <specific details>
+Kubernetes Status: [Running/Missing/Error] - <pod/service status>
+Hardware Requirements: [Met/Missing] - <GPU/storage/network needs>
+Network Access: [Available/Missing] - <DNS/LoadBalancer/ports>
+
+Recommendation: <next steps based on complete findings>
+```
+
+### **Integration-Specific Guidelines**
+This methodology applies to all homelab integrations: monitoring tools, AI services, network configuration, storage management, etc. The goal is transforming potentially frustrating technical work into systematic, documented, repeatable processes.
+
 ## Notes
 - The homelab runs GPU-accelerated AI workloads (RTX 3070 passthrough)
 - Extensive documentation exists for troubleshooting common issues
