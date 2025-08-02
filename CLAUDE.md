@@ -334,18 +334,40 @@ EXAMPLES:
 - [Common failure patterns and how to avoid them]
 ```
 
-#### **Phase 1: Research & Planning (MANDATORY)**
-1. **Read Official Documentation Thoroughly**
-   - Main project documentation
-   - GitHub repositories and README files  
-   - Community forums and known issues
+#### **Phase 1: Deep Research & Configuration Analysis (MANDATORY)**
+
+1. **Analyze GitHub Repository Structure Thoroughly**
+   - Read ALL configuration files, forms, structs, schemas
+   - Identify EVERY optional field and its impact on functionality
+   - Map required vs optional fields and their interdependencies
+   - Document field validation logic and default behaviors
+   - Create `docs/reference/<tool>-configuration-analysis.md`
+
+2. **Read Official Documentation with Critical Eye**
+   - Main project documentation with focus on configuration examples
+   - GitHub repositories: config schemas, validation code, form definitions
+   - Community forums: search for "not working", "optional field", "mapping" issues
+   - Issue tracker: look for configuration-related bugs and edge cases
    - Create `docs/reference/<tool>-reference.md` with findings
-   
-2. **Create High-Level Plan Based on Real Documentation**
-   - Not assumptions or hallucinations
-   - Include verification steps for each phase
-   - Account for different user expertise levels
-   - Document in `docs/reference/<tool>-verification-plan.md`
+
+3. **Request User Access Tokens for Configuration Verification**
+   - Get API tokens/credentials needed to inspect actual configurations
+   - "I need your [API token/credentials] to verify your current configuration before proceeding"
+   - Never assume configurations are correct - always verify actual state
+   - Document access patterns in `docs/reference/<tool>-access-requirements.md`
+
+4. **Verify User's Actual Configuration BEFORE Starting**
+   - Read configuration files directly via API/CLI
+   - Check GUI forms for missing optional fields that are actually required
+   - Validate interdependent field relationships (motion sensor → camera mapping)
+   - Compare user config against working reference configurations
+   - Document gaps in `docs/reference/<tool>-config-verification.md`
+
+5. **Create Implementation Plan Based on Real State**
+   - Plan based on actual configuration gaps found, not assumptions
+   - Include configuration fixes as first priority
+   - Account for novice users missing "optional" critical fields
+   - Document in `docs/reference/<tool>-implementation-plan.md`
 
 #### **Phase 2: Systematic Implementation**
 3. **Proceed Step-by-Step with Verification**
@@ -403,8 +425,37 @@ Network Access: [Available/Missing] - <DNS/LoadBalancer/ports>
 Recommendation: <next steps based on complete findings>
 ```
 
+### **Critical Configuration Validation Examples**
+
+#### **Home Assistant Integration Pitfalls**
+```bash
+# Motion Sensor Mapping - Often "optional" but breaks functionality
+curl -H "Authorization: Bearer $TOKEN" "$HA_URL/api/config/automation/config" | \
+  jq '.automation[] | select(.alias | contains("AI Event")) | .variables.motion_sensors'
+
+# Blueprint Configuration - Check for missing field mappings  
+grep -A 10 "motion_sensors:" automations.yaml
+# Look for: motion_sensors: [] # EMPTY = BROKEN
+
+# Provider Configuration - Verify all required fields populated
+curl -H "Authorization: Bearer $TOKEN" "$HA_URL/api/config/integrations" | \
+  jq '.[] | select(.domain == "llmvision") | .data'
+```
+
+#### **Kubernetes Configuration Traps**
+```bash
+# Resource Limits - Often "optional" but causes OOM kills
+kubectl get pods -o yaml | yq '.items[].spec.containers[].resources'
+
+# Persistent Volume Claims - Check actual vs requested storage
+kubectl get pvc -o wide
+
+# Service Account Permissions - Verify RBAC is complete
+kubectl auth can-i --list --as=system:serviceaccount:namespace:account
+```
+
 ### **Integration-Specific Guidelines**
-This methodology applies to all homelab integrations: monitoring tools, AI services, network configuration, storage management, etc. The goal is transforming potentially frustrating technical work into systematic, documented, repeatable processes.
+This methodology applies to all homelab integrations: monitoring tools, AI services, network configuration, storage management, etc. The goal is transforming potentially frustrating technical work into systematic, documented, repeatable processes that catch "optional but critical" configuration gaps before they cause hours of debugging.
 
 ## Notes
 - The homelab runs GPU-accelerated AI workloads (RTX 3070 passthrough)
