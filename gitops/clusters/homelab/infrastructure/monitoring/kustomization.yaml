@@ -7,6 +7,8 @@ resources:
   - prometheus-storage-class.yaml
   - cpu-alerting-rules.yaml
   - grafana-ingress.yaml
+  - pad-deployment.yaml
+  - pad-ingress.yaml
 
 configMapGenerator:
   - name: monitoring-values
