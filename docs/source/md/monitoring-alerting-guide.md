@@ -110,7 +110,8 @@ grafana:
 
 ### Usage: Creating Email Alerts in Grafana
 
-1. **Access Grafana**: `http://<node-ip>:32080` (admin/admin)
+1. **Access Grafana**: `https://grafana.app.homelab` (use admin credentials)
+   - **Alternative**: `http://<node-ip>:32080` (NodePort access)
 2. **Contact Points**: Alerting → Contact Points → Add contact point
    - **Name**: `email-notifications`
    - **Type**: `Email`
