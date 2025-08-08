@@ -25,14 +25,14 @@ spec:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                - k3s-vm-pve  # 1st choice: lowest CPU (7%)
+                - k3s-vm-still-fawn  # 1st choice: high memory (15.6GB)
           - weight: 80
             preference:
               matchExpressions:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                - k3s-vm-chief-horse  # 2nd choice: moderate CPU (23%)
+                - k3s-vm-chief-horse  # 2nd choice: medium memory (3.8GB)
           
           # Fallback: any available Linux node (including still-fawn if needed)
           requiredDuringSchedulingIgnoredDuringExecution:
