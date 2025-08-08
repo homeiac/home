@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-anomaly-detector
+  namespace: monitoring
+  labels:
+    app: prometheus-anomaly-detector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-anomaly-detector
+  template:
+    metadata:
+      labels:
+        app: prometheus-anomaly-detector
+    spec:
+      affinity:
+        nodeAffinity:
+          # Intelligent node placement preferences
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k3s-vm-pve  # 1st choice: lowest CPU (7%)
+          - weight: 80
+            preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k3s-vm-chief-horse  # 2nd choice: moderate CPU (23%)
+          
+          # Fallback: any available Linux node (including still-fawn if needed)
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      
+      containers:
+      - name: pad
+        image: quay.io/aicoe/prometheus-anomaly-detector:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: FLT_PROM_URL
+          value: "http://kube-prometheus-stack-prometheus:9090"
+        - name: FLT_METRICS_LIST
+          value: "up;node_cpu_seconds_total;node_memory_MemAvailable_bytes;node_filesystem_avail_bytes;kube_pod_container_status_restarts_total"
+        - name: FLT_RETRAINING_INTERVAL_MINUTES
+          value: "60"  # Retrain hourly for homelab
+        - name: FLT_DATA_START_TIME
+          value: "7d"  # Learn from 7 days of historical data
+        - name: FLT_ROLLING_TRAINING_WINDOW_SIZE
+          value: "15d"  # Use 15-day rolling window
+        - name: APP_FILE
+          value: "app.py"
+        - name: FLT_DEBUG_MODE
+          value: "True"  # Enable debug logging initially
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"  # Allow bursts for ML training
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+      restartPolicy: Always
+      
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-anomaly-detector
+  namespace: monitoring
+  labels:
+    app: prometheus-anomaly-detector
+spec:
+  selector:
+    app: prometheus-anomaly-detector
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
