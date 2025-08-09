@@ -2,7 +2,7 @@
 
 ## Overview
 
-The homelab uses a multi-layered monitoring approach combining Kubernetes-native monitoring (Prometheus/Grafana) with ML-powered anomaly detection (PAD) and external HTTP/TCP monitoring (Uptime Kuma). This provides comprehensive coverage from infrastructure metrics to automated anomaly detection to service availability.
+The homelab uses a multi-layered monitoring approach combining Kubernetes-native monitoring (Prometheus/Grafana) with external HTTP/TCP monitoring (Uptime Kuma). This provides comprehensive coverage from infrastructure metrics to service availability monitoring.
 
 ## Complete Monitoring Architecture
 
@@ -20,18 +20,13 @@ graph TB
     subgraph "Kubernetes Monitoring Stack"
         subgraph "Ingress Layer"
             TLB --> GRAFANA_ING[Grafana Ingress<br/>grafana.app.homelab]
-            TLB --> PAD_ING[PAD Ingress<br/>pad.app.homelab]
             GRAFANA_ING --> GRAFANA_SVC[Grafana Service]
-            PAD_ING --> PAD_SVC[PAD Service]
         end
         
         subgraph "Monitoring Namespace"
             GRAFANA_SVC --> GRAFANA_POD[Grafana Pod<br/>Unified Alerting Enabled]
             PROM_SVC[Prometheus Service] --> PROM_POD[Prometheus Pod<br/>30d Retention]
-            PAD_SVC --> PAD_POD[PAD Pod<br/>Prophet ML + Fourier<br/>Auto-retrains hourly]
             AM_SVC[AlertManager Service] --> AM_POD[AlertManager Pod<br/>Not Used]
-            
-            PAD_POD --> PROM_POD
             
             subgraph "Storage Layer"
                 PROM_POD --> PROM_DATA[Prometheus Storage<br/>500Gi on 2TB ZFS<br/>k3s-vm-still-fawn]
@@ -97,13 +92,6 @@ graph TB
 - **Storage**: Long-term metrics retention (30 days) on high-capacity storage
 - **Access**: `grafana.app.homelab` via Traefik Ingress
 
-### **ML-Powered Anomaly Detection (PAD)**
-- **Purpose**: Automated anomaly detection across ALL metrics using machine learning
-- **Scope**: Learns patterns from all Prometheus metrics without manual configuration
-- **Models**: Prophet (time-series forecasting) + Fourier (signal analysis)
-- **Retraining**: Hourly retraining with 7-day historical data learning
-- **Access**: `pad.app.homelab` via Traefik Ingress
-- **Node Placement**: Intelligent affinity (prefer pve → chief-horse → any available)
 
 ### **External Service Monitoring (Uptime Kuma)**  
 - **Purpose**: Service availability and HTTP/TCP endpoint monitoring
@@ -114,11 +102,10 @@ graph TB
 
 ## Key Architectural Decisions
 
-### **Triple Alerting Strategy**
-- **PAD**: ML-based anomaly detection for pattern deviations without manual configuration
+### **Dual Alerting Strategy**
 - **Grafana**: Complex metric-based alerts with statistical analysis and manual thresholds
 - **Uptime Kuma**: Simple up/down service monitoring with immediate notifications
-- **Redundancy**: All three systems can alert independently via different paths
+- **Redundancy**: Both systems can alert independently via different paths
 
 ### **Storage Strategy**
 - **Prometheus**: High-capacity 2TB ZFS storage for long-term metrics
@@ -126,27 +113,25 @@ graph TB
 - **Node Affinity**: Both run on `k3s-vm-still-fawn` (GPU node) for performance
 
 ### **Access Patterns**
-- **Production Access**: `grafana.app.homelab` and `pad.app.homelab` via Traefik (preferred)
+- **Production Access**: `grafana.app.homelab` via Traefik (preferred)
 - **Direct Access**: NodePort fallback for troubleshooting
 - **DNS Strategy**: Leverages `*.app.homelab` wildcard for seamless routing
 
 ### **Alert Philosophy**
-- **PAD**: ML-learned pattern deviation alerts (completely automated, no thresholds)
 - **Grafana**: Threshold-based alerts for resource exhaustion, performance degradation  
 - **Uptime Kuma**: Availability-focused alerts for service outages
-- **Consolidation**: Single email destination with different alert contexts and intelligence levels
+- **Consolidation**: Single email destination with different alert contexts
 
 ## Service Coverage Matrix
 
-| Service Type | Prometheus/Grafana | PAD (ML) | Uptime Kuma | Alert Method |
-|---|---|---|---|---|
-| **Anomaly Detection** | ⚠️ Manual rules | ✅ **Automated ML** | ❌ | PAD → Auto-detect |
-| **K8s Resource Usage** | ✅ Detailed metrics | ✅ Pattern learning | ❌ | Grafana/PAD → Email |
-| **Node Performance** | ✅ Historical trends | ✅ Auto-baseline | ❌ | Grafana/PAD → Email |
-| **Service Availability** | ⚠️ Limited | ❌ | ✅ Primary | Uptime Kuma → Email/HA |
-| **HTTP Endpoints** | ❌ | ❌ | ✅ Primary | Uptime Kuma → Email/HA |
-| **Infrastructure Health** | ⚠️ Metrics only | ✅ ML patterns | ✅ Primary | PAD/Uptime Kuma → Email/HA |
-| **External Connectivity** | ❌ | ❌ | ✅ Primary | Uptime Kuma → Email/HA |
+| Service Type | Prometheus/Grafana | Uptime Kuma | Alert Method |
+|---|---|---|---|
+| **K8s Resource Usage** | ✅ Detailed metrics | ❌ | Grafana → Email |
+| **Node Performance** | ✅ Historical trends | ❌ | Grafana → Email |
+| **Service Availability** | ⚠️ Limited | ✅ Primary | Uptime Kuma → Email/HA |
+| **HTTP Endpoints** | ❌ | ✅ Primary | Uptime Kuma → Email/HA |
+| **Infrastructure Health** | ⚠️ Metrics only | ✅ Primary | Uptime Kuma → Email/HA |
+| **External Connectivity** | ❌ | ✅ Primary | Uptime Kuma → Email/HA |
 
 ## Implementation References
 
