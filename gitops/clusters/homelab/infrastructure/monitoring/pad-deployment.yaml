@@ -67,11 +67,9 @@ spec:
         
         resources:
           requests:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "200m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"  # Allow bursts for ML training
+          # No limits - let it use what it needs, we'll monitor and set limits based on actual usage
         
         livenessProbe:
           httpGet:
