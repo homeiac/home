@@ -30,15 +30,19 @@ spec:
             - name: OLLAMA_PORT
               value: "11434"
             - name: OLLAMA_GPU_OVERHEAD
-              value: "1073741824"  # 1GB GPU memory overhead
+              value: "536870912"   # 512MB GPU memory overhead (reduced from 1GB)
             - name: OLLAMA_NUM_PARALLEL
-              value: "1"  # Single parallel to reduce CPU usage
+              value: "4"           # Increase parallel processing for single user
             - name: OLLAMA_MAX_LOADED_MODELS
-              value: "1"  # Limit to one model to prevent memory pressure
+              value: "1"           # Limit to one model to prevent memory pressure
             - name: OLLAMA_FLASH_ATTENTION
-              value: "true"  # Enable flash attention for GPU efficiency
+              value: "true"        # Enable flash attention for GPU efficiency
             - name: CUDA_VISIBLE_DEVICES
-              value: "0"  # Explicitly use GPU 0
+              value: "0"           # Explicitly use GPU 0
+            - name: OLLAMA_CONTEXT_LENGTH
+              value: "8192"        # Optimize context length for performance
+            - name: OLLAMA_KV_CACHE_TYPE
+              value: "f16"         # Use FP16 for KV cache (faster)
           ports:
             - containerPort: 11434
           resources:
