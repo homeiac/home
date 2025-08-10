@@ -44,3 +44,10 @@ spec:
           resources:
             limits:
               nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ollama-models
