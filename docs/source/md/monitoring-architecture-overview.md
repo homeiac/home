@@ -135,9 +135,15 @@ graph TB
 
 ## Implementation References
 
+### Core Monitoring
 - **Grafana Configuration**: `gitops/clusters/homelab/infrastructure/monitoring/`
 - **Uptime Kuma Setup**: [Complete Uptime Kuma Monitoring Setup Guide](uptime-kuma-monitoring-complete-guide.md)
 - **Email Alerting**: [Monitoring and Alerting Guide](monitoring-alerting-guide.md)
 - **Prometheus Storage**: [Prometheus 2TB Storage Migration Guide](prometheus-2tb-migration-guide.md)
+
+### Service-Specific Troubleshooting
+- **Ollama GPU Optimization**: [Ollama GPU Optimization Guide](guides/ollama-gpu-optimization-guide.md)
+- **Ollama Troubleshooting**: [Ollama Troubleshooting Runbook](troubleshooting/ollama-troubleshooting-runbook.md)
+- **Ollama High CPU Issue**: [Ollama High CPU Usage RCA](troubleshooting/ollama-high-cpu-usage-rca.md)
 
 This architecture provides comprehensive monitoring coverage while maintaining simplicity and redundancy across the homelab infrastructure.
