@@ -35,12 +35,15 @@ Client → DNS: service.app.homelab → Specific LoadBalancer IP → Pod
 - **Configuration**: Kubernetes Ingress resources with `ingressClassName: traefik`
 
 ### **MetalLB (LoadBalancer Provider)**
-- **IP Pool**: `192.168.4.80-120` (estimated from observed IPs)
+- **Main K3s Cluster**: `192.168.4.80-120`
+- **MicroK8s Dev Cluster**: `192.168.4.140-160` (Windows hybrid cluster)
 - **Assigned IPs**:
   - `192.168.4.80` - Traefik (HTTP router)
   - `192.168.4.81` - Ollama (direct service)
   - `192.168.4.82` - Stable Diffusion (direct service) 
   - `192.168.4.120` - Samba (TCP services)
+  - `192.168.4.140` - MicroK8s test service
+  - `192.168.4.141` - Netdata monitoring (MicroK8s dev cluster)
 
 ### **OPNsense Unbound DNS**
 - **Function**: Local DNS resolver with host overrides
