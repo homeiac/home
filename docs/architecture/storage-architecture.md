@@ -19,13 +19,13 @@ graph TB
     end
     
     subgraph "VM Layer - k3s-vm-still-fawn"
-        B --> G[/mnt/smb_data/prometheus]
-        D --> H[/mnt/smb_data]
-        F --> I[/var/lib/rancher]
+        B --> G[mnt/smb_data/prometheus]
+        D --> H[mnt/smb_data]
+        F --> I[var/lib/rancher]
         
-        G --> J[/dev/sdb - 20TB]
+        G --> J[dev/sdb - 20TB]
         H --> J
-        I --> K[/dev/sda - 400GB]
+        I --> K[dev/sda - 400GB]
     end
     
     subgraph "Proxmox ZFS Layer - still-fawn"
@@ -37,7 +37,7 @@ graph TB
     end
     
     subgraph "Client Access"
-        P[SMB Client] --> Q[//homelab/secure]
+        P[SMB Client] --> Q[homelab/secure]
         Q --> H
     end
 ```
@@ -49,9 +49,9 @@ graph TB
 ```mermaid
 flowchart LR
     A[Prometheus Writes] --> B[LocalVolume PV]
-    B --> C[/mnt/smb_data/prometheus]
+    B --> C[mnt/smb_data/prometheus]
     C --> D[ext4 filesystem]
-    D --> E[/dev/sdb]
+    D --> E[dev/sdb]
     E --> F[ZFS Volume]
     F --> G[local-20TB-zfs Pool]
     G --> H[Physical HDDs]
@@ -74,8 +74,8 @@ graph TB
     end
     
     subgraph "Target Storage"
-        D --> G[/mnt/smb_data/prometheus]
-        E --> H[/var/lib/rancher/k3s/...]
+        D --> G[mnt/smb_data/prometheus]
+        E --> H[var/lib/rancher/k3s/...]
         F --> I[Removed after migration]
     end
 ```
@@ -172,13 +172,13 @@ graph LR
     end
     
     subgraph "Guest OS View"
-        B --> E[/dev/sda - 400GB]
-        D --> F[/dev/sdb - 20TB]
+        B --> E[dev/sda - 400GB]
+        D --> F[dev/sdb - 20TB]
     end
     
     subgraph "Mount Points"
-        E --> G[/ root filesystem]
-        F --> H[/mnt/smb_data ext4]
+        E --> G[ root filesystem]
+        F --> H[mnt/smb_data ext4]
     end
 ```
 
@@ -221,7 +221,7 @@ graph TB
     end
     
     subgraph "Client Access"
-        H[SMB Client] --> I[//homelab/secure]
+        H[SMB Client] --> I[homelab/secure]
         I --> D
     end
 ```
