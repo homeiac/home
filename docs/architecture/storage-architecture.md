@@ -211,7 +211,7 @@ scsi1: local-20TB-zfs:vm-108-disk-0,backup=0,replicate=0,size=20000G
 ```mermaid
 graph TB
     A[Samba Pod] --> B[HostPath Volume]
-    B --> C[/mnt/smb_data]
+    B --> C[mnt/smb_data]
     
     subgraph "SMB Shares"
         C --> D[secure share]
