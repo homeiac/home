@@ -97,6 +97,50 @@ class TestLXCConfigManager:
         assert "dev0: /dev/bus/usb/003/004" in updated_content
         assert "lxc.cgroup2.devices.allow: c 189:* rwm" in updated_content
 
+    def test_update_config_pmxcfs_direct_write(self, config_manager, lxc_config_wrong_device):
+        """Test updating config on pmxcfs filesystem uses direct write."""
+        # Set up config path to look like pmxcfs
+        pmxcfs_path = Path("/etc/pve/lxc/113.conf")
+        config_manager.config_path = pmxcfs_path
+        
+        # Mock the file operations
+        with mock.patch.object(Path, 'exists', return_value=True), \
+             mock.patch.object(Path, 'read_text', return_value=lxc_config_wrong_device), \
+             mock.patch.object(Path, 'write_text') as mock_write:
+            
+            result = config_manager.update_config("/dev/bus/usb/003/003", dry_run=False)
+            
+            assert result is True
+            # Verify direct write was called (not atomic move)
+            mock_write.assert_called_once()
+            written_content = mock_write.call_args[0][0]
+            assert "dev0: /dev/bus/usb/003/003" in written_content
+
+    def test_update_config_regular_filesystem_atomic(self, config_manager, lxc_config_wrong_device, tmp_path):
+        """Test updating config on regular filesystem uses atomic replacement."""
+        # Regular path (not under /etc/pve/)
+        config_manager.config_path.write_text(lxc_config_wrong_device)
+        
+        with mock.patch('shutil.move') as mock_move:
+            result = config_manager.update_config("/dev/bus/usb/003/003", dry_run=False)
+            
+            assert result is True
+            # Verify atomic move was called
+            mock_move.assert_called_once()
+
+    def test_update_config_pmxcfs_write_failure(self, config_manager):
+        """Test handling write failure on pmxcfs."""
+        # Set up config path to look like pmxcfs
+        pmxcfs_path = Path("/etc/pve/lxc/113.conf")
+        config_manager.config_path = pmxcfs_path
+        
+        with mock.patch.object(Path, 'exists', return_value=True), \
+             mock.patch.object(Path, 'read_text', return_value="dev0: /dev/bus/usb/003/004\n"), \
+             mock.patch.object(Path, 'write_text', side_effect=PermissionError("Operation not permitted")):
+            
+            with pytest.raises(ConfigurationError, match="Failed to update config"):
+                config_manager.update_config("/dev/bus/usb/003/003", dry_run=False)
+
     def test_update_config_replace_device(self, config_manager, lxc_config_wrong_device):
         """Test updating config with replacement device."""
         config_manager.config_path.write_text(lxc_config_wrong_device)
