@@ -1,0 +1,26 @@
+[Unit]
+Description=Coral TPU Initialization and Frigate Configuration
+After=network.target pve-guests.service
+Before=pve-container@113.service
+Wants=pve-guests.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 10
+ExecStart=/root/scripts/coral-tpu-init.sh
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables for production
+Environment="DRY_RUN=false"
+Environment="DEBUG=true"
+Environment="LXC_ID=113"
+Environment="CORAL_INIT_DIR=/root/code"
+Environment="PYTHON_CMD=python3"
+Environment="LOG_FILE=/var/log/coral-tpu-init.log"
+
+[Install]
+WantedBy=multi-user.target

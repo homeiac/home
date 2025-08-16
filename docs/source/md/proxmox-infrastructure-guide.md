@@ -26,7 +26,7 @@ graph TB
         end
         
         subgraph "fun-bedbug - AMD Node"
-            fb_hw[AMD A9-9400 RADEON R5<br/>2 cores, 7.22GB RAM<br/>116GB local + 899GB ZFS<br/>Integrated graphics]
+            fb_hw[AMD A9-9400 RADEON R5<br/>2 cores, 7.22GB RAM<br/>116GB local + 2.72TB ZFS<br/>Integrated graphics]
         end
         
         subgraph "rapid-civet - OFFLINE"
@@ -160,7 +160,6 @@ graph TB
         ch_vm --> k3s_cluster
         
         k3s_cluster --> metallb[MetalLB LoadBalancer<br/>Pool: 192.168.4.80-120<br/>L2 Advertisement]
-        k3s_cluster --> longhorn[Longhorn Storage<br/>Default StorageClass<br/>Distributed across nodes]
         k3s_cluster --> flux[Flux GitOps<br/>Manages applications<br/>Syncs from Git repository]
     end
 ```
@@ -355,7 +354,7 @@ graph TB
         
         subgraph "fun-bedbug - AMD Node"  
             fb_local[116GB Local Disk<br/>System storage]
-            fb_zfs[899GB ZFS Pool<br/>local-1TB-backup]
+            fb_zfs[2.72TB ZFS Pool<br/>local-3TB-backup<br/>Thin Provisioned]
         end
     end
     
@@ -378,7 +377,7 @@ graph TB
 | pve | local-zfs | 421GB | VMs, containers | Compression, snapshots |
 | pve | local | 340GB | System storage | Standard filesystem |
 | chief-horse | local-256-gb-zfs | 230GB | VMs, containers | Compression, snapshots |
-| fun-bedbug | local-1TB-backup | 899GB | Backup storage | Compression, dedup |
+| fun-bedbug | local-3TB-backup | 2.72TB | Frigate NVR storage | Compression, thin provisioning |
 
 ## Network Configuration Details
 
