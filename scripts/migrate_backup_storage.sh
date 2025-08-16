@@ -1,6 +1,11 @@
 #!/bin/bash
 # Proxmox Backup Storage Migration Script
 # Migrates backup jobs from one storage to another (e.g., local to PBS)
+#
+# ⚠️  WARNING: THIS SCRIPT IS UNTESTED ⚠️
+# This script was created as part of backup infrastructure documentation
+# but has not been tested in production. Use at your own risk and always
+# test in a non-production environment first with --dry-run option.
 
 set -euo pipefail
 

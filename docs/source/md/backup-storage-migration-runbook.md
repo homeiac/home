@@ -16,6 +16,8 @@ This runbook provides step-by-step instructions for migrating Proxmox backup job
 - `jq` for JSON processing
 - Migration script: `/scripts/migrate_backup_storage.sh`
 
+> ⚠️ **IMPORTANT**: The migration script is currently untested in production environments. Always use `--dry-run` first and test thoroughly in non-production before using on critical systems.
+
 ### Pre-Migration Checklist
 
 - [ ] Verify target storage is configured and active
