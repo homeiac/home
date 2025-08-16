@@ -304,12 +304,14 @@ Purpose: Network Video Recorder with AI detection
 Resources:
   - CPU: 4 cores
   - RAM: 4GB
-  - Storage: 20GB ZFS
+  - Storage: 500GB from local-3TB-backup ZFS pool
 Network:
   - eth0: vmbr25gbe, DHCP
 Features:
   - High CPU usage for video processing
   - AI-powered object detection
+  - Storage migrated from Samsung T5 USB to 3TB HDD SATA
+  - 16x storage capacity increase (from 928GB to 2.72TB pool)
 Tags: community-script, nvr
 ```
 
@@ -489,6 +491,7 @@ graph TB
 - **Size**: 500GB quota
 - **Features**: No compression (CPU efficiency for Frigate node)
 - **Purpose**: Avoid /tmp space limitations during large backups
+- **Configuration**: Added `tmpdir: /local-3TB-backup/backup-tmpdir` to `/etc/vzdump.conf` on fun-bedbug
 
 ### Backup Management
 
