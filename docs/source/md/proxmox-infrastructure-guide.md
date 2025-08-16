@@ -379,6 +379,168 @@ graph TB
 | chief-horse | local-256-gb-zfs | 230GB | VMs, containers | Compression, snapshots |
 | fun-bedbug | local-3TB-backup | 2.72TB | Frigate NVR storage | Compression, thin provisioning |
 
+## Backup Infrastructure
+
+### Proxmox Backup Server (PBS) Architecture
+
+The homelab uses a centralized Proxmox Backup Server for comprehensive backup coverage with proper retention policies and deduplication.
+
+```mermaid
+graph TB
+    subgraph "Backup Infrastructure"
+        subgraph "PBS Container (still-fawn)"
+            pbs[proxmox-backup-server<br/>Container 103<br/>4GB RAM, 4 cores]
+            pbs_old[Old Storage<br/>local-2TB-zfs<br/>489GB available]
+            pbs_new[homelab-backup<br/>local-20TB-zfs<br/>20TB available]
+        end
+        
+        subgraph "Backup Sources"
+            critical[Critical Infrastructure<br/>101 OPNsense<br/>102 MAAS<br/>113 Frigate<br/>116 Home Assistant]
+            
+            k8s[Kubernetes Cluster<br/>107 k3s-pve<br/>108 k3s-still-fawn<br/>109 k3s-chief-horse]
+            
+            services[Support Services<br/>100 docker-pve<br/>111 cloudflared<br/>112 docker-fun-bedbug]
+        end
+        
+        subgraph "Backup Job"
+            single_job[backup-ff3d789f-f52b<br/>All VMs/LXCs<br/>Every 2 days @ 22:30<br/>Exclude: PBS (103)]
+        end
+    end
+    
+    critical --> single_job
+    k8s --> single_job
+    services --> single_job
+    single_job --> pbs_new
+    
+    subgraph "Storage Optimization"
+        tmpdir[fun-bedbug tmpdir<br/>500GB ZFS dataset<br/>No compression<br/>CPU efficiency]
+        k3s_storage[K3s VM Expansion<br/>400GB → 700GB<br/>+300GB for LLM models]
+    end
+```
+
+### Backup Configuration
+
+#### Single Job Approach ("One Job to Rule Them All")
+
+**Job ID**: `backup-ff3d789f-f52b`
+
+```json
+{
+  "all": 1,
+  "enabled": 1,
+  "exclude": "103",
+  "mode": "snapshot",
+  "schedule": "2,22:30",
+  "storage": "homelab-backup",
+  "prune-backups": {
+    "keep-daily": 3,
+    "keep-weekly": 2
+  },
+  "notes-template": "{{guestname}}"
+}
+```
+
+#### Coverage Details
+
+**Automatically Backed Up**:
+- **101** - OPNsense (Firewall/Router)
+- **102** - Ubuntu MAAS (Infrastructure provisioning)
+- **107** - k3s-vm-pve (Kubernetes control plane)
+- **108** - k3s-vm-still-fawn (Kubernetes GPU worker)
+- **109** - k3s-vm-chief-horse (Kubernetes worker)
+- **116** - Home Assistant OS (Home automation)
+- **100** - docker-pve (Docker services)
+- **111** - cloudflared (Tunnel service)
+- **112** - docker-fun-bedbug (Docker services)
+- **113** - frigate (NVR/Security cameras)
+
+**Excluded**:
+- **103** - proxmox-backup-server (Prevents recursive backups)
+
+#### Storage Specifications
+
+| Component | Size | Usage | Details |
+|-----------|------|-------|---------|
+| **homelab-backup datastore** | 20TB | 0.01% | PBS storage on local-20TB-zfs |
+| **Backup tmpdir** | 500GB | Variable | Dedicated ZFS dataset on fun-bedbug |
+| **Previous storage** | 489GB | N/A | Migrated from proxmox-backup-server |
+
+#### Retention Policy
+
+- **Daily backups**: 3 retained
+- **Weekly backups**: 2 retained  
+- **Schedule**: Every 2 days at 22:30 (off-peak)
+- **Compression**: zstd with pigz for efficiency
+
+### Storage Optimizations
+
+#### SMB Storage Fix
+- **Problem**: VM 108 had 19.8TB thick provisioned (actual usage: 1.8TB)
+- **Solution**: Converted to thin provisioning, freed 18TB space
+- **Command**: `zfs set refreservation=none local-20TB-zfs/vm-108-disk-0`
+
+#### K3s VM Expansion  
+- **Previous**: 400GB total, ~380GB available
+- **Current**: 700GB total, 437GB available (+300GB for LLM models)
+- **Process**: VM resize → partition resize → filesystem expansion
+
+#### Tmpdir Configuration
+- **Location**: `/local-3TB-backup/backup-tmpdir`
+- **Size**: 500GB quota
+- **Features**: No compression (CPU efficiency for Frigate node)
+- **Purpose**: Avoid /tmp space limitations during large backups
+
+### Backup Management
+
+#### Migration Script
+Use `/scripts/migrate_backup_storage.sh` to migrate between storage backends:
+
+```bash
+# Migrate all jobs from old to new storage
+./migrate_backup_storage.sh --from proxmox-backup-server --to homelab-backup --all
+
+# Dry run to preview changes
+./migrate_backup_storage.sh --from old-storage --to new-storage --all --dry-run
+```
+
+#### Monitoring Commands
+
+```bash
+# Check backup job status
+pvesh get /cluster/backup
+
+# Monitor PBS storage usage
+pvesm status | grep homelab-backup
+
+# View backup logs
+journalctl -u pveproxy | grep backup
+
+# Check individual job
+pvesh get /cluster/backup/backup-ff3d789f-f52b
+```
+
+#### Troubleshooting
+
+**Common Issues**:
+
+1. **Insufficient tmpdir space**
+   - Solution: Increase `/local-3TB-backup/backup-tmpdir` quota
+   - Monitor: `df -h /local-3TB-backup/backup-tmpdir`
+
+2. **PBS storage full**
+   - Check: `pvesm status | grep homelab-backup`
+   - Solution: Adjust retention or expand storage
+
+3. **Backup job failures**
+   - Logs: `journalctl -u pveproxy | grep vzdump`
+   - Check: VM/LXC status during backup window
+
+**Performance Notes**:
+- Backups run during off-peak hours (22:30)
+- zstd compression with pigz for CPU efficiency
+- Snapshots minimize downtime
+- Deduplication reduces storage usage
+
 ## Network Configuration Details
 
 ### Bridge Configurations
