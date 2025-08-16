@@ -186,20 +186,36 @@ class LXCConfigManager:
         if not self._validate_config_content(new_content):
             raise ConfigurationError("Generated config content is invalid")
 
-        # Write to temporary file first
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as tmp_file:
-            tmp_file.write(new_content)
-            tmp_path = Path(tmp_file.name)
+        # Check if this is a pmxcfs filesystem (Proxmox cluster filesystem)
+        is_pmxcfs = str(self.config_path).startswith('/etc/pve/')
+        
+        if is_pmxcfs:
+            # For pmxcfs, use direct write (atomic operations not supported)
+            logger.debug("Using direct write for pmxcfs filesystem")
+            try:
+                self.config_path.write_text(new_content)
+                logger.info("Configuration updated successfully (direct write)")
+                return True
+            except (OSError, PermissionError) as e:
+                raise ConfigurationError(f"Failed to update config: {e}") from e
+        else:
+            # For regular filesystems, use atomic replacement
+            logger.debug("Using atomic replacement for regular filesystem")
+            
+            # Write to temporary file first
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as tmp_file:
+                tmp_file.write(new_content)
+                tmp_path = Path(tmp_file.name)
 
-        try:
-            # Atomic move to final location
-            shutil.move(str(tmp_path), str(self.config_path))
-            logger.info("Configuration updated successfully")
-            return True
-        except (OSError, PermissionError) as e:
-            # Cleanup temp file
-            tmp_path.unlink(missing_ok=True)
-            raise ConfigurationError(f"Failed to update config: {e}") from e
+            try:
+                # Atomic move to final location
+                shutil.move(str(tmp_path), str(self.config_path))
+                logger.info("Configuration updated successfully (atomic)")
+                return True
+            except (OSError, PermissionError) as e:
+                # Cleanup temp file
+                tmp_path.unlink(missing_ok=True)
+                raise ConfigurationError(f"Failed to update config: {e}") from e
 
     def _update_config_content(self, content: str, device_path: str) -> str:
         """Update configuration content with new device path."""
