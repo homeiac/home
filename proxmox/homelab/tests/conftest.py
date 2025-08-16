@@ -206,3 +206,7 @@ def mock_uptime_kuma_api():
         mock_get.return_value.json.return_value = {"monitors": []}
         
         yield {"post": mock_post, "get": mock_get}
+
+
+# Import coral fixtures
+from .coral_fixtures import *  # noqa
