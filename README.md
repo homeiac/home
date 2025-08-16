@@ -35,12 +35,15 @@ for details on bare metal installs and container provisioning.
 
 * [Ollama GPU Server Guide](proxmox/guides/ollama-gpu-server.md) - deploy via Flux
 * [Ollama Service Guide](proxmox/guides/ollama-service-guide.md)
+* [Coral TPU Automation System](proxmox/homelab/README_CORAL_AUTOMATION.md) - automated Coral TPU initialization
+* [Frigate Storage Migration Report](docs/source/md/frigate-storage-migration-report.md) - Samsung T5 to 3TB HDD migration
 * [Stable Diffusion Web UI Guide](proxmox/guides/stable-diffusion-webui-guide.md)
 * [Flux Bootstrap Guide](proxmox/guides/flux-guide.md)
 * [MetalLB Setup Guide](proxmox/guides/metallb-guide.md)
 * [Monitoring Setup Guide](proxmox/guides/monitoring-guide.md) - deployed via Flux
 * [Monitoring Troubleshooting](monitoring/docs/troubleshooting.md) - fix common issues
 * [K3s Too Many Open Files Runbook](docs/source/md/runbooks/too-many-open-files-k3s.md) - troubleshoot descriptor errors
+* [Coral TPU Automation Runbook](docs/source/md/coral-tpu-automation-runbook.md) - maintain and troubleshoot automated Coral TPU initialization
 * [Docs Workflow Guide](docs/source/md/docs_workflow_guide.md)
   * documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
