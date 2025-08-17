@@ -54,7 +54,10 @@ Host *.maas
 
 ### Documentation Quality
 - Validate Markdown: `markdownlint`
-- **Mermaid Diagrams**: Ensure compliance with Mermaid.js syntax - parentheses are not allowed in node/edge descriptions
+- **Mermaid Diagrams**: Ensure compliance with Mermaid.js syntax:
+  - Parentheses are not allowed in node/edge descriptions
+  - Forward slash at the beginning of node descriptions (e.g., `[/text]`) creates special rhomboid shapes - avoid unless intended
+  - For file paths in nodes, use plain text without leading slash (e.g., `[etc/resolv.conf]` instead of `[/etc/resolv.conf]`)
 
 ### GitHub Issues and Git Workflow
 - Create GitHub issue before starting work: `gh issue create --title "Brief description" --body "Detailed description"`

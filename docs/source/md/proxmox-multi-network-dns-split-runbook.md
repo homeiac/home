@@ -63,7 +63,7 @@ graph TD
 
 ```mermaid
 graph LR
-    A[Application] --> B[/etc/resolv.conf]
+    A[Application] --> B[etc/resolv.conf]
     B --> C[systemd-resolved stub 127.0.0.53]
     
     C --> D{Split DNS Routing}
