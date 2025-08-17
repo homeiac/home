@@ -379,7 +379,9 @@ graph TB
 | pve | local-zfs | 421GB | VMs, containers | Compression, snapshots |
 | pve | local | 340GB | System storage | Standard filesystem |
 | chief-horse | local-256-gb-zfs | 230GB | VMs, containers | Compression, snapshots |
-| fun-bedbug | local-3TB-backup | 2.72TB | Frigate NVR storage | Compression, thin provisioning |
+| fun-bedbug | local-3TB-backup | 2.72TB | Frigate NVR, backup storage | Compression, thin provisioning, **POSIX ACLs** |
+
+**Note**: The `local-3TB-backup` dataset requires POSIX ACL support (`acltype=posixacl`) for Proxmox backup compatibility. Other datasets may use `acltype=off` for CPU performance optimization.
 
 ## Backup Infrastructure
 
@@ -415,7 +417,7 @@ graph TB
     single_job --> pbs_new
     
     subgraph "Storage Optimization"
-        tmpdir[fun-bedbug tmpdir<br/>500GB ZFS dataset<br/>No compression<br/>CPU efficiency]
+        tmpdir[fun-bedbug tmpdir<br/>500GB ZFS dataset<br/>No compression<br/>POSIX ACLs enabled<br/>CPU efficiency]
         k3s_storage[K3s VM Expansion<br/>400GB → 700GB<br/>+300GB for LLM models]
     end
 ```
@@ -493,6 +495,30 @@ graph TB
 - **Purpose**: Avoid /tmp space limitations during large backups
 - **Configuration**: Added `tmpdir: /local-3TB-backup/backup-tmpdir` to `/etc/vzdump.conf` on fun-bedbug
 
+#### ZFS ACL Configuration for Backup Compatibility
+
+**CRITICAL**: ZFS datasets optimized for CPU performance (with `acltype=off`) can cause Proxmox backup failures. When rsync attempts to preserve ACLs during backup operations, it fails with "Operation not supported" errors.
+
+**Required Configuration**:
+```bash
+# Enable POSIX ACL support on backup storage datasets
+zfs set acltype=posixacl local-3TB-backup
+zfs set acltype=posixacl local-3TB-backup/backup-tmpdir
+```
+
+**Performance Trade-offs**:
+- **CPU Performance**: `acltype=off` provides maximum CPU efficiency
+- **Backup Compatibility**: `acltype=posixacl` required for Proxmox backup operations
+- **Recommendation**: Enable ACLs on backup storage, optimize CPU performance on other datasets
+
+**Verification**:
+```bash
+# Check current ACL configuration
+zfs get acltype <dataset-name>
+
+# Should return: acltype=posix for backup datasets
+```
+
 ### Backup Management
 
 #### Migration Script
@@ -537,6 +563,20 @@ pvesh get /cluster/backup/backup-ff3d789f-f52b
 3. **Backup job failures**
    - Logs: `journalctl -u pveproxy | grep vzdump`
    - Check: VM/LXC status during backup window
+
+4. **ACL-related backup failures**
+   - **Symptoms**: rsync errors with "Operation not supported" for ACL operations
+   - **Root Cause**: ZFS dataset has `acltype=off` (CPU performance optimization)
+   - **Solution**: Enable POSIX ACL support on backup storage datasets
+   ```bash
+   # Fix ACL support on backup datasets
+   zfs set acltype=posixacl local-3TB-backup
+   zfs set acltype=posixacl local-3TB-backup/backup-tmpdir
+   
+   # Verify configuration
+   zfs get acltype local-3TB-backup local-3TB-backup/backup-tmpdir
+   ```
+   - **Prevention**: Include ACL considerations when optimizing ZFS for CPU performance
 
 **Performance Notes**:
 - Backups run during off-peak hours (22:30)
