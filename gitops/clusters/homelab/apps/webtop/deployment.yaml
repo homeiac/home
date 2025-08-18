@@ -73,6 +73,9 @@ spec:
           mountPath: /config
         - name: dev-shm
           mountPath: /dev/shm
+        - name: init-scripts
+          mountPath: /custom-cont-init.d
+          readOnly: true
       volumes:
       - name: config
         persistentVolumeClaim:
@@ -83,3 +86,7 @@ spec:
         emptyDir:
           medium: Memory
           sizeLimit: 2Gi
+      - name: init-scripts
+        configMap:
+          name: webtop-init-scripts
+          defaultMode: 0755

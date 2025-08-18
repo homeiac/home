@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webtop-init-scripts
+  namespace: webtop
+data:
+  01-install-essentials.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Installing essential development tools..."
+    
+    # Update package list
+    apt-get update
+    
+    # Install essential CLI tools (quick to install)
+    apt-get install -y \
+      vim \
+      neovim \
+      atop \
+      htop \
+      tmux \
+      git \
+      curl \
+      wget \
+      jq \
+      ripgrep \
+      fd-find \
+      tree \
+      ncdu \
+      build-essential \
+      python3 \
+      python3-pip \
+      python3-venv \
+      golang \
+      nodejs \
+      npm
+    
+    # Install GitHub CLI
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+    apt-get update
+    apt-get install -y gh
+    
+    # Install kubectl for Kubernetes management
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    rm kubectl
+    
+    # Install Flux CLI for GitOps
+    curl -s https://fluxcd.io/install.sh | bash
+    
+    # Clean up
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    
+    echo "Essential tools installation complete!"
+  
+  02-setup-proot-apps.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "Setting up proot-apps for user-space package management..."
+    
+    # Download and install proot-apps if not already present
+    if [ ! -f /usr/local/bin/proot-apps ]; then
+      wget -O /usr/local/bin/proot-apps https://github.com/linuxserver/proot-apps/releases/latest/download/proot-apps-x86_64
+      chmod +x /usr/local/bin/proot-apps
+    fi
+    
+    # Create helper script for user to install major applications
+    cat > /config/install-vscode.sh << 'EOF'
+    #!/bin/bash
+    echo "Installing VS Code via proot-apps (this will persist across restarts)..."
+    proot-apps install vscode
+    echo "VS Code installation complete! You can launch it from the application menu."
+    EOF
+    chmod +x /config/install-vscode.sh
+    
+    # Create a list of available proot apps
+    cat > /config/available-proot-apps.txt << 'EOF'
+    # Available proot-apps that will persist:
+    # To install, run: proot-apps install <app-name>
+    
+    # Development Tools:
+    - vscode        # Visual Studio Code
+    - sublime       # Sublime Text
+    - atom          # Atom Editor
+    
+    # Browsers:
+    - firefox       # Firefox Browser
+    - chrome        # Google Chrome
+    - brave         # Brave Browser
+    
+    # Communication:
+    - discord       # Discord
+    - slack         # Slack
+    
+    # Other Tools:
+    - filezilla     # FTP Client
+    - postman       # API Testing
+    
+    # To list all available apps: proot-apps list
+    # To search for an app: proot-apps search <keyword>
+    EOF
+    
+    echo "proot-apps setup complete! Check /config/available-proot-apps.txt for installable applications."
