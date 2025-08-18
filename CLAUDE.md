@@ -60,8 +60,12 @@ Host *.maas
   - For file paths in nodes, use plain text without leading slash (e.g., `[etc/resolv.conf]` instead of `[/etc/resolv.conf]`)
 
 ### GitHub Issues and Git Workflow
-- Create GitHub issue before starting work: `gh issue create --title "Brief description" --body "Detailed description"`
-- Reference issue in commits: Use format "fixes #123" or "refs #123" in commit messages
+**Standard GitHub Workflow ("do gh workflow")**: Complete 3-step process for all tasks:
+1. **Create GitHub issue first**: `gh issue create --title "Brief description" --body "Detailed description with acceptance criteria"`
+2. **Git commit with issue reference**: Use "fixes #123" or "closes #123" in commit message
+3. **Git push**: Automatically closes the GitHub issue when pushed to main/master branch
+
+**Important**: Always create the GitHub issue BEFORE doing the work, then reference it in commits for automatic closure.
 - GitHub CLI authentication: `gh auth login` (follow prompts for web-based authentication)
 
 ## Architecture Structure
