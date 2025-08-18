@@ -4,69 +4,40 @@ metadata:
   name: webtop-init-scripts
   namespace: webtop
 data:
-  01-install-essentials.sh: |
+  01-setup-ssh-rdp.sh: |
     #!/bin/bash
     set -e
     
-    echo "Installing essential development tools..."
+    echo "Setting up SSH and RDP services..."
     
-    # Update package list
+    # Update package list and install SSH/RDP servers
     apt-get update
-    
-    # Install essential CLI tools (quick to install)
-    apt-get install -y \
-      vim \
-      neovim \
-      atop \
-      htop \
-      tmux \
-      git \
-      curl \
-      wget \
-      jq \
-      ripgrep \
-      fd-find \
-      tree \
-      ncdu \
-      build-essential \
-      python3 \
-      python3-pip \
-      python3-venv \
-      golang \
-      openssh-server \
-      xrdp
-    
-    # Install Node.js from NodeSource (includes npm)
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-    apt-get install -y nodejs
-    
-    # Install GitHub CLI
-    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-    apt-get update
-    apt-get install -y gh
-    
-    # Install kubectl for Kubernetes management
-    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    rm kubectl
-    
-    # Install Flux CLI for GitOps
-    curl -s https://fluxcd.io/install.sh | bash
+    apt-get install -y openssh-server xrdp
     
     # Configure SSH
     mkdir -p /var/run/sshd
-    # Allow password authentication for the custom user
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
     sed -i 's/#Port 22/Port 22/' /etc/ssh/sshd_config
     
-    # Configure xRDP to use the existing X session
+    # Setup SSH key for gshiva user
+    if [ ! -d /config/.ssh ]; then
+      mkdir -p /config/.ssh
+      chmod 700 /config/.ssh
+    fi
+    
+    # Add your public key (replace with your actual key)
+    cat > /config/.ssh/authorized_keys << 'EOF'
+# Add your SSH public key here
+# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-email@example.com
+EOF
+    chmod 600 /config/.ssh/authorized_keys
+    
+    # Configure xRDP
     echo "xfce4-session" > /etc/skel/.xsession
     sed -i 's/port=3389/port=3389/' /etc/xrdp/xrdp.ini
     
-    # Start SSH and xRDP services
+    # Start services
     service ssh start
     service xrdp start
     
@@ -74,87 +45,7 @@ data:
     apt-get clean
     rm -rf /var/lib/apt/lists/*
     
-    echo "Essential tools installation complete!"
+    echo "SSH and RDP setup complete!"
     echo "SSH service started on port 22"
     echo "xRDP service started on port 3389"
-  
-  02-setup-proot-apps.sh: |
-    #!/bin/bash
-    set -e
-    
-    echo "Setting up proot-apps for user-space package management..."
-    
-    # Download and install proot-apps if not already present
-    if [ ! -f /usr/local/bin/proot-apps ]; then
-      wget -O /usr/local/bin/proot-apps https://github.com/linuxserver/proot-apps/releases/latest/download/proot-apps-x86_64
-      chmod +x /usr/local/bin/proot-apps
-    fi
-    
-    # Create helper script for user to install major applications
-    cat > /config/install-vscode.sh << 'EOF'
-    #!/bin/bash
-    echo "Installing VS Code via proot-apps (this will persist across restarts)..."
-    proot-apps install vscode
-    echo "VS Code installation complete! You can launch it from the application menu."
-    EOF
-    chmod +x /config/install-vscode.sh
-    
-    # Create a list of available proot apps
-    cat > /config/available-proot-apps.txt << 'EOF'
-    # Available proot-apps that will persist:
-    # To install, run: proot-apps install <app-name>
-    
-    # Development Tools:
-    - vscode        # Visual Studio Code
-    - sublime       # Sublime Text
-    - atom          # Atom Editor
-    
-    # Browsers:
-    - firefox       # Firefox Browser
-    - chrome        # Google Chrome
-    - brave         # Brave Browser
-    
-    # Communication:
-    - discord       # Discord
-    - slack         # Slack
-    
-    # Other Tools:
-    - filezilla     # FTP Client
-    - postman       # API Testing
-    
-    # To list all available apps: proot-apps list
-    # To search for an app: proot-apps search <keyword>
-    EOF
-    
-    echo "proot-apps setup complete! Check /config/available-proot-apps.txt for installable applications."
-  
-  99-readiness-check.sh: |
-    #!/bin/bash
-    # Readiness check script to ensure essential tools are installed
-    
-    # Check if essential CLI tools are installed
-    for tool in vim git python3 curl wget; do
-      if ! command -v $tool &> /dev/null; then
-        echo "$tool not found"
-        exit 1
-      fi
-    done
-    
-    # Check if SSH is running (if installed)
-    if [ -f /usr/sbin/sshd ]; then
-      if ! pgrep sshd > /dev/null; then
-        echo "SSH not running"
-        exit 1
-      fi
-    fi
-    
-    # Check if xRDP is running (if installed)
-    if [ -f /usr/sbin/xrdp ]; then
-      if ! pgrep xrdp > /dev/null; then
-        echo "xRDP not running"
-        exit 1
-      fi
-    fi
-    
-    echo "All services ready"
-    exit 0
+    echo "SSH key configured in /config/.ssh/authorized_keys"
