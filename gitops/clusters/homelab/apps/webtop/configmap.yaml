@@ -34,7 +34,9 @@ data:
       python3-venv \
       golang \
       nodejs \
-      npm
+      npm \
+      openssh-server \
+      xrdp
     
     # Install GitHub CLI
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -51,11 +53,28 @@ data:
     # Install Flux CLI for GitOps
     curl -s https://fluxcd.io/install.sh | bash
     
+    # Configure SSH
+    mkdir -p /var/run/sshd
+    # Allow password authentication for the custom user
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+    sed -i 's/#Port 22/Port 22/' /etc/ssh/sshd_config
+    
+    # Configure xRDP to use the existing X session
+    echo "xfce4-session" > /etc/skel/.xsession
+    sed -i 's/port=3389/port=3389/' /etc/xrdp/xrdp.ini
+    
+    # Start SSH and xRDP services
+    service ssh start
+    service xrdp start
+    
     # Clean up
     apt-get clean
     rm -rf /var/lib/apt/lists/*
     
     echo "Essential tools installation complete!"
+    echo "SSH service started on port 22"
+    echo "xRDP service started on port 3389"
   
   02-setup-proot-apps.sh: |
     #!/bin/bash
