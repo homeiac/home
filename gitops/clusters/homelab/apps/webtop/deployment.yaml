@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webtop
+  namespace: webtop
+  labels:
+    app: webtop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webtop
+  template:
+    metadata:
+      labels:
+        app: webtop
+    spec:
+      nodeSelector:
+        hardware-type: nvidia-gpu
+      containers:
+      - name: dind
+        image: docker:27-dind
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: docker-storage
+          mountPath: /var/lib/docker
+      - name: webtop
+        image: lscr.io/linuxserver/webtop:ubuntu-xfce
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "America/Los_Angeles"
+        - name: SUBFOLDER
+          value: "/"
+        - name: TITLE
+          value: "Development Environment"
+        - name: DOCKER_HOST
+          value: "tcp://localhost:2375"
+        ports:
+        - containerPort: 3000
+          name: http
+        - containerPort: 3001
+          name: https
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            nvidia.com/gpu: 1
+            memory: "8Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: dev-shm
+          mountPath: /dev/shm
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: webtop-config
+      - name: docker-storage
+        emptyDir: {}
+      - name: dev-shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi

@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: traefik
+  name: webtop-ingress
+  namespace: webtop
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: webtop.app.homelab
+    http:
+      paths:
+      - backend:
+          service:
+            name: webtop
+            port:
+              number: 3000
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - webtop.app.homelab
+    secretName: webtop-tls

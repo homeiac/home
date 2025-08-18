@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webtop
+  labels:
+    name: webtop
+    app.kubernetes.io/name: webtop
+    app.kubernetes.io/part-of: development-tools

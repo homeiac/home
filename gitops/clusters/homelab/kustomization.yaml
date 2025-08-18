@@ -9,4 +9,5 @@ resources:
   - apps/ollama
   - apps/stable-diffusion
   - apps/samba
+  - apps/webtop
 
