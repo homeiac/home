@@ -23,6 +23,13 @@ spec:
         env:
         - name: DOCKER_TLS_CERTDIR
           value: ""
+        - name: DOCKER_HOST
+          value: "tcp://127.0.0.1:2375"
+        args:
+        - dockerd
+        - --host=tcp://127.0.0.1:2375
+        - --host=unix:///var/run/docker.sock
+        - --tls=false
         securityContext:
           privileged: true
         volumeMounts:
@@ -42,7 +49,7 @@ spec:
         - name: TITLE
           value: "Development Environment"
         - name: DOCKER_HOST
-          value: "tcp://localhost:2375"
+          value: "tcp://127.0.0.1:2375"
         - name: CUSTOM_USER
           value: "gshiva"
         - name: PASSWORD
