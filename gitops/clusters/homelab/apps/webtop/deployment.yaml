@@ -43,6 +43,17 @@ spec:
           value: "Development Environment"
         - name: DOCKER_HOST
           value: "tcp://localhost:2375"
+        - name: CUSTOM_USER
+          value: "gshiva"
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webtop-auth
+              key: password
+        - name: SUDO_ACCESS
+          value: "true"
+        - name: DOCKER_MODS
+          value: "linuxserver/mods:universal-docker"
         ports:
         - containerPort: 3000
           name: http
