@@ -72,6 +72,42 @@ spec:
             nvidia.com/gpu: 1
             memory: "8Gi"
             cpu: "4"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Check if essential CLI tools are available
+              for tool in vim git python3 curl wget; do
+                if ! command -v $tool &> /dev/null; then
+                  exit 1
+                fi
+              done
+              # Check if SSH is running
+              if [ -f /usr/sbin/sshd ] && ! pgrep sshd > /dev/null; then
+                exit 1
+              fi
+              # Check if xRDP is running
+              if [ -f /usr/sbin/xrdp ] && ! pgrep xrdp > /dev/null; then
+                exit 1
+              fi
+              exit 0
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
         volumeMounts:
         - name: config
           mountPath: /config

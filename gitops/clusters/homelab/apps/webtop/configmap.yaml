@@ -125,3 +125,34 @@ data:
     EOF
     
     echo "proot-apps setup complete! Check /config/available-proot-apps.txt for installable applications."
+  
+  99-readiness-check.sh: |
+    #!/bin/bash
+    # Readiness check script to ensure essential tools are installed
+    
+    # Check if essential CLI tools are installed
+    for tool in vim git python3 curl wget; do
+      if ! command -v $tool &> /dev/null; then
+        echo "$tool not found"
+        exit 1
+      fi
+    done
+    
+    # Check if SSH is running (if installed)
+    if [ -f /usr/sbin/sshd ]; then
+      if ! pgrep sshd > /dev/null; then
+        echo "SSH not running"
+        exit 1
+      fi
+    fi
+    
+    # Check if xRDP is running (if installed)
+    if [ -f /usr/sbin/xrdp ]; then
+      if ! pgrep xrdp > /dev/null; then
+        echo "xRDP not running"
+        exit 1
+      fi
+    fi
+    
+    echo "All services ready"
+    exit 0
