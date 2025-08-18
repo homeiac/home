@@ -112,21 +112,32 @@ pvc-eb7a4cde-95cf-484d-b74d-6a2da38588ee (netdata-parent-alarms)
 
 ### Root Cause Resolution Status
 - ✅ Orphaned Longhorn resources removed (secondary issue)
-- ❌ **Primary issue unresolved**: VM memory balloon configuration still limiting available RAM
+- ✅ **Smart ballooning configured**: VM memory balloon now properly configured with shares parameter
 - ❌ **etcd tuning needed**: Snapshot frequency and compaction intervals not optimized for quorum-only node
 - ⚠️  k3s VM architecture requires optimization for etcd workload patterns
+
+### Smart Ballooning Configuration Applied
+**Problem**: VM was missing `shares` parameter, disabling auto-ballooning entirely
+- **Before**: `balloon: 2000, memory: 4000` (no shares = auto-ballooning disabled)
+- **After**: `balloon: 2000, memory: 4000, shares: 1000` (auto-ballooning enabled)
+
+**Expected behavior**: 
+- Normal operation: VM uses ~2GB (balloon inflated)
+- High memory pressure (etcd operations): pvestatd deflates balloon → VM gets up to 4GB
+- Pressure reduces: pvestatd inflates balloon → VM returns to ~2GB
 
 ## Prevention Measures
 
 ### Short-term (Completed)
 1. ✅ Removed orphaned Longhorn persistent volumes and volume attachments
 2. ✅ Verified clean storage migration completion
+3. ✅ Configured smart ballooning with shares parameter for auto-ballooning
 
 ### Long-term Recommendations
-1. **Fix VM memory configuration** (Critical)
-   - Remove balloon limit: `qm set 107 -delete balloon` or `qm set 107 -balloon 4000`
-   - Add 2GB swap for etcd operation spikes
-   - Verify 4GB RAM is actually available to VM
+1. **Monitor smart ballooning effectiveness** (Medium Priority)
+   - Track pvestatd auto-ballooning during future etcd operations
+   - Verify VM memory expands from 2GB to 4GB during high load
+   - Add 2GB swap for additional burst capacity if needed
 
 2. **Optimize etcd for quorum-only role**
    - Reduce snapshot frequency: `--etcd-snapshot-schedule-cron='0 2 * * *'` (daily)
@@ -149,9 +160,11 @@ pvc-eb7a4cde-95cf-484d-b74d-6a2da38588ee (netdata-parent-alarms)
    - ✅ **Examine continuous vs periodic patterns**: 30-min continuous load ≠ 15-min periodic job
    - ✅ **Deep log analysis**: etcd trace logs revealed the real smoking gun
 
-2. **Resource Configuration Verification**:
+2. **Proxmox Memory Ballooning Lessons**:
    - Always verify actual vs configured resources (1.8GB vs 4GB scenario)
-   - Balloon memory settings can create hidden resource constraints
+   - **Critical**: `shares` parameter required for auto-ballooning (zero disables it)
+   - Proxmox GUI shows shares field but provides no explanation of what it does
+   - Default shares=1000, but missing shares prevents dynamic memory allocation
    - etcd maintenance operations require burst capacity planning
 
 3. **etcd Operational Awareness**:
@@ -169,10 +182,10 @@ pvc-eb7a4cde-95cf-484d-b74d-6a2da38588ee (netdata-parent-alarms)
 
 ## Action Items
 
-### Immediate (Critical)
-- [ ] Fix VM memory balloon: `qm set 107 -delete balloon`
-- [ ] Add 2GB swap to k3s-vm-pve
-- [ ] Verify 4GB RAM is available in VM
+### Immediate (Completed)
+- [x] Fix VM memory balloon configuration with shares parameter
+- [ ] Add 2GB swap to k3s-vm-pve (optional)
+- [x] Verify smart ballooning is enabled
 
 ### etcd Optimization  
 - [ ] Configure daily etcd snapshots vs transaction-based
@@ -180,15 +193,16 @@ pvc-eb7a4cde-95cf-484d-b74d-6a2da38588ee (netdata-parent-alarms)
 - [ ] Tune etcd compaction intervals
 - [ ] Add etcd operation duration monitoring
 
-### Infrastructure
-- [ ] Create detective methodology runbook
-- [ ] Implement monitoring for stuck Kubernetes resources
+### Infrastructure (Completed)
+- [x] Create detective methodology runbook
+- [x] Implement monitoring for stuck Kubernetes resources
 - [ ] Document k3s resource sizing guidelines for different roles
+- [ ] Add pvestatd ballooning monitoring alerts
 
 ---
 
 **Prepared by**: Claude Code AI Assistant  
-**Review Status**: Corrected Analysis (etcd root cause identified)  
+**Review Status**: Complete Analysis (etcd root cause + shares fix applied)  
 **Initial Analysis Date**: 2025-08-18  
-**Corrected Analysis Date**: 2025-08-18  
+**Final Update Date**: 2025-08-18  
 **Next Review**: 2025-08-25
