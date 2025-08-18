@@ -98,6 +98,55 @@ graph TB
 
 ## Virtual Machine Configurations
 
+### Development Environment
+
+#### Webtop Development Environment
+
+The homelab includes a cloud-based development environment using Webtop, deployed via Kubernetes GitOps for scalability and management.
+
+```yaml
+Deployment: K3s cluster via GitOps (Flux)
+Purpose: Cloud development environment with GPU acceleration
+Access: https://webtop.app.homelab
+Container: linuxserver/webtop:ubuntu-xfce
+```
+
+**Key Features:**
+- **GPU Acceleration**: RTX 3070 time-slicing for AI/ML development
+- **Docker-in-Docker**: VS Code devcontainer support via sidecar pattern
+- **Persistent Storage**: 50Gi PVC for home directory persistence
+- **Secure Access**: Traefik Ingress with TLS termination
+- **Development Ready**: Ubuntu XFCE desktop with development tools
+
+**GitOps Configuration:**
+```
+Location: gitops/clusters/homelab/apps/webtop/
+Resources:
+  - namespace.yaml - Dedicated namespace for development tools
+  - pvc.yaml - 50Gi local-path persistent volume claim
+  - deployment.yaml - Main deployment with GPU and DinD sidecar
+  - service.yaml - LoadBalancer service (192.168.4.120)
+  - ingress.yaml - Traefik ingress for webtop.app.homelab
+Network:
+  - LoadBalancer: MetalLB assigns IP from 192.168.4.80-120 pool
+  - Ingress: Traefik routes webtop.app.homelab → LoadBalancer
+  - Direct Access: http://192.168.4.120:3000
+Storage:
+  - PVC: 50Gi local-path storage mounted to /config
+  - Persistence: Home directory survives pod restarts and updates
+GPU:
+  - Device: nvidia.com/gpu resource request
+  - Sharing: Time-slicing with other GPU workloads (Ollama, Stable Diffusion)
+  - Verification: nvidia-smi available within desktop environment
+```
+
+**Development Workflow:**
+1. Access via web browser at https://webtop.app.homelab
+2. Full Ubuntu XFCE desktop environment with GPU acceleration
+3. Docker-in-Docker for modern containerized development
+4. Persistent home directory maintains development environment
+5. Integration with homelab AI services (Ollama backend)
+
 ### Core Infrastructure VMs
 
 #### OPNsense Firewall (VM 101)
@@ -666,7 +715,7 @@ graph TB
         
         subgraph "Service Access Patterns"
             wildcard --> traefik[Traefik Ingress<br/>192.168.4.82<br/>HTTP/HTTPS proxy]
-            traefik --> k3s_services[K3s Services<br/>- ollama.app.homelab<br/>- stable-diffusion.app.homelab]
+            traefik --> k3s_services[K3s Services<br/>- ollama.app.homelab<br/>- stable-diffusion.app.homelab<br/>- webtop.app.homelab]
             
             opnsense_dns --> direct_services[Direct Service Access<br/>- samba.homelab → 192.168.4.120<br/>- monitoring services<br/>- management interfaces]
         end
