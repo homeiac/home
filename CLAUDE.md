@@ -600,6 +600,30 @@ kubectl auth can-i --list --as=system:serviceaccount:namespace:account
 ### **Integration-Specific Guidelines**
 This methodology applies to all homelab integrations: monitoring tools, AI services, network configuration, storage management, etc. The goal is transforming potentially frustrating technical work into systematic, documented, repeatable processes that catch "optional but critical" configuration gaps before they cause hours of debugging.
 
+## Service-Specific Update Policies
+
+### **Frigate NVR Update Policy (CRITICAL)**
+**MANDATORY**: Before any Frigate upgrade discussion, ALWAYS check PVE Helper Scripts version support first:
+
+```bash
+# 1. Check PVE Helper Scripts current version
+curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/frigate-install.sh | grep -E "(v[0-9]+\.[0-9]+\.[0-9]+|Installing Frigate)"
+
+# 2. Compare with latest Frigate release  
+curl -s https://api.github.com/repos/blakeblackshear/frigate/releases/latest | jq -r '.tag_name'
+
+# 3. Decision: ONLY proceed if PVE Helper Scripts support the target version
+```
+
+**Update Rules:**
+- **WAIT for PVE Helper Scripts** to support new versions - DO NOT manually update
+- **LXC 113 on fun-bedbug.maas**: Resource-constrained AMD A9-9400 system
+- **Hardware Acceleration**: AMD Radeon R5 + Google Coral TPU (automated)
+- **Current Version**: 0.14.1 (face recognition requires 0.16.0+ when scripts support it)
+- **Reference**: `docs/reference/frigate-upgrade-decision-framework.md`
+
+**Rationale**: Manual updates break LXC integration, hardware acceleration, and rollback capabilities on underpowered hardware.
+
 ## Notes
 - The homelab runs GPU-accelerated AI workloads (RTX 3070 passthrough)
 - Extensive documentation exists for troubleshooting common issues
