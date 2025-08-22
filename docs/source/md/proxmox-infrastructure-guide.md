@@ -361,6 +361,15 @@ Features:
   - AI-powered object detection
   - Storage migrated from Samsung T5 USB to 3TB HDD SATA
   - 16x storage capacity increase (from 928GB to 2.72TB pool)
+Current Version: 0.14.1 (installed via PVE Helper Scripts)
+Hardware Acceleration:
+  - AMD Radeon R5 GPU with VA-API (preset-vaapi)
+  - Google Coral USB TPU for object detection
+  - Automated TPU initialization via coral-tpu-init.service
+Upgrade Policy:
+  - Wait for PVE Helper Scripts to support newer versions
+  - DO NOT manually update - breaks LXC integration
+  - Face recognition requires v0.16.0+ (pending script update)
 Tags: community-script, nvr
 ```
 
