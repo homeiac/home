@@ -47,7 +47,7 @@ class InfrastructureOrchestrator:
     def __init__(self) -> None:
         self.maas_host = "192.168.4.53"
         self.maas_user = os.getenv("MAAS_USER", "gshiva")
-        self.maas_password = os.getenv("MAAS_PASSWORD", "elder137berry")
+        self.maas_password = os.getenv("MAAS_PASSWORD", "")
 
         # Critical services from .env
         self.critical_services = self._load_critical_services_from_env()

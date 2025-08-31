@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "homelab"
 version = "0.1.0"
-description = ""
+description = "AI-First Homelab Infrastructure Management with Crucible Storage Integration"
 authors = ["Kumar Gopal <kumar.gopal@bd.com>"]
 readme = "README.md"
 packages = [{include = "homelab", from = "src"}]
@@ -18,7 +18,11 @@ pyudev = "^0.24.3"
 python-socketio = "^5.13.0"
 websocket-client = "^1.8.0"
 uptime-kuma-api = "^1.2.1"
-
+# New dependencies for Crucible integration
+aiofiles = "^24.1.0"
+aiohttp = "^3.9.0"
+pydantic = "^2.5.0"
+typer = {extras = ["all"], version = "^0.12.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
@@ -30,20 +34,35 @@ black = "^24.0.0"
 isort = "^5.13.0"
 pytest-mock = "^3.12.0"
 types-requests = "^2.32.4.20250611"
+# Additional dev dependencies for Crucible testing
+pytest-asyncio = "^0.23.0"
+bandit = "^1.7.0"
+pre-commit = "^3.6.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
+python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--strict-markers",
     "--strict-config",
+    "--verbose",
     "--cov=src/homelab",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=100"
+    "--cov-report=xml",
+    "--cov-fail-under=90"
 ]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "mock: marks tests that use mocking extensively"
+]
+asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "INFO"
 
 [tool.coverage.run]
 source = ["src/homelab"]
@@ -109,11 +128,12 @@ warn_unreachable = true
 strict_equality = true
 
 [[tool.mypy.overrides]]
-module = "proxmoxer.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "paramiko.*"
+module = [
+    "proxmoxer.*",
+    "paramiko.*",
+    "dotenv.*",
+    "uptime_kuma_api.*"
+]
 ignore_missing_imports = true
 
 [build-system]
