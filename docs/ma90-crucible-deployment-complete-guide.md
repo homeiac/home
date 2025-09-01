@@ -377,15 +377,23 @@ With only 1 downstairs process, you **CANNOT** test Crucible functionality:
 
 ### **Required Next Steps for Testing:**
 
-**Option A: Deploy 2 Additional MA90 Sleds**
+**Option A: Deploy 2 Additional MA90 Sleds (PRODUCTION - RECOMMENDED)**
 1. **Deploy 2 more MA90 sleds** using this exact process
 2. **Configure each with 1 downstairs** on port 3810
-3. **Test 3-way replication** across 3 separate sleds
+3. **Test true 3-way distributed replication** across 3 separate sleds
+4. **Benefits**: Fault tolerance, true distributed storage, no single point of failure
 
-**Option B: Add 2 More Downstairs to Current Sled**  
+**Option B: Add 2 More Downstairs to Current Sled (TESTING/EVALUATION ONLY)**  
+
+**⚠️ WARNING: NOT TRULY DISTRIBUTED STORAGE**
+- Single point of failure (entire sled)
+- No fault tolerance benefits  
+- For functional testing and evaluation only
+- **DO NOT USE IN PRODUCTION**
+
 1. **Create 2 additional regions** on proper-raptor (see NBD guide)
 2. **Start downstairs on ports 3811, 3812**
-3. **Test 3-downstairs configuration** on single sled
+3. **Test 3-downstairs configuration** on single sled (testing only)
 
 ### **After 3 Downstairs Available:**
 4. **Test NBD integration** with Proxmox VMs (see `docs/crucible-proxmox-nbd-integration-guide.md`)
