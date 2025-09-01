@@ -394,7 +394,7 @@ Tags: backup, community-script
 
 ```mermaid
 graph TB
-    subgraph "Node Storage Configurations"
+    subgraph "Compute Storage (Proxmox Nodes)"
         subgraph "still-fawn - Storage Beast"
             sf_local[468GB Local Disk<br/>VMs and containers]
             sf_20tb[local-20TB-zfs<br/>21.69TB ZFS Pool<br/>Large data storage]
@@ -418,14 +418,71 @@ graph TB
         end
     end
     
-    subgraph "Shared Storage Services"
-        sf_pbs --> pbs_shared[Proxmox Backup Server<br/>700GB shared pool<br/>All nodes can backup]
+    subgraph "Distributed Storage Sleds (MA90 Crucible)"
+        subgraph "proper-raptor.maas - Storage Sled 1"
+            pr_boot[sda1: 512MB EFI Boot]
+            pr_root[sda2: 25GB ext4 Root]
+            pr_zfs[sda3: 91.6GB ZFS Pool<br/>crucible downstairs:3810<br/>4K blocks, high performance]
+        end
         
-        sf_20tb --> large_data[Large Data Storage<br/>- Media files<br/>- AI model storage<br/>- Long-term archives]
+        subgraph "Additional MA90 Sleds (Planned)"
+            ma90_2[MA90 Sled 2<br/>Same layout as proper-raptor<br/>crucible downstairs:3810]
+            ma90_3[MA90 Sled 3<br/>Same layout as proper-raptor<br/>crucible downstairs:3810]
+        end
         
-        sf_2tb --> vm_storage[VM Disk Storage<br/>- K3s VM disks<br/>- High-performance storage<br/>- Snapshots and backups]
+        subgraph "Crucible 3-Way Replication"
+            pr_zfs --> crucible_vol[Crucible Volume<br/>3-way synchronous replication<br/>~60MB/s performance with 4K blocks]
+            ma90_2 --> crucible_vol
+            ma90_3 --> crucible_vol
+        end
+    end
+    
+    subgraph "Storage Integration"
+        subgraph "NBD Storage Interface"
+            crucible_vol --> nbd_server[Crucible NBD Server<br/>still-fawn.maas:10809<br/>Network Block Device]
+            nbd_server --> proxmox_vm[Proxmox VMs<br/>Block storage via NBD<br/>Fault-tolerant, distributed]
+        end
+        
+        subgraph "Shared Storage Services"
+            sf_pbs --> pbs_shared[Proxmox Backup Server<br/>700GB shared pool<br/>All nodes can backup]
+            
+            sf_20tb --> large_data[Large Data Storage<br/>- Media files<br/>- AI model storage<br/>- Long-term archives]
+            
+            sf_2tb --> vm_storage[VM Disk Storage<br/>- K3s VM disks<br/>- High-performance storage<br/>- Snapshots and backups]
+        end
     end
 ```
+
+### MA90 Crucible Distributed Storage
+
+**Architecture**: Oxide Computer's Crucible distributed storage system deployed on commodity AMD MA90 mini PCs
+
+**Components**:
+- **Storage Sleds**: 3x MA90 mini PCs with dedicated ZFS-backed storage
+- **Network**: 2.5GbE connectivity with 10GbE SFP+ uplinks  
+- **Replication**: 3-way synchronous replication for fault tolerance
+- **Integration**: NBD (Network Block Device) interface for Proxmox VMs
+
+**Hardware per MA90 Sled**:
+- **CPU**: AMD A9-9400 (2 cores, 4 threads)
+- **RAM**: 8GB DDR4
+- **Storage**: 128GB M.2 SATA SSD
+- **Network**: 2.5GbE capable (currently 1Gbps)
+
+**Partition Layout per MA90**:
+```bash
+sda1: 512MB vfat  /boot/efi  # EFI boot partition
+sda2:  25GB ext4  /          # Root filesystem  
+sda3:  91GB ZFS   /crucible  # Dedicated storage pool
+```
+
+**Performance Characteristics**:
+- **4K Block Size**: 60+ MB/s write performance
+- **512B Block Size**: 6-11 MB/s (avoid - 10x slower!)
+- **Network Bottleneck**: Currently limited by 1Gbps connectivity
+- **Fault Tolerance**: Survives 1 sled failure with no data loss
+
+**Deployment Guide**: See [MA90 Crucible Deployment Guide](../ma90-crucible-deployment-complete-guide.md)
 
 ### Storage Classes and Usage
 
