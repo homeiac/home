@@ -4,7 +4,15 @@
 **Status**: TESTED AND WORKING  
 **Performance**: 4K blocks = 60+ MB/s (vs 512B blocks = 6 MB/s)
 
-## 🚨 CRITICAL PERFORMANCE NOTE
+## 🚨 CRITICAL LIMITATIONS
+
+### **Single-Sled Testing Not Supported**
+**CRUCIBLE REQUIRES MINIMUM 3 DOWNSTAIRS FOR TESTING** - Cannot test with single MA90 sled!
+- ❌ **1 downstairs**: Crucible upstairs/NBD fails to start
+- ✅ **3 downstairs**: Required for any Crucible testing (can be on same sled)
+- 📋 **Minimum deployment**: 3 MA90 sleds OR 3 downstairs processes on single sled
+
+### **Performance Requirements**
 **NEVER USE 512-BYTE BLOCKS** - Performance is 10x worse than 4K blocks!
 - ❌ **512B blocks**: 6-11 MB/s  
 - ✅ **4K blocks**: 60+ MB/s
@@ -361,11 +369,28 @@ sudo rm -f /crucible/test-performance
 
 ## Next Steps
 
-1. **Deploy additional MA90s** using this exact process
-2. **Test 3-way replication** across multiple sleds
-3. **Set up systemd services** for persistent operation
-4. **Integrate with Proxmox VMs** via NBD
-5. **Monitor performance** and storage health
+### ⚠️ **CRITICAL: Single Sled Cannot Be Tested**
+With only 1 downstairs process, you **CANNOT** test Crucible functionality:
+- Crucible upstairs requires minimum 3 downstairs for quorum
+- NBD server will fail to start
+- No testing possible until you have 3 downstairs
+
+### **Required Next Steps for Testing:**
+
+**Option A: Deploy 2 Additional MA90 Sleds**
+1. **Deploy 2 more MA90 sleds** using this exact process
+2. **Configure each with 1 downstairs** on port 3810
+3. **Test 3-way replication** across 3 separate sleds
+
+**Option B: Add 2 More Downstairs to Current Sled**  
+1. **Create 2 additional regions** on proper-raptor (see NBD guide)
+2. **Start downstairs on ports 3811, 3812**
+3. **Test 3-downstairs configuration** on single sled
+
+### **After 3 Downstairs Available:**
+4. **Test NBD integration** with Proxmox VMs (see `docs/crucible-proxmox-nbd-integration-guide.md`)
+5. **Set up systemd services** for persistent operation
+6. **Monitor performance** and storage health
 
 ---
 

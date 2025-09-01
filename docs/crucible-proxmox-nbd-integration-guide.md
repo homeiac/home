@@ -2,10 +2,24 @@
 
 **Complete step-by-step guide for integrating Oxide Crucible distributed storage with Proxmox via NBD (Network Block Device)**
 
+## ⚠️ CRITICAL REQUIREMENT: MINIMUM 3 DOWNSTAIRS PROCESSES
+
+**THIS INTEGRATION REQUIRES 3 DOWNSTAIRS PROCESSES** - Single sled testing is NOT SUPPORTED!
+
+### **Deployment Options:**
+- **Option A**: 3 separate MA90 sleds with 1 downstairs each
+- **Option B**: 3 downstairs processes on single MA90 sled (for testing)
+- **Option C**: Mix of sleds and processes (production hybrid)
+
+### **Why 3 Downstairs Required:**
+- Crucible upstairs requires minimum 3 targets for quorum
+- NBD server fails to start with fewer than 3 downstairs
+- Single-sled deployment with 1 downstairs will fail
+
 ## Prerequisites
 
-- **Crucible Storage Sleds**: MA90 mini PCs running Ubuntu 24.04 with Crucible downstairs processes
-- **Proxmox Host**: Compute host with Crucible binaries compiled (still-fawn)
+- **Crucible Storage**: MINIMUM 3 downstairs processes (see deployment options above)
+- **Proxmox Host**: Compute host with Crucible binaries compiled (still-fawn)  
 - **Network**: 2.5GbE connectivity between compute and storage hosts
 
 ## Architecture Overview
@@ -22,24 +36,58 @@
 │  └───────────┘  │    │  │ :10809      │ │    │ │   :3811     │ │
 └─────────────────┘    │  └─────────────┘ │    │ │   :3812     │ │
                        └──────────────────┘    │ └─────────────┘ │
+                                               │                 │
+                                               │ ⚠️  REQUIRES    │
+                                               │ 3 DOWNSTAIRS   │
+                                               │ MINIMUM!       │
                                                └─────────────────┘
 ```
 
 ## Step 1: Verify Crucible Downstairs Status
 
-Check that all 3 Crucible downstairs processes are running on the MA90 storage sled:
-
+### **Option A: Multiple MA90 Sleds (Production)**
 ```bash
-# SSH to MA90 storage sled
+# Check each sled has 1 downstairs
+ssh ubuntu@proper-raptor.maas "ps aux | grep crucible-downstairs"  # Should show :3810
+ssh ubuntu@ma90-sled-2.maas "ps aux | grep crucible-downstairs"     # Should show :3810  
+ssh ubuntu@ma90-sled-3.maas "ps aux | grep crucible-downstairs"     # Should show :3810
+```
+
+### **Option B: Single Sled with 3 Downstairs (Testing)**
+```bash
+# SSH to single MA90 sled
 ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas
 
-# Verify downstairs processes
+# Verify 3 downstairs processes running
 ps aux | grep crucible-downstairs
-# Expected: 3 processes on ports 3810, 3811, 3812
+# Expected output: 3 processes on ports 3810, 3811, 3812
+# ubuntu    1234  crucible-downstairs run -p 3810 -d /crucible/regions-1  
+# ubuntu    1235  crucible-downstairs run -p 3811 -d /crucible/regions-2
+# ubuntu    1236  crucible-downstairs run -p 3812 -d /crucible/regions-3
 
 # Check current IP address
 ip addr show enp1s0
 # Note the IP address (e.g., 192.168.4.121)
+```
+
+### **Setting Up 3 Downstairs on Single Sled (If Needed)**
+```bash
+# Create 3 separate region directories
+sudo mkdir -p /crucible/{regions-1,regions-2,regions-3}
+
+# Create 3 regions with different UUIDs
+UUID1=$(python3 -c 'import uuid; print(uuid.uuid4())')
+UUID2=$(python3 -c 'import uuid; print(uuid.uuid4())')
+UUID3=$(python3 -c 'import uuid; print(uuid.uuid4())')
+
+./crucible-downstairs create --data /crucible/regions-1 --uuid $UUID1 --block-size 4096 --extent-size 32768 --extent-count 100
+./crucible-downstairs create --data /crucible/regions-2 --uuid $UUID2 --block-size 4096 --extent-size 32768 --extent-count 100  
+./crucible-downstairs create --data /crucible/regions-3 --uuid $UUID3 --block-size 4096 --extent-size 32768 --extent-count 100
+
+# Start 3 downstairs processes
+nohup ./crucible-downstairs run --data /crucible/regions-1 --address 0.0.0.0 --port 3810 > /var/log/crucible/downstairs-3810.log 2>&1 &
+nohup ./crucible-downstairs run --data /crucible/regions-2 --address 0.0.0.0 --port 3811 > /var/log/crucible/downstairs-3811.log 2>&1 &
+nohup ./crucible-downstairs run --data /crucible/regions-3 --address 0.0.0.0 --port 3812 > /var/log/crucible/downstairs-3812.log 2>&1 &
 ```
 
 ## Step 2: Create Crucible Volume for NBD Export
