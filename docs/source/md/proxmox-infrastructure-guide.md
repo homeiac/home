@@ -465,7 +465,7 @@ graph TB
 - **Replication**: 3-way synchronous replication for fault tolerance
 - **Integration**: NBD (Network Block Device) interface for Proxmox VMs
 
-**⚠️ IMPORTANT**: 3 downstairs on single sled = **TESTING ONLY** (no fault tolerance, single point of failure)
+**💡 COST-EFFECTIVE TESTING**: 3 downstairs on single sled = **Budget evaluation** (~$30 vs ~$90 for 3 sleds)
 
 **Hardware per MA90 Sled**:
 - **CPU**: AMD A9-9400 (2 cores, 4 threads)
@@ -491,9 +491,9 @@ sda3:  91GB ZFS   /crucible  # Dedicated storage pool
 **⚠️ Current Status**:
 - ✅ **Single MA90 Deployed**: proper-raptor with optimized 4K block configuration
 - ❌ **Testing Not Possible**: Single sled cannot be tested (requires minimum 3 downstairs)
-- 🔄 **Additional Sleds Required**: Need 2 more MA90s (production) OR 2 more downstairs on current sled (testing only)
-- ⏳ **Blocked**: All NBD integration and testing blocked until 3 downstairs available
-- ⚠️ **Note**: Single-sled 3-downstairs = testing only, no fault tolerance
+- 🔄 **Next Steps**: Deploy 2 more MA90s (production fault tolerance) OR add 2 more downstairs (budget testing)
+- ⏳ **Blocked**: All NBD integration blocked until 3 downstairs available (3-way quorum required)
+- 💡 **Budget Option**: Single-sled 3-downstairs perfect for learning/testing Crucible functionality
 
 ### Storage Classes and Usage
 
