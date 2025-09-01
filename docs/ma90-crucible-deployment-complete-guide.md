@@ -4,6 +4,25 @@
 **Status**: TESTED AND WORKING  
 **Performance**: 4K blocks = 60+ MB/s (vs 512B blocks = 6 MB/s)
 
+## 🚀 Quick Start Prerequisites
+
+### **Required Before Starting:**
+1. **SSH Key Setup**: Ensure `~/.ssh/id_ed25519_pve` key has access to MA90 sleds
+2. **Crucible Binaries**: Available on still-fawn at `/tmp/crucible/target/release/`
+3. **MAAS Access**: Upload commissioning script capability
+4. **Network Access**: 2.5GbE connectivity to MA90 storage sleds
+
+### **SSH Key Access Validation:**
+```bash
+# Test SSH access to MA90 sled
+ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas "whoami && hostname"
+# Expected output: ubuntu + hostname
+
+# Test SSH access to build host  
+ssh root@still-fawn.maas "ls -la /tmp/crucible/target/release/crucible-downstairs"
+# Expected: crucible-downstairs binary file
+```
+
 ## 🚨 CRITICAL LIMITATIONS
 
 ### **Single-Sled Testing Not Supported**
@@ -257,12 +276,19 @@ sudo zfs list
 
 ### Deploy Crucible Binaries
 ```bash
-# Transfer from still-fawn (where binaries were compiled)
+# CRITICAL: Binaries are compiled on still-fawn at /tmp/crucible/target/release/
+# First, create tarball on still-fawn (if not already done)
+ssh root@still-fawn.maas "cd /tmp/crucible/target/release && tar czf /tmp/crucible-bins.tar.gz crucible-downstairs crucible-agent dsc crucible-nbd-server"
+
+# Transfer from still-fawn to MA90 sled
 scp -i ~/.ssh/id_ed25519_pve root@still-fawn.maas:/tmp/crucible-bins.tar.gz ~/
 
-# Extract and prepare
+# Extract and prepare binaries
 tar xzf crucible-bins.tar.gz
 chmod +x crucible-downstairs crucible-agent dsc crucible-nbd-server
+
+# Verify binaries are executable
+ls -la crucible-*
 ```
 
 ### Create Optimized Crucible Region
@@ -318,22 +344,43 @@ sudo fio --name=crucible-test \
 sudo rm -f /crucible/test-performance
 ```
 
-## Working File Locations
+## Working File Locations & Access Patterns
+
+### Development Machine (Windows)
+- **Working commissioning script**: `C:\Users\gshiv\code\home\proxmox\homelab\scripts\45-ma90-multi-zfs-layout-fixed.sh`
+- **SSH private key**: `~/.ssh/id_ed25519_pve` (**CRITICAL** for MA90 access)
+- **Documentation**: `docs/ma90-crucible-deployment-complete-guide.md` (this file)
 
 ### MAAS Server (192.168.4.53)
-- **Commissioning script**: Uploaded via web interface
-- **System ID**: `xx4ebf` (proper-raptor)
+- **Commissioning script**: Upload `45-ma90-multi-zfs-layout-fixed.sh` via web interface
+- **System ID**: `xx4ebf` (proper-raptor example)
+- **Access**: Web interface + `maas admin` CLI
 
-### Still-fawn (Build Host)
-- **Crucible source**: `/tmp/crucible/`
-- **Compiled binaries**: `/tmp/crucible-bins.tar.gz`
+### Still-fawn.maas (Build Host) - **CRITICAL: Source of Binaries**
+- **Crucible source code**: `/tmp/crucible/` (cloned from GitHub)
+- **Compiled binaries**: `/tmp/crucible/target/release/` (crucible-downstairs, crucible-agent, etc.)
+- **Binary archive**: `/tmp/crucible-bins.tar.gz` (for transfer to MA90 sleds)
+- **SSH access**: `ssh root@still-fawn.maas`
 
-### Proper-raptor (Storage Sled)
-- **ZFS pool**: `/crucible/` (91.6GB)
-- **Crucible binaries**: `/home/ubuntu/crucible-*`
-- **Region data**: `/crucible/regions/`
+### MA90 Storage Sleds (e.g., proper-raptor.maas)
+- **ZFS pool**: `/crucible/` (91.6GB dedicated storage)
+- **Transferred binaries**: `/home/ubuntu/crucible-*` (executable)
+- **Region data**: `/crucible/regions/` (ZFS-backed storage)
 - **Logs**: `/var/log/crucible/downstairs.log`
-- **Service port**: `3810`
+- **Service port**: `3810` (single sled) or `3810,3811,3812` (testing setup)
+- **SSH access**: `ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas`
+
+### Key Command Patterns for New Sessions
+```bash
+# 1. Verify SSH access to MA90
+ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas "whoami && hostname"
+
+# 2. Transfer binaries from still-fawn
+scp -i ~/.ssh/id_ed25519_pve root@still-fawn.maas:/tmp/crucible-bins.tar.gz ~/
+
+# 3. Check current Crucible status
+ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas "ps aux | grep crucible"
+```
 
 ## Common Errors & Solutions
 
