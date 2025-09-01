@@ -7,8 +7,8 @@
 **THIS INTEGRATION REQUIRES 3 DOWNSTAIRS PROCESSES** - Single sled testing is NOT SUPPORTED!
 
 ### **Deployment Options:**
-- **Option A**: 3 separate MA90 sleds with 1 downstairs each
-- **Option B**: 3 downstairs processes on single MA90 sled (for testing)
+- **Option A**: 3 separate MA90 sleds with 1 downstairs each (**PRODUCTION - RECOMMENDED**)
+- **Option B**: 3 downstairs processes on single MA90 sled (**TESTING/EVALUATION ONLY - NOT DISTRIBUTED**)
 - **Option C**: Mix of sleds and processes (production hybrid)
 
 ### **Why 3 Downstairs Required:**
@@ -43,6 +43,21 @@
                                                └─────────────────┘
 ```
 
+## Production vs Testing Deployment Comparison
+
+| Aspect | 3 Separate MA90 Sleds | 3 Downstairs on 1 Sled |
+|--------|----------------------|------------------------|
+| **Fault Tolerance** | ✅ Survives 1-2 sled failures | ❌ Single point of failure |
+| **True Distribution** | ✅ Geographically distributed | ❌ All on same hardware |
+| **Performance** | ✅ 3x network/disk bandwidth | ❌ Limited by single sled |
+| **Production Ready** | ✅ **RECOMMENDED** | ❌ **TESTING ONLY** |
+| **Cost** | Higher (3 sleds) | Lower (1 sled) |
+| **Complexity** | Higher (3 deployments) | Lower (single deployment) |
+
+**🎯 Recommendation**: Use single-sled 3-downstairs ONLY for functional testing and evaluation. Deploy 3 separate MA90 sleds for any production use case.
+
+---
+
 ## Step 1: Verify Crucible Downstairs Status
 
 ### **Option A: Multiple MA90 Sleds (Production)**
@@ -53,7 +68,14 @@ ssh ubuntu@ma90-sled-2.maas "ps aux | grep crucible-downstairs"     # Should sho
 ssh ubuntu@ma90-sled-3.maas "ps aux | grep crucible-downstairs"     # Should show :3810
 ```
 
-### **Option B: Single Sled with 3 Downstairs (Testing)**
+### **Option B: Single Sled with 3 Downstairs (TESTING/EVALUATION ONLY)**
+
+**⚠️ WARNING: NOT TRULY DISTRIBUTED STORAGE**
+- Single point of failure (entire sled)
+- No fault tolerance benefits
+- For functional testing and evaluation only
+- **DO NOT USE IN PRODUCTION**
+
 ```bash
 # SSH to single MA90 sled
 ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas
@@ -70,7 +92,14 @@ ip addr show enp1s0
 # Note the IP address (e.g., 192.168.4.121)
 ```
 
-### **Setting Up 3 Downstairs on Single Sled (If Needed)**
+### **Setting Up 3 Downstairs on Single Sled (TESTING/EVALUATION ONLY)**
+
+**⚠️ CRITICAL WARNING: THIS IS NOT DISTRIBUTED STORAGE!**
+- **Single Point of Failure**: If this sled fails, ALL storage is lost
+- **No Fault Tolerance**: Defeats the primary purpose of Crucible
+- **Testing Only**: Use this configuration ONLY for functional testing/evaluation
+- **Production Use**: Deploy 3 separate MA90 sleds for true distributed storage
+
 ```bash
 # Create 3 separate region directories
 sudo mkdir -p /crucible/{regions-1,regions-2,regions-3}

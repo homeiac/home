@@ -460,10 +460,12 @@ graph TB
 **⚠️ CRITICAL REQUIREMENT**: Minimum 3 downstairs processes required for any testing or operation
 
 **Components**:
-- **Storage Sleds**: 3x MA90 mini PCs with dedicated ZFS-backed storage (REQUIRED - cannot test with fewer)
+- **Storage Sleds**: 3x MA90 mini PCs with dedicated ZFS-backed storage (**REQUIRED** - cannot test with fewer)
 - **Network**: 2.5GbE connectivity with 10GbE SFP+ uplinks  
 - **Replication**: 3-way synchronous replication for fault tolerance
 - **Integration**: NBD (Network Block Device) interface for Proxmox VMs
+
+**⚠️ IMPORTANT**: 3 downstairs on single sled = **TESTING ONLY** (no fault tolerance, single point of failure)
 
 **Hardware per MA90 Sled**:
 - **CPU**: AMD A9-9400 (2 cores, 4 threads)
@@ -489,8 +491,9 @@ sda3:  91GB ZFS   /crucible  # Dedicated storage pool
 **⚠️ Current Status**:
 - ✅ **Single MA90 Deployed**: proper-raptor with optimized 4K block configuration
 - ❌ **Testing Not Possible**: Single sled cannot be tested (requires minimum 3 downstairs)
-- 🔄 **Additional Sleds Required**: Need 2 more MA90s OR 2 more downstairs on current sled
+- 🔄 **Additional Sleds Required**: Need 2 more MA90s (production) OR 2 more downstairs on current sled (testing only)
 - ⏳ **Blocked**: All NBD integration and testing blocked until 3 downstairs available
+- ⚠️ **Note**: Single-sled 3-downstairs = testing only, no fault tolerance
 
 ### Storage Classes and Usage
 
