@@ -7,14 +7,15 @@
 **THIS INTEGRATION REQUIRES 3 DOWNSTAIRS PROCESSES** - Single sled testing is NOT SUPPORTED!
 
 ### **Deployment Options:**
-- **Option A**: 3 separate MA90 sleds with 1 downstairs each (**PRODUCTION - RECOMMENDED**)
-- **Option B**: 3 downstairs processes on single MA90 sled (**TESTING/EVALUATION ONLY - NOT DISTRIBUTED**)
-- **Option C**: Mix of sleds and processes (production hybrid)
+- **Option A**: 3 separate MA90 sleds (**Production - Full Fault Tolerance**)
+- **Option B**: 3 downstairs on single sled (**Cost-Effective Testing/Evaluation**)
+- **Option C**: Mix of sleds and processes (hybrid approach)
 
 ### **Why 3 Downstairs Required:**
-- Crucible upstairs requires minimum 3 targets for quorum
-- NBD server fails to start with fewer than 3 downstairs
-- Single-sled deployment with 1 downstairs will fail
+- Crucible upstairs requires minimum 3 targets for quorum-based consensus
+- NBD server fails to start with fewer than 3 downstairs targets
+- Single MA90 with 1 downstairs cannot provide the required 3-way quorum
+- **Solution**: Deploy 3 downstairs processes (cheapest: same sled, production: separate sleds)
 
 ## Prerequisites
 
@@ -43,18 +44,19 @@
                                                └─────────────────┘
 ```
 
-## Production vs Testing Deployment Comparison
+## Deployment Strategy Comparison
 
 | Aspect | 3 Separate MA90 Sleds | 3 Downstairs on 1 Sled |
 |--------|----------------------|------------------------|
-| **Fault Tolerance** | ✅ Survives 1-2 sled failures | ❌ Single point of failure |
-| **True Distribution** | ✅ Geographically distributed | ❌ All on same hardware |
-| **Performance** | ✅ 3x network/disk bandwidth | ❌ Limited by single sled |
-| **Production Ready** | ✅ **RECOMMENDED** | ❌ **TESTING ONLY** |
-| **Cost** | Higher (3 sleds) | Lower (1 sled) |
-| **Complexity** | Higher (3 deployments) | Lower (single deployment) |
+| **Fault Tolerance** | ✅ Survives hardware failures | 📊 Single point of failure |
+| **Geographic Distribution** | ✅ Separate locations possible | 🏠 Single location |
+| **Performance Scaling** | ✅ 3x network/disk bandwidth | 📊 Single sled bandwidth |
+| **Cost** | ~$90 (3 sleds) | ~$30 (1 sled) |
+| **Setup Complexity** | Higher (3 deployments) | 🚀 Simple (single deployment) |
+| **Learning/Testing** | 💸 Expensive for evaluation | ✅ **Perfect for testing** |
+| **Production Use** | ✅ **Recommended** | 🔄 Consider upgrade path |
 
-**🎯 Recommendation**: Use single-sled 3-downstairs ONLY for functional testing and evaluation. Deploy 3 separate MA90 sleds for any production use case.
+**🎯 Strategy**: Start with single-sled testing to learn Crucible, then expand to 3 sleds when ready for production fault tolerance.
 
 ---
 
@@ -68,13 +70,13 @@ ssh ubuntu@ma90-sled-2.maas "ps aux | grep crucible-downstairs"     # Should sho
 ssh ubuntu@ma90-sled-3.maas "ps aux | grep crucible-downstairs"     # Should show :3810
 ```
 
-### **Option B: Single Sled with 3 Downstairs (TESTING/EVALUATION ONLY)**
+### **Option B: Single Sled with 3 Downstairs (Cost-Effective Testing)**
 
-**⚠️ WARNING: NOT TRULY DISTRIBUTED STORAGE**
-- Single point of failure (entire sled)
-- No fault tolerance benefits
-- For functional testing and evaluation only
-- **DO NOT USE IN PRODUCTION**
+**💡 SMART TESTING APPROACH - Evaluate Crucible without expensive hardware**
+- **Cost Savings**: Test full Crucible functionality with just 1 MA90 ($30)
+- **Complete Feature Testing**: NBD integration, upstairs/downstairs, replication logic
+- **Development/Learning**: Perfect for understanding Crucible before production investment
+- **Upgrade Path**: Easy migration to 3-sled production setup later
 
 ```bash
 # SSH to single MA90 sled
@@ -92,13 +94,13 @@ ip addr show enp1s0
 # Note the IP address (e.g., 192.168.4.121)
 ```
 
-### **Setting Up 3 Downstairs on Single Sled (TESTING/EVALUATION ONLY)**
+### **Setting Up 3 Downstairs on Single Sled (Budget-Friendly Testing)**
 
-**⚠️ CRITICAL WARNING: THIS IS NOT DISTRIBUTED STORAGE!**
-- **Single Point of Failure**: If this sled fails, ALL storage is lost
-- **No Fault Tolerance**: Defeats the primary purpose of Crucible
-- **Testing Only**: Use this configuration ONLY for functional testing/evaluation
-- **Production Use**: Deploy 3 separate MA90 sleds for true distributed storage
+**🚀 COST-EFFECTIVE CRUCIBLE EVALUATION**
+- **Budget Testing**: Full Crucible functionality testing for ~$30 (vs ~$90 for 3 sleds)
+- **Feature Complete**: Test all upstairs/downstairs interactions, NBD, performance
+- **Learning Platform**: Understand Crucible architecture before production deployment
+- **Note**: Production deployments benefit from 3 separate sleds for fault tolerance
 
 ```bash
 # Create 3 separate region directories

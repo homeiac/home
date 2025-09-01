@@ -369,31 +369,31 @@ sudo rm -f /crucible/test-performance
 
 ## Next Steps
 
-### ⚠️ **CRITICAL: Single Sled Cannot Be Tested**
-With only 1 downstairs process, you **CANNOT** test Crucible functionality:
-- Crucible upstairs requires minimum 3 downstairs for quorum
-- NBD server will fail to start
-- No testing possible until you have 3 downstairs
+### 💡 **BUDGET-FRIENDLY TESTING STRATEGY**
+With only 1 downstairs process, Crucible requires 3 total downstairs for functionality:
+- Crucible upstairs uses 3-way quorum for consensus-based operations
+- NBD server needs minimum 3 downstairs targets to start
+- **Solution**: Add 2 more downstairs processes (same sled = $30 testing vs 3 sleds = $90)
 
 ### **Required Next Steps for Testing:**
 
-**Option A: Deploy 2 Additional MA90 Sleds (PRODUCTION - RECOMMENDED)**
+**Option A: Deploy 2 Additional MA90 Sleds (Production Fault Tolerance)**
 1. **Deploy 2 more MA90 sleds** using this exact process
 2. **Configure each with 1 downstairs** on port 3810
 3. **Test true 3-way distributed replication** across 3 separate sleds
-4. **Benefits**: Fault tolerance, true distributed storage, no single point of failure
+4. **Benefits**: Hardware fault tolerance, geographic distribution, 3x performance scaling
 
-**Option B: Add 2 More Downstairs to Current Sled (TESTING/EVALUATION ONLY)**  
+**Option B: Add 2 More Downstairs to Current Sled (Cost-Effective Testing)**  
 
-**⚠️ WARNING: NOT TRULY DISTRIBUTED STORAGE**
-- Single point of failure (entire sled)
-- No fault tolerance benefits  
-- For functional testing and evaluation only
-- **DO NOT USE IN PRODUCTION**
+**💡 SMART BUDGET APPROACH - Test full Crucible functionality for $30**
+- **Perfect for Learning**: Understand all Crucible features without expensive hardware
+- **Complete Testing**: NBD integration, replication, upstairs/downstairs communication
+- **Development Platform**: Ideal for experimentation and proof-of-concept work
+- **Upgrade Ready**: Easy migration to 3-sled production setup when needed
 
 1. **Create 2 additional regions** on proper-raptor (see NBD guide)
 2. **Start downstairs on ports 3811, 3812**
-3. **Test 3-downstairs configuration** on single sled (testing only)
+3. **Test complete 3-downstairs functionality** on single sled
 
 ### **After 3 Downstairs Available:**
 4. **Test NBD integration** with Proxmox VMs (see `docs/crucible-proxmox-nbd-integration-guide.md`)
