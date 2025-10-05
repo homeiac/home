@@ -23,29 +23,40 @@
 
 ## Post-Upgrade Allocations (32GB)
 
-### Memory Distribution
-| Component | Previous | New | Change | Justification |
-|-----------|----------|-----|--------|---------------|
+### Initial Memory Distribution (First Pass)
+| Component | Previous | Initial | Change | Justification |
+|-----------|----------|---------|--------|---------------|
 | k3s-vm-still-fawn | 16GB | 20GB | +4GB | Prometheus (1.2GB), Grafana (546MB), monitoring growth |
 | proxmox-backup-server | 4GB | 6GB | +2GB | Improved deduplication, concurrent backups |
 | docker-webtop | 8GB | 8GB | 0 | Adequate for current use |
 | crucible-test-vm | 0.5GB | 0.5GB | 0 | Minimal test workload |
 | Proxmox Host | ~3.5GB | ~5.5GB | +2GB | ZFS ARC, system services, Ceph |
 
+### Optimized Memory Distribution (Final)
+After analyzing actual usage, memory was reallocated for better AI workload support:
+
+| Component | Initial | **Final** | Change | Justification |
+|-----------|---------|-----------|--------|---------------|
+| **k3s-vm-still-fawn** | 20GB | **24GB** | +4GB | GPU node for AI: supports 34B LLMs, SDXL + ControlNet |
+| **proxmox-backup-server** | 6GB | **2GB** | -4GB | Actual usage only 35MB, 2GB provides 50x headroom |
+| docker-webtop | 8GB | 8GB | 0 | Development environment unchanged |
+| crucible-test-vm | 0.5GB | 0.5GB | 0 | Test workload unchanged |
+| Proxmox Host | ~5.5GB | ~5.5GB | 0 | Adequate for ZFS ARC and services |
+
+**Note**: Total allocation (34.5GB) exceeds physical RAM (32GB) by 2.5GB through safe overcommit, as PBS uses minimal memory.
+
 ### Implementation Commands
 ```bash
 # Verify RAM upgrade
 free -h  # Shows 31Gi total
 
-# Update k3s VM
-qm set 108 --memory 20480
-
-# Update PBS container  
-pct set 103 --memory 6144
+# Final optimized allocation
+qm set 108 --memory 24576   # k3s VM to 24GB
+pct set 103 --memory 2048    # PBS to 2GB (was using only 35MB)
 
 # Verify changes
-qm config 108 | grep memory  # Shows: memory: 20480
-pct config 103 | grep memory  # Shows: memory: 6144
+qm config 108 | grep memory  # Shows: memory: 24576
+pct config 103 | grep memory  # Shows: memory: 2048
 ```
 
 ## Benefits Achieved
@@ -56,25 +67,32 @@ pct config 103 | grep memory  # Shows: memory: 6144
 3. **Better Monitoring Performance**: Prometheus and Grafana have headroom
 4. **Improved Backup Speed**: PBS can cache more deduplication tables
 
-### Future Opportunities Enabled
-With 32GB total memory, still-fawn can now support:
+### AI/ML Capabilities with 24GB k3s VM
+With 24GB allocated to the GPU-enabled k3s VM, still-fawn now supports:
 
-1. **AI/ML Workloads**: 
-   - Small language models (3-7B parameters)
-   - Local inference endpoints
-   - Vector databases for RAG applications
+1. **Large Language Models (Ollama)**: 
+   - **34B parameter models**: Codellama-34B, Yi-34B
+   - **Multiple 13B models**: 2-3 concurrent models
+   - **7B models**: 4-5 simultaneous models
+   - Local inference endpoints with low latency
+   
+2. **Stable Diffusion Capabilities**:
+   - **SDXL models**: Full resolution generation
+   - **ControlNet**: Multiple control models
+   - **LoRA/VAE**: Multiple adapters simultaneously
+   - Complex multi-model pipelines
 
-2. **Enhanced Monitoring**:
+3. **Enhanced Monitoring**:
    - Loki log aggregation
    - Thanos long-term storage
    - Additional Netdata collectors
 
-3. **Development Services**:
+4. **Development Services**:
    - GitLab runner
    - CI/CD pipelines
    - Container registry cache
 
-4. **Performance Optimization**:
+5. **Performance Optimization**:
    - Redis/Memcached for application caching
    - Database read replicas
    - CDN edge cache
