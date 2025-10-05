@@ -1,7 +1,7 @@
 # Runbook: Fix Proxmox Backup Server Storage Connectivity Issues
 
 ## Problem Statement
-Proxmox Backup Server (PBS) storage repositories appear as inactive or inaccessible in Proxmox VE due to DNS resolution failures or network connectivity issues.
+Proxmox Backup Server (PBS) storage repositories appear as inactive or inaccessible in Proxmox VE due to DNS resolution failures. The most common cause is missing DNS entries in MAAS for infrastructure containers that don't receive automatic DNS registration.
 
 ## Symptoms
 - PBS storage shows as "inactive" in Proxmox GUI
@@ -64,22 +64,31 @@ host proxmox-backup-server.maas
 nslookup proxmox-backup-server.maas
 ```
 
-#### Step 2: Add DNS Entry to MAAS
-```bash
-# Access MAAS server (usually on pve node)
-ssh ubuntu@maas.server
+#### Step 2: Create DNS Resource in MAAS Web UI (Recommended)
+1. **Access MAAS Web Interface**: Navigate to `http://192.168.4.53:5240/MAAS/`
+2. **Go to Domains**: Click on **Domains** → **maas**
+3. **Add DNS Resource**: Click **Add DNS resource**
+4. **Configure DNS Entry**:
+   - **Name**: `proxmox-backup-server`
+   - **Type**: `A/AAAA record`
+   - **Data**: `192.168.4.218` (current container IP)
+5. **Save**: Click **Save DNS resource**
 
-# Add DNS entry via MAAS CLI
+#### Step 3: Alternative - MAAS CLI Method
+```bash
+# If you have MAAS CLI configured
 maas admin dnsresources create domain=maas name=proxmox-backup-server ip_addresses=192.168.4.218
 ```
 
-#### Step 3: Add Local DNS Override (Alternative)
+#### Step 4: Fallback - Local DNS Override
 ```bash
-# Add to /etc/hosts on all Proxmox nodes
+# Only if MAAS access is not available
 echo "192.168.4.218 proxmox-backup-server.maas proxmox-backup-server" >> /etc/hosts
 ```
 
-### Option 2: Use IP Address Instead of Hostname
+### Option 2: Use IP Address Instead of Hostname (Not Recommended)
+
+**Note**: This approach works but is not recommended for infrastructure services as it bypasses proper DNS architecture.
 
 #### Step 1: Update Storage Configuration
 ```bash
@@ -98,14 +107,6 @@ grep -A5 "pbs:" /etc/pve/storage.cfg
 # Test storage connectivity
 pvesm status | grep pbs
 ```
-
-### Option 3: Update Storage via GUI
-
-1. Navigate to Datacenter → Storage
-2. Select the PBS storage entry
-3. Click Edit
-4. Change Server field from hostname to IP address
-5. Save and verify connectivity
 
 ## Verification
 
@@ -132,23 +133,39 @@ done
 
 ## Common Issues and Solutions
 
-### Issue: Authentication Failed
+### Issue: DNS Entry Not Working After Creation
 ```bash
-# Update fingerprint
-pvesm set proxmox-backup-server --fingerprint "$(echo | openssl s_client -connect 192.168.4.218:8007 2>/dev/null | openssl x509 -fingerprint -sha256 -noout | cut -d'=' -f2)"
+# Wait for DNS propagation (30-60 seconds)
+sleep 60
+
+# Test DNS resolution
+host proxmox-backup-server.maas
+nslookup proxmox-backup-server.maas 192.168.4.53
+
+# Clear local DNS cache if needed
+systemctl restart systemd-resolved
 ```
 
-### Issue: Different IPs on Different Nodes
+### Issue: Container IP Address Changed
 ```bash
-# Ensure PBS has static IP
-pct config 103 | grep net0
-# Add: ,ip=192.168.4.218/24,gw=192.168.4.1
+# Get current container IP
+pct exec 103 -- ip a show eth0 | grep "inet "
+
+# Update DNS resource in MAAS with new IP
+# Go to MAAS → Domains → maas → Edit DNS resource
+# Update the IP address to match current container IP
+```
+
+### Issue: Authentication Failed
+```bash
+# Update fingerprint using hostname (after DNS is working)
+pvesm set proxmox-backup-server --fingerprint "$(echo | openssl s_client -connect proxmox-backup-server.maas:8007 2>/dev/null | openssl x509 -fingerprint -sha256 -noout | cut -d'=' -f2)"
 ```
 
 ### Issue: Firewall Blocking
 ```bash
 # Check if port 8007 is accessible
-nc -zv 192.168.4.218 8007
+nc -zv proxmox-backup-server.maas 8007
 
 # Check PBS container firewall
 pct exec 103 -- iptables -L -n | grep 8007
@@ -157,25 +174,35 @@ pct exec 103 -- iptables -L -n | grep 8007
 ## Prevention
 
 ### Best Practices
-1. **Use Static IPs** for critical infrastructure services
-2. **Document IP assignments** in configuration management
-3. **Configure DNS properly** before using hostnames
+1. **Create DNS entries manually** for infrastructure containers in MAAS
+2. **Use hostnames consistently** rather than IP addresses in configuration
+3. **Document DNS entries** in configuration management
 4. **Monitor DNS resolution** for critical services
+5. **Keep MAAS DNS resources updated** when container IPs change
 
 ### Long-term Solutions
-1. Configure MAAS to automatically register LXC containers
-2. Use DHCP reservations with DNS registration
-3. Implement service discovery mechanism
-4. Set up monitoring for storage connectivity
+1. **Infrastructure Containers**: Always create manual DNS resources for critical services
+2. **Monitoring**: Set up DNS resolution monitoring for backup services
+3. **Documentation**: Maintain inventory of manual DNS entries created
+4. **Automation**: Consider scripting DNS resource creation for new infrastructure containers
+
+### Why Some Containers Don't Get Automatic DNS
+- MAAS automatically creates DNS for some services (VMs with certain naming patterns, managed machines)
+- Infrastructure containers like PBS may not follow patterns MAAS recognizes
+- Containers with complex hostnames (multiple dashes) may not trigger automatic registration
+- Manual DNS resource creation is the reliable solution for infrastructure services
 
 ## Rollback
 
-### Restore Original Configuration
-```bash
-# Restore from backup
-cp /etc/pve/storage.cfg.backup /etc/pve/storage.cfg
+### Remove DNS Entry from MAAS
+1. **Access MAAS Web Interface**: Navigate to `http://192.168.4.53:5240/MAAS/`
+2. **Go to Domains**: Click on **Domains** → **maas**
+3. **Find DNS Resource**: Locate `proxmox-backup-server` entry
+4. **Delete**: Click the delete button for the DNS resource
 
-# Or manually revert
+### Restore Storage Configuration (if using IP fallback)
+```bash
+# If you used IP addresses temporarily, revert to hostname
 sed -i 's/server 192.168.4.218/server proxmox-backup-server.maas/' /etc/pve/storage.cfg
 ```
 
