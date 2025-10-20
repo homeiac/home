@@ -382,30 +382,46 @@ Membership information
 
 ### Lessons Learned
 
-1. **Expected Votes Configuration Works as Designed**
+1. **SSH User Depends on Image Type (CRITICAL)**
+   - Debian cloud images create `debian` user by default, NOT `root`
+   - Ubuntu cloud images create `ubuntu` user
+   - Always test SSH access with correct user: `ssh debian@node` or `ssh ubuntu@node`
+   - All commands require `sudo` prefix when using non-root user
+   - This could have worked even without Intel-specific image if correct SSH user was used
+   - **Impact**: Wasted time assuming root access, could have proceeded faster with `debian` user
+
+2. **Cloud-init Hosts Template is Critical**
+   - Default Debian template uses `127.0.1.1` which breaks pmxcfs
+   - Must be fixed to use `{{public_ipv4}}` for hostname resolution
+   - This is a **mandatory** post-join step, not optional
+   - Without this fix, cluster membership fails on every reboot
+   - **Applies to ALL cloud-init based deployments**
+
+3. **Expected Votes Configuration Works as Designed**
    - Setting expected=4 with 4 nodes means cluster can tolerate 1 node failure
    - During pumped-piglet reboot: 3 of 4 votes = quorate ✅
    - This configuration allows cluster to remain operational if any single node goes offline
 
-2. **pve-ha-lrm Timing Dependency**
+4. **pve-ha-lrm Timing Dependency**
    - The HA Local Resource Manager may fail first start if cluster filesystem isn't fully synced
    - Always check for green checkmark in GUI after join
    - Simple service restart resolves the issue
 
-3. **Ceph Services Must Be Disabled**
+5. **Ceph Services Must Be Disabled**
    - Even if Ceph isn't used, services create systemd ordering cycles
    - Must be disabled before first reboot to ensure pve-cluster starts reliably
    - Reference: still-fawn RCA for detailed ordering cycle analysis
 
-4. **No VM Disruption During Join**
+6. **No VM Disruption During Join**
    - All VMs and containers remained running during cluster join
    - Uptime unchanged from before join operation
    - Demonstrates cluster's ability to expand safely while serving workloads
 
-5. **Documentation Structure Effectiveness**
+7. **Documentation Structure Effectiveness**
    - Generic runbook + specific action log approach worked well
    - Having a template with placeholders ensured no steps were missed
    - Real-time documentation captured actual outputs for troubleshooting
+   - **Improvement needed**: Runbook now includes Phase 0 for SSH user determination
 
 ---
 

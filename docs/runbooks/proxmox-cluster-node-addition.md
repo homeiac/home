@@ -44,6 +44,53 @@ This runbook provides the complete procedure for adding a new Proxmox VE node to
 
 ---
 
+## Phase 0: SSH Access Setup (CRITICAL)
+
+### Step 0.1: Determine SSH User
+
+**Purpose**: Establish SSH access to new node before proceeding
+
+**IMPORTANT**: Debian cloud images create `debian` user by default, NOT `root`. Ubuntu creates `ubuntu` user.
+
+**SSH Access Test**:
+```bash
+# Try debian user first (for Debian-based images)
+ssh debian@<new-node-ip> "whoami"
+
+# If that fails, try ubuntu user (for Ubuntu-based images)
+ssh ubuntu@<new-node-ip> "whoami"
+
+# If both fail, try root (less common for cloud images)
+ssh root@<new-node-ip> "whoami"
+```
+
+**Expected Result**: One of the above commands succeeds and returns the username.
+
+**Document the working user**: All subsequent commands will use this user with `sudo` when needed.
+
+---
+
+### Step 0.2: Understanding sudo Requirements
+
+**Key Point**: If using non-root user (`debian` or `ubuntu`), you MUST prefix privileged commands with `sudo`:
+
+```bash
+# For debian/ubuntu users:
+ssh debian@<new-node-ip> "sudo pvecm status"
+ssh debian@<new-node-ip> "sudo systemctl status pve-cluster"
+
+# For root user (no sudo needed):
+ssh root@<new-node-ip> "pvecm status"
+ssh root@<new-node-ip> "systemctl status pve-cluster"
+```
+
+**Convention in this runbook**:
+- Commands shown without user prefix (e.g., `pvecm status`)
+- **You must add appropriate SSH user and sudo** based on Step 0.1 results
+- Example: If using `debian` user, run: `ssh debian@node "sudo pvecm status"`
+
+---
+
 ## Phase 1: Pre-Join Investigation
 
 ### Step 1.1: Verify Current Cluster Status
