@@ -260,7 +260,66 @@ ls -la /etc/pve/                          # Cluster filesystem mounted
 
 ## Phase 5: Post-Join Configuration
 
-### Step 5.1: Disable Ceph Services (Critical)
+### Step 5.1: Fix Cloud-init Hosts Template (CRITICAL)
+
+**Purpose**: Ensure hostname resolves to actual IP (not loopback) after cloud-init regeneration
+
+**Context**: Cloud-init regenerates `/etc/hosts` from template on boot. Default Debian template uses `127.0.1.1` for hostname, which breaks pmxcfs (Proxmox cluster filesystem).
+
+**Issue**: pmxcfs requires hostname to resolve to non-loopback IP for cluster communication. Using `127.0.1.1` causes critical errors.
+
+**Commands** (run on new node):
+```bash
+# Check current template
+cat /etc/cloud/templates/hosts.debian.tmpl
+
+# Fix template to use public_ipv4
+sudo tee /etc/cloud/templates/hosts.debian.tmpl <<'EOF'
+## template:jinja
+{#
+This file (/etc/cloud/templates/hosts.debian.tmpl) is only utilized
+if enabled in cloud-config.  Specifically, in order to enable it
+you need to add the following to config:
+   manage_etc_hosts: True
+-#}
+{{public_ipv4}} {{fqdn}} {{hostname}}
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+EOF
+
+# Manually fix /etc/hosts for immediate effect
+sudo tee /etc/hosts <<EOF
+127.0.0.1 localhost
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+
+# Proxmox cluster nodes
+<main-node-ip>  <main-node-fqdn> <main-node-short>
+<node2-ip>      <node2-fqdn> <node2-short>
+<new-node-ip>   <new-node-fqdn> <new-node-short>
+EOF
+
+# Verify hostname resolution
+hostname -i  # Should return actual IP, NOT 127.0.1.1
+hostname -f  # Should return FQDN
+
+# Check for pmxcfs errors
+journalctl -u pmxcfs --since '1 minute ago' | grep -i 'unable to resolve'
+```
+
+**Success Criteria**:
+- ✅ Template uses `{{public_ipv4}}` instead of `127.0.1.1`
+- ✅ `/etc/hosts` maps hostname to actual IP address
+- ✅ `hostname -i` returns non-loopback IP (e.g., 192.168.4.x)
+- ✅ No pmxcfs hostname resolution errors in logs
+
+**Why This Matters**: Without this fix, cloud-init will reset `/etc/hosts` to use `127.0.1.1` on every reboot, causing pmxcfs to fail and breaking cluster membership.
+
+---
+
+### Step 5.2: Disable Ceph Services (Critical)
 
 **Purpose**: Prevent systemd ordering cycle issues with pve-cluster
 
@@ -291,7 +350,7 @@ journalctl -b | grep -i 'ordering cycle'
 
 ---
 
-### Step 5.2: Verify Web GUI Access
+### Step 5.3: Verify Web GUI Access
 
 **Manual Test**:
 1. Open browser: `https://<new-node-ip>:8006`
