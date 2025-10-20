@@ -407,6 +407,106 @@ Membership information
    - Having a template with placeholders ensured no steps were missed
    - Real-time documentation captured actual outputs for troubleshooting
 
+---
+
+## Phase 7: Cloud-init Template Fix (CRITICAL)
+
+### Step 7.1: Issue Discovery
+
+**Timestamp**: 20:21 PM (October 20)
+
+**Issue Found**: pmxcfs error logs showing hostname resolution failure
+
+**Error Message**:
+```
+Oct 20 20:21:47 pumped-piglet pmxcfs[1486]: [main] crit: Unable to resolve node name 'pumped-piglet' to a non-loopback IP address - missing entry in '/etc/hosts' or DNS?
+```
+
+**Root Cause**: Cloud-init template (`/etc/cloud/templates/hosts.debian.tmpl`) was using `127.0.1.1` for hostname instead of actual public IP, causing cloud-init to regenerate `/etc/hosts` with loopback address on every boot.
+
+**Impact**: This would have caused cluster filesystem (pmxcfs) failures on subsequent reboots, making cluster membership unstable.
+
+---
+
+### Step 7.2: Fix Cloud-init Template
+
+**Timestamp**: 22:45 PM (October 20)
+
+**Commands**:
+```bash
+# Update cloud-init template to use public IPv4
+ssh debian@192.168.4.175 "sudo tee /etc/cloud/templates/hosts.debian.tmpl" <<'EOF'
+## template:jinja
+{{public_ipv4}} {{fqdn}} {{hostname}}
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+EOF
+```
+
+**Results**:
+- Template updated successfully
+- Now uses `{{public_ipv4}}` instead of `127.0.1.1`
+
+**Result**: ✅ Success - Template will persist correct hostname resolution across reboots
+
+---
+
+### Step 7.3: Fix Current /etc/hosts File
+
+**Timestamp**: 22:46 PM (October 20)
+
+**Commands**:
+```bash
+# Update /etc/hosts with correct hostname-to-IP mapping
+ssh debian@192.168.4.175 "sudo tee /etc/hosts" <<'EOF'
+127.0.0.1 localhost
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+
+# Proxmox cluster nodes
+192.168.4.122  pve.maas pve
+192.168.4.19   chief-horse.maas chief-horse
+192.168.4.172  fun-bedbug.maas fun-bedbug
+192.168.4.175  pumped-piglet.maas pumped-piglet
+EOF
+```
+
+**Verification**:
+```bash
+ssh debian@192.168.4.175 "hostname -i"
+# Output: 192.168.4.175
+
+ssh debian@192.168.4.175 "hostname -f"
+# Output: pumped-piglet.maas
+
+ssh debian@192.168.4.175 "sudo journalctl -u pmxcfs --since '1 minute ago' | grep -i 'unable to resolve'"
+# Output: (no errors)
+```
+
+**Result**: ✅ Success - Hostname now resolves correctly to actual IP
+
+---
+
+### Step 7.4: Verification Summary
+
+**Hostname Resolution**:
+- ✅ `hostname -i` returns `192.168.4.175` (NOT 127.0.1.1)
+- ✅ `hostname -f` returns `pumped-piglet.maas`
+- ✅ No pmxcfs errors in recent logs
+
+**Files Fixed**:
+- ✅ `/etc/cloud/templates/hosts.debian.tmpl` - Uses `{{public_ipv4}}`
+- ✅ `/etc/hosts` - Contains all cluster nodes with actual IPs
+
+**Long-term Impact**:
+- Cloud-init will now regenerate `/etc/hosts` correctly on every boot
+- pmxcfs will always be able to resolve node name to non-loopback IP
+- Cluster membership will remain stable across reboots
+
+---
+
 ### Next Steps
 
 1. **Monitor Cluster Stability**
@@ -414,21 +514,26 @@ Membership information
    - Check GUI regularly for green checkmark persistence
    - Monitor corosync logs for any membership issues
 
-2. **Add still-fawn Back to Cluster**
+2. **Test Reboot Stability Again**
+   - Reboot pumped-piglet to verify cloud-init template fix persists
+   - Confirm `/etc/hosts` regenerates with correct IPs
+   - Verify pmxcfs has no hostname resolution errors
+
+3. **Add still-fawn Back to Cluster**
    - Wait for CPU fan replacement
    - Follow same runbook procedure
    - Cluster will then have 5 nodes (expected=5, quorum=3)
 
-3. **Update Infrastructure Documentation**
+4. **Update Infrastructure Documentation**
    - Add pumped-piglet to hardware inventory
    - Update network topology with 192.168.4.175
    - Document new cluster configuration (4 active nodes)
 
-4. **Test Cluster Failover**
+5. **Test Cluster Failover**
    - Verify cluster remains quorate if any 1 node fails
    - Test VM migration between nodes
    - Validate high availability functionality
 
 ---
 
-**Tags**: action-log, p520, pumped-piglet, proxmox, cluster, pvecm, cluster-join, still-fawn-offline
+**Tags**: action-log, p520, pumped-piglet, proxmox, cluster, pvecm, cluster-join, cloud-init, pmxcfs, hostname-resolution, still-fawn-offline
