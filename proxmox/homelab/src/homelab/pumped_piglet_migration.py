@@ -311,11 +311,13 @@ class PumpedPigletMigration:
         """
         Phase 3: Create K3s VM with GPU passthrough.
 
+        IMPORTANT: This will DESTROY and RECREATE the VM to ensure UEFI + Q35 + GPU passthrough.
+
         Returns:
             Dictionary with VM creation results
         """
         self.logger.info("=" * 60)
-        self.logger.info("PHASE 3: K3s VM Creation")
+        self.logger.info("PHASE 3: K3s VM Creation with UEFI + Q35 + GPU")
         self.logger.info("=" * 60)
 
         # Get GPU info from state
@@ -323,25 +325,73 @@ class PumpedPigletMigration:
         if not gpu_info:
             raise RuntimeError("GPU info not found in state - run phase2 first")
 
-        # Step 3.1: Get next available VMID
-        from homelab.vm_manager import VMManager
-
-        vmid = self.run_step(
-            "get_next_vmid", VMManager.get_next_available_vmid, self.proxmox
-        )
-
-        self.logger.info(f"Using VMID: {vmid}")
-
-        # Step 3.2: Check if VM already exists
+        # Step 3.1: Check if VM already exists
         vm_exists = self.run_step(
             "check_vm_exists", self._check_vm_exists_by_name, self.VM_NAME
         )
 
         if vm_exists:
-            self.logger.info(f"✅ VM {self.VM_NAME} already exists (VMID: {vm_exists})")
-            vmid = vm_exists
+            self.logger.warning(f"⚠️  VM {self.VM_NAME} exists (VMID: {vm_exists})")
+            self.logger.warning("⚠️  VM will be DESTROYED and RECREATED with UEFI + Q35 + GPU passthrough")
+
+            # Check if VM has correct BIOS type
+            result = subprocess.run(
+                f"qm config {vm_exists} | grep -E '(bios|machine|hostpci)'",
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+
+            has_uefi = "bios: ovmf" in result.stdout
+            has_q35 = "machine: q35" in result.stdout
+            has_gpu = "hostpci" in result.stdout
+
+            if has_uefi and has_q35 and has_gpu:
+                self.logger.info("✅ VM already has correct UEFI + Q35 + GPU configuration, skipping recreation")
+                vmid = vm_exists
+            else:
+                self.logger.warning(f"❌ VM configuration incorrect:")
+                self.logger.warning(f"   UEFI (ovmf): {has_uefi}")
+                self.logger.warning(f"   Q35 machine: {has_q35}")
+                self.logger.warning(f"   GPU passthrough: {has_gpu}")
+                self.logger.warning("   Recreating VM with correct configuration...")
+
+                # Step 3.2: Remove node from K3s cluster first (if in cluster)
+                self.logger.info("Removing node from K3s cluster before VM destruction...")
+                try:
+                    subprocess.run(
+                        f"KUBECONFIG=/root/.kube/config kubectl delete node {self.VM_NAME}",
+                        shell=True,
+                        capture_output=True,
+                        timeout=30,
+                    )
+                    self.logger.info("✅ Node removed from K3s cluster")
+                except Exception as e:
+                    self.logger.warning(f"Could not remove node from cluster (may not exist): {e}")
+
+                # Step 3.3: Destroy existing VM
+                self.run_step("destroy_vm", self._destroy_vm_if_exists, vm_exists)
+
+                # Step 3.4: Get next available VMID for recreation
+                from homelab.vm_manager import VMManager
+                vmid = VMManager.get_next_available_vmid(self.proxmox)
+                self.logger.info(f"Using new VMID: {vmid}")
+
+                # Step 3.5: Create VM with UEFI + Q35 + GPU
+                vmid = self.run_step(
+                    "create_vm",
+                    self._create_vm_with_gpu,
+                    vmid,
+                    gpu_info["pci_address"],
+                    self.state.state.get("gpu_info", {}).get("audio"),
+                )
         else:
-            # Step 3.3: Create VM
+            # VM doesn't exist, create it fresh
+            from homelab.vm_manager import VMManager
+            vmid = VMManager.get_next_available_vmid(self.proxmox)
+            self.logger.info(f"Using VMID: {vmid}")
+
+            # Step 3.6: Create VM
             vmid = self.run_step(
                 "create_vm",
                 self._create_vm_with_gpu,
@@ -350,7 +400,7 @@ class PumpedPigletMigration:
                 self.state.state.get("gpu_info", {}).get("audio"),
             )
 
-        # Step 3.4: Get VM IP
+        # Step 3.7: Get VM IP
         vm_ip = self.run_step("get_vm_ip", self._wait_for_vm_ip, vmid)
 
         self.state.store_vm_info(vmid, vm_ip)
@@ -369,11 +419,87 @@ class PumpedPigletMigration:
             self.logger.error(f"Error checking VM existence: {e}")
             return None
 
+    def _destroy_vm_if_exists(self, vmid: int) -> None:
+        """
+        Safely destroy existing VM.
+
+        Args:
+            vmid: VM ID to destroy
+        """
+        try:
+            # Check if VM exists
+            vm_exists = subprocess.run(
+                f"qm status {vmid}",
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+
+            if vm_exists.returncode != 0:
+                self.logger.info(f"VM {vmid} does not exist, nothing to destroy")
+                return
+
+            self.logger.info(f"Destroying existing VM {vmid}")
+
+            # Backup current config
+            config_result = subprocess.run(
+                f"qm config {vmid}",
+                shell=True,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            backup_file = f"/tmp/vm_{vmid}_backup_config.txt"
+            with open(backup_file, "w") as f:
+                f.write(config_result.stdout)
+            self.logger.info(f"Backed up VM config to {backup_file}")
+
+            # Stop VM if running
+            subprocess.run(
+                f"qm stop {vmid}",
+                shell=True,
+                capture_output=True,
+                timeout=60,
+            )
+            time.sleep(5)
+
+            # Destroy VM
+            subprocess.run(
+                f"qm destroy {vmid} --purge",
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            self.logger.info(f"✅ VM {vmid} destroyed successfully")
+
+        except subprocess.TimeoutExpired:
+            self.logger.warning("VM stop timed out, forcing destruction")
+            subprocess.run(
+                f"qm destroy {vmid} --purge",
+                shell=True,
+                check=True,
+            )
+        except Exception as e:
+            self.logger.error(f"Error destroying VM: {e}")
+            raise
+
     def _create_vm_with_gpu(
         self, vmid: int, gpu_pci: str, audio_pci: Optional[str]
     ) -> int:
-        """Create VM with GPU passthrough."""
-        self.logger.info(f"Creating VM {vmid} ({self.VM_NAME}) with GPU passthrough")
+        """
+        Create VM with UEFI + Q35 + GPU passthrough.
+
+        Args:
+            vmid: VM ID to create
+            gpu_pci: GPU PCI address (e.g., 'b3:00')
+            audio_pci: Optional GPU audio PCI address
+
+        Returns:
+            VM ID
+        """
+        self.logger.info(f"Creating VM {vmid} ({self.VM_NAME}) with UEFI + Q35 + GPU passthrough")
 
         # Download cloud image if needed
         img_path = "/tmp/noble-cloudimg.img"
@@ -389,13 +515,21 @@ class PumpedPigletMigration:
                 check=True,
             )
 
-        # Create VM via SSH commands (no GPU passthrough for now)
+        # CRITICAL: UEFI + Q35 + GPU passthrough configuration
+        # Based on: proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md
         commands = [
-            # Create VM (using i440fx instead of q35 since no GPU passthrough)
-            f"qm create {vmid} --name {self.VM_NAME} --memory {self.VM_MEMORY_MB} "
-            f"--cores {self.VM_CORES} --cpu host --net0 virtio,bridge=vmbr0 "
+            # Create VM with UEFI (OVMF) + Q35 machine type + host CPU
+            f"qm create {vmid} --name {self.VM_NAME} "
+            f"--bios ovmf "  # UEFI boot (REQUIRED for GPU passthrough)
+            f"--machine q35 "  # Q35 machine type (REQUIRED for PCIe passthrough)
+            f"--cpu host "  # Host CPU passthrough (REQUIRED for full instruction set)
+            f"--cores {self.VM_CORES} "
+            f"--memory {self.VM_MEMORY_MB} "
+            f"--net0 virtio,bridge=vmbr0,firewall=0 "
             f"--agent enabled=1",
-            # Import disk
+            # Add EFI disk for OVMF
+            f"qm set {vmid} --efidisk0 {self.NVME_POOL}:1,efitype=4m,pre-enrolled-keys=1",
+            # Import cloud image disk
             f"qm importdisk {vmid} {img_path} {self.NVME_POOL}",
             # Configure SCSI controller and attach disk
             f"qm set {vmid} --scsihw virtio-scsi-pci",
@@ -404,27 +538,40 @@ class PumpedPigletMigration:
             f"qm resize {vmid} scsi0 {self.VM_DISK_SIZE_GB}G",
             # Add cloud-init
             f"qm set {vmid} --ide2 {self.NVME_POOL}:cloudinit",
-            # Configure boot
+            # Configure boot order
             f"qm set {vmid} --boot order=scsi0",
-            # Cloud-init config (use the snippet like other K3s VMs)
+            # Cloud-init configuration
             f"qm set {vmid} --ipconfig0 ip=dhcp",
             f"qm set {vmid} --ciuser ubuntu",
             f"qm set {vmid} --sshkeys /root/.ssh/authorized_keys",
             f"qm set {vmid} --cicustom user=local:snippets/install-k3sup-qemu-agent.yaml",
-            # Start VM
-            f"qm start {vmid}",
+            # GPU PASSTHROUGH: PCI-Express mode with All Functions
+            f"qm set {vmid} --hostpci0 {gpu_pci},pcie=1",
         ]
 
         # Execute all commands locally (script runs on pumped-piglet)
         for cmd in commands:
-            self.logger.debug(f"Executing: {cmd}")
-            subprocess.run(
+            self.logger.info(f"Executing: {cmd}")
+            result = subprocess.run(
                 cmd,
                 shell=True,
-                check=True,
                 capture_output=True,
                 text=True,
             )
+            if result.returncode != 0:
+                self.logger.error(f"Command failed: {cmd}")
+                self.logger.error(f"Error: {result.stderr}")
+                raise RuntimeError(f"VM creation failed: {result.stderr}")
+
+        # Start VM
+        self.logger.info(f"Starting VM {vmid}")
+        subprocess.run(
+            f"qm start {vmid}",
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
         return vmid
 
