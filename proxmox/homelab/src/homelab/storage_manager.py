@@ -45,7 +45,7 @@ class StorageManager:
         """
         try:
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "zpool", "list", "-H", pool_name],
+                ["zpool", "list", "-H", pool_name],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -67,7 +67,7 @@ class StorageManager:
         """
         try:
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "zpool", "import"],
+                ["zpool", "import"],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -93,8 +93,6 @@ class StorageManager:
         try:
             result = subprocess.run(
                 [
-                    "ssh",
-                    f"root@{self.node}.maas",
                     "zpool",
                     "list",
                     "-H",
@@ -161,8 +159,6 @@ class StorageManager:
             try:
                 subprocess.run(
                     [
-                        "ssh",
-                        f"root@{self.node}.maas",
                         "zpool",
                         "import",
                         "-f",
@@ -188,8 +184,6 @@ class StorageManager:
         try:
             subprocess.run(
                 [
-                    "ssh",
-                    f"root@{self.node}.maas",
                     "zpool",
                     "create",
                     "-o",
@@ -229,8 +223,6 @@ class StorageManager:
             try:
                 subprocess.run(
                     [
-                        "ssh",
-                        f"root@{self.node}.maas",
                         "zfs",
                         "set",
                         f"{prop}={value}",
@@ -310,8 +302,6 @@ class StorageManager:
         try:
             result = subprocess.run(
                 [
-                    "ssh",
-                    f"root@{self.node}.maas",
                     "zfs",
                     "list",
                     "-H",
@@ -331,7 +321,7 @@ class StorageManager:
         self.logger.info(f"🆕 Creating dataset {full_path}")
         try:
             subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "zfs", "create", full_path],
+                ["zfs", "create", full_path],
                 check=True,
                 capture_output=True,
             )
@@ -340,8 +330,6 @@ class StorageManager:
             if quota:
                 subprocess.run(
                     [
-                        "ssh",
-                        f"root@{self.node}.maas",
                         "zfs",
                         "set",
                         f"quota={quota}",
