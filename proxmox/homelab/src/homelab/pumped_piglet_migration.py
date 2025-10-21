@@ -394,7 +394,7 @@ class PumpedPigletMigration:
             # Create VM
             f"qm create {vmid} --name {self.VM_NAME} --memory {self.VM_MEMORY_MB} "
             f"--cores {self.VM_CORES} --cpu host --net0 virtio,bridge=vmbr0 "
-            f"--serial0 socket --vga serial0 --agent enabled=1",
+            f"--serial0 socket --vga serial0 --agent enabled=1 --machine q35",
             # Import disk
             f"qm importdisk {vmid} {img_path} {self.NVME_POOL}",
             # Attach disk
@@ -411,7 +411,7 @@ class PumpedPigletMigration:
             f"qm set {vmid} --sshkeys /root/.ssh/authorized_keys",
         ]
 
-        # Add GPU passthrough
+        # Add GPU passthrough (requires q35 machine type)
         hostpci_config = self.gpu_mgr.create_hostpci_config(gpu_pci, audio_pci)
         commands.append(f"qm set {vmid} --hostpci0 {hostpci_config}")
 
