@@ -142,7 +142,11 @@ class VMManager:
                 continue
 
             # 2) Calculate resources
-            status = client.get_node_status()
+            try:
+                status = client.get_node_status()
+            except Exception as e:
+                print(f"⚠️  Skipping node {name!r}: error getting status ({type(e).__name__})")
+                continue
             cpus, memb = ResourceManager.calculate_vm_resources(
                 status, node.get("cpu_ratio", 1.0), node.get("memory_ratio", 1.0)
             )
