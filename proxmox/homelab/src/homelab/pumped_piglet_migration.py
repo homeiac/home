@@ -166,7 +166,7 @@ class PumpedPigletMigration:
         self.logger = logger
 
         # Initialize Proxmox client
-        self.proxmox = ProxmoxClient.from_env()
+        self.proxmox = ProxmoxClient(self.NODE).proxmox
 
         # Initialize managers
         self.storage_mgr = StorageManager(self.proxmox, self.NODE)
