@@ -52,7 +52,7 @@ class GPUPassthroughManager:
         """
         try:
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "lspci", "-nn"],
+                ["lspci", "-nn"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -105,7 +105,7 @@ class GPUPassthroughManager:
 
         try:
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "lspci", "-s", audio_short],
+                ["lspci", "-s", audio_short],
                 capture_output=True,
                 text=True,
             )
@@ -164,7 +164,7 @@ class GPUPassthroughManager:
 
         try:
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "lsmod"],
+                ["lsmod"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -195,7 +195,7 @@ class GPUPassthroughManager:
         try:
             # Read current /etc/modules
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "cat", "/etc/modules"],
+                ["cat", "/etc/modules"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -213,11 +213,7 @@ class GPUPassthroughManager:
             self.logger.info(f"📝 Adding VFIO modules to /etc/modules: {', '.join(to_add)}")
             for mod in to_add:
                 subprocess.run(
-                    [
-                        "ssh",
-                        f"root@{self.node}.maas",
-                        f"echo '{mod}' >> /etc/modules",
-                    ],
+                    f"echo '{mod}' >> /etc/modules",
                     check=True,
                     shell=True,
                 )
@@ -229,8 +225,6 @@ class GPUPassthroughManager:
             self.logger.info("🔧 Updating initramfs...")
             subprocess.run(
                 [
-                    "ssh",
-                    f"root@{self.node}.maas",
                     "update-initramfs",
                     "-u",
                     "-k",
@@ -260,7 +254,7 @@ class GPUPassthroughManager:
         try:
             # Check if blacklist file exists
             result = subprocess.run(
-                ["ssh", f"root@{self.node}.maas", "cat", blacklist_file],
+                ["cat", blacklist_file],
                 capture_output=True,
                 text=True,
             )
@@ -272,11 +266,7 @@ class GPUPassthroughManager:
             # Create blacklist file
             self.logger.info("📝 Blacklisting nouveau driver")
             subprocess.run(
-                [
-                    "ssh",
-                    f"root@{self.node}.maas",
-                    f"echo '{blacklist_content}' > {blacklist_file}",
-                ],
+                f"echo '{blacklist_content}' > {blacklist_file}",
                 check=True,
                 shell=True,
             )
