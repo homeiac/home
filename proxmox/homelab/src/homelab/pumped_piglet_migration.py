@@ -397,7 +397,8 @@ class PumpedPigletMigration:
             f"--agent enabled=1",
             # Import disk
             f"qm importdisk {vmid} {img_path} {self.NVME_POOL}",
-            # Attach disk
+            # Configure SCSI controller and attach disk
+            f"qm set {vmid} --scsihw virtio-scsi-pci",
             f"qm set {vmid} --scsi0 {self.NVME_POOL}:vm-{vmid}-disk-0",
             # Resize disk
             f"qm resize {vmid} scsi0 {self.VM_DISK_SIZE_GB}G",
