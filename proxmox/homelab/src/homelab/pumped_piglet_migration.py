@@ -418,13 +418,15 @@ class PumpedPigletMigration:
         # Start VM
         commands.append(f"qm start {vmid}")
 
-        # Execute all commands
+        # Execute all commands locally (script runs on pumped-piglet)
         for cmd in commands:
             self.logger.debug(f"Executing: {cmd}")
             subprocess.run(
-                ["ssh", f"root@{self.NODE}.maas", cmd],
+                cmd,
+                shell=True,
                 check=True,
                 capture_output=True,
+                text=True,
             )
 
         return vmid
@@ -436,12 +438,10 @@ class PumpedPigletMigration:
 
         while time.time() - start_time < timeout:
             try:
+                # Run qm guest cmd locally (script runs on pumped-piglet)
                 result = subprocess.run(
-                    [
-                        "ssh",
-                        f"root@{self.NODE}.maas",
-                        f"qm guest cmd {vmid} network-get-interfaces",
-                    ],
+                    f"qm guest cmd {vmid} network-get-interfaces",
+                    shell=True,
                     capture_output=True,
                     text=True,
                     timeout=10,
