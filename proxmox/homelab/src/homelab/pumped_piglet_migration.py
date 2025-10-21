@@ -529,11 +529,11 @@ class PumpedPigletMigration:
             f"--agent enabled=1",
             # Add EFI disk for OVMF
             f"qm set {vmid} --efidisk0 {self.NVME_POOL}:1,efitype=4m,pre-enrolled-keys=1",
-            # Import cloud image disk
+            # Import cloud image disk (creates vm-{vmid}-disk-1 since disk-0 is EFI disk)
             f"qm importdisk {vmid} {img_path} {self.NVME_POOL}",
             # Configure SCSI controller and attach disk
             f"qm set {vmid} --scsihw virtio-scsi-pci",
-            f"qm set {vmid} --scsi0 {self.NVME_POOL}:vm-{vmid}-disk-0",
+            f"qm set {vmid} --scsi0 {self.NVME_POOL}:vm-{vmid}-disk-1",
             # Resize disk
             f"qm resize {vmid} scsi0 {self.VM_DISK_SIZE_GB}G",
             # Add cloud-init
