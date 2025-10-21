@@ -389,12 +389,12 @@ class PumpedPigletMigration:
                 check=True,
             )
 
-        # Create VM via SSH commands
+        # Create VM via SSH commands (no GPU passthrough for now)
         commands = [
-            # Create VM
+            # Create VM (using i440fx instead of q35 since no GPU passthrough)
             f"qm create {vmid} --name {self.VM_NAME} --memory {self.VM_MEMORY_MB} "
             f"--cores {self.VM_CORES} --cpu host --net0 virtio,bridge=vmbr0 "
-            f"--serial0 socket --vga serial0 --agent enabled=1 --machine q35",
+            f"--agent enabled=1",
             # Import disk
             f"qm importdisk {vmid} {img_path} {self.NVME_POOL}",
             # Attach disk
@@ -410,14 +410,9 @@ class PumpedPigletMigration:
             f"qm set {vmid} --ciuser ubuntu",
             f"qm set {vmid} --sshkeys /root/.ssh/authorized_keys",
             f"qm set {vmid} --cicustom user=local:snippets/install-k3sup-qemu-agent.yaml",
+            # Start VM
+            f"qm start {vmid}",
         ]
-
-        # Add GPU passthrough (requires q35 machine type)
-        hostpci_config = self.gpu_mgr.create_hostpci_config(gpu_pci, audio_pci)
-        commands.append(f"qm set {vmid} --hostpci0 {hostpci_config}")
-
-        # Start VM
-        commands.append(f"qm start {vmid}")
 
         # Execute all commands locally (script runs on pumped-piglet)
         for cmd in commands:
