@@ -9,6 +9,9 @@ class ProxmoxClient:
     """Wrapper around Proxmox API for easy interaction."""
 
     def __init__(self, host: str) -> None:
+        # Append .maas suffix if not present
+        if not host.endswith(".maas"):
+            host = host + ".maas"
         self.host = host
 
         # Extract API token components
