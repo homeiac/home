@@ -1,0 +1,151 @@
+#!/usr/bin/expect -f
+
+set timeout 10
+log_user 1
+set env(TERM) "xterm"
+
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# SSH dialog - use LEFT ARROW to select Yes explicitly
+expect {
+    "*SSH DETECTED*" {
+        puts "✓ SSH dialog detected - moving to Yes and selecting"
+        # Send left arrow key then enter
+        send "\033\[D\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: SSH dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Wait a moment for the selection to process
+sleep 1
+
+# Check if we got past the SSH dialog
+expect {
+    "*Choose Type*" {
+        puts "🎉 SUCCESS: Bypassed SSH dialog! Now at container type selection"
+        puts "✓ Selecting Advanced container type"
+        send "\t\r"
+    }
+    "*Proceed using SSH*" {
+        puts "✓ SSH proceeding dialog - continuing"
+        send "\r"
+        expect "*Choose Type*" {
+            puts "✓ Now at container type - selecting Advanced"
+            send "\t\r"
+        }
+    }
+    "Exiting due to SSH usage" {
+        puts "✗ FAILED: Still selecting No instead of Yes"
+        exit 1
+    }
+    timeout {
+        puts "✗ TIMEOUT: No response after SSH dialog in 10s"
+        exit 1
+    }
+}
+
+# If we get here, we successfully passed SSH dialog!
+puts "🎉 BREAKTHROUGH: SSH dialog automation working!"
+puts "Continuing with container configuration..."
+
+# Continue with remaining dialogs using quick timeouts
+expect {
+    "*Container ID*" {
+        puts "✓ Container ID - entering 104"
+        send "104\r"
+        exp_continue
+    }
+    "*Hostname*" {
+        puts "✓ Hostname - entering docker-webtop"
+        send "docker-webtop\r"
+        exp_continue
+    }
+    "*Disk Size*" {
+        puts "✓ Disk size - entering 50GB"
+        send "50\r"
+        exp_continue
+    }
+    "*CPU Core*" {
+        puts "✓ CPU cores - entering 4"
+        send "4\r"
+        exp_continue
+    }
+    "*RAM*" {
+        puts "✓ RAM - entering 8192MB"  
+        send "8192\r"
+        exp_continue
+    }
+    "*Bridge*" {
+        puts "✓ Bridge - entering vmbr0"
+        send "vmbr0\r"
+        exp_continue
+    }
+    "*IPv4*" {
+        puts "✓ IP address - entering 192.168.4.104/24"
+        send "192.168.4.104/24\r"
+        exp_continue
+    }
+    "*Gateway*" {
+        puts "✓ Gateway - entering 192.168.4.1"
+        send "192.168.4.1\r"
+        exp_continue
+    }
+    "*Create CT*" {
+        puts "✓ Final confirmation - creating container!"
+        set timeout 300
+        send "y\r"
+    }
+    "*IPv6*" {
+        send "n\r"
+        exp_continue
+    }
+    "*MTU*" {
+        send "\r"
+        exp_continue
+    }
+    "*DNS*" {
+        send "\r"
+        exp_continue
+    }
+    "*MAC*" {
+        send "\r"
+        exp_continue
+    }
+    "*VLAN*" {
+        send "\r"
+        exp_continue
+    }
+    "*SSH*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Verbose*" {
+        send "y\r"
+        exp_continue
+    }
+    timeout {
+        puts "✗ TIMEOUT in configuration steps"
+        exit 1
+    }
+}
+
+# Wait for completion
+expect {
+    "*Completed Successfully*" {
+        puts "🎉🎉🎉 COMPLETE SUCCESS: Docker LXC Container Created! 🎉🎉🎉"
+        exit 0
+    }
+    timeout {
+        puts "✗ TIMEOUT: Container creation exceeded 5 minutes"
+        exit 1
+    }
+    eof {
+        puts "✓ Script completed"
+        exit 0
+    }
+}
+
+expect eof

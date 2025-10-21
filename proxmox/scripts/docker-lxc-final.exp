@@ -1,0 +1,151 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+log_user 1
+
+# Set proper environment
+set env(TERM) "xterm"
+set env(DEBIAN_FRONTEND) "noninteractive"
+
+# Start the Docker script
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# Handle SSH warning dialog
+expect {
+    "*SSH DETECTED*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Proceed using SSH*" {
+        send "\r"
+        exp_continue
+    }
+}
+
+# Handle container type selection
+expect {
+    "*CONTAINER TYPE*" {
+        # Send Tab to move to Advanced, then Space to select
+        send "\t \r"
+        exp_continue
+    }
+}
+
+# Handle container ID
+expect {
+    "*Container ID*" {
+        send "104\r"
+        exp_continue
+    }
+}
+
+# Handle hostname
+expect {
+    "*Hostname*" {
+        send "docker-webtop\r"
+        exp_continue
+    }
+}
+
+# Handle disk size
+expect {
+    "*Disk Size*" {
+        send "50\r"
+        exp_continue
+    }
+}
+
+# Handle CPU cores
+expect {
+    "*CPU Core*" {
+        send "4\r"
+        exp_continue
+    }
+}
+
+# Handle RAM
+expect {
+    "*RAM*" {
+        send "8192\r"
+        exp_continue
+    }
+}
+
+# Handle bridge
+expect {
+    "*Bridge*" {
+        send "vmbr0\r"
+        exp_continue
+    }
+}
+
+# Handle IP address
+expect {
+    "*IPv4*" {
+        send "192.168.4.104/24\r"
+        exp_continue
+    }
+}
+
+# Handle gateway
+expect {
+    "*Gateway*" {
+        send "192.168.4.1\r"
+        exp_continue
+    }
+}
+
+# Handle various optional settings with defaults
+expect {
+    "*IPv6*" {
+        send "n\r"
+        exp_continue
+    }
+    "*MTU*" {
+        send "\r"
+        exp_continue
+    }
+    "*DNS Search*" {
+        send "\r"
+        exp_continue
+    }
+    "*DNS Server*" {
+        send "\r"
+        exp_continue
+    }
+    "*MAC Address*" {
+        send "\r"
+        exp_continue
+    }
+    "*VLAN*" {
+        send "\r"
+        exp_continue
+    }
+    "*Root SSH*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Verbose*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Create CT*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Completed Successfully*" {
+        puts "SUCCESS: Docker LXC created!"
+        exit 0
+    }
+    timeout {
+        puts "TIMEOUT: Script took too long"
+        exit 1
+    }
+    eof {
+        puts "DONE: Script finished"
+        exit 0
+    }
+}
+
+# Wait for completion
+expect eof

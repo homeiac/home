@@ -1,0 +1,133 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+log_user 1
+
+# Start the script
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# Handle SSH dialog - need to move to Yes and select it
+expect {
+    "*SSH DETECTED*" {
+        # Move left arrow to select Yes, then press Enter
+        send "\033\[D\r"
+    }
+    timeout {
+        puts "Timeout waiting for SSH dialog"
+        exit 1
+    }
+}
+
+# Wait for next screen after SSH confirmation
+expect {
+    "*Proceed using SSH*" {
+        send "\r"
+    }
+    "*Choose Type*" {
+        # Already at container type screen
+    }
+    timeout {
+        puts "Timeout after SSH confirmation"
+        exit 1
+    }
+}
+
+# Container type selection - Tab to Advanced, Enter to select
+expect {
+    "*Choose Type*" {
+        send "\t\r"
+    }
+    timeout {
+        puts "Timeout at container type selection"
+        exit 1
+    }
+}
+
+# All subsequent configuration steps
+expect {
+    "*Container ID*" {
+        send "104\r"
+        exp_continue
+    }
+    "*Hostname*" {
+        send "docker-webtop\r"
+        exp_continue
+    }
+    "*Disk Size*" {
+        send "50\r"
+        exp_continue
+    }
+    "*CPU Core*" {
+        send "4\r"
+        exp_continue
+    }
+    "*RAM*" {
+        send "8192\r"
+        exp_continue
+    }
+    "*Bridge*" {
+        send "vmbr0\r"
+        exp_continue
+    }
+    "*IPv4*" {
+        send "192.168.4.104/24\r"
+        exp_continue
+    }
+    "*Gateway*" {
+        send "192.168.4.1\r"
+        exp_continue
+    }
+    "*IPv6*" {
+        send "n\r"
+        exp_continue
+    }
+    "*MTU*" {
+        send "\r"
+        exp_continue
+    }
+    "*DNS Search*" {
+        send "\r"
+        exp_continue
+    }
+    "*DNS Server*" {
+        send "\r"
+        exp_continue
+    }
+    "*MAC*" {
+        send "\r"
+        exp_continue
+    }
+    "*VLAN*" {
+        send "\r"
+        exp_continue
+    }
+    "*Root SSH*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Verbose*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Create CT*" {
+        send "y\r"
+        exp_continue
+    }
+    "*Completed Successfully*" {
+        puts "\n🎉 SUCCESS: Docker LXC Container 104 Created Successfully!"
+        puts "IP: 192.168.4.104"
+        puts "Hostname: docker-webtop"
+        puts "Ready for Webtop deployment!"
+        exit 0
+    }
+    timeout {
+        puts "Timeout during configuration steps"
+        exit 1
+    }
+    eof {
+        puts "Script completed"
+        exit 0
+    }
+}
+
+expect eof

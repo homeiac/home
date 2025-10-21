@@ -1,0 +1,218 @@
+#!/usr/bin/expect -f
+
+# Quick timeouts for fast feedback - only container creation should be slow
+set timeout 10
+log_user 1
+
+# Set environment properly  
+set env(TERM) "xterm"
+
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# Step 1: Handle SSH dialog (should be quick)
+expect {
+    "*SSH DETECTED*" {
+        puts "✓ SSH dialog detected - selecting Yes"
+        send "\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: SSH dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 2: Handle SSH confirmation (should be quick) 
+expect {
+    "*Proceed using SSH*" {
+        puts "✓ SSH confirmation - proceeding"
+        send "\r"
+    }
+    "*Choose Type*" {
+        puts "✓ Skipped to container type selection"
+    }
+    timeout {
+        puts "✗ TIMEOUT: SSH confirmation failed in 10s"
+        exit 1
+    }
+}
+
+# Step 3: Container type selection (should be quick)
+expect {
+    "*Choose Type*" {
+        puts "✓ Container type dialog - selecting Advanced"
+        send "\t\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Container type dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 4: Container ID (should be quick)
+expect {
+    "*Container ID*" {
+        puts "✓ Container ID dialog - entering 104"
+        send "104\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Container ID dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 5: Hostname (should be quick)
+expect {
+    "*Hostname*" {
+        puts "✓ Hostname dialog - entering docker-webtop"
+        send "docker-webtop\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Hostname dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 6: Disk size (should be quick)
+expect {
+    "*Disk Size*" {
+        puts "✓ Disk size dialog - entering 50GB"
+        send "50\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Disk size dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 7: CPU cores (should be quick)
+expect {
+    "*CPU Core*" {
+        puts "✓ CPU cores dialog - entering 4"
+        send "4\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: CPU cores dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 8: RAM (should be quick)
+expect {
+    "*RAM*" {
+        puts "✓ RAM dialog - entering 8192MB"
+        send "8192\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: RAM dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 9: Bridge (should be quick)
+expect {
+    "*Bridge*" {
+        puts "✓ Bridge dialog - entering vmbr0"
+        send "vmbr0\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Bridge dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 10: IP Address (should be quick)
+expect {
+    "*IPv4*" {
+        puts "✓ IP address dialog - entering 192.168.4.104/24"
+        send "192.168.4.104/24\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: IP address dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Step 11: Gateway (should be quick)
+expect {
+    "*Gateway*" {
+        puts "✓ Gateway dialog - entering 192.168.4.1"
+        send "192.168.4.1\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Gateway dialog not found in 10s"
+        exit 1
+    }
+}
+
+# Speed through remaining optional settings
+set timeout 5
+expect {
+    "*IPv6*" {
+        puts "✓ IPv6 dialog - disabling"
+        send "n\r"
+        exp_continue
+    }
+    "*MTU*" {
+        puts "✓ MTU dialog - using default"
+        send "\r"
+        exp_continue
+    }
+    "*DNS Search*" {
+        puts "✓ DNS Search dialog - using default"
+        send "\r"
+        exp_continue
+    }
+    "*DNS Server*" {
+        puts "✓ DNS Server dialog - using default"
+        send "\r"
+        exp_continue
+    }
+    "*MAC*" {
+        puts "✓ MAC dialog - using default"
+        send "\r"
+        exp_continue
+    }
+    "*VLAN*" {
+        puts "✓ VLAN dialog - using default"
+        send "\r"
+        exp_continue
+    }
+    "*Root SSH*" {
+        puts "✓ Root SSH dialog - enabling"
+        send "y\r"
+        exp_continue
+    }
+    "*Verbose*" {
+        puts "✓ Verbose dialog - enabling"
+        send "y\r"
+        exp_continue
+    }
+    "*Create CT*" {
+        puts "✓ Final confirmation - creating container (this will take longer...)"
+        # Longer timeout for actual container creation
+        set timeout 300
+        send "y\r"
+    }
+    timeout {
+        puts "✗ TIMEOUT: Skipped dialog in optional settings"
+        exp_continue
+    }
+}
+
+# Wait for completion with longer timeout
+expect {
+    "*Completed Successfully*" {
+        puts "🎉 SUCCESS: Docker LXC container created!"
+        exit 0
+    }
+    timeout {
+        puts "✗ TIMEOUT: Container creation took longer than 5 minutes"
+        exit 1
+    }
+    eof {
+        puts "✓ Script completed"
+        exit 0
+    }
+}
+
+expect eof
