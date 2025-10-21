@@ -118,15 +118,25 @@ class VMManager:
         for idx, node in enumerate(Config.get_nodes()):
             name = node["name"]
             storage = node["img_storage"]
-            client = ProxmoxClient(name)
-            proxmox = client.proxmox
 
             if not storage:
                 print(f"⚠️  Skipping node {name!r}: no storage defined.")
                 continue
 
+            # Try to connect to node, skip if offline
+            try:
+                client = ProxmoxClient(name)
+                proxmox = client.proxmox
+            except Exception as e:
+                print(f"⚠️  Skipping node {name!r}: cannot connect ({type(e).__name__})")
+                continue
+
             # 1) Skip existing VM
-            vmid = VMManager.vm_exists(proxmox, name)
+            try:
+                vmid = VMManager.vm_exists(proxmox, name)
+            except Exception as e:
+                print(f"⚠️  Skipping node {name!r}: error checking VM ({type(e).__name__})")
+                continue
             if vmid:
                 print(f"⚠️  VM exists: {Config.VM_NAME_TEMPLATE.format(node=name)} (vmid={vmid}), skipping.")
                 continue
