@@ -35,6 +35,12 @@ class VMManager:
         used = set()
         for n in proxmox.nodes.get():
             nodename = n["node"]
+            node_status = n.get("status", "unknown")
+
+            # Skip offline nodes to avoid connection errors
+            if node_status != "online":
+                continue
+
             for vm in proxmox.nodes(nodename).qemu.get():
                 used.add(int(vm["vmid"]))
             for ct in proxmox.nodes(nodename).lxc.get():
