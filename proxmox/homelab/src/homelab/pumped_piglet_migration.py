@@ -405,10 +405,11 @@ class PumpedPigletMigration:
             f"qm set {vmid} --ide2 {self.NVME_POOL}:cloudinit",
             # Configure boot
             f"qm set {vmid} --boot order=scsi0",
-            # Cloud-init config
+            # Cloud-init config (use the snippet like other K3s VMs)
             f"qm set {vmid} --ipconfig0 ip=dhcp",
             f"qm set {vmid} --ciuser ubuntu",
             f"qm set {vmid} --sshkeys /root/.ssh/authorized_keys",
+            f"qm set {vmid} --cicustom user=local:snippets/install-k3sup-qemu-agent.yaml",
         ]
 
         # Add GPU passthrough (requires q35 machine type)
