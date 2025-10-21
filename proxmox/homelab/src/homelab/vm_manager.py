@@ -31,20 +31,29 @@ class VMManager:
 
     @staticmethod
     def get_next_available_vmid(proxmox: Any) -> int:
-        """Find the next free VMID, skipping existing QEMU VMs and LXC containers."""
+        """Find the next free VMID using cluster-wide resources query."""
         used = set()
-        for n in proxmox.nodes.get():
-            nodename = n["node"]
-            node_status = n.get("status", "unknown")
 
-            # Skip offline nodes to avoid connection errors
-            if node_status != "online":
-                continue
+        # Use cluster resources API to get ALL VMs/CTs (including offline nodes)
+        try:
+            resources = proxmox.cluster.resources.get(type='vm')
+            for resource in resources:
+                used.add(int(resource['vmid']))
+        except Exception:
+            # Fallback to per-node query (skip offline nodes)
+            for n in proxmox.nodes.get():
+                nodename = n["node"]
+                node_status = n.get("status", "unknown")
 
-            for vm in proxmox.nodes(nodename).qemu.get():
-                used.add(int(vm["vmid"]))
-            for ct in proxmox.nodes(nodename).lxc.get():
-                used.add(int(ct["vmid"]))
+                # Skip offline nodes to avoid connection errors
+                if node_status != "online":
+                    continue
+
+                for vm in proxmox.nodes(nodename).qemu.get():
+                    used.add(int(vm["vmid"]))
+                for ct in proxmox.nodes(nodename).lxc.get():
+                    used.add(int(ct["vmid"]))
+
         for candidate in range(100, 9999):
             if candidate not in used:
                 return candidate
