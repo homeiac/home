@@ -1,0 +1,134 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+log_user 1
+
+# Set environment for proper terminal handling
+set env(TERM) "xterm-256color"
+
+# Start the script
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# Wait for SSH detection dialog and handle it
+expect {
+    -re ".*SSH DETECTED.*Proceed using SSH.*" {
+        # Press Enter to select "Yes" (it's highlighted by default)
+        send "\r"
+    }
+    timeout {
+        puts "Timeout waiting for SSH dialog"
+        exit 1
+    }
+}
+
+# Now expect the follow-up message and continue
+expect {
+    -re ".*Proceed using SSH.*chosen to proceed.*" {
+        send "\r"
+    }
+    -re ".*Choose Type.*" {
+        # We're already at the container type selection
+    }
+    timeout {
+        puts "Timeout after SSH dialog"
+        exit 1
+    }
+}
+
+# Handle container type selection - press Tab to move to Advanced, then Enter
+expect {
+    -re ".*Choose Type.*" {
+        send "\t\r"
+    }
+    timeout {
+        puts "Timeout at container type"
+        exit 1
+    }
+}
+
+# Handle all subsequent dialogs in order
+expect {
+    -re ".*Container ID.*" {
+        send "104\r"
+        exp_continue
+    }
+    -re ".*Hostname.*" {
+        send "docker-webtop\r"
+        exp_continue
+    }
+    -re ".*Disk Size.*" {
+        send "50\r"
+        exp_continue
+    }
+    -re ".*CPU Core.*" {
+        send "4\r"
+        exp_continue
+    }
+    -re ".*RAM.*" {
+        send "8192\r"
+        exp_continue
+    }
+    -re ".*Bridge.*" {
+        send "vmbr0\r"
+        exp_continue
+    }
+    -re ".*IPv4.*" {
+        send "192.168.4.104/24\r"
+        exp_continue
+    }
+    -re ".*Gateway.*" {
+        send "192.168.4.1\r"
+        exp_continue
+    }
+    -re ".*IPv6.*" {
+        send "n\r"
+        exp_continue
+    }
+    -re ".*MTU.*" {
+        send "\r"
+        exp_continue
+    }
+    -re ".*DNS Search.*" {
+        send "\r"
+        exp_continue
+    }
+    -re ".*DNS Server.*" {
+        send "\r"
+        exp_continue
+    }
+    -re ".*MAC.*" {
+        send "\r"
+        exp_continue
+    }
+    -re ".*VLAN.*" {
+        send "\r"
+        exp_continue
+    }
+    -re ".*Root SSH.*" {
+        send "y\r"
+        exp_continue
+    }
+    -re ".*Verbose.*" {
+        send "y\r"
+        exp_continue
+    }
+    -re ".*Create CT.*" {
+        send "y\r"
+        exp_continue
+    }
+    -re ".*Completed Successfully.*" {
+        puts "\n=== SUCCESS: Docker LXC Container Created! ==="
+        exit 0
+    }
+    timeout {
+        puts "Timeout during configuration"
+        exit 1
+    }
+    eof {
+        puts "Script completed"
+        exit 0
+    }
+}
+
+# Final wait
+expect eof

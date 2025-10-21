@@ -1,0 +1,128 @@
+#!/usr/bin/expect -f
+# Expect script to automate Proxmox VE Helper Scripts Docker LXC creation
+
+set timeout 300
+set container_id "104"
+set hostname "docker-webtop"
+set ip_address "192.168.4.104"
+
+# Start the Docker LXC helper script
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# Handle initial prompts
+expect {
+    "Do you want to continue" {
+        send "y\r"
+        exp_continue
+    }
+    "Choose Type" {
+        # Select Advanced
+        send "\t\r"
+        exp_continue
+    }
+    "CONTAINER TYPE" {
+        # Navigate to Advanced and select
+        send "\t\r"
+        exp_continue
+    }
+}
+
+# Handle container ID
+expect "Set Container ID" {
+    send "$container_id\r"
+}
+
+# Handle hostname
+expect "Set Hostname" {
+    send "$hostname\r"
+}
+
+# Handle disk size
+expect "Set Disk Size in GB" {
+    send "50\r"
+}
+
+# Handle CPU cores
+expect "Set CPU Core Count" {
+    send "4\r"
+}
+
+# Handle RAM
+expect "Set RAM in MB" {
+    send "8192\r"
+}
+
+# Handle Bridge
+expect "Set a Bridge" {
+    send "vmbr0\r"
+}
+
+# Handle Static IP
+expect "Set a Static IPv4 CIDR Address" {
+    send "$ip_address/24\r"
+}
+
+# Handle Gateway
+expect "Set a Gateway IP" {
+    send "192.168.4.1\r"
+}
+
+# Handle APT Cacher
+expect "Disable IPv6" {
+    send "n\r"
+}
+
+# Handle MTU Size
+expect "Set Interface MTU Size" {
+    send "\r"
+}
+
+# Handle DNS Search Domain
+expect "Set a DNS Search Domain" {
+    send "\r"
+}
+
+# Handle DNS Server
+expect "Set a DNS Server IP" {
+    send "\r"
+}
+
+# Handle MAC Address
+expect "Set a MAC Address" {
+    send "\r"
+}
+
+# Handle VLAN
+expect "Set a VLAN Tag" {
+    send "\r"
+}
+
+# Enable features
+expect "Enable Root SSH Access" {
+    send "y\r"
+}
+
+expect "Enable Verbose Mode" {
+    send "y\r"
+}
+
+# Final creation
+expect "Create CT" {
+    send "y\r"
+}
+
+# Wait for completion
+expect {
+    "Completed Successfully" {
+        puts "Docker LXC container created successfully!"
+        exit 0
+    }
+    timeout {
+        puts "Script timed out"
+        exit 1
+    }
+    eof {
+        puts "Script completed"
+        exit 0
+    }
+}

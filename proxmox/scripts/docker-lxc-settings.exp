@@ -1,0 +1,173 @@
+#!/usr/bin/expect -f
+
+set timeout 10
+log_user 1
+set env(TERM) "xterm"
+
+spawn bash -c "curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/docker.sh | bash"
+
+# SSH dialog
+expect {
+    "*SSH DETECTED*" {
+        puts "✓ SSH dialog - selecting Yes"
+        send "\033\[D\r"
+    }
+    timeout {
+        puts "✗ No SSH dialog"
+        exit 1
+    }
+}
+
+# SSH confirmation
+expect {
+    "*Proceed using SSH*" {
+        puts "✓ SSH confirmation"
+        send "\r"
+    }
+    "*SETTINGS*" {
+        puts "✓ Went straight to settings menu"
+    }
+    timeout {
+        puts "✗ No SSH confirmation"
+        exit 1
+    }
+}
+
+# SETTINGS menu - select "3 Advanced Settings"
+expect {
+    "*SETTINGS*" {
+        puts "✓ Settings menu - selecting Advanced Settings (option 3)"
+        send "3\r"
+    }
+    timeout {
+        puts "✗ No settings menu"
+        exit 1
+    }
+}
+
+# Now expect container type selection
+expect {
+    "*Choose Type*" {
+        puts "✓ Container type - selecting Advanced"
+        send "\t\r"
+    }
+    timeout {
+        puts "✗ No container type dialog"
+        exit 1
+    }
+}
+
+# Rest of the configuration with fast feedback
+expect {
+    "*Container ID*" {
+        puts "✓ ID: 104"
+        send "104\r"
+        exp_continue
+    }
+    "*Hostname*" {
+        puts "✓ Host: docker-webtop"
+        send "docker-webtop\r"
+        exp_continue
+    }
+    "*Disk Size*" {
+        puts "✓ Disk: 50GB"
+        send "50\r"
+        exp_continue
+    }
+    "*CPU Core*" {
+        puts "✓ CPU: 4 cores"
+        send "4\r"
+        exp_continue
+    }
+    "*RAM*" {
+        puts "✓ RAM: 8192MB"
+        send "8192\r"
+        exp_continue
+    }
+    "*Bridge*" {
+        puts "✓ Bridge: vmbr0"
+        send "vmbr0\r"
+        exp_continue
+    }
+    "*IPv4*" {
+        puts "✓ IP: 192.168.4.104/24"
+        send "192.168.4.104/24\r"
+        exp_continue
+    }
+    "*Gateway*" {
+        puts "✓ Gateway: 192.168.4.1"
+        send "192.168.4.1\r"
+        exp_continue
+    }
+    "*IPv6*" {
+        puts "✓ IPv6: disabled"
+        send "n\r"
+        exp_continue
+    }
+    "*MTU*" {
+        puts "✓ MTU: default"
+        send "\r"
+        exp_continue
+    }
+    "*DNS Search*" {
+        puts "✓ DNS Search: default"
+        send "\r"
+        exp_continue
+    }
+    "*DNS Server*" {
+        puts "✓ DNS Server: default"
+        send "\r"
+        exp_continue
+    }
+    "*MAC*" {
+        puts "✓ MAC: default"
+        send "\r"
+        exp_continue
+    }
+    "*VLAN*" {
+        puts "✓ VLAN: default"
+        send "\r"
+        exp_continue
+    }
+    "*Root SSH*" {
+        puts "✓ SSH: enabled"
+        send "y\r"
+        exp_continue
+    }
+    "*Verbose*" {
+        puts "✓ Verbose: enabled"
+        send "y\r"
+        exp_continue
+    }
+    "*Create CT*" {
+        puts "🚀 CREATING CONTAINER (this will take a few minutes)..."
+        set timeout 300
+        send "y\r"
+    }
+    timeout {
+        puts "✗ Timeout in configuration"
+        exit 1
+    }
+}
+
+# Wait for final success
+expect {
+    "*Completed Successfully*" {
+        puts ""
+        puts "🎉🎉🎉 AUTOMATION SUCCESS! 🎉🎉🎉"
+        puts "Docker LXC Container 104 created!"
+        puts "IP: 192.168.4.104"
+        puts "Hostname: docker-webtop"
+        exit 0
+    }
+    timeout {
+        puts "✗ Container creation timeout"
+        exit 1
+    }
+    eof {
+        puts "✓ Process completed"
+        exit 0
+    }
+}
+
+expect eof
