@@ -292,9 +292,9 @@ class GPUPassthroughManager:
 
         if audio_pci:
             audio_short = audio_pci.replace("0000:", "")
-            config = f"{gpu_short};{audio_short},pcie=1,x-vga=1"
+            config = f"{gpu_short};{audio_short},pcie=1"
         else:
-            config = f"{gpu_short},pcie=1,x-vga=1"
+            config = f"{gpu_short},pcie=1"
 
         return config
 
