@@ -165,8 +165,8 @@ class PumpedPigletMigration:
         self.state = MigrationState(Path(state_file))
         self.logger = logger
 
-        # Initialize Proxmox client (use localhost since script runs on pumped-piglet)
-        self.proxmox = ProxmoxClient("localhost").proxmox
+        # Initialize Proxmox client
+        self.proxmox = ProxmoxClient(self.NODE).proxmox
 
         # Initialize managers
         self.storage_mgr = StorageManager(self.proxmox, self.NODE)
