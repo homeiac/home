@@ -27,10 +27,10 @@ data:
     fi
     
     # Add your public key (replace with your actual key)
-    cat > /config/.ssh/authorized_keys << 'EOF'
-# Add your SSH public key here
-# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-email@example.com
-EOF
+    cat > /config/.ssh/authorized_keys << 'SSHEOF'
+    # Add your SSH public key here
+    # ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-email@example.com
+    SSHEOF
     chmod 600 /config/.ssh/authorized_keys
     
     # Configure xRDP
