@@ -18,14 +18,14 @@ grafana:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                  - k3s-vm-still-fawn
+                  - k3s-vm-pumped-piglet-gpu
 
 prometheus:
   prometheusSpec:
     # Retain 30 days of raw data (adjust as needed)
     retention: 30d
     nodeSelector:
-      kubernetes.io/hostname: k3s-vm-still-fawn
+      kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -68,7 +68,7 @@ grafana:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                  - k3s-vm-still-fawn
+                  - k3s-vm-pumped-piglet-gpu
   smtp:
     enabled: true
     existingSecret: smtp-credentials
