@@ -192,7 +192,7 @@ k3s-vm-pve
 ssh root@chief-horse.maas "qm guest exec 109 -- cat /var/lib/rancher/k3s/server/node-token"
 
 # Manual K3s installation on VM 105
-ssh -i ~/.ssh/id_ed25519_pve ubuntu@192.168.4.208 "curl -sfL https://get.k3s.io | \
+ssh -i ~/.ssh/id_ed25519_pve ubuntu@192.168.4.210 "curl -sfL https://get.k3s.io | \
   K3S_URL=https://192.168.4.237:6443 \
   K3S_TOKEN='K103e5597417ab93ecbc26766cdd781a42e2150b1bc2aa844149f1307c8a8656148::server:4b29815ba0333c8cc08d6bc71f063bc0' \
   INSTALL_K3S_VERSION=v1.32.4+k3s1 \
@@ -259,16 +259,16 @@ kubectl cluster-info
 **Output**:
 ```
 # Node status - SUCCESS
-NAME                   STATUS   ROLES                       AGE    VERSION        INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION     CONTAINER-RUNTIME
-k3s-vm-chief-horse     Ready    control-plane,etcd,master   161d   v1.32.4+k3s1   192.168.4.237   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
-k3s-vm-pumped-piglet   Ready    control-plane,etcd,master   45s    v1.32.4+k3s1   192.168.4.208   <none>        Ubuntu 24.04.3 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
-k3s-vm-pve             Ready    control-plane,etcd,master   160d   v1.32.4+k3s1   192.168.4.238   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
+NAME                       STATUS   ROLES                       AGE    VERSION        INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION     CONTAINER-RUNTIME
+k3s-vm-chief-horse         Ready    control-plane,etcd,master   161d   v1.32.4+k3s1   192.168.4.237   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
+k3s-vm-pumped-piglet-gpu   Ready    control-plane,etcd,master   45s    v1.32.4+k3s1   192.168.4.210   <none>        Ubuntu 24.04.3 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
+k3s-vm-pve                 Ready    control-plane,etcd,master   160d   v1.32.4+k3s1   192.168.4.238   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
 
-# System pods running on k3s-vm-pumped-piglet
-nvidia-device-plugin-daemonset-hkt9j                          1/1     Running   0               63s    10.42.1.5       k3s-vm-pumped-piglet
-svclb-samba-lb-872eb5d1-dnb47                                 2/2     Running   0               63s    10.42.1.3       k3s-vm-pumped-piglet
-svclb-stable-diffusion-webui-c2a3606b-pdccl                   1/1     Running   0               63s    10.42.1.4       k3s-vm-pumped-piglet
-svclb-webtop-3881a045-6fhbs                                   4/4     Running   0               63s    10.42.1.6       k3s-vm-pumped-piglet
+# System pods running on k3s-vm-pumped-piglet-gpu
+nvidia-device-plugin-daemonset-hkt9j                          1/1     Running   0               63s    10.42.1.5       k3s-vm-pumped-piglet-gpu
+svclb-samba-lb-872eb5d1-dnb47                                 2/2     Running   0               63s    10.42.1.3       k3s-vm-pumped-piglet-gpu
+svclb-stable-diffusion-webui-c2a3606b-pdccl                   1/1     Running   0               63s    10.42.1.4       k3s-vm-pumped-piglet-gpu
+svclb-webtop-3881a045-6fhbs                                   4/4     Running   0               63s    10.42.1.6       k3s-vm-pumped-piglet-gpu
 
 # Cluster info
 Kubernetes control plane is running at https://192.168.4.237:6443
@@ -375,14 +375,14 @@ kubectl get nodes -o wide
 
 **Output**:
 ```
-NAME                   STATUS   ROLES                       AGE    VERSION        INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION     CONTAINER-RUNTIME
-k3s-vm-chief-horse     Ready    control-plane,etcd,master   161d   v1.32.4+k3s1   192.168.4.237   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
-k3s-vm-pumped-piglet   Ready    control-plane,etcd,master   2m     v1.32.4+k3s1   192.168.4.208   <none>        Ubuntu 24.04.3 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
-k3s-vm-pve             Ready    control-plane,etcd,master   160d   v1.32.4+k3s1   192.168.4.238   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
+NAME                       STATUS   ROLES                       AGE    VERSION        INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION     CONTAINER-RUNTIME
+k3s-vm-chief-horse         Ready    control-plane,etcd,master   161d   v1.32.4+k3s1   192.168.4.237   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
+k3s-vm-pumped-piglet-gpu   Ready    control-plane,etcd,master   2m     v1.32.4+k3s1   192.168.4.210   <none>        Ubuntu 24.04.3 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
+k3s-vm-pve                 Ready    control-plane,etcd,master   160d   v1.32.4+k3s1   192.168.4.238   <none>        Ubuntu 24.04.2 LTS   6.8.0-85-generic   containerd://2.0.4-k3s2
 ```
 
 ### Verification Checks
-- [x] k3s-vm-pumped-piglet showing as Ready
+- [x] k3s-vm-pumped-piglet-gpu showing as Ready
 - [x] Node has control-plane,etcd,master roles
 - [x] System pods running on new node
 - [x] Etcd cluster healthy with 3 members (embedded in K3s)
@@ -390,9 +390,9 @@ k3s-vm-pve             Ready    control-plane,etcd,master   160d   v1.32.4+k3s1 
 - [x] All workloads running normally
 
 ### Changes Made
-1. Installed K3s v1.32.4+k3s1 on VM 105 (192.168.4.208) as control plane node
+1. Installed K3s v1.32.4+k3s1 on VM 105 (192.168.4.210) as control plane node
 2. Deleted failed still-fawn node from cluster
-3. Cluster now has 3 healthy control plane nodes (chief-horse, pumped-piglet, pve)
+3. Cluster now has 3 healthy control plane nodes (chief-horse, pumped-piglet-gpu, pve)
 
 ## Issues Encountered
 
