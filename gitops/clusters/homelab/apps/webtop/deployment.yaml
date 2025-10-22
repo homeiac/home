@@ -16,7 +16,7 @@ spec:
         app: webtop
     spec:
       nodeSelector:
-        hardware-type: nvidia-gpu
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
       containers:
       - name: dind
         image: docker:27-dind
