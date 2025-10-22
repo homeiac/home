@@ -6,7 +6,7 @@ metadata:
   labels:
     app: stable-diffusion-webui
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: stable-diffusion-webui
