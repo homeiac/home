@@ -14,7 +14,7 @@ spec:
         app: samba
     spec:
       nodeSelector:
-        kubernetes.io/hostname: k3s-vm-still-fawn
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
       initContainers:
       - name: init-perms
         image: busybox
