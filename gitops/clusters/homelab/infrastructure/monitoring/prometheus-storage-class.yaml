@@ -28,4 +28,4 @@ spec:
             - key: kubernetes.io/hostname
               operator: In
               values:
-                - k3s-vm-still-fawn
+                - k3s-vm-pumped-piglet-gpu
