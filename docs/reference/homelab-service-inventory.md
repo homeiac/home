@@ -1,7 +1,7 @@
 # Homelab Service Inventory
 
-**Last Updated**: October 21, 2025
-**Cluster Status**: 3-node K3s cluster (after still-fawn.maas failure)
+**Last Updated**: October 23, 2025
+**Cluster Status**: 3-node K3s cluster + PBS operational (after still-fawn.maas failure)
 
 ## Network Architecture Overview
 
@@ -54,6 +54,7 @@ graph TB
     end
 
     subgraph LXC_Containers[LXC Containers]
+        PBS[Proxmox Backup Server<br>LXC 103<br>pumped-piglet<br>192.168.4.218<br>1.3TB/21TB storage]
         FRIG[Frigate NVR<br>LXC 113<br>fun-bedbug<br>AMD Radeon R5 + Coral TPU]
         DOCK[Docker Host<br>LXC 112<br>fun-bedbug]
     end
@@ -74,6 +75,7 @@ graph TB
     PVE --> K3S_PVE
     CH --> K3S_CH
     PP --> K3S_PP
+    PP --> PBS
     FB --> FRIG
     FB --> DOCK
 
@@ -500,10 +502,17 @@ gitops/clusters/homelab/
 - Manual export: Settings → JSON Model in Grafana UI
 
 **VM Backups**:
-- Proxmox Backup Server (PBS) - if configured
+- **Proxmox Backup Server (PBS)**: ✅ Operational
+  - Location: LXC 103 on pumped-piglet.maas
+  - Web UI: https://proxmox-backup-server.maas:8007 (192.168.4.218)
+  - Storage: homelab-backup datastore (1.3TB used / 21TB total)
+  - Existing backups: 5 containers + 6 VMs
+  - Integration: Active in Proxmox VE storage config
 - Manual snapshots: `qm snapshot <vmid> <snapshot-name>`
+- Automated backups: Configure via Datacenter → Backup in Proxmox
 
 **LXC Backups**:
+- PBS datastore: homelab-backup (primary backup target)
 - Frigate: Recordings on local-3TB-backup ZFS pool
 - Docker containers: Managed via docker-compose files (not in this repo)
 
