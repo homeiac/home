@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .coral_models import ContainerStatus, LXCConfig, ConfigurationError
+from .coral_models import ConfigurationError, ContainerStatus, LXCConfig
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class LXCConfigManager:
     def __init__(self, container_id: str, config_path: Optional[Path] = None, backup_dir: Optional[Path] = None):
         """
         Initialize the config manager.
-        
+
         Args:
             container_id: LXC container ID (e.g., "113")
             config_path: Path to LXC config file (defaults to /etc/pve/lxc/{container_id}.conf)
@@ -34,30 +34,28 @@ class LXCConfigManager:
         else:
             # Development environment fallback
             self.config_path = Path.home() / "lxc_configs" / f"{container_id}.conf"
-        
+
         self.backup_dir = backup_dir or Path.home() / "coral-backups"
-        
+
         # Ensure backup directory exists
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
     def read_config(self) -> LXCConfig:
         """
         Read current LXC configuration.
-        
+
         Returns:
             LXCConfig object with current state
-            
+
         Raises:
             ConfigurationError: If config file cannot be read
         """
         logger.debug(f"Reading LXC config from {self.config_path}")
-        
+
         if not self.config_path.exists():
             logger.warning(f"Config file not found: {self.config_path}")
             return LXCConfig(
-                container_id=self.container_id,
-                config_path=self.config_path,
-                status=ContainerStatus.NOT_FOUND
+                container_id=self.container_id, config_path=self.config_path, status=ContainerStatus.NOT_FOUND
             )
 
         try:
@@ -68,18 +66,18 @@ class LXCConfigManager:
         # Parse configuration
         dev0_line = self._find_config_line(content, "dev0:")
         current_dev0 = dev0_line.split(":", 1)[1].strip() if dev0_line else None
-        
+
         has_usb_permissions = "lxc.cgroup2.devices.allow: c 189:* rwm" in content
-        
+
         # Get container status
         status = self._get_container_status()
-        
+
         return LXCConfig(
             container_id=self.container_id,
             config_path=self.config_path,
             current_dev0=current_dev0,
             has_usb_permissions=has_usb_permissions,
-            status=status
+            status=status,
         )
 
     def _find_config_line(self, content: str, prefix: str) -> Optional[str]:
@@ -94,20 +92,16 @@ class LXCConfigManager:
         """Get current container status."""
         try:
             result = subprocess.run(
-                ["pct", "status", self.container_id],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=10
+                ["pct", "status", self.container_id], capture_output=True, text=True, check=True, timeout=10
             )
-            
+
             if "status: running" in result.stdout:
                 return ContainerStatus.RUNNING
             elif "status: stopped" in result.stdout:
                 return ContainerStatus.STOPPED
             else:
                 return ContainerStatus.ERROR
-                
+
         except subprocess.SubprocessError:
             logger.warning(f"Failed to get status for container {self.container_id}")
             return ContainerStatus.NOT_FOUND
@@ -115,23 +109,23 @@ class LXCConfigManager:
     def backup_config(self) -> Path:
         """
         Create a backup of the current configuration.
-        
+
         Returns:
             Path to backup file
-            
+
         Raises:
             ConfigurationError: If backup fails
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_file = self.backup_dir / f"lxc_{self.container_id}_{timestamp}.conf"
-        
+
         try:
             shutil.copy2(self.config_path, backup_file)
             logger.info(f"Config backed up to {backup_file}")
-            
+
             # Keep only last 5 backups
             self._cleanup_old_backups()
-            
+
             return backup_file
         except (OSError, PermissionError) as e:
             raise ConfigurationError(f"Failed to backup config to {backup_file}: {e}") from e
@@ -140,7 +134,7 @@ class LXCConfigManager:
         """Keep only the 5 most recent backups."""
         pattern = f"lxc_{self.container_id}_*.conf"
         backups = sorted(self.backup_dir.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
-        
+
         for old_backup in backups[5:]:
             try:
                 old_backup.unlink()
@@ -151,19 +145,19 @@ class LXCConfigManager:
     def update_config(self, device_path: str, dry_run: bool = False) -> bool:
         """
         Update LXC configuration with new device path.
-        
+
         Args:
             device_path: New device path (e.g., "/dev/bus/usb/003/004")
             dry_run: If True, only validate changes without applying
-            
+
         Returns:
             True if update succeeded, False otherwise
-            
+
         Raises:
             ConfigurationError: If update fails
         """
         logger.info(f"Updating LXC config with device: {device_path} (dry_run={dry_run})")
-        
+
         if not self.config_path.exists():
             raise ConfigurationError(f"Config file not found: {self.config_path}")
 
@@ -174,7 +168,7 @@ class LXCConfigManager:
 
         # Update content
         new_content = self._update_config_content(content, device_path)
-        
+
         if dry_run:
             logger.info("Dry run - would update config with:")
             logger.info(f"dev0: {device_path}")
@@ -187,8 +181,8 @@ class LXCConfigManager:
             raise ConfigurationError("Generated config content is invalid")
 
         # Check if this is a pmxcfs filesystem (Proxmox cluster filesystem)
-        is_pmxcfs = str(self.config_path).startswith('/etc/pve/')
-        
+        is_pmxcfs = str(self.config_path).startswith("/etc/pve/")
+
         if is_pmxcfs:
             # For pmxcfs, use direct write (atomic operations not supported)
             logger.debug("Using direct write for pmxcfs filesystem")
@@ -201,9 +195,9 @@ class LXCConfigManager:
         else:
             # For regular filesystems, use atomic replacement
             logger.debug("Using atomic replacement for regular filesystem")
-            
+
             # Write to temporary file first
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tmp_file:
                 tmp_file.write(new_content)
                 tmp_path = Path(tmp_file.name)
 
@@ -226,7 +220,7 @@ class LXCConfigManager:
 
         for line in lines:
             stripped = line.strip()
-            
+
             # Update existing dev0 line
             if stripped.startswith("dev0:"):
                 new_lines.append(f"dev0: {device_path}")
@@ -253,21 +247,21 @@ class LXCConfigManager:
         # Basic validation - ensure required lines exist
         has_dev0 = any(line.strip().startswith("dev0:") for line in content.splitlines())
         has_usb_perms = "lxc.cgroup2.devices.allow: c 189:* rwm" in content
-        
+
         return has_dev0 and has_usb_perms
 
     def stop_container(self, timeout: int = 30) -> bool:
         """
         Stop the LXC container.
-        
+
         Args:
             timeout: Maximum time to wait for container to stop
-            
+
         Returns:
             True if container stopped successfully
         """
         logger.info(f"Stopping container {self.container_id}")
-        
+
         # Check current status
         status = self._get_container_status()
         if status == ContainerStatus.STOPPED:
@@ -278,24 +272,21 @@ class LXCConfigManager:
             return False
 
         try:
-            subprocess.run(
-                ["pct", "stop", self.container_id],
-                check=True,
-                timeout=timeout
-            )
-            
+            subprocess.run(["pct", "stop", self.container_id], check=True, timeout=timeout)
+
             # Wait for container to stop
             import time
+
             start_time = time.time()
             while time.time() - start_time < timeout:
                 if self._get_container_status() == ContainerStatus.STOPPED:
                     logger.info("Container stopped successfully")
                     return True
                 time.sleep(1)
-            
+
             logger.error(f"Container failed to stop within {timeout} seconds")
             return False
-            
+
         except subprocess.SubprocessError as e:
             logger.error(f"Failed to stop container: {e}")
             return False
@@ -303,34 +294,31 @@ class LXCConfigManager:
     def start_container(self, timeout: int = 30) -> bool:
         """
         Start the LXC container.
-        
+
         Args:
             timeout: Maximum time to wait for container to start
-            
+
         Returns:
             True if container started successfully
         """
         logger.info(f"Starting container {self.container_id}")
-        
+
         try:
-            subprocess.run(
-                ["pct", "start", self.container_id],
-                check=True,
-                timeout=timeout
-            )
-            
+            subprocess.run(["pct", "start", self.container_id], check=True, timeout=timeout)
+
             # Wait for container to start
             import time
+
             start_time = time.time()
             while time.time() - start_time < timeout:
                 if self._get_container_status() == ContainerStatus.RUNNING:
                     logger.info("Container started successfully")
                     return True
                 time.sleep(1)
-            
+
             logger.error(f"Container failed to start within {timeout} seconds")
             return False
-            
+
         except subprocess.SubprocessError as e:
             logger.error(f"Failed to start container: {e}")
             return False
@@ -338,10 +326,10 @@ class LXCConfigManager:
     def verify_coral_access(self, expected_device_path: str) -> bool:
         """
         Verify that Coral is accessible inside the container.
-        
+
         Args:
             expected_device_path: Expected device path
-            
+
         Returns:
             True if Coral is accessible inside container
         """
@@ -356,18 +344,18 @@ class LXCConfigManager:
                 capture_output=True,
                 text=True,
                 check=True,
-                timeout=10
+                timeout=10,
             )
-            
+
             google_found = "18d1:9302" in result.stdout
-            
+
             if google_found:
                 logger.info("Coral TPU verified accessible inside container")
                 return True
             else:
                 logger.warning("Coral TPU not visible inside container")
                 return False
-                
+
         except subprocess.SubprocessError as e:
             logger.error(f"Failed to verify Coral access: {e}")
             return False

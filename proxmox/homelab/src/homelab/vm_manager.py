@@ -36,9 +36,9 @@ class VMManager:
 
         # Use cluster resources API to get ALL VMs/CTs (including offline nodes)
         try:
-            resources = proxmox.cluster.resources.get(type='vm')
+            resources = proxmox.cluster.resources.get(type="vm")
             for resource in resources:
-                used.add(int(resource['vmid']))
+                used.add(int(resource["vmid"]))
         except Exception:
             # Fallback to per-node query (skip offline nodes)
             for n in proxmox.nodes.get():
@@ -194,7 +194,7 @@ class VMManager:
             proxmox.nodes(name).qemu(vmid).config.post(
                 ciuser=Config.CLOUD_USER,
                 cipassword=Config.CLOUD_PASSWORD,
-                sshkeys=Config.SSH_PUBKEY,
+                sshkeys=Config.get_ssh_pubkey(),
                 ipconfig0=Config.CLOUD_IP_CONFIG,
                 cicustom=cloud_cfg,
             )

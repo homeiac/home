@@ -22,12 +22,35 @@ class Config:
     SSH_PUBKEY_PATH = os.getenv("SSH_PUBKEY_PATH", "/root/.ssh/id_rsa.pub")
     CLOUD_IP_CONFIG = os.getenv("CLOUD_IP_CONFIG", "ip=dhcp")
 
-    # Load public key contents at import-time
-    _SSH_PATH = os.path.expanduser(os.getenv("SSH_PUBKEY_PATH", "~/.ssh/id_rsa.pub"))
-    with open(_SSH_PATH) as _f:
-        raw_ssh = _f.read().strip()
+    # Cache for lazily-loaded SSH public key
+    _ssh_pubkey_cache: str = None  # type: ignore[assignment]
 
-    SSH_PUBKEY = quote(raw_ssh, safe="")
+    @classmethod
+    def get_ssh_pubkey(cls) -> str:
+        """Load SSH public key on demand with caching.
+
+        Returns:
+            URL-encoded SSH public key content
+
+        Raises:
+            FileNotFoundError: If SSH public key file does not exist
+            ValueError: If SSH_PUBKEY_PATH environment variable is not set
+        """
+        if cls._ssh_pubkey_cache is not None:
+            return cls._ssh_pubkey_cache
+
+        ssh_path = os.path.expanduser(os.getenv("SSH_PUBKEY_PATH", "~/.ssh/id_rsa.pub"))
+
+        try:
+            with open(ssh_path) as f:
+                raw_ssh = f.read().strip()
+            cls._ssh_pubkey_cache = quote(raw_ssh, safe="")
+            return cls._ssh_pubkey_cache
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"SSH public key not found at {ssh_path}. "
+                f"Please set SSH_PUBKEY_PATH environment variable or create the key file."
+            )
 
     # Ensure ipconfig0 is correctly formatted
     _raw_ip = os.getenv("CLOUD_IP_CONFIG", "dhcp").strip()

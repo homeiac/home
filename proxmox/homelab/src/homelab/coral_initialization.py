@@ -14,14 +14,10 @@ logger = logging.getLogger(__name__)
 class CoralInitializer:
     """Handles Coral TPU initialization with safety checks."""
 
-    def __init__(
-        self,
-        coral_init_dir: Path = Path("/root/code"),
-        python_cmd: str = "python3"
-    ):
+    def __init__(self, coral_init_dir: Path = Path("/root/code"), python_cmd: str = "python3"):
         """
         Initialize the Coral initializer.
-        
+
         Args:
             coral_init_dir: Directory containing coral repos
             python_cmd: Python command to use
@@ -39,10 +35,10 @@ class CoralInitializer:
     def can_initialize_safely(self, current_device: Optional[CoralDevice] = None) -> tuple[bool, str]:
         """
         Check if initialization can be performed safely.
-        
+
         Args:
             current_device: Current device state (will detect if None)
-            
+
         Returns:
             Tuple of (can_initialize, reason)
         """
@@ -67,7 +63,7 @@ class CoralInitializer:
             (self.init_script, "initialization script"),
             (self.model_file, "model file"),
             (self.labels_file, "labels file"),
-            (self.input_file, "input image")
+            (self.input_file, "input image"),
         ]:
             if not file_path.exists():
                 missing_files.append(f"{name} ({file_path})")
@@ -80,14 +76,14 @@ class CoralInitializer:
     def initialize_coral(self, dry_run: bool = False, timeout: int = 60) -> CoralDevice:
         """
         Initialize Coral TPU device.
-        
+
         Args:
             dry_run: If True, only validate without executing
             timeout: Timeout for initialization in seconds
-            
+
         Returns:
             CoralDevice after initialization
-            
+
         Raises:
             SafetyViolationError: If initialization is not safe
             InitializationError: If initialization fails
@@ -97,7 +93,7 @@ class CoralInitializer:
         # Pre-initialization safety check
         current_device = self.detector.detect_coral()
         can_init, reason = self.can_initialize_safely(current_device)
-        
+
         if not can_init:
             logger.error(f"Initialization blocked: {reason}")
             raise SafetyViolationError(reason)
@@ -114,7 +110,7 @@ class CoralInitializer:
                 bus="003",
                 device="005",
                 device_path="/dev/bus/usb/003/005",
-                description="Google Inc. (simulated)"
+                description="Google Inc. (simulated)",
             )
 
         # Execute initialization
@@ -126,18 +122,16 @@ class CoralInitializer:
                 capture_output=True,
                 text=True,
                 check=True,
-                timeout=timeout
+                timeout=timeout,
             )
-            
+
             logger.info("Initialization script completed successfully")
             logger.debug(f"Script output: {result.stdout}")
-            
+
         except subprocess.TimeoutExpired as e:
             raise InitializationError(f"Initialization timed out after {timeout} seconds") from e
         except subprocess.CalledProcessError as e:
-            raise InitializationError(
-                f"Initialization script failed (exit code {e.returncode}): {e.stderr}"
-            ) from e
+            raise InitializationError(f"Initialization script failed (exit code {e.returncode}): {e.stderr}") from e
 
         # Wait for device to switch to Google mode
         try:
@@ -152,15 +146,18 @@ class CoralInitializer:
         return [
             self.python_cmd,
             str(self.init_script),
-            "--model", str(self.model_file),
-            "--labels", str(self.labels_file),
-            "--input", str(self.input_file)
+            "--model",
+            str(self.model_file),
+            "--labels",
+            str(self.labels_file),
+            "--input",
+            str(self.input_file),
         ]
 
     def verify_prerequisites(self) -> tuple[bool, list[str]]:
         """
         Verify that all prerequisites for initialization are met.
-        
+
         Returns:
             Tuple of (all_good, list_of_issues)
         """
@@ -176,7 +173,7 @@ class CoralInitializer:
             (self.init_script, "PyCoral initialization script"),
             (self.model_file, "MobileNet model file"),
             (self.labels_file, "Labels file"),
-            (self.input_file, "Test input image")
+            (self.input_file, "Test input image"),
         ]:
             if not file_path.exists():
                 issues.append(f"{description} not found: {file_path}")
@@ -184,11 +181,7 @@ class CoralInitializer:
         # Check if python command is available
         try:
             result = subprocess.run(
-                [self.python_cmd, "--version"],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=5
+                [self.python_cmd, "--version"], capture_output=True, text=True, check=True, timeout=5
             )
             logger.debug(f"Python version: {result.stdout.strip()}")
         except subprocess.SubprocessError:
@@ -196,12 +189,7 @@ class CoralInitializer:
 
         # Check if PyCoral is importable
         try:
-            subprocess.run(
-                [self.python_cmd, "-c", "import pycoral"],
-                capture_output=True,
-                check=True,
-                timeout=5
-            )
+            subprocess.run([self.python_cmd, "-c", "import pycoral"], capture_output=True, check=True, timeout=5)
         except subprocess.SubprocessError:
             issues.append("PyCoral library not available")
 
@@ -210,7 +198,7 @@ class CoralInitializer:
     def get_initialization_status(self) -> dict[str, any]:
         """
         Get comprehensive initialization status.
-        
+
         Returns:
             Dictionary with status information
         """
@@ -231,6 +219,6 @@ class CoralInitializer:
                 "init_script": str(self.init_script),
                 "model_file": str(self.model_file),
                 "labels_file": str(self.labels_file),
-                "input_file": str(self.input_file)
-            }
+                "input_file": str(self.input_file),
+            },
         }

@@ -98,17 +98,13 @@ class K3sMigrationManager:
             conditions = node_data.get("status", {}).get("conditions", [])
 
             # Find Ready condition
-            ready_condition = next(
-                (c for c in conditions if c["type"] == "Ready"), None
-            )
+            ready_condition = next((c for c in conditions if c["type"] == "Ready"), None)
 
             return {
                 "name": node_data["metadata"]["name"],
                 "status": ready_condition["status"] if ready_condition else "Unknown",
                 "roles": ",".join(
-                    node_data["metadata"].get("labels", {}).get(
-                        "node-role.kubernetes.io", ""
-                    ).split(",")
+                    node_data["metadata"].get("labels", {}).get("node-role.kubernetes.io", "").split(",")
                 ),
             }
 
@@ -322,9 +318,7 @@ class K3sMigrationManager:
             except subprocess.CalledProcessError as e:
                 self.logger.error(f"Error applying label {key}={value}: {e.stderr}")
 
-    def taint_node(
-        self, node_name: str, key: str, value: str, effect: str = "NoSchedule"
-    ) -> None:
+    def taint_node(self, node_name: str, key: str, value: str, effect: str = "NoSchedule") -> None:
         """
         Apply taint to K3s node (idempotent).
 

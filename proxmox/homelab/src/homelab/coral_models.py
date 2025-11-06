@@ -8,6 +8,7 @@ from typing import Optional
 
 class CoralMode(Enum):
     """Coral TPU device modes."""
+
     GOOGLE = "18d1:9302"  # Initialized and ready for use
     UNICHIP = "1a6e:089a"  # Uninitialized, needs Python script
     NOT_FOUND = "not_found"
@@ -15,6 +16,7 @@ class CoralMode(Enum):
 
 class ContainerStatus(Enum):
     """LXC container status."""
+
     RUNNING = "running"
     STOPPED = "stopped"
     ERROR = "error"
@@ -23,6 +25,7 @@ class ContainerStatus(Enum):
 
 class ActionType(Enum):
     """Automation actions that can be taken."""
+
     NO_ACTION = "no_action"
     INITIALIZE_CORAL = "initialize_coral"
     UPDATE_CONFIG = "update_config"
@@ -34,6 +37,7 @@ class ActionType(Enum):
 @dataclass(frozen=True)
 class CoralDevice:
     """Represents a detected Coral TPU device."""
+
     mode: CoralMode
     bus: Optional[str] = None
     device: Optional[str] = None
@@ -54,6 +58,7 @@ class CoralDevice:
 @dataclass(frozen=True)
 class LXCConfig:
     """Represents LXC container configuration."""
+
     container_id: str
     config_path: Path
     current_dev0: Optional[str] = None
@@ -74,6 +79,7 @@ class LXCConfig:
 @dataclass(frozen=True)
 class SystemState:
     """Complete system state for decision making."""
+
     coral: CoralDevice
     lxc: LXCConfig
     frigate_using_tpu: bool = False
@@ -103,6 +109,7 @@ class SystemState:
 @dataclass(frozen=True)
 class AutomationPlan:
     """Plan for automation actions."""
+
     actions: list[ActionType]
     reason: str
     safe: bool = True
@@ -117,6 +124,7 @@ class AutomationPlan:
 @dataclass(frozen=True)
 class InitializationResult:
     """Result of Coral TPU initialization."""
+
     success: bool
     stdout: str
     stderr: str
@@ -126,24 +134,29 @@ class InitializationResult:
 
 class CoralAutomationError(Exception):
     """Base exception for Coral automation errors."""
+
     pass
 
 
 class SafetyViolationError(CoralAutomationError):
     """Raised when attempting unsafe operations."""
+
     pass
 
 
 class DeviceNotFoundError(CoralAutomationError):
     """Raised when Coral device is not detected."""
+
     pass
 
 
 class InitializationError(CoralAutomationError):
     """Raised when Coral initialization fails."""
+
     pass
 
 
 class ConfigurationError(CoralAutomationError):
     """Raised when LXC configuration operations fail."""
+
     pass

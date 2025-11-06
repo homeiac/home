@@ -308,38 +308,50 @@ class UptimeKumaClient:
         # Create or update monitors (idempotent)
         for monitor_config in monitors_config:
             monitor_name = monitor_config["name"]
-            
+
             # Check if monitor already exists
             existing_monitor = self.get_monitor_by_name(monitor_name)
-            
+
             if existing_monitor:
                 # Monitor exists, check if update is needed
                 monitor_id = existing_monitor.get("id")
                 needs_update = False
-                
+
                 # Compare key configuration fields
-                config_fields = ["hostname", "url", "port", "interval", "maxretries", "retryInterval", "type", "method", "description"]
+                config_fields = [
+                    "hostname",
+                    "url",
+                    "port",
+                    "interval",
+                    "maxretries",
+                    "retryInterval",
+                    "type",
+                    "method",
+                    "description",
+                ]
                 for field in config_fields:
                     if field in monitor_config:
                         existing_value = existing_monitor.get(field)
                         new_value = monitor_config[field]
-                        
+
                         # Special handling for MonitorType enum
-                        if field == "type" and hasattr(new_value, 'value'):
+                        if field == "type" and hasattr(new_value, "value"):
                             new_value = new_value.value
-                            
+
                         if existing_value != new_value:
-                            logger.info(f"Monitor '{monitor_name}' field '{field}' differs: {existing_value} -> {new_value}")
+                            logger.info(
+                                f"Monitor '{monitor_name}' field '{field}' differs: {existing_value} -> {new_value}"
+                            )
                             needs_update = True
                             break
-                
+
                 if needs_update:
                     logger.info(f"Updating monitor: {monitor_name}")
                     try:
                         # Remove 'name' from config since it's not needed for update
                         config = monitor_config.copy()
                         config.pop("name")
-                        
+
                         if self.update_monitor(monitor_id, **config):
                             logger.info(f"✅ Successfully updated monitor '{monitor_name}' (ID: {monitor_id})")
                             results.append({"name": monitor_name, "status": "updated", "monitor_id": monitor_id})

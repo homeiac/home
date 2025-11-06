@@ -326,9 +326,7 @@ class PumpedPigletMigration:
             raise RuntimeError("GPU info not found in state - run phase2 first")
 
         # Step 3.1: Check if VM already exists
-        vm_exists = self.run_step(
-            "check_vm_exists", self._check_vm_exists_by_name, self.VM_NAME
-        )
+        vm_exists = self.run_step("check_vm_exists", self._check_vm_exists_by_name, self.VM_NAME)
 
         if vm_exists:
             self.logger.warning(f"⚠️  VM {self.VM_NAME} exists (VMID: {vm_exists})")
@@ -374,6 +372,7 @@ class PumpedPigletMigration:
 
                 # Step 3.4: Get next available VMID for recreation
                 from homelab.vm_manager import VMManager
+
                 vmid = VMManager.get_next_available_vmid(self.proxmox)
                 self.logger.info(f"Using new VMID: {vmid}")
 
@@ -388,6 +387,7 @@ class PumpedPigletMigration:
         else:
             # VM doesn't exist, create it fresh
             from homelab.vm_manager import VMManager
+
             vmid = VMManager.get_next_available_vmid(self.proxmox)
             self.logger.info(f"Using VMID: {vmid}")
 
@@ -485,9 +485,7 @@ class PumpedPigletMigration:
             self.logger.error(f"Error destroying VM: {e}")
             raise
 
-    def _create_vm_with_gpu(
-        self, vmid: int, gpu_pci: str, audio_pci: Optional[str]
-    ) -> int:
+    def _create_vm_with_gpu(self, vmid: int, gpu_pci: str, audio_pci: Optional[str]) -> int:
         """
         Create VM with UEFI + Q35 + GPU passthrough.
 
@@ -631,9 +629,7 @@ class PumpedPigletMigration:
             raise RuntimeError("VM info not found - run phase3 first")
 
         # Initialize K3s manager
-        self.k3s_mgr = K3sMigrationManager(
-            vm_hostname=self.VM_NAME, existing_node_ip=self.EXISTING_K3S_NODE
-        )
+        self.k3s_mgr = K3sMigrationManager(vm_hostname=self.VM_NAME, existing_node_ip=self.EXISTING_K3S_NODE)
 
         # Step 4.1: Get join token
         token = self.run_step("get_k3s_token", self.k3s_mgr.get_join_token)
@@ -656,9 +652,7 @@ class PumpedPigletMigration:
         # Step 4.4: Wait for node to join cluster
         time.sleep(30)  # Give cluster time to register node
 
-        node_in_cluster = self.run_step(
-            "verify_node_in_cluster", self.k3s_mgr.node_in_cluster, self.VM_NAME
-        )
+        node_in_cluster = self.run_step("verify_node_in_cluster", self.k3s_mgr.node_in_cluster, self.VM_NAME)
 
         return {
             "installed": installed,
@@ -681,9 +675,7 @@ class PumpedPigletMigration:
 
         # Cordon still-fawn (if it exists)
         try:
-            self.run_step(
-                "cordon_still_fawn", self.k3s_mgr.cordon_node, "k3s-vm-still-fawn"
-            )
+            self.run_step("cordon_still_fawn", self.k3s_mgr.cordon_node, "k3s-vm-still-fawn")
         except Exception as e:
             self.logger.warning(f"Could not cordon still-fawn: {e}")
 

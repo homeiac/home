@@ -258,9 +258,7 @@ class StorageManager:
         # Check if already registered
         try:
             existing = self.proxmox.storage(storage_id).get()
-            self.logger.info(
-                f"✅ Storage {storage_id} already registered in Proxmox"
-            )
+            self.logger.info(f"✅ Storage {storage_id} already registered in Proxmox")
             return False
         except Exception:
             # Storage doesn't exist, proceed with registration
@@ -282,9 +280,7 @@ class StorageManager:
             self.logger.error(f"Error registering storage: {e}")
             raise
 
-    def create_dataset(
-        self, pool_name: str, dataset_name: str, quota: Optional[str] = None
-    ) -> bool:
+    def create_dataset(self, pool_name: str, dataset_name: str, quota: Optional[str] = None) -> bool:
         """
         Create ZFS dataset (idempotent).
 
