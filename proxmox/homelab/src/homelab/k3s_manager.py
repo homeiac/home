@@ -83,3 +83,48 @@ class K3sManager:
         except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError) as e:
             logger.error(f"Error checking cluster: {e}")
             return False
+
+    def install_k3s(self, vm_hostname: str, token: str, server_url: str) -> bool:
+        """
+        Install k3s on VM and join to cluster.
+
+        Args:
+            vm_hostname: Hostname of VM to install k3s on
+            token: K3s join token
+            server_url: URL of k3s server (e.g., https://192.168.4.212:6443)
+
+        Returns:
+            True if installation succeeded
+
+        Raises:
+            RuntimeError: If installation fails
+        """
+        install_cmd = (
+            f"curl -sfL https://get.k3s.io | "
+            f"K3S_TOKEN={token} "
+            f"K3S_URL={server_url} "
+            f"sh -s - server "
+            f"--write-kubeconfig-mode 644 "
+            f"--disable=traefik"
+        )
+
+        logger.info(f"🚀 Installing k3s on {vm_hostname}")
+
+        try:
+            subprocess.run(
+                ["ssh", "-o", "StrictHostKeyChecking=no",
+                 f"ubuntu@{vm_hostname}", install_cmd],
+                check=True,
+                capture_output=True,
+                timeout=300  # 5 minutes
+            )
+
+            logger.info(f"✅ K3s installed on {vm_hostname}")
+            return True
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"K3s installation failed: {e.stderr.decode()}")
+            raise RuntimeError(f"Failed to install k3s: {e}")
+        except subprocess.TimeoutExpired:
+            logger.error("K3s installation timeout")
+            raise RuntimeError("K3s installation timeout")
