@@ -13,6 +13,7 @@ from typing import Any, Optional
 import paramiko
 
 from homelab.config import Config
+from homelab.health_checker import VMHealthChecker
 from homelab.proxmox_api import ProxmoxClient
 from homelab.resource_manager import ResourceManager
 
@@ -173,15 +174,36 @@ class VMManager:
                 print(f"⚠️  Skipping node {name!r}: cannot connect ({type(e).__name__})")
                 continue
 
-            # 1) Skip existing VM
+            # 1) Check if VM exists and its health
             try:
                 vmid = VMManager.vm_exists(proxmox, name)
             except Exception as e:
                 print(f"⚠️  Skipping node {name!r}: error checking VM ({type(e).__name__})")
                 continue
+
             if vmid:
-                print(f"⚠️  VM exists: {Config.VM_NAME_TEMPLATE.format(node=name)} (vmid={vmid}), skipping.")
-                continue
+                # VM exists - check health
+                try:
+                    health_checker = VMHealthChecker(proxmox, name)
+                    health = health_checker.check_vm_health(vmid)
+
+                    if health.should_delete:
+                        print(f"⚠️  VM {vmid} unhealthy: {health.reason}")
+                        print(f"🔄 Deleting and will recreate...")
+                        VMManager.delete_vm(proxmox, name, vmid)
+                        vmid = None  # Will recreate below
+                    else:
+                        if health.is_healthy:
+                            print(f"✅ VM {Config.VM_NAME_TEMPLATE.format(node=name)} (vmid={vmid}) is healthy, skipping.")
+                        else:
+                            print(f"⚠️  VM {vmid} unhealthy but won't delete: {health.reason}")
+                        continue
+
+                except Exception as e:
+                    print(f"⚠️  Error checking VM health: {e}")
+                    continue
+
+            # If we get here, need to create VM (either didn't exist or was deleted)
 
             # 2) Calculate resources
             try:
