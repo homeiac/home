@@ -30,6 +30,48 @@ class VMManager:
         return None
 
     @staticmethod
+    def delete_vm(proxmox: Any, node_name: str, vmid: int) -> bool:
+        """
+        Delete VM if it exists.
+
+        Args:
+            proxmox: Proxmox API client
+            node_name: Node hostname
+            vmid: VM ID to delete
+
+        Returns:
+            True if VM was deleted, False if it didn't exist
+        """
+        try:
+            # Check if VM exists
+            status = proxmox.nodes(node_name).qemu(vmid).status.current.get()
+
+            # Stop VM if running
+            if status.get("status") == "running":
+                print(f"⏹️  Stopping VM {vmid}")
+                proxmox.nodes(node_name).qemu(vmid).status.stop.post()
+
+                # Wait for VM to stop (max 30 seconds)
+                timeout = time.time() + 30
+                while time.time() < timeout:
+                    st = proxmox.nodes(node_name).qemu(vmid).status.current.get()
+                    if st.get("status") == "stopped":
+                        break
+                    time.sleep(2)
+
+            # Delete VM
+            print(f"🗑️  Deleting VM {vmid}")
+            proxmox.nodes(node_name).qemu(vmid).delete()
+            time.sleep(2)  # Give Proxmox time to process
+
+            return True
+
+        except Exception as e:
+            # VM doesn't exist
+            print(f"ℹ️  VM {vmid} does not exist on {node_name}")
+            return False
+
+    @staticmethod
     def get_next_available_vmid(proxmox: Any) -> int:
         """Find the next free VMID using cluster-wide resources query."""
         used = set()
