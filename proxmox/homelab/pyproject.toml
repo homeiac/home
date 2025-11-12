@@ -58,9 +58,9 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
-    "mock: marks tests that use mocking extensively"
+    "mock: marks tests that use mocking extensively",
+    "asyncio: marks tests that use asyncio"
 ]
-asyncio_mode = "auto"
 log_cli = true
 log_cli_level = "INFO"
 
