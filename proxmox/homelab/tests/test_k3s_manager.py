@@ -120,3 +120,47 @@ class TestK3sManager:
             result = manager.node_in_cluster("k3s-vm-test")
 
             assert result is False
+
+    def test_install_k3s_on_new_node(self):
+        """Should install k3s and join cluster."""
+        with mock.patch('subprocess.run') as mock_run:
+            mock_run.return_value = mock.MagicMock(returncode=0)
+
+            manager = K3sManager()
+            result = manager.install_k3s(
+                vm_hostname="k3s-vm-test",
+                token="K10abc::server:def",
+                server_url="https://192.168.4.212:6443"
+            )
+
+            assert result is True
+            # Verify curl | sh command was executed
+            cmd_str = ' '.join(mock_run.call_args[0][0])
+            assert "ssh" in cmd_str
+            assert "ubuntu@k3s-vm-test" in cmd_str
+            assert "curl -sfL https://get.k3s.io" in cmd_str
+            assert "K3S_TOKEN" in cmd_str
+            assert "K3S_URL" in cmd_str
+            assert "https://192.168.4.212:6443" in cmd_str
+
+    def test_install_k3s_handles_failure(self):
+        """Should raise RuntimeError on installation failure."""
+        with mock.patch('subprocess.run') as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(
+                1, "ssh", stderr=b"Installation failed"
+            )
+
+            manager = K3sManager()
+
+            with pytest.raises(RuntimeError, match="Failed to install k3s"):
+                manager.install_k3s("k3s-vm-test", "token", "https://server:6443")
+
+    def test_install_k3s_handles_timeout(self):
+        """Should raise RuntimeError on installation timeout."""
+        with mock.patch('subprocess.run') as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired("ssh", 300)
+
+            manager = K3sManager()
+
+            with pytest.raises(RuntimeError, match="K3s installation timeout"):
+                manager.install_k3s("k3s-vm-test", "token", "https://server:6443")
