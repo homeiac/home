@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 
 from homelab.vm_manager import VMManager
+from homelab.health_checker import VMHealthStatus
 
 
 def test_vm_exists_found(mock_proxmox, mock_env, temp_ssh_key):
@@ -383,3 +384,134 @@ def test_delete_vm_stop_timeout(mock_sleep, mock_proxmox):
     assert result is True
     mock_proxmox.nodes.return_value.qemu.return_value.status.stop.post.assert_called_once()
     mock_proxmox.nodes.return_value.qemu.return_value.delete.assert_called_once()
+
+
+@mock.patch('homelab.vm_manager.VMManager._resize_disk_via_cli')
+@mock.patch('homelab.vm_manager.VMManager._import_disk_via_cli')
+@mock.patch('homelab.vm_manager.VMManager.delete_vm')
+@mock.patch('homelab.vm_manager.VMHealthChecker')
+@mock.patch('homelab.vm_manager.VMManager.get_next_available_vmid')
+@mock.patch('homelab.vm_manager.VMManager.vm_exists')
+@mock.patch('homelab.vm_manager.ResourceManager.calculate_vm_resources')
+@mock.patch('homelab.vm_manager.ProxmoxClient')
+@mock.patch('homelab.vm_manager.Config.get_nodes')
+@mock.patch('homelab.vm_manager.Config.get_network_ifaces_for')
+@mock.patch('time.sleep')
+def test_create_or_update_vm_deletes_unhealthy_vm(
+    mock_sleep, mock_get_ifaces, mock_get_nodes, mock_client_class,
+    mock_calc_resources, mock_vm_exists, mock_get_vmid,
+    mock_health_checker_class, mock_delete, mock_import_disk, mock_resize_disk, mock_env
+):
+    """Should delete and recreate unhealthy VM."""
+    # Setup mocks
+    mock_get_nodes.return_value = [{"name": "test-node", "img_storage": "local-zfs", "cpu_ratio": 0.5, "memory_ratio": 0.5}]
+    mock_get_ifaces.return_value = ["vmbr0"]
+    mock_vm_exists.return_value = 108  # VM exists
+    mock_get_vmid.return_value = 109  # New VMID for recreation
+    mock_calc_resources.return_value = (4, 8 * 1024**3)  # 4 CPUs, 8GB RAM
+
+    # Setup client mock
+    mock_client = mock.MagicMock()
+    mock_proxmox = mock.MagicMock()
+    mock_client.proxmox = mock_proxmox
+    mock_client.get_node_status.return_value = {"cpuinfo": {"cpus": 8}, "memory": {"total": 16 * 1024**3}}
+    mock_client_class.return_value = mock_client
+
+    # Mock health checker to return unhealthy status
+    mock_checker = mock.MagicMock()
+    mock_checker.check_vm_health.return_value = VMHealthStatus(
+        is_healthy=False,
+        should_delete=True,
+        reason="VM is stopped"
+    )
+    mock_health_checker_class.return_value = mock_checker
+
+    # Mock delete_vm success
+    mock_delete.return_value = True
+
+    # Mock VM status for the new VM
+    mock_proxmox.nodes.return_value.qemu.return_value.status.current.get.return_value = {"status": "running"}
+
+    VMManager.create_or_update_vm()
+
+    # Should have checked health and deleted VM
+    mock_checker.check_vm_health.assert_called_once_with(108)
+    mock_delete.assert_called_once_with(mock_proxmox, "test-node", 108)
+
+    # Should have created new VM
+    mock_get_vmid.assert_called_once()
+    mock_proxmox.nodes.return_value.qemu.create.assert_called_once()
+
+
+@mock.patch('homelab.vm_manager.VMHealthChecker')
+@mock.patch('homelab.vm_manager.VMManager.vm_exists')
+@mock.patch('homelab.vm_manager.ProxmoxClient')
+@mock.patch('homelab.vm_manager.Config.get_nodes')
+def test_create_or_update_vm_keeps_healthy_vm(
+    mock_get_nodes, mock_client_class, mock_vm_exists,
+    mock_health_checker_class, mock_env
+):
+    """Should skip healthy VMs without deletion."""
+    # Setup mocks
+    mock_get_nodes.return_value = [{"name": "test-node", "img_storage": "local-zfs"}]
+    mock_vm_exists.return_value = 108  # VM exists
+
+    # Setup client mock
+    mock_client = mock.MagicMock()
+    mock_proxmox = mock.MagicMock()
+    mock_client.proxmox = mock_proxmox
+    mock_client_class.return_value = mock_client
+
+    # Mock health checker to return healthy status
+    mock_checker = mock.MagicMock()
+    mock_checker.check_vm_health.return_value = VMHealthStatus(
+        is_healthy=True,
+        should_delete=False,
+        reason="VM is running"
+    )
+    mock_health_checker_class.return_value = mock_checker
+
+    VMManager.create_or_update_vm()
+
+    # Should have checked health
+    mock_checker.check_vm_health.assert_called_once_with(108)
+
+    # Should NOT have tried to create new VM
+    mock_proxmox.nodes.return_value.qemu.create.assert_not_called()
+
+
+@mock.patch('homelab.vm_manager.VMHealthChecker')
+@mock.patch('homelab.vm_manager.VMManager.vm_exists')
+@mock.patch('homelab.vm_manager.ProxmoxClient')
+@mock.patch('homelab.vm_manager.Config.get_nodes')
+def test_create_or_update_vm_unhealthy_but_no_delete(
+    mock_get_nodes, mock_client_class, mock_vm_exists,
+    mock_health_checker_class, mock_env
+):
+    """Should not delete VM when health checker says should_delete=False."""
+    # Setup mocks
+    mock_get_nodes.return_value = [{"name": "test-node", "img_storage": "local-zfs"}]
+    mock_vm_exists.return_value = 108  # VM exists
+
+    # Setup client mock
+    mock_client = mock.MagicMock()
+    mock_proxmox = mock.MagicMock()
+    mock_client.proxmox = mock_proxmox
+    mock_client_class.return_value = mock_client
+
+    # Mock health checker to return unhealthy but should NOT delete
+    mock_checker = mock.MagicMock()
+    mock_checker.check_vm_health.return_value = VMHealthStatus(
+        is_healthy=False,
+        should_delete=False,
+        reason="VM in unknown state"
+    )
+    mock_health_checker_class.return_value = mock_checker
+
+    VMManager.create_or_update_vm()
+
+    # Should have checked health
+    mock_checker.check_vm_health.assert_called_once_with(108)
+
+    # Should NOT have tried to create new VM
+    mock_proxmox.nodes.return_value.qemu.create.assert_not_called()
