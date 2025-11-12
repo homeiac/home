@@ -280,7 +280,7 @@ def test_create_or_update_vm_creates_new_vm(
 
 
 @mock.patch('homelab.vm_manager.VMManager._resize_disk_via_cli')
-@mock.patch('homelab.vm_manager.VMManager._import_disk_via_cli') 
+@mock.patch('homelab.vm_manager.VMManager._import_disk_via_cli')
 @mock.patch('homelab.vm_manager.VMManager.get_next_available_vmid')
 @mock.patch('homelab.vm_manager.VMManager.vm_exists')
 @mock.patch('homelab.vm_manager.ResourceManager.calculate_vm_resources')
@@ -289,8 +289,8 @@ def test_create_or_update_vm_creates_new_vm(
 @mock.patch('homelab.vm_manager.Config.get_network_ifaces_for')
 @mock.patch('time.sleep')
 def test_create_or_update_vm_timeout(
-    mock_sleep, mock_get_ifaces, mock_get_nodes, mock_client_class, 
-    mock_calc_resources, mock_vm_exists, mock_get_vmid, 
+    mock_sleep, mock_get_ifaces, mock_get_nodes, mock_client_class,
+    mock_calc_resources, mock_vm_exists, mock_get_vmid,
     mock_import_disk, mock_resize_disk, mock_env
 ):
     """Test create_or_update_vm handles VM start timeout."""
@@ -300,24 +300,86 @@ def test_create_or_update_vm_timeout(
     mock_vm_exists.return_value = None  # No existing VM
     mock_get_vmid.return_value = 108
     mock_calc_resources.return_value = (4, 8 * 1024**3)  # 4 CPUs, 8GB RAM
-    
+
     # Setup client mock
     mock_client = mock.MagicMock()
     mock_proxmox = mock.MagicMock()
     mock_client.proxmox = mock_proxmox
     mock_client.get_node_status.return_value = {"cpuinfo": {"cpus": 8}, "memory": {"total": 16 * 1024**3}}
     mock_client_class.return_value = mock_client
-    
+
     # Mock VM never reaches running state (timeout scenario)
     mock_proxmox.nodes.return_value.qemu.return_value.status.current.get.return_value = {"status": "starting"}
-    
+
     # Mock time.time to trigger timeout
     with mock.patch('time.time') as mock_time:
         # First call (start time), then calls that exceed timeout
         mock_time.side_effect = [0, 100, 200, 300]  # Exceeds 180s timeout
-        
+
         VMManager.create_or_update_vm()
-    
+
     # Verify VM creation process was attempted
     mock_proxmox.nodes.return_value.qemu.create.assert_called_once()
     mock_proxmox.nodes.return_value.qemu.return_value.status.start.post.assert_called_once()
+
+
+@mock.patch('time.sleep')
+def test_delete_vm_when_exists_and_running(mock_sleep, mock_proxmox):
+    """Should stop and delete VM when it exists and is running."""
+    # VM exists and is running
+    mock_proxmox.nodes.return_value.qemu.return_value.status.current.get.side_effect = [
+        {"status": "running"},  # First check
+        {"status": "stopped"}   # After stop
+    ]
+    mock_proxmox.nodes.return_value.qemu.return_value.status.stop.post.return_value = None
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.return_value = None
+
+    result = VMManager.delete_vm(mock_proxmox, "test-node", 108)
+
+    assert result is True
+    mock_proxmox.nodes.return_value.qemu.return_value.status.stop.post.assert_called_once()
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.assert_called_once()
+
+
+@mock.patch('time.sleep')
+def test_delete_vm_when_exists_and_stopped(mock_sleep, mock_proxmox):
+    """Should delete VM when it exists and is already stopped."""
+    # VM exists and is stopped
+    mock_proxmox.nodes.return_value.qemu.return_value.status.current.get.return_value = {"status": "stopped"}
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.return_value = None
+
+    result = VMManager.delete_vm(mock_proxmox, "test-node", 108)
+
+    assert result is True
+    mock_proxmox.nodes.return_value.qemu.return_value.status.stop.post.assert_not_called()
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.assert_called_once()
+
+
+def test_delete_vm_when_not_exists(mock_proxmox):
+    """Should return False when VM doesn't exist."""
+    mock_proxmox.nodes.return_value.qemu.return_value.status.current.get.side_effect = Exception("VM not found")
+
+    result = VMManager.delete_vm(mock_proxmox, "test-node", 108)
+
+    assert result is False
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.assert_not_called()
+
+
+@mock.patch('time.sleep')
+def test_delete_vm_stop_timeout(mock_sleep, mock_proxmox):
+    """Should still delete VM even if stop times out."""
+    # VM is running and never stops (timeout scenario)
+    mock_proxmox.nodes.return_value.qemu.return_value.status.current.get.return_value = {"status": "running"}
+    mock_proxmox.nodes.return_value.qemu.return_value.status.stop.post.return_value = None
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.return_value = None
+
+    # Mock time.time to trigger timeout
+    with mock.patch('time.time') as mock_time:
+        # First call (start time), then calls that exceed 30s timeout
+        mock_time.side_effect = [0, 10, 20, 31]
+
+        result = VMManager.delete_vm(mock_proxmox, "test-node", 108)
+
+    assert result is True
+    mock_proxmox.nodes.return_value.qemu.return_value.status.stop.post.assert_called_once()
+    mock_proxmox.nodes.return_value.qemu.return_value.delete.assert_called_once()
