@@ -1,8 +1,8 @@
 """K3s cluster management for VM provisioning."""
+
 import json
 import logging
 import subprocess
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +27,16 @@ class K3sManager:
             result = subprocess.run(
                 [
                     "ssh",
-                    "-o", "StrictHostKeyChecking=no",
+                    "-o",
+                    "StrictHostKeyChecking=no",
                     f"ubuntu@{existing_node_ip}",
-                    "sudo", "cat", "/var/lib/rancher/k3s/server/node-token"
+                    "sudo",
+                    "cat",
+                    "/var/lib/rancher/k3s/server/node-token",
                 ],
                 capture_output=True,
                 check=True,
-                timeout=30
+                timeout=30,
             )
 
             token = result.stdout.decode().strip()
@@ -59,10 +62,7 @@ class K3sManager:
         """
         try:
             result = subprocess.run(
-                ["kubectl", "get", "nodes", "-o", "json"],
-                capture_output=True,
-                text=True,
-                timeout=30
+                ["kubectl", "get", "nodes", "-o", "json"], capture_output=True, text=True, timeout=30
             )
 
             if result.returncode != 0:
@@ -112,11 +112,10 @@ class K3sManager:
 
         try:
             subprocess.run(
-                ["ssh", "-o", "StrictHostKeyChecking=no",
-                 f"ubuntu@{vm_hostname}", install_cmd],
+                ["ssh", "-o", "StrictHostKeyChecking=no", f"ubuntu@{vm_hostname}", install_cmd],
                 check=True,
                 capture_output=True,
-                timeout=300  # 5 minutes
+                timeout=300,  # 5 minutes
             )
 
             logger.info(f"✅ K3s installed on {vm_hostname}")
