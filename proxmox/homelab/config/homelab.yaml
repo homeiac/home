@@ -1,0 +1,64 @@
+# Unified Homelab Infrastructure Configuration
+# Single source of truth for all infrastructure components
+# Apply with: poetry run homelab apply
+
+# Metadata
+metadata:
+  name: homelab
+  version: "1.0"
+  description: "Complete homelab infrastructure definition"
+
+# Infrastructure Components (applied in dependency order)
+
+# DNS Resources (applied first - required by other components)
+dns_resources:
+  - name: proxmox-backup-server
+    domain: maas
+    type: A
+    ip: 192.168.4.211
+    provider: maas  # maas or opnsense
+    description: "PBS server for Proxmox backups"
+
+# PBS Storage (depends on DNS)
+pbs_storages:
+  - name: homelab-backup
+    enabled: true
+    server: proxmox-backup-server.maas
+    datastore: homelab-backup
+    content:
+      - backup
+    username: root@pam
+    fingerprint: "54:52:3A:D2:43:F0:80:66:E3:D0:BB:D6:0B:28:50:9F:C6:1C:73:BD:45:EA:D0:38:BC:25:54:EE:A4:D5:D1:54"
+    prune_backups:
+      keep_daily: 7
+      keep_weekly: 4
+      keep_monthly: 3
+    description: "Primary PBS storage for homelab backups with retention policy"
+
+  - name: proxmox-backup-server
+    enabled: false
+    server: proxmox-backup-server.maas
+    datastore: pve-backup
+    content:
+      - backup
+    username: root@pam
+    fingerprint: "54:52:3A:D2:43:F0:80:66:E3:D0:BB:D6:0B:28:50:9F:C6:1C:73:BD:45:EA:D0:38:BC:25:54:EE:A4:D5:D1:54"
+    prune_backups:
+      keep_all: 1
+    description: "Legacy storage entry - replaced by homelab-backup"
+
+# Future: Add more resource types as they're implemented
+# storage_pools:
+#   - name: crucible-storage
+#     type: zfs
+#     ...
+#
+# virtual_machines:
+#   - name: k3s-vm-pve
+#     node: pve
+#     ...
+#
+# containers:
+#   - name: uptime-kuma
+#     node: pve
+#     ...
