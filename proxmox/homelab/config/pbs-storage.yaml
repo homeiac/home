@@ -1,0 +1,32 @@
+# Declarative PBS (Proxmox Backup Server) Storage Configuration
+# This file defines the desired state of PBS storage entries in Proxmox VE
+# The PBSStorageManager will reconcile actual state to match this configuration
+
+pbs_storages:
+  # Active PBS storage for homelab backups
+  - name: homelab-backup
+    enabled: true
+    server: proxmox-backup-server.maas
+    datastore: homelab-backup
+    content:
+      - backup
+    username: root@pam
+    fingerprint: "54:52:3A:D2:43:F0:80:66:E3:D0:BB:D6:0B:28:50:9F:C6:1C:73:BD:45:EA:D0:38:BC:25:54:EE:A4:D5:D1:54"
+    prune_backups:
+      keep_daily: 7
+      keep_weekly: 4
+      keep_monthly: 3
+    description: "Primary PBS storage for homelab backups with retention policy"
+
+  # Legacy PBS storage entry - disabled (old pve-backup datastore)
+  - name: proxmox-backup-server
+    enabled: false
+    server: proxmox-backup-server.maas
+    datastore: pve-backup
+    content:
+      - backup
+    username: root@pam
+    fingerprint: "54:52:3A:D2:43:F0:80:66:E3:D0:BB:D6:0B:28:50:9F:C6:1C:73:BD:45:EA:D0:38:BC:25:54:EE:A4:D5:D1:54"
+    prune_backups:
+      keep_all: 1
+    description: "Legacy storage entry - replaced by homelab-backup"
