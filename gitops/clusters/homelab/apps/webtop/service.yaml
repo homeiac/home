@@ -14,7 +14,7 @@ spec:
   - port: 3001
     targetPort: 3001
     name: https
-  - port: 22
+  - port: 2222
     targetPort: 22
     name: ssh
   - port: 3389
