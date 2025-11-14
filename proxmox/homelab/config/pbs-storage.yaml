@@ -6,7 +6,7 @@ pbs_storages:
   # Active PBS storage for homelab backups
   - name: homelab-backup
     enabled: true
-    server: proxmox-backup-server.maas
+    server: 192.168.4.218
     datastore: homelab-backup
     content:
       - backup
@@ -16,12 +16,12 @@ pbs_storages:
       keep_daily: 7
       keep_weekly: 4
       keep_monthly: 3
-    description: "Primary PBS storage for homelab backups with retention policy"
+    description: "Primary PBS storage for homelab backups with retention policy (LXC 103 on pumped-piglet)"
 
   # Legacy PBS storage entry - disabled (old pve-backup datastore)
   - name: proxmox-backup-server
     enabled: false
-    server: proxmox-backup-server.maas
+    server: 192.168.4.218
     datastore: pve-backup
     content:
       - backup
