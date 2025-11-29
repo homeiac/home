@@ -5,6 +5,7 @@ resources:
   - flux-system
   - infrastructure/metallb               #(chart + CRDs)
   - infrastructure/monitoring            #(kube-prometheus-stack)
+  - infrastructure/traefik               #(static IP config)
   - infrastructure-config/metallb-config        #(address-pool)
   - apps/ollama
   - apps/stable-diffusion
