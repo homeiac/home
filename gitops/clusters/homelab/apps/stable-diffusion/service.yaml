@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: stable-diffusion-webui
   namespace: stable-diffusion
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: "192.168.4.82"
 spec:
   type: LoadBalancer
   selector:
