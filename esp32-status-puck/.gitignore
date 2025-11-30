@@ -1,0 +1,15 @@
+# Build artifacts
+.pio/
+.vscode/
+
+# Credentials - NEVER COMMIT
+firmware/include/config.h
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
