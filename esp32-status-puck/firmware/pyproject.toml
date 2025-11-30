@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "esp32-status-puck-firmware"
+version = "0.1.0"
+description = "ESP32 Status Puck firmware development environment"
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+platformio = "^6.1.15"
+
+[tool.poetry.group.dev.dependencies]
+esptool = "^4.7"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

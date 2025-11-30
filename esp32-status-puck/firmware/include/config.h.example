@@ -1,0 +1,28 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+/**
+ * ESP32 Status Puck - Configuration Template
+ * Copy this file to config.h and fill in your values
+ */
+
+// ============================================
+// Demo Mode - No WiFi needed, cycles through states
+// ============================================
+#define DEMO_MODE     true   // Set to false for real network mode
+
+// WiFi Configuration (only used when DEMO_MODE is false)
+#define WIFI_SSID     "your_wifi_ssid"
+#define WIFI_PASSWORD "your_wifi_password"
+
+// API Endpoint (only used when DEMO_MODE is false)
+#define API_ENDPOINT  "http://your-server:3000/api/status"
+
+// Network timeouts
+#define WIFI_CONNECT_TIMEOUT_MS  30000  // 30 seconds
+#define HTTP_TIMEOUT_MS          5000   // 5 seconds
+
+// Status refresh interval
+#define STATUS_REFRESH_MS        30000  // 30 seconds
+
+#endif // CONFIG_H
