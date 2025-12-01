@@ -16,6 +16,7 @@
 #include <Wire.h>
 #include <Preferences.h>
 #include "CST816D.h"
+#include "app_framework.h"
 
 // ============================================
 // Color Constants (Jony Ive palette)
@@ -129,6 +130,25 @@ float calibrationAngle = 120.0f;  // Arc position during calibration
 bool celebrating = false;
 unsigned long celebrationStart = 0;
 const unsigned long CELEBRATION_DURATION = 1000;
+
+// ============================================
+// App Framework State
+// ============================================
+int currentAppIndex = 0;
+int appCount = 0;
+AppDefinition* apps = NULL;
+bool showingAppMenu = false;
+int menuSelection = 0;
+
+// Alert state
+AlertPriority pendingAlertPriority = ALERT_NONE;
+const char* pendingAlertMessage = NULL;
+bool alertOverlayVisible = false;
+lv_obj_t* alertOverlay = NULL;
+
+// Menu UI
+lv_obj_t* menuContainer = NULL;
+lv_obj_t* menuItems[4] = {NULL, NULL, NULL, NULL};
 
 // ============================================
 // Button State
@@ -251,6 +271,20 @@ uint32_t lerpColor(uint32_t c1, uint32_t c2, float t);
 float getPulseFactor(unsigned long remainingMs, unsigned long totalDuration);
 void checkAmbientMode();
 void setDisplayBrightness(uint8_t percent);
+
+// Pomodoro App wrappers (for framework)
+void pomodoro_init();
+void pomodoro_deinit();
+void pomodoro_update();
+void pomodoro_handleEncoder(int direction);
+void pomodoro_handleButton(ButtonEvent event);
+
+// Status App (placeholder for now)
+void status_init();
+void status_deinit();
+void status_update();
+void status_handleEncoder(int direction);
+void status_handleButton(ButtonEvent event);
 
 // ============================================
 // ISR - Button
@@ -644,7 +678,7 @@ void showCalibrationPattern() {
 }
 
 // ============================================
-// Read Encoder
+// Read Encoder - Just reads hardware, sets encoderDelta
 // ============================================
 void handleEncoder() {
     static unsigned long lastEncoderTime = 0;
@@ -662,10 +696,8 @@ void handleEncoder() {
         int dt = digitalRead(ENCODER_B);
         int dir = (dt != clk) ? 1 : -1;
 
-        // In SETTING state: adjust offset (calibration)
-        if (currentState == SETTING) {
-            adjustOffset(dir);
-        }
+        // Set delta for framework to route to active app
+        encoderDelta = dir;
 
         lastInteractionTime = millis();
         ambientMode = false;
@@ -834,6 +866,717 @@ void transitionToSetting() {
 }
 
 // ============================================
+// Pomodoro App Wrappers (for framework)
+// ============================================
+void pomodoro_init() {
+    currentState = SETTING;
+    currentProgress = 0.0f;
+    completedPomodoros = prefs.getInt("completed", 0);
+    createPomodoroUI();
+    Serial.println("Pomodoro app initialized");
+}
+
+void pomodoro_deinit() {
+    prefs.putInt("completed", completedPomodoros);
+    if (calibrationMode) {
+        hideOffsetDisplay();
+    }
+    // Clean up UI objects
+    for (int i = 0; i < NUM_SEGMENTS; i++) {
+        if (arcSegments[i]) {
+            lv_obj_del(arcSegments[i]);
+            arcSegments[i] = NULL;
+        }
+    }
+    if (timeLabel) { lv_obj_del(timeLabel); timeLabel = NULL; }
+    if (presetLabel) { lv_obj_del(presetLabel); presetLabel = NULL; }
+    for (int i = 0; i < 4; i++) {
+        if (dots[i]) { lv_obj_del(dots[i]); dots[i] = NULL; }
+    }
+    arcForeground = NULL;
+    leds.clear();
+    leds.show();
+}
+
+void pomodoro_update() {
+    unsigned long now = millis();
+
+    switch (currentState) {
+        case SETTING:
+            if (calibrationMode) {
+                showCalibrationPattern();
+                if (millis() - offsetDisplayTime > 2000) {
+                    hideOffsetDisplay();
+                    lv_arc_set_value(arcForeground, 0);
+                    leds.clear();
+                    leds.show();
+                }
+            }
+            checkAmbientMode();
+            break;
+
+        case WORKING:
+        case RESTING: {
+            if (celebrating) {
+                runCelebration();
+                break;
+            }
+
+            unsigned long elapsed = now - timerStartTime;
+
+            if (elapsed >= timerDuration) {
+                updateArc(1.0f, 0, 1.0f);
+                updateLedComet(1.0f, 0, 1.0f);
+                lv_timer_handler();
+                delay(100);
+
+                if (currentState == WORKING) {
+                    transitionToRest();
+                } else {
+                    transitionToSetting();
+                }
+                break;
+            }
+
+            targetProgress = (float)elapsed / (float)timerDuration;
+            currentProgress = smoothValue(currentProgress, targetProgress, 0.1f);
+
+            unsigned long remaining = timerDuration - elapsed;
+            float pulse = getPulseFactor(remaining, timerDuration);
+
+            uint32_t targetColor;
+            if (currentState == WORKING) {
+                targetColor = lerpColor(COLOR_TOMATO_START, COLOR_TOMATO_END, currentProgress);
+            } else {
+                targetColor = COLOR_COOL_WHITE;
+            }
+            currentLedColor = lerpColor(currentLedColor, targetColor, 0.1f);
+
+            updateArc(currentProgress, targetColor, pulse);
+            updateTimeLabel(elapsed);
+            updateLedComet(currentProgress, currentLedColor, pulse);
+            break;
+        }
+
+        case PAUSED: {
+            float breath = 0.3f + 0.2f * sinf(now / 1000.0f * PI);
+            updateLedComet(currentProgress, currentLedColor, breath);
+            break;
+        }
+    }
+}
+
+void pomodoro_handleEncoder(int direction) {
+    if (currentState == SETTING) {
+        adjustOffset(direction);
+    }
+    lastInteractionTime = millis();
+    ambientMode = false;
+}
+
+void pomodoro_handleButton(ButtonEvent event) {
+    unsigned long now = millis();
+
+    switch (event) {
+        case BTN_CLICK:
+            if (currentState == SETTING) {
+                startWork();
+            } else if (currentState == WORKING || currentState == RESTING) {
+                stateBeforePause = currentState;
+                pausedElapsed = now - timerStartTime;
+                currentState = PAUSED;
+                Serial.println("Paused");
+            } else if (currentState == PAUSED) {
+                timerStartTime = now - pausedElapsed;
+                currentState = stateBeforePause;
+                Serial.println("Resumed");
+            }
+            break;
+
+        case BTN_DOUBLE:
+            transitionToSetting();
+            Serial.println("Reset");
+            break;
+
+        case BTN_TRIPLE:
+            testMode = !testMode;
+            transitionToSetting();
+            Serial.printf("Test mode: %s\n", testMode ? "ON" : "OFF");
+            for (int i = 0; i < LED_NUM; i++) {
+                leds.setPixelColor(i, testMode ? 0x00FF00 : 0x0000FF);
+            }
+            leds.show();
+            delay(200);
+            leds.clear();
+            leds.show();
+            break;
+
+        default:
+            break;
+    }
+
+    lastInteractionTime = now;
+    ambientMode = false;
+}
+
+// ============================================
+// Status App - Claude Code + Home Assistant Views
+// ============================================
+
+// Status app state
+enum StatusView {
+    VIEW_CLAUDE_CODE = 0,
+    VIEW_HOME_ASSISTANT,
+    VIEW_COUNT
+};
+
+StatusView currentStatusView = VIEW_CLAUDE_CODE;
+
+// Mock data (will be replaced with HTTP fetch)
+struct ClaudeCodeStatus {
+    int sessions;
+    int agents;
+    char lastTask[64];
+    int gitDirty;
+} claudeStatus = { 2, 0, "Fixed auth bug in login.ts", 1 };
+
+struct HomeAssistantStatus {
+    float cpuTemp;
+    int memoryPct;
+    bool k8sHealthy;
+    int alerts;
+    int notifications;
+} haStatus = { 45.2f, 68, true, 0, 3 };
+
+// Status UI objects
+lv_obj_t* statusMainLabel = NULL;
+lv_obj_t* statusSubtitleLabel = NULL;
+lv_obj_t* statusDetailLabel = NULL;
+lv_obj_t* statusArc = NULL;
+lv_obj_t* statusViewIndicator = NULL;
+
+// Device accent colors (for identity flash)
+const uint32_t CLAUDE_CODE_COLOR = 0x7C3AED;  // Purple
+const uint32_t HOME_ASSISTANT_COLOR = 0x03A9F4;  // Blue
+
+void status_createClaudeCodeView() {
+    lv_obj_t* scr = lv_scr_act();
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+
+    // Health arc around edge
+    statusArc = lv_arc_create(scr);
+    lv_obj_set_size(statusArc, 230, 230);
+    lv_obj_center(statusArc);
+    lv_arc_set_rotation(statusArc, 270);
+    lv_arc_set_bg_angles(statusArc, 0, 360);
+    lv_arc_set_value(statusArc, 100);
+    lv_obj_remove_style(statusArc, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(statusArc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_arc_width(statusArc, 6, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(statusArc, 6, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(statusArc, lv_color_hex(0x222222), LV_PART_MAIN);
+
+    // Arc color based on git status
+    uint32_t arcColor = (claudeStatus.gitDirty > 0) ? 0xFFAA00 : 0x00AA00;
+    lv_obj_set_style_arc_color(statusArc, lv_color_hex(arcColor), LV_PART_INDICATOR);
+
+    // Large session count
+    statusMainLabel = lv_label_create(scr);
+    lv_obj_set_style_text_font(statusMainLabel, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(statusMainLabel, lv_color_white(), 0);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d", claudeStatus.sessions);
+    lv_label_set_text(statusMainLabel, buf);
+    lv_obj_align(statusMainLabel, LV_ALIGN_CENTER, 0, -20);
+
+    // Subtitle
+    statusSubtitleLabel = lv_label_create(scr);
+    lv_obj_set_style_text_font(statusSubtitleLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(statusSubtitleLabel, lv_color_hex(0x888888), 0);
+    lv_label_set_text(statusSubtitleLabel, "Claude Sessions");
+    lv_obj_align(statusSubtitleLabel, LV_ALIGN_CENTER, 0, 20);
+
+    // Last task (scrolling)
+    statusDetailLabel = lv_label_create(scr);
+    lv_obj_set_style_text_font(statusDetailLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(statusDetailLabel, lv_color_hex(0xAAAAAA), 0);
+    lv_obj_set_width(statusDetailLabel, 180);
+    lv_label_set_long_mode(statusDetailLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(statusDetailLabel, claudeStatus.lastTask);
+    lv_obj_align(statusDetailLabel, LV_ALIGN_BOTTOM_MID, 0, -50);
+
+}
+
+void status_createHomeAssistantView() {
+    lv_obj_t* scr = lv_scr_act();
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+
+    // Temperature arc
+    statusArc = lv_arc_create(scr);
+    lv_obj_set_size(statusArc, 230, 230);
+    lv_obj_center(statusArc);
+    lv_arc_set_rotation(statusArc, 135);
+    lv_arc_set_bg_angles(statusArc, 0, 270);
+    lv_arc_set_range(statusArc, 0, 100);
+    lv_arc_set_value(statusArc, (int)haStatus.cpuTemp);
+    lv_obj_remove_style(statusArc, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(statusArc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_arc_width(statusArc, 12, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(statusArc, 12, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(statusArc, lv_color_hex(0x222222), LV_PART_MAIN);
+
+    // Color based on temperature
+    uint32_t tempColor;
+    if (haStatus.cpuTemp < 60.0f) {
+        tempColor = 0x00AA00;  // Green
+    } else if (haStatus.cpuTemp < 75.0f) {
+        tempColor = 0xFFAA00;  // Amber
+    } else {
+        tempColor = 0xFF0000;  // Red
+    }
+    lv_obj_set_style_arc_color(statusArc, lv_color_hex(tempColor), LV_PART_INDICATOR);
+
+    // Temperature display
+    statusMainLabel = lv_label_create(scr);
+    lv_obj_set_style_text_font(statusMainLabel, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(statusMainLabel, lv_color_white(), 0);
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%.0f", haStatus.cpuTemp);
+    lv_label_set_text(statusMainLabel, buf);
+    lv_obj_align(statusMainLabel, LV_ALIGN_CENTER, 0, -15);
+
+    // Temperature unit
+    statusSubtitleLabel = lv_label_create(scr);
+    lv_obj_set_style_text_font(statusSubtitleLabel, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(statusSubtitleLabel, lv_color_hex(0x888888), 0);
+    lv_label_set_text(statusSubtitleLabel, "C");
+    lv_obj_align(statusSubtitleLabel, LV_ALIGN_CENTER, 35, -20);
+
+    // K8s status and alerts
+    statusDetailLabel = lv_label_create(scr);
+    lv_obj_set_style_text_font(statusDetailLabel, &lv_font_montserrat_14, 0);
+    uint32_t detailColor = haStatus.k8sHealthy ? 0x00AA00 : 0xFF0000;
+    lv_obj_set_style_text_color(statusDetailLabel, lv_color_hex(detailColor), 0);
+    snprintf(buf, sizeof(buf), "K8s %s | %d alerts",
+             haStatus.k8sHealthy ? "OK" : "DOWN",
+             haStatus.alerts);
+    lv_label_set_text(statusDetailLabel, buf);
+    lv_obj_align(statusDetailLabel, LV_ALIGN_CENTER, 0, 35);
+}
+
+void status_updateLeds() {
+    if (currentStatusView == VIEW_CLAUDE_CODE) {
+        // LEDs based on git dirty count
+        int amberCount = min(claudeStatus.gitDirty, LED_NUM);
+        for (int i = 0; i < LED_NUM; i++) {
+            if (i < amberCount) {
+                leds.setPixelColor(i, leds.Color(100, 60, 0));  // Amber
+            } else {
+                leds.setPixelColor(i, leds.Color(0, 60, 0));    // Green
+            }
+        }
+    } else {
+        // LEDs based on health/alerts
+        if (!haStatus.k8sHealthy || haStatus.alerts > 0) {
+            // Proportional red LEDs
+            int redCount = haStatus.k8sHealthy ? min(haStatus.alerts, LED_NUM) : LED_NUM;
+            for (int i = 0; i < LED_NUM; i++) {
+                if (i < redCount) {
+                    leds.setPixelColor(i, leds.Color(100, 0, 0));  // Red
+                } else {
+                    leds.setPixelColor(i, leds.Color(0, 60, 0));   // Green
+                }
+            }
+        } else {
+            // All green
+            for (int i = 0; i < LED_NUM; i++) {
+                leds.setPixelColor(i, leds.Color(0, 60, 0));
+            }
+        }
+    }
+    leds.show();
+}
+
+void status_flashAccentColor(uint32_t color) {
+    // Brief flash to indicate device switch
+    for (int i = 0; i < LED_NUM; i++) {
+        uint8_t r = (color >> 16) & 0xFF;
+        uint8_t g = (color >> 8) & 0xFF;
+        uint8_t b = color & 0xFF;
+        leds.setPixelColor(i, leds.Color(r / 2, g / 2, b / 2));
+    }
+    leds.show();
+}
+
+void status_init() {
+    currentStatusView = VIEW_CLAUDE_CODE;
+
+    if (currentStatusView == VIEW_CLAUDE_CODE) {
+        status_createClaudeCodeView();
+    } else {
+        status_createHomeAssistantView();
+    }
+
+    status_updateLeds();
+    Serial.println("Status app initialized");
+}
+
+void status_deinit() {
+    statusMainLabel = NULL;
+    statusSubtitleLabel = NULL;
+    statusDetailLabel = NULL;
+    statusArc = NULL;
+    statusViewIndicator = NULL;
+    leds.clear();
+    leds.show();
+}
+
+void status_update() {
+    // Could add periodic refresh here
+    // For now, LEDs are updated on view change
+}
+
+void status_handleEncoder(int direction) {
+    // Cycle through views
+    if (direction > 0) {
+        currentStatusView = (StatusView)((currentStatusView + 1) % VIEW_COUNT);
+    } else {
+        currentStatusView = (StatusView)((currentStatusView + VIEW_COUNT - 1) % VIEW_COUNT);
+    }
+
+    // Flash accent color for device identity
+    uint32_t accentColor = (currentStatusView == VIEW_CLAUDE_CODE)
+        ? CLAUDE_CODE_COLOR
+        : HOME_ASSISTANT_COLOR;
+    status_flashAccentColor(accentColor);
+    delay(150);
+
+    // Rebuild UI for new view
+    lv_obj_clean(lv_scr_act());
+
+    if (currentStatusView == VIEW_CLAUDE_CODE) {
+        status_createClaudeCodeView();
+    } else {
+        status_createHomeAssistantView();
+    }
+
+    status_updateLeds();
+    lastInteractionTime = millis();
+
+    Serial.printf("Switched to %s view\n",
+        currentStatusView == VIEW_CLAUDE_CODE ? "Claude Code" : "Home Assistant");
+}
+
+void status_handleButton(ButtonEvent event) {
+    if (event == BTN_CLICK) {
+        // Refresh data (placeholder - would fetch from API)
+        Serial.println("Status refresh requested");
+
+        // Flash LEDs to indicate refresh
+        for (int i = 0; i < LED_NUM; i++) {
+            leds.setPixelColor(i, leds.Color(50, 50, 50));
+        }
+        leds.show();
+        delay(100);
+        status_updateLeds();
+    }
+    lastInteractionTime = millis();
+}
+
+// ============================================
+// App Registry
+// ============================================
+AppDefinition appRegistry[] = {
+    { "Status",   status_init,   status_deinit,   status_update,   status_handleEncoder,   status_handleButton },
+    { "Pomodoro", pomodoro_init, pomodoro_deinit, pomodoro_update, pomodoro_handleEncoder, pomodoro_handleButton },
+};
+const int APP_REGISTRY_COUNT = sizeof(appRegistry) / sizeof(appRegistry[0]);
+
+// ============================================
+// Framework Implementation
+// ============================================
+void framework_init(AppDefinition* appList, int count) {
+    apps = appList;
+    appCount = count;
+    currentAppIndex = 0;  // Start with Status app
+
+    if (apps && apps[0].init) {
+        apps[0].init();
+    }
+}
+
+void framework_switchApp(int index) {
+    if (index < 0 || index >= appCount) return;
+    if (index == currentAppIndex && !showingAppMenu) return;
+
+    // Deinit current app
+    if (apps[currentAppIndex].deinit) {
+        apps[currentAppIndex].deinit();
+    }
+
+    // Clear screen
+    lv_obj_clean(lv_scr_act());
+
+    // Init new app
+    currentAppIndex = index;
+    if (apps[currentAppIndex].init) {
+        apps[currentAppIndex].init();
+    }
+
+    Serial.printf("Switched to app: %s\n", apps[currentAppIndex].name);
+}
+
+void framework_showMenu() {
+    showingAppMenu = true;
+    menuSelection = currentAppIndex;
+
+    // Clean screen and create menu
+    lv_obj_clean(lv_scr_act());
+    lv_obj_t* scr = lv_scr_act();
+    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+
+    // Title
+    lv_obj_t* title = lv_label_create(scr);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_label_set_text(title, "Apps");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
+
+    // App list
+    int startY = 80;
+    for (int i = 0; i < appCount && i < 4; i++) {
+        menuItems[i] = lv_label_create(scr);
+        lv_obj_set_style_text_font(menuItems[i], &lv_font_montserrat_24, 0);
+        lv_label_set_text(menuItems[i], apps[i].name);
+        lv_obj_align(menuItems[i], LV_ALIGN_TOP_MID, 0, startY + i * 40);
+
+        uint32_t color = (i == menuSelection) ? COLOR_TOMATO : 0x666666;
+        lv_obj_set_style_text_color(menuItems[i], lv_color_hex(color), 0);
+    }
+
+    Serial.println("App menu opened");
+}
+
+void framework_hideMenu() {
+    showingAppMenu = false;
+
+    // Clear menu items
+    for (int i = 0; i < 4; i++) {
+        menuItems[i] = NULL;
+    }
+
+    // Reinit current app
+    lv_obj_clean(lv_scr_act());
+    if (apps[currentAppIndex].init) {
+        apps[currentAppIndex].init();
+    }
+
+    Serial.println("App menu closed");
+}
+
+void framework_handleMenuEncoder(int direction) {
+    menuSelection = (menuSelection + direction + appCount) % appCount;
+
+    // Update highlight
+    for (int i = 0; i < appCount && i < 4; i++) {
+        if (menuItems[i]) {
+            uint32_t color = (i == menuSelection) ? COLOR_TOMATO : 0x666666;
+            lv_obj_set_style_text_color(menuItems[i], lv_color_hex(color), 0);
+        }
+    }
+}
+
+void framework_handleMenuButton(ButtonEvent event) {
+    if (event == BTN_CLICK) {
+        showingAppMenu = false;
+        framework_switchApp(menuSelection);
+    } else if (event == BTN_DOUBLE) {
+        // Cancel menu
+        framework_hideMenu();
+    }
+}
+
+void framework_updateMenu() {
+    // Rainbow LED effect while menu is open
+    static uint16_t hueOffset = 0;
+    hueOffset += 256;
+
+    for (int i = 0; i < LED_NUM; i++) {
+        uint16_t hue = (i * 65536 / LED_NUM + hueOffset) % 65536;
+        leds.setPixelColor(i, leds.ColorHSV(hue, 255, 100));
+    }
+    leds.show();
+}
+
+ButtonEvent framework_processButtonEvent() {
+    unsigned long now = millis();
+
+    // Check for long press while button held
+    if (buttonDown && !longPressHandled) {
+        if (now - buttonPressTime >= LONG_PRESS_MS) {
+            longPressHandled = true;
+            return BTN_LONG;
+        }
+    }
+
+    if (!buttonDown) {
+        longPressHandled = false;
+    }
+
+    // Process clicks after double-click window
+    if (clickCount > 0 && now - lastClickTime >= DOUBLE_CLICK_MS) {
+        ButtonEvent event = BTN_NONE;
+        if (clickCount == 1) event = BTN_CLICK;
+        else if (clickCount == 2) event = BTN_DOUBLE;
+        else if (clickCount >= 3) event = BTN_TRIPLE;
+        clickCount = 0;
+        return event;
+    }
+
+    return BTN_NONE;
+}
+
+// ============================================
+// Alert System Implementation
+// ============================================
+lv_obj_t* alertContainer = NULL;
+lv_obj_t* alertLabel = NULL;
+unsigned long alertStartTime = 0;
+
+void framework_showAlertOverlay() {
+    if (alertContainer != NULL) return;  // Already showing
+
+    lv_obj_t* scr = lv_scr_act();
+
+    // Semi-transparent overlay container
+    alertContainer = lv_obj_create(scr);
+    lv_obj_set_size(alertContainer, 200, 100);
+    lv_obj_center(alertContainer);
+    lv_obj_set_style_bg_opa(alertContainer, LV_OPA_90, 0);
+    lv_obj_set_style_radius(alertContainer, 20, 0);
+    lv_obj_set_style_border_width(alertContainer, 3, 0);
+    lv_obj_set_style_pad_all(alertContainer, 10, 0);
+
+    // Color based on priority
+    uint32_t bgColor, borderColor;
+    switch (pendingAlertPriority) {
+        case ALERT_CRITICAL:
+            bgColor = 0x330000;
+            borderColor = 0xFF0000;
+            break;
+        case ALERT_WARNING:
+            bgColor = 0x332200;
+            borderColor = 0xFFAA00;
+            break;
+        case ALERT_INFO:
+        default:
+            bgColor = 0x001133;
+            borderColor = 0x0066FF;
+            break;
+    }
+
+    lv_obj_set_style_bg_color(alertContainer, lv_color_hex(bgColor), 0);
+    lv_obj_set_style_border_color(alertContainer, lv_color_hex(borderColor), 0);
+
+    // Alert title based on priority
+    const char* title;
+    switch (pendingAlertPriority) {
+        case ALERT_CRITICAL: title = "CRITICAL"; break;
+        case ALERT_WARNING:  title = "WARNING"; break;
+        default:             title = "INFO"; break;
+    }
+
+    // Title label
+    lv_obj_t* titleLabel = lv_label_create(alertContainer);
+    lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(titleLabel, lv_color_hex(borderColor), 0);
+    lv_label_set_text(titleLabel, title);
+    lv_obj_align(titleLabel, LV_ALIGN_TOP_MID, 0, 0);
+
+    // Message label
+    alertLabel = lv_label_create(alertContainer);
+    lv_obj_set_style_text_font(alertLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(alertLabel, lv_color_white(), 0);
+    lv_obj_set_width(alertLabel, 170);
+    lv_label_set_long_mode(alertLabel, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(alertLabel, pendingAlertMessage ? pendingAlertMessage : "Alert");
+    lv_obj_align(alertLabel, LV_ALIGN_CENTER, 0, 10);
+
+    // Dismiss hint
+    lv_obj_t* hintLabel = lv_label_create(alertContainer);
+    lv_obj_set_style_text_font(hintLabel, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_color(hintLabel, lv_color_hex(0x666666), 0);
+    lv_label_set_text(hintLabel, "Click to dismiss");
+    lv_obj_align(hintLabel, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    alertOverlayVisible = true;
+    alertStartTime = millis();
+
+    Serial.printf("Alert shown: %s - %s\n", title, pendingAlertMessage);
+}
+
+void framework_hideAlertOverlay() {
+    if (alertContainer != NULL) {
+        lv_obj_del(alertContainer);
+        alertContainer = NULL;
+        alertLabel = NULL;
+    }
+    alertOverlayVisible = false;
+}
+
+void framework_raiseAlert(AlertPriority priority, const char* message) {
+    pendingAlertPriority = priority;
+    pendingAlertMessage = message;
+
+    // Critical alerts show immediately
+    if (priority == ALERT_CRITICAL) {
+        framework_showAlertOverlay();
+    }
+}
+
+void framework_dismissAlert() {
+    framework_hideAlertOverlay();
+    pendingAlertPriority = ALERT_NONE;
+    pendingAlertMessage = NULL;
+
+    // Restore app LEDs
+    if (apps && apps[currentAppIndex].update) {
+        // Let the app restore its LED state
+    }
+
+    Serial.println("Alert dismissed");
+}
+
+void framework_updateAlertOverlay() {
+    if (!alertOverlayVisible) return;
+
+    // Pulsing LED effect for alerts
+    unsigned long elapsed = millis() - alertStartTime;
+    float pulse = 0.5f + 0.5f * sinf(elapsed / 200.0f);  // Fast pulse
+
+    uint8_t brightness = (uint8_t)(pulse * 255);
+
+    // Color based on priority
+    uint32_t ledColor;
+    switch (pendingAlertPriority) {
+        case ALERT_CRITICAL:
+            ledColor = leds.Color(brightness, 0, 0);  // Red
+            break;
+        case ALERT_WARNING:
+            ledColor = leds.Color(brightness, brightness / 2, 0);  // Amber
+            break;
+        default:
+            ledColor = leds.Color(0, 0, brightness);  // Blue
+            break;
+    }
+
+    for (int i = 0; i < LED_NUM; i++) {
+        leds.setPixelColor(i, ledColor);
+    }
+    leds.show();
+}
+
+// ============================================
 // Check Ambient Mode
 // ============================================
 void checkAmbientMode() {
@@ -950,101 +1693,82 @@ void setup() {
     completedPomodoros = prefs.getInt("completed", 0);
     Serial.printf("Loaded %d completed pomodoros\n", completedPomodoros);
 
-    // Create UI
+    // Initialize app framework (starts with Status app)
     delay(100);
-    createPomodoroUI();
+    framework_init(appRegistry, APP_REGISTRY_COUNT);
 
     lastInteractionTime = millis();
-    Serial.println("Ready! Rotate encoder to select preset, click to start.");
+    Serial.println("Ready! Long press for app menu.");
 }
 
 // ============================================
 // Main Loop
 // ============================================
 void loop() {
-    unsigned long now = millis();
-
-    // Handle input
+    // Read encoder (still needed for delta calculation)
     handleEncoder();
-    handleButton();
 
-    // State machine
-    switch (currentState) {
-        case SETTING:
-            // Handle calibration mode - show test pattern
-            if (calibrationMode) {
-                showCalibrationPattern();
+    // Get button event through framework
+    ButtonEvent btnEvent = framework_processButtonEvent();
 
-                // Auto-hide after 2 seconds of no adjustment
-                if (millis() - offsetDisplayTime > 2000) {
-                    hideOffsetDisplay();
-                    lv_arc_set_value(arcForeground, 0);  // Reset arc
-                    leds.clear();
-                    leds.show();
-                }
+    // Handle alert overlay first (highest priority)
+    if (alertOverlayVisible) {
+        // Any button press dismisses alert
+        if (btnEvent != BTN_NONE) {
+            framework_dismissAlert();
+            // Restore current app's state
+            if (apps && apps[currentAppIndex].update) {
+                apps[currentAppIndex].update();
             }
-            checkAmbientMode();
-            break;
-
-        case WORKING:
-        case RESTING: {
-            // Handle celebration first
-            if (celebrating) {
-                runCelebration();
-                break;
-            }
-
-            // Calculate elapsed time
-            unsigned long elapsed = now - timerStartTime;
-
-            // Check if timer complete
-            if (elapsed >= timerDuration) {
-                // Render final frame at 100% before transitioning
-                updateArc(1.0f, 0, 1.0f);
-                updateLedComet(1.0f, 0, 1.0f);
-                lv_timer_handler();
-                delay(100);  // Brief pause to show completion
-
-                if (currentState == WORKING) {
-                    transitionToRest();
-                } else {
-                    transitionToSetting();
-                }
-                break;
-            }
-
-            // Calculate progress
-            targetProgress = (float)elapsed / (float)timerDuration;
-            currentProgress = smoothValue(currentProgress, targetProgress, 0.1f);
-
-            // Get pulse factor for end warning (breathing effect in final 30%)
-            unsigned long remaining = timerDuration - elapsed;
-            float pulse = getPulseFactor(remaining, timerDuration);
-
-            // Calculate color based on progress
-            uint32_t targetColor;
-            if (currentState == WORKING) {
-                // Lerp from peachy coral to deep blood red as work progresses
-                targetColor = lerpColor(COLOR_TOMATO_START, COLOR_TOMATO_END, currentProgress);
-            } else {
-                targetColor = COLOR_COOL_WHITE;
-            }
-            currentLedColor = lerpColor(currentLedColor, targetColor, 0.1f);
-
-            // Update display with pulse for breathing effect
-            updateArc(currentProgress, targetColor, pulse);
-            updateTimeLabel(elapsed);
-
-            // Update LEDs (also pulsing)
-            updateLedComet(currentProgress, currentLedColor, pulse);
-            break;
         }
+        // Update pulsing LEDs
+        framework_updateAlertOverlay();
 
-        case PAUSED:
-            // Show paused state - LEDs breathing slowly
-            float breath = 0.3f + 0.2f * sinf(now / 1000.0f * PI);
-            updateLedComet(currentProgress, currentLedColor, breath);
-            break;
+        lv_timer_handler();
+        delay(16);
+        return;
+    }
+
+    // Long press ALWAYS toggles app menu (global behavior)
+    if (btnEvent == BTN_LONG) {
+        if (showingAppMenu) {
+            framework_hideMenu();
+        } else {
+            // Deinit current app before showing menu
+            if (apps && apps[currentAppIndex].deinit) {
+                apps[currentAppIndex].deinit();
+            }
+            framework_showMenu();
+        }
+        lv_timer_handler();
+        delay(16);
+        return;
+    }
+
+    // Route input based on context
+    if (showingAppMenu) {
+        // Menu mode
+        if (encoderDelta != 0) {
+            framework_handleMenuEncoder(encoderDelta > 0 ? 1 : -1);
+            encoderDelta = 0;
+        }
+        if (btnEvent != BTN_NONE) {
+            framework_handleMenuButton(btnEvent);
+        }
+        framework_updateMenu();
+    } else {
+        // App mode - route to current app
+        if (encoderDelta != 0 && apps && apps[currentAppIndex].handleEncoder) {
+            apps[currentAppIndex].handleEncoder(encoderDelta > 0 ? 1 : -1);
+            encoderDelta = 0;
+        }
+        if (btnEvent != BTN_NONE && apps && apps[currentAppIndex].handleButton) {
+            apps[currentAppIndex].handleButton(btnEvent);
+        }
+        // Update current app
+        if (apps && apps[currentAppIndex].update) {
+            apps[currentAppIndex].update();
+        }
     }
 
     // LVGL timer
