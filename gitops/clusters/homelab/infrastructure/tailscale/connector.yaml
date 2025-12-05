@@ -1,0 +1,15 @@
+apiVersion: tailscale.com/v1alpha1
+kind: Connector
+metadata:
+  name: homelab-subnet-router
+  namespace: tailscale
+spec:
+  hostname: ts-homelab-router
+  tags:
+    - tag:k8s-operator
+  subnetRouter:
+    advertiseRoutes:
+      - "192.168.4.0/24"    # Homelab LAN (Proxmox, HA, services)
+      - "10.42.0.0/16"      # K3s pod CIDR
+      - "10.43.0.0/16"      # K3s service CIDR
+  exitNode: true

@@ -6,6 +6,7 @@ resources:
   - infrastructure/metallb               #(chart + CRDs)
   - infrastructure/monitoring            #(kube-prometheus-stack)
   - infrastructure/traefik               #(static IP config)
+  - infrastructure/tailscale             #(subnet router + exit node)
   - infrastructure-config/metallb-config        #(address-pool)
   - apps/ollama
   - apps/stable-diffusion
