@@ -4,7 +4,7 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  # connector.yaml applied separately after CRDs exist
+  - connector.yaml  # CRDs installed by operator
   # NOTE: oauth-secret must be created manually:
   # kubectl create secret generic operator-oauth -n tailscale \
   #   --from-literal=client_id=YOUR_CLIENT_ID \
