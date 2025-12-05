@@ -123,12 +123,13 @@ This document describes the complete network topology of the homelab, including 
 
 ### Virtual Machines
 
-| VM | VMID | Host | IP | Purpose |
-|----|------|------|-----|---------|
-| k3s-vm-pve | - | pve | 192.168.4.238 | K3s node |
-| k3s-vm-still-fawn | 108 | still-fawn | 192.168.4.212 | K3s node |
-| k3s-vm-chief-horse | 109 | chief-horse | 192.168.4.237 | K3s node (currently stopped) |
-| haos16.0 | 116 | chief-horse | 192.168.4.240 | Home Assistant OS |
+| VM | VMID | Host | IP | Status | Purpose |
+|----|------|------|-----|--------|---------|
+| k3s-vm-pve | - | pve | 192.168.4.238 | Running | K3s node |
+| k3s-vm-still-fawn | 108 | still-fawn | 192.168.4.212 | Running | K3s node |
+| k3s-vm-chief-horse | 109 | chief-horse | 192.168.4.237 | **Stopped** | K3s node (stopped to give HA more RAM) |
+| k3s-vm-pumped-piglet | - | pumped-piglet | 192.168.4.210 | Running | K3s node (GPU) |
+| haos16.0 | 116 | chief-horse | 192.168.4.240 | Running | Home Assistant OS (6GB RAM) |
 
 ### LXC Containers
 
