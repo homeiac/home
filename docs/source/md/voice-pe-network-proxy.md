@@ -139,8 +139,19 @@ ssh root@pve.maas "curl -s http://192.168.4.240:8123/ | head -1"
 - Home Assistant at static IP 192.168.4.240
 - pve network interfaces properly configured
 
+## HA Internal URL Configuration
+
+**IMPORTANT**: For Voice PE to fetch TTS audio files, HA must be configured to advertise the proxy URL.
+
+Go to **Settings → System → Network → Home Assistant URL** and set:
+- **Local network**: `http://192.168.1.122:8123`
+
+This ensures HA tells devices to fetch media from the reachable proxy address instead of the unreachable homelab IP.
+
 ## Related Documentation
 
+- [Voice PE Complete Setup Guide](voice-pe-complete-setup-guide.md) - Full Voice PE setup including Whisper/Piper
+- [Homelab Network Topology](homelab-network-topology.md) - Complete network architecture
 - [Tailscale K3s Setup Guide](tailscale-k3s-setup-guide.md) - For devices that CAN run Tailscale
 - [Home Assistant OS Network Priority Fix](homeassistant-os-network-priority-fix.md) - Multi-network HA configuration
 
