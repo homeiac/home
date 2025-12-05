@@ -158,16 +158,26 @@ This allows HA to reach Voice PE directly on the 86.x network for ESPHome API.
 
 Increased from 2GB to 6GB to support local Whisper processing.
 
-```bash
-# Stop other VMs if needed
-ssh root@chief-horse.maas "qm stop 109"  # k3s VM
+**Decision**: Stopped k3s-vm-chief-horse (VMID 109) to dedicate chief-horse entirely to Home Assistant. The K3s cluster still has 3 nodes (pve, still-fawn, pumped-piglet-gpu) which is sufficient.
 
-# Increase HA memory
+```bash
+# Drain k3s node first (move workloads gracefully)
+KUBECONFIG=~/kubeconfig kubectl drain k3s-vm-chief-horse --ignore-daemonsets --delete-emptydir-data
+
+# Stop the k3s VM
+ssh root@chief-horse.maas "qm stop 109"
+
+# Increase HA memory to 6GB
 ssh root@chief-horse.maas "qm set 116 --memory 6144"
 
 # Reboot HA
 ssh root@chief-horse.maas "qm reboot 116"
 ```
+
+**Current state**:
+- k3s-vm-chief-horse: **stopped** (was 4GB)
+- haos16.0 (HA): **running** with 6GB
+- K3s cluster: 3 nodes remaining (pve, still-fawn, pumped-piglet-gpu)
 
 ## Voice PE Setup Steps
 
