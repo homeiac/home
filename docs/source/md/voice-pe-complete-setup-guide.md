@@ -288,16 +288,111 @@ curl -s -H "Authorization: Bearer $HA_TOKEN" \
 | Piper | HA add-on | Local text-to-speech |
 | chief-horse vmbr2 | 192.168.86.244 | Bridge to Google WiFi for ESPHome |
 
+## Voice Capabilities
+
+### What Works Out of the Box
+
+| Feature | Example Command | Status |
+|---------|-----------------|--------|
+| Light control | "Turn on office light" | Works |
+| Light brightness | "Set office light to 50%" | Works |
+| Timers | "Set a timer for 5 minutes" | Works |
+| Timer management | "Cancel timer" / "Pause timer" | Works |
+| Delayed commands | "Turn off lights in 10 minutes" | Works |
+| Time queries | "What time is it?" | Works |
+
+### What Requires Extra Setup
+
+| Feature | Requirement | Documentation |
+|---------|-------------|---------------|
+| Voice reminders | Ollama + automations | [Voice PE Reminders Guide](voice-pe-reminders-ollama-setup.md) |
+| Alarms | Not natively supported | - |
+| Smart device names | Device aliases in HA | See below |
+
+### What Does NOT Work
+
+| Feature | Reason |
+|---------|--------|
+| Alarms (wake me at 7am) | Not implemented in HA Assist |
+| Calendar integration | Requires additional setup |
+| Music playback | Requires media player integration |
+
+## Ollama LLM Integration (Optional)
+
+Ollama can be integrated for natural language processing tasks like parsing reminder times.
+
+**Important**: The basic Ollama conversation agent (`conversation.ollama_conversation`) can ONLY chat - it CANNOT control devices. Device control requires the built-in HA Assist agent.
+
+### Ollama Setup
+
+1. Ollama runs in K3s cluster at `http://192.168.4.81`
+2. Model: `llama3.2:3b` (2GB, balanced for voice tasks)
+3. HA Integration: Settings → Devices & Services → Ollama
+
+### Conversation Agent Capabilities
+
+| Agent | Device Control | Smart Responses | Use Case |
+|-------|----------------|-----------------|----------|
+| Home Assistant (built-in) | Yes | Basic | Device control, timers |
+| Ollama Conversation | No | Yes | General questions, time parsing |
+
+**Recommendation**: Use "Full local assistant" (built-in) for Voice PE. Use Ollama for specific automations like reminder time parsing.
+
+## Smart Device Integration
+
+### Meross Smart Lights (via HACS)
+
+1. Install HACS integration
+2. Search for "Meross LAN" in HACS
+3. Add integration: Settings → Devices & Services → Meross LAN
+4. Devices auto-discover on local network
+
+**Controllable devices**:
+- Office Front light
+- Office Back light
+- Bedroom lights
+
+### Device Naming for Voice Control
+
+HA creates entity IDs from device names. For voice control, set friendly names:
+
+```yaml
+# Example: Settings → Devices → [Device] → Name
+"Smart Dimmer Switch 2005093..." → "Office Front"
+```
+
+## Voice PE Assistant Configuration
+
+### Recommended Configuration
+
+| Setting | Value | Reason |
+|---------|-------|--------|
+| Assist pipeline | Full local assistant | Device control works |
+| Wake word | Okay Nabu | Default |
+| STT | faster-whisper | Local processing |
+| TTS | piper | Local processing |
+
+### Accessing Voice PE Settings
+
+**Settings → Devices & Services → ESPHome → Voice PE device → Configure**
+
+Or
+
+**Settings → Voice assistants → [select pipeline]**
+
 ## Related Documentation
 
 - [Voice PE Network Proxy Setup](voice-pe-network-proxy.md) - Detailed proxy configuration
+- [Voice PE Reminders with Ollama](voice-pe-reminders-ollama-setup.md) - Voice-controlled reminders
 - [Tailscale K3s Setup Guide](tailscale-k3s-setup-guide.md) - Remote access (separate from Voice PE)
 - [Home Assistant OS Network Priority Fix](homeassistant-os-network-priority-fix.md) - Multi-network HA configuration
+- [Homelab Network Topology](homelab-network-topology.md) - Complete network architecture
 
 ## Tags
 
-voice-pe, voicepe, home-assistant, homeassistant, esphome, whisper, piper, speech-to-text, text-to-speech, stt, tts, wyoming, network-proxy, socat, esp32, google-wifi, local-voice, voice-assistant, okay-nabu
+voice-pe, voicepe, home-assistant, homeassistant, esphome, whisper, piper, speech-to-text, text-to-speech, stt, tts, wyoming, network-proxy, socat, esp32, google-wifi, local-voice, voice-assistant, okay-nabu, ollama, llm, meross, smart-lights, reminders, timers
 
 ---
 
 *Document created: 2025-12-05*
+*Last updated: 2025-12-05*
