@@ -29,7 +29,7 @@ Person at door → Frigate (Coral TPU) → Person detected
 | LLM Vision | ✅ Ready | Ollama provider configured |
 | llava:7b | ✅ Ready | Vision model (3.8GB VRAM) |
 | Voice PE LED | ✅ Ready | `light.home_assistant_voice_09f5a3_led_ring` |
-| Phone notify | ✅ Ready | `notify.mobile_app_pixel_10_pro` |
+| Phone notify | ✅ Working | `notify.mobile_app_pixel_10_pro` |
 | Doorbell | ✅ Ready | `camera.reolink_doorbell` |
 
 ## Performance Results
@@ -185,6 +185,11 @@ scripts/package-detection/
 
 ## Related Documentation
 
+- **Blog Post**: `docs/source/md/blog-package-detection-llm-vision.md`
 - Voice PE Setup: `docs/source/md/voice-pe-complete-setup-guide.md`
 - LLM Vision Reference: `docs/reference/llm-vision-complete-reference.md`
 - Frigate Integration: `docs/source/md/frigate-homeassistant-integration-guide.md`
+
+## GitHub Issue
+
+Tracking: https://github.com/homeiac/home/issues/167
