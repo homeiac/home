@@ -1,6 +1,6 @@
-# I Built a Package Detection System That Actually Works (No Cloud, No Subscription, No False Alarms)
+# I Built a Doorbell AI That Tells Me WHO's There AND If They Left a Package
 
-*How I stopped worrying about porch pirates and learned to love local AI*
+*No cloud. No subscription. No false alarms. Just local AI that actually understands what it sees.*
 
 ---
 
@@ -12,22 +12,32 @@ By the time an actual delivery happens, you've already muted the notifications i
 
 **I was done with this.**
 
-I wanted ONE notification. When a package ACTUALLY arrives. No false alarms. No cloud subscriptions. No "AI" that's really just motion detection with extra steps.
+I didn't just want package detection. I wanted to know:
+- **Who** is at my door (Amazon? FedEx? Random person?)
+- **Did they leave a package?** (Not "are they holding something" - did they actually leave it?)
 
-So I built my own.
+So I built my own dual-phase doorbell AI.
 
 ---
 
-## The Result: 1.8 Seconds to Know If There's a Package
+## The Result: Two Smart Notifications Per Visit
 
 Here's what happens now when someone approaches my door:
 
-1. **Person detected** → My doorbell sees a human (not a leaf, not a shadow)
-2. **AI analyzes the image** → Local LLM looks at the actual scene
-3. **Package confirmed?** → Only then do I get notified
-4. **Visual feedback** → My voice assistant's LED ring pulses blue
+### Phase 1: Person Arrives
+```
+📱 "🚪 Someone at door: Amazon driver in blue vest holding box"
+```
 
-Total time from person detection to notification: **under 2 seconds**.
+### Phase 2: Person Leaves (3 seconds later)
+```
+📱 "📦 Package Delivered!"
+💡 Voice assistant LED pulses blue
+```
+
+The magic? **Two different questions at two different times:**
+1. "Who is this person?" (while they're there)
+2. "Is there a package on the porch?" (after they leave)
 
 False alarms in the past month: **zero**.
 
@@ -39,17 +49,23 @@ Here's the thing about traditional "smart" cameras: they're dumb. They detect mo
 
 My system uses **LLM Vision** - an actual language model that can *see* and *reason*:
 
+### When person arrives:
 ```
-Me: "Is there a package visible in this image?"
-AI: "NO"
-(No notification sent)
+Me: "Describe the person at this door in 10 words or less."
+AI: "UPS driver in brown uniform holding cardboard box"
+```
 
-Me: "Is there a package visible in this image?"
+### When person leaves:
+```
+Me: "Is there a package on the porch?"
 AI: "YES"
 (Phone buzzes, LED pulses blue)
 ```
 
-The AI doesn't just pattern-match. It understands what a package looks like. A box. A padded envelope. An Amazon smile logo. Even packages partially hidden or at weird angles.
+The AI doesn't just pattern-match. It understands:
+- **Uniforms**: Amazon blue vest, UPS brown, FedEx purple
+- **Context**: "holding a package" vs "package on ground"
+- **Objects**: Boxes, padded envelopes, Amazon smile logos
 
 And it runs **entirely on my local GPU**. No cloud. No subscription. No privacy concerns.
 
@@ -77,48 +93,80 @@ Total monthly cost: **$0**
 
 ## How It Actually Works
 
-### Step 1: Person Detection
+### Step 1: Dual Triggers
 
-My Reolink doorbell has built-in person detection. When someone approaches:
+My automation fires twice per visit - once when someone arrives, once when they leave:
 
 ```yaml
 trigger:
   - platform: state
     entity_id: binary_sensor.reolink_video_doorbell_wifi_person
+    from: "off"
     to: "on"
+    id: person_arrived
+
+  - platform: state
+    entity_id: binary_sensor.reolink_video_doorbell_wifi_person
+    from: "on"
+    to: "off"
+    for: { seconds: 3 }  # Wait 3 seconds to confirm they left
+    id: person_left
 ```
 
 This filters out 99% of noise. No more leaf notifications.
 
-### Step 2: AI Analysis
+### Step 2: AI Analysis (Two Different Questions)
 
-Here's where the magic happens. I send the camera snapshot to my local AI:
+**When person arrives** - identify who's there:
 
 ```yaml
 - service: llmvision.image_analyzer
   data:
     provider: ollama
     model: llava:7b
-    image_entity: image.reolink_doorbell_person
+    image_file: /config/www/tmp/doorbell_visitor.jpg
     message: >
-      Answer ONLY "YES" or "NO":
-      Is there a package, box, or delivery item visible?
+      Describe the person at this door in 10 words or less.
+      Include: delivery uniform (UPS/FedEx/Amazon/USPS),
+      or regular visitor, or unknown person.
+      Mention if holding a package.
+```
+
+**When person leaves** - check for packages:
+
+```yaml
+- service: llmvision.image_analyzer
+  data:
+    provider: ollama
+    model: llava:7b
+    image_file: /config/www/tmp/doorbell_after.jpg
+    message: >
+      Answer ONLY YES or NO:
+      Is there a package, box, or delivery item
+      visible on this porch/doorstep?
 ```
 
 The AI looks at the actual image and makes a decision. Not motion detection. Not object recognition. Actual visual understanding.
 
-### Step 3: Smart Notification
+### Step 3: Smart Notifications
 
-Only if the AI says "YES" do I get bothered:
+Two different notifications for two different events:
 
 ```yaml
+# On arrival - always notify
+- service: notify.mobile_app_pixel_10_pro
+  data:
+    title: "🚪 Someone at door"
+    message: "{{ visitor_analysis.response_text }}"
+
+# After they leave - only if package detected
 - condition: template
-  value_template: "{{ 'yes' in llm_response.response_text | lower }}"
+  value_template: "{{ 'yes' in package_check.response_text | lower }}"
 
 - service: notify.mobile_app_pixel_10_pro
   data:
     title: "📦 Package Delivered!"
-    message: "A package was detected at your front door."
+    message: "A package was left at your front door."
 ```
 
 ---
@@ -209,14 +257,15 @@ git clone https://github.com/homeiac/home.git
 
 ## What's Next
 
-This is just the beginning. With LLM Vision, you can build:
+This dual-phase approach opens up endless possibilities. With LLM Vision, you can build:
 
-- **"Who's at the door?"** - Describe the person (uniform = delivery, suit = salesperson)
+- **Package theft detection** - "Is the package I saw earlier still there?"
+- **Visitor history** - Log all visitors with AI descriptions
 - **Pet detection** - "Is my dog in the backyard?"
 - **Car recognition** - "Is that my car or a stranger's?"
-- **Security alerts** - "Is someone trying to break in?"
+- **Security alerts** - "Is someone lingering suspiciously?"
 
-The AI understands context. You just ask questions in plain English.
+The AI understands context. You just ask questions in plain English. And by asking different questions at different times (arrival vs departure), you get much smarter results.
 
 ---
 
@@ -228,8 +277,9 @@ I spent years annoyed by dumb notifications from "smart" cameras. In one weekend
 - **Zero monthly cost** (not "cheap" - free)
 - **Zero cloud dependency** (not "optional" - none)
 - **100% package detection** (actually intelligent)
+- **Dual-phase intelligence** (arrival AND departure analysis)
 
-The future of smart home isn't better motion sensors. It's AI that can actually *see*.
+The future of smart home isn't better motion sensors. It's AI that can actually *see* - and knows when to ask which questions.
 
 ---
 
