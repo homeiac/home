@@ -317,26 +317,55 @@ curl -s -H "Authorization: Bearer $HA_TOKEN" \
 | Calendar integration | Requires additional setup |
 | Music playback | Requires media player integration |
 
-## Ollama LLM Integration (Optional)
+## Ollama LLM Integration (Recommended)
 
-Ollama can be integrated for natural language processing tasks like parsing reminder times.
+Ollama provides smart natural language understanding for Voice PE, including device queries, intelligent responses, AND device control when using a model with tool calling support.
 
-**Important**: The basic Ollama conversation agent (`conversation.ollama_conversation`) can ONLY chat - it CANNOT control devices. Device control requires the built-in HA Assist agent.
+### Tool Calling Support (Critical)
+
+**Not all models support tool calling!** Without tool calling, Ollama can only chat - it cannot control devices.
+
+| Model | Size | Tool Calling | Use Case |
+|-------|------|--------------|----------|
+| **qwen2.5:7b** | 4.7GB | ✅ Yes | Best for Voice PE - smart + device control |
+| llama3.2:3b | 2.0GB | ❌ No | Chat only, use for reminder time parsing |
+| fixt/home-3b-v3 | 2.0GB | ✅ Yes | Specialized HA control, minimal chat |
 
 ### Ollama Setup
 
-1. Ollama runs in K3s cluster at `http://192.168.4.81`
-2. Model: `llama3.2:3b` (2GB, balanced for voice tasks)
+1. Ollama runs in K3s cluster at `http://192.168.4.80` (ollama.app.homelab)
+2. **Recommended Model**: `qwen2.5:7b` (tool calling support)
 3. HA Integration: Settings → Devices & Services → Ollama
+4. **Enable "Control Home Assistant"** checkbox in Ollama integration config
+5. Expose entities you want to control
+
+### Best of Both Worlds Configuration
+
+The optimal setup uses Ollama with "Prefer handling commands locally" enabled:
+
+**Settings → Voice assistants → Full local assistant:**
+- Conversation agent: **Ollama Conversation**
+- "Prefer handling commands locally": **ON**
+
+This gives you:
+
+| Command Type | Handler | Speed |
+|--------------|---------|-------|
+| "Turn on office light" | Built-in Assist | Fast (~1s) |
+| "What devices do I have?" | Ollama (qwen2.5:7b) | Smart (~3-5s) |
+| "Tell me a joke" | Ollama | Smart (~3-5s) |
+| "Set brightness to 50%" | Built-in Assist | Fast (~1s) |
+| "What's the status of bedroom light?" | Ollama | Smart (~3-5s) |
 
 ### Conversation Agent Capabilities
 
 | Agent | Device Control | Smart Responses | Use Case |
 |-------|----------------|-----------------|----------|
-| Home Assistant (built-in) | Yes | Basic | Device control, timers |
-| Ollama Conversation | No | Yes | General questions, time parsing |
+| Home Assistant (built-in) | Yes | Basic | Fast device control, timers |
+| Ollama (qwen2.5:7b) | Yes | Yes | Smart queries + device control |
+| Ollama (llama3.2:3b) | No | Yes | Reminder time parsing only |
 
-**Recommendation**: Use "Full local assistant" (built-in) for Voice PE. Use Ollama for specific automations like reminder time parsing.
+**Recommendation**: Use "Full local assistant" with Ollama Conversation (qwen2.5:7b) and "Prefer handling locally" ON for the best experience.
 
 ## Smart Device Integration
 
@@ -367,7 +396,9 @@ HA creates entity IDs from device names. For voice control, set friendly names:
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| Assist pipeline | Full local assistant | Device control works |
+| Assist pipeline | Full local assistant | Best of both worlds |
+| Conversation agent | Ollama Conversation | Smart LLM responses |
+| Prefer handling locally | ON | Fast device control with LLM fallback |
 | Wake word | Okay Nabu | Default |
 | STT | faster-whisper | Local processing |
 | TTS | piper | Local processing |
@@ -390,9 +421,9 @@ Or
 
 ## Tags
 
-voice-pe, voicepe, home-assistant, homeassistant, esphome, whisper, piper, speech-to-text, text-to-speech, stt, tts, wyoming, network-proxy, socat, esp32, google-wifi, local-voice, voice-assistant, okay-nabu, ollama, llm, meross, smart-lights, reminders, timers
+voice-pe, voicepe, home-assistant, homeassistant, esphome, whisper, piper, speech-to-text, text-to-speech, stt, tts, wyoming, network-proxy, socat, esp32, google-wifi, local-voice, voice-assistant, okay-nabu, ollama, llm, meross, smart-lights, reminders, timers, qwen, qwen2.5, tool-calling, function-calling, device-control
 
 ---
 
 *Document created: 2025-12-05*
-*Last updated: 2025-12-05*
+*Last updated: 2025-12-07*
