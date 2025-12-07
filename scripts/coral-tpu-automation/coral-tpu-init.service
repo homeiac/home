@@ -1,8 +1,11 @@
 [Unit]
 Description=Coral TPU Initialization and Frigate Configuration
-After=network.target pve-guests.service
+# CRITICAL: Must wait for pve-cluster.service so /etc/pve/ is mounted
+# Without this, the service fails with "Config file not found: /etc/pve/lxc/113.conf"
+After=pve-cluster.service pveproxy.service pve-guests.service
 Before=pve-container@113.service
 Wants=pve-guests.service
+Requires=pve-cluster.service
 
 [Service]
 Type=oneshot

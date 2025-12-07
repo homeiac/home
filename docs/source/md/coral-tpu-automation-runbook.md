@@ -152,7 +152,49 @@ systemctl start coral-tpu-init.service
 
 ### Common Issues and Solutions
 
-#### Issue: Service Fails to Start
+#### Issue: Service Fails at Boot with "Config file not found"
+
+This is the most common issue - the service runs before Proxmox mounts `/etc/pve/`.
+
+```bash
+# Diagnosis - check for this specific error
+journalctl -u coral-tpu-init.service --no-pager | grep "Config file not found"
+
+# Example error:
+# homelab.coral_config - WARNING - Config file not found: /etc/pve/lxc/113.conf
+
+# Root cause: Service started before pve-cluster.service mounted /etc/pve/
+# The /etc/pve/ directory is a FUSE filesystem (pmxcfs) that's only available
+# after the Proxmox cluster services start.
+
+# Solution: Update service dependencies
+cat > /etc/systemd/system/coral-tpu-init.service << 'EOF'
+[Unit]
+Description=Coral TPU Initialization Service
+After=pve-cluster.service pveproxy.service
+Wants=pve-cluster.service
+Requires=pve-cluster.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/python3 /root/coral-automation/scripts/coral_tpu_automation.py
+Environment=PYTHONPATH=/root/coral-automation/src
+WorkingDirectory=/root/coral-automation
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload and restart
+systemctl daemon-reload
+systemctl restart coral-tpu-init.service
+```
+
+#### Issue: Service Fails to Start (Other Causes)
 
 ```bash
 # Diagnosis
@@ -161,7 +203,7 @@ journalctl -u coral-tpu-init.service --no-pager
 
 # Common causes:
 # 1. Python import errors
-# 2. Missing dependencies  
+# 2. Missing dependencies
 # 3. Permission issues
 # 4. File path problems
 
