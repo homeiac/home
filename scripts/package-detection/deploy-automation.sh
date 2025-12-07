@@ -29,6 +29,13 @@ AUTOMATION_JSON=$(cat <<'ENDJSON'
     {
       "platform": "state",
       "entity_id": "binary_sensor.reolink_video_doorbell_wifi_person",
+      "from": "off",
+      "to": "on",
+      "id": "person_arrived"
+    },
+    {
+      "platform": "state",
+      "entity_id": "binary_sensor.reolink_video_doorbell_wifi_person",
       "from": "on",
       "to": "off",
       "for": { "seconds": 3 },
@@ -44,68 +51,114 @@ AUTOMATION_JSON=$(cat <<'ENDJSON'
   ],
   "action": [
     {
-      "alias": "Capture snapshot of porch after person left",
-      "service": "camera.snapshot",
-      "target": { "entity_id": "camera.reolink_doorbell" },
-      "data": { "filename": "/config/www/tmp/doorbell_after.jpg" }
-    },
-    {
-      "alias": "Analyze porch for packages",
-      "service": "llmvision.image_analyzer",
-      "data": {
-        "provider": "01K1KDVH6Y1GMJ69MJF77WGJEA",
-        "model": "llava:7b",
-        "image_file": "/config/www/tmp/doorbell_after.jpg",
-        "message": "Look at this porch/doorstep image. Answer ONLY YES or NO: Is there a package, box, parcel, or delivery item visible on the porch or doorstep?",
-        "max_tokens": 10,
-        "target_width": 1280
-      },
-      "response_variable": "llm_response"
-    },
-    {
-      "alias": "Log result",
-      "service": "logbook.log",
-      "data": {
-        "name": "Package Detection",
-        "message": "After person left: {{ llm_response.response_text }}",
-        "entity_id": "camera.reolink_doorbell"
-      }
-    },
-    {
-      "alias": "Notify if package detected",
-      "if": [
+      "choose": [
         {
-          "condition": "template",
-          "value_template": "{{ 'yes' in (llm_response.response_text | default('') | lower) }}"
-        }
-      ],
-      "then": [
-        {
-          "parallel": [
+          "alias": "PERSON ARRIVED - Analyze who is at door",
+          "conditions": [{ "condition": "trigger", "id": "person_arrived" }],
+          "sequence": [
+            { "delay": { "seconds": 2 } },
             {
-              "service": "notify.mobile_app_pixel_10_pro",
+              "service": "camera.snapshot",
+              "target": { "entity_id": "camera.reolink_doorbell" },
+              "data": { "filename": "/config/www/tmp/doorbell_visitor.jpg" }
+            },
+            {
+              "service": "llmvision.image_analyzer",
               "data": {
-                "title": "📦 Package Delivered!",
-                "message": "A package was left at your front door.",
-                "data": {
-                  "image": "/api/camera_proxy/camera.reolink_doorbell",
-                  "tag": "package_delivery",
-                  "channel": "Package Alerts",
-                  "importance": "high"
-                }
+                "provider": "01K1KDVH6Y1GMJ69MJF77WGJEA",
+                "model": "llava:7b",
+                "image_file": "/config/www/tmp/doorbell_visitor.jpg",
+                "message": "Describe the person at this door in 10 words or less. Include: delivery uniform (UPS/FedEx/Amazon/USPS), or regular visitor, or unknown person. Mention if holding a package.",
+                "max_tokens": 50,
+                "target_width": 1280
+              },
+              "response_variable": "visitor_analysis"
+            },
+            {
+              "service": "logbook.log",
+              "data": {
+                "name": "Doorbell Visitor",
+                "message": "{{ visitor_analysis.response_text }}",
+                "entity_id": "camera.reolink_doorbell"
               }
             },
             {
-              "service": "light.turn_on",
-              "target": { "entity_id": "light.home_assistant_voice_09f5a3_led_ring" },
-              "data": { "rgb_color": [0, 100, 255], "brightness": 200 }
+              "service": "notify.mobile_app_pixel_10_pro",
+              "data": {
+                "title": "🚪 Someone at door",
+                "message": "{{ visitor_analysis.response_text }}",
+                "data": {
+                  "image": "/api/camera_proxy/camera.reolink_doorbell",
+                  "tag": "doorbell_visitor",
+                  "channel": "Doorbell",
+                  "importance": "default"
+                }
+              }
             }
           ]
         },
-        { "delay": { "seconds": 30 } },
         {
-          "service": "light.turn_off",
-          "target": { "entity_id": "light.home_assistant_voice_09f5a3_led_ring" }
+          "alias": "PERSON LEFT - Check for packages",
+          "conditions": [{ "condition": "trigger", "id": "person_left" }],
+          "sequence": [
+            {
+              "service": "camera.snapshot",
+              "target": { "entity_id": "camera.reolink_doorbell" },
+              "data": { "filename": "/config/www/tmp/doorbell_after.jpg" }
+            },
+            {
+              "service": "llmvision.image_analyzer",
+              "data": {
+                "provider": "01K1KDVH6Y1GMJ69MJF77WGJEA",
+                "model": "llava:7b",
+                "image_file": "/config/www/tmp/doorbell_after.jpg",
+                "message": "Answer ONLY YES or NO: Is there a package, box, or delivery item visible on this porch/doorstep?",
+                "max_tokens": 10,
+                "target_width": 1280
+              },
+              "response_variable": "package_check"
+            },
+            {
+              "service": "logbook.log",
+              "data": {
+                "name": "Package Check",
+                "message": "After visitor left: {{ package_check.response_text }}",
+                "entity_id": "camera.reolink_doorbell"
+              }
+            },
+            {
+              "if": [{ "condition": "template", "value_template": "{{ 'yes' in (package_check.response_text | default('') | lower) }}" }],
+              "then": [
+                {
+                  "parallel": [
+                    {
+                      "service": "notify.mobile_app_pixel_10_pro",
+                      "data": {
+                        "title": "📦 Package Delivered!",
+                        "message": "A package was left at your front door.",
+                        "data": {
+                          "image": "/api/camera_proxy/camera.reolink_doorbell",
+                          "tag": "package_delivery",
+                          "channel": "Package Alerts",
+                          "importance": "high"
+                        }
+                      }
+                    },
+                    {
+                      "service": "light.turn_on",
+                      "target": { "entity_id": "light.home_assistant_voice_09f5a3_led_ring" },
+                      "data": { "rgb_color": [0, 100, 255], "brightness": 200 }
+                    }
+                  ]
+                },
+                { "delay": { "seconds": 30 } },
+                {
+                  "service": "light.turn_off",
+                  "target": { "entity_id": "light.home_assistant_voice_09f5a3_led_ring" }
+                }
+              ]
+            }
+          ]
         }
       ]
     }
