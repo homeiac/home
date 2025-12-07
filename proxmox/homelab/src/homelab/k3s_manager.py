@@ -104,8 +104,7 @@ class K3sManager:
             f"K3S_TOKEN={token} "
             f"K3S_URL={server_url} "
             f"sh -s - server "
-            f"--write-kubeconfig-mode 644 "
-            f"--disable=traefik"
+            f"--write-kubeconfig-mode 644"
         )
 
         logger.info(f"🚀 Installing k3s on {vm_hostname}")

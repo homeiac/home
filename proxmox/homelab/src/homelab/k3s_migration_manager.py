@@ -196,7 +196,7 @@ class K3sMigrationManager:
 
         disable = []
         if disable_components is None:
-            disable_components = ["traefik"]  # Default disable traefik
+            disable_components = []  # Don't disable any components by default
         for component in disable_components:
             disable.append(f"--disable={component}")
 
