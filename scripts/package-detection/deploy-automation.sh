@@ -43,11 +43,6 @@ AUTOMATION_JSON=$(cat <<'ENDJSON'
   ],
   "action": [
     {
-      "delay": {
-        "seconds": 2
-      }
-    },
-    {
       "service": "llmvision.image_analyzer",
       "data": {
         "provider": "01K1KDVH6Y1GMJ69MJF77WGJEA",

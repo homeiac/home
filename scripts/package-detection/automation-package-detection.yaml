@@ -47,19 +47,15 @@ condition:
       {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.package_delivery_detection', 'last_triggered') or 0)) > 1800 }}
 
 action:
-  # Step 1: Wait briefly for person to be fully in frame
-  - delay:
-      seconds: 2
-
-  # Step 2: Capture snapshot from camera
+  # Step 1: IMMEDIATELY capture snapshot when person detected
+  # No delay - catch them while they're still in frame
   - service: camera.snapshot
     target:
       entity_id: camera.reolink_doorbell
     data:
       filename: /config/www/tmp/doorbell_snapshot.jpg
 
-  # Step 3: Analyze snapshot with LLM Vision
-  # Option A: Use saved file (works without Frigate)
+  # Step 2: Analyze snapshot with LLM Vision
   - service: llmvision.image_analyzer
     data:
       provider: 01K1KDVH6Y1GMJ69MJF77WGJEA  # Ollama provider entry_id
