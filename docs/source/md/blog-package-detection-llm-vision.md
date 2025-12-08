@@ -16,11 +16,11 @@ I didn't just want package detection. I wanted to know:
 - **Who** is at my door (Amazon? FedEx? Random person?)
 - **Did they leave a package?** (Not "are they holding something" - did they actually leave it?)
 
-So I built my own dual-phase doorbell AI.
+So I built my own three-phase doorbell AI with voice interaction.
 
 ---
 
-## The Result: Two Smart Notifications Per Visit
+## The Result: Three-Phase Intelligence
 
 Here's what happens now when someone approaches my door:
 
@@ -32,12 +32,20 @@ Here's what happens now when someone approaches my door:
 ### Phase 2: Person Leaves (3 seconds later)
 ```
 📱 "📦 Package Delivered!"
-💡 Voice assistant LED pulses blue
+🔵 Voice assistant LED turns blue (stays on)
 ```
 
-The magic? **Two different questions at two different times:**
+### Phase 3: You Ask (hours later)
+```
+🗣️ "Okay Nabu, what's my notification?"
+🔊 "Package delivered at 2:45 PM by Amazon driver in blue vest"
+💡 LED turns off
+```
+
+The magic? **Three different questions at three different times:**
 1. "Who is this person?" (while they're there)
 2. "Is there a package on the porch?" (after they leave)
+3. "What was that notification?" (when you're ready)
 
 False alarms in the past month: **zero**.
 
@@ -206,23 +214,52 @@ After a week of real-world testing:
 
 ---
 
-## The Voice Assistant Bonus
+## The Voice Assistant Bonus: Alexa-Style Notifications
 
-Because I already have a Home Assistant Voice PE, I added a visual notification:
+This is where it gets really cool. Instead of a simple 30-second LED flash, I built **Alexa-style persistent notifications**:
 
-```yaml
-- service: light.turn_on
-  target:
-    entity_id: light.voice_assistant_led_ring
-  data:
-    rgb_color: [0, 100, 255]  # Blue pulse
-    brightness: 200
+### The LED Stays On Until You Acknowledge
+
+```
+📦 Package delivered
+       ↓
+🔵 LED turns blue (stays on indefinitely)
+       ↓
+🗣️ "Okay Nabu, what's my notification?"
+       ↓
+🔊 "Package delivered at 2:45 PM by Amazon driver in blue vest"
+       ↓
+💡 LED turns off automatically
 ```
 
+### How It Works
+
+The notification state is stored in Home Assistant helpers:
+- `input_boolean.has_pending_notification` - Is there something to tell you?
+- `input_text.pending_notification_message` - What to say when asked
+
+A **sentence trigger** catches natural voice commands:
+```yaml
+trigger:
+  - platform: conversation
+    command:
+      - "what's my notification"
+      - "any notifications"
+      - "check notifications"
+```
+
+When triggered, the Voice PE reads the stored message and clears the LED.
+
+### The Experience
+
 Now when a package arrives:
-- 📱 Phone buzzes
-- 💡 Voice assistant glows blue for 30 seconds
-- 🔊 Optional: "A package has been delivered" announcement
+- 📱 Phone buzzes with AI description
+- 🔵 Voice assistant LED turns blue and **stays on**
+- 🗣️ Hours later: "Hey Nabu, any notifications?"
+- 🔊 "Package delivered at 2:45 PM by Amazon driver in blue vest"
+- 💡 LED turns off
+
+No more missed notifications. No more "what was that alert about?"
 
 ---
 
@@ -277,9 +314,10 @@ I spent years annoyed by dumb notifications from "smart" cameras. In one weekend
 - **Zero monthly cost** (not "cheap" - free)
 - **Zero cloud dependency** (not "optional" - none)
 - **100% package detection** (actually intelligent)
-- **Dual-phase intelligence** (arrival AND departure analysis)
+- **Three-phase intelligence** (arrival, departure, AND voice acknowledgment)
+- **Natural voice interaction** ("what's my notification?" - just like Alexa)
 
-The future of smart home isn't better motion sensors. It's AI that can actually *see* - and knows when to ask which questions.
+The future of smart home isn't better motion sensors. It's AI that can actually *see*, *remember*, and *speak* - on your terms, when you're ready to listen.
 
 ---
 
@@ -287,7 +325,7 @@ The future of smart home isn't better motion sensors. It's AI that can actually 
 
 ---
 
-**Tags**: package-detection, llm-vision, ollama, home-assistant, smart-home, ai, local-ai, privacy, no-subscription, doorbell-camera, reolink, frigate, porch-pirate, delivery-notification
+**Tags**: package-detection, llm-vision, ollama, home-assistant, smart-home, ai, local-ai, privacy, no-subscription, doorbell-camera, reolink, frigate, porch-pirate, delivery-notification, voice-assistant, alexa-style, voice-pe, natural-language
 
 **Related**:
 - [Voice PE Complete Setup Guide](voice-pe-complete-setup-guide.md)
