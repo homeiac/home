@@ -168,6 +168,23 @@ The automation has multiple safeguards:
 2. Check entity exists: `./check-prerequisites.sh`
 3. Verify Voice PE is online in HA
 
+### LED stays on after acknowledgment
+**Problem**: LED stays on after asking "what's my notification"
+
+**Quick fix**:
+```bash
+./clear-notification-workaround.sh
+```
+
+**Permanent fix**: See `LED-NOTIFICATION-FIX.md` and `INVESTIGATION-SUMMARY.md`
+
+**Test notification flow**:
+```bash
+./test-led-off.sh
+```
+
+**Root cause**: The `script.get_pending_notification` uses a blocking `assist_satellite.announce` action that doesn't complete, preventing the notification boolean from being turned off. Fix by wrapping the announcement in a `parallel` block (see `fixed-script.yaml`).
+
 ## Files
 
 ```
@@ -180,7 +197,14 @@ scripts/package-detection/
 ├── pull-vision-model.sh               # Pull Ollama models
 ├── test-llm-vision.sh                 # Test LLM Vision analysis
 ├── test-notification.sh               # Test phone notifications
-└── test-voice-pe-led.sh               # Test Voice PE LED
+├── test-voice-pe-led.sh               # Test Voice PE LED
+│
+├── LED-NOTIFICATION-FIX.md            # LED acknowledgment issue analysis
+├── INVESTIGATION-SUMMARY.md           # Complete investigation findings
+├── test-led-off.sh                    # Test notification LED flow
+├── clear-notification-workaround.sh   # Emergency notification clear
+├── fixed-script.yaml                  # Fixed script configuration
+└── fix-notification-script.sh         # Automated fix application
 ```
 
 ## Related Documentation
