@@ -78,9 +78,12 @@ The official pycoral wheels only support Python 3.9. Need to build from source:
 
 ## Existing Helper Scripts (DO NOT REINVENT)
 
-### Coral TPU Automation (`/root/coral-automation/`)
+### Coral TPU Automation
+**Repo location**: `proxmox/scripts/coral-automation/`
+**Host location**: `/root/coral-automation/` (deployed to fun-bedbug.maas)
+
 ```bash
-# Initialize Coral and configure LXC
+# Initialize Coral and configure LXC (run on Proxmox host)
 cd /root/coral-automation && python3 scripts/coral_tpu_automation.py --container-id 113
 ```
 
@@ -91,7 +94,7 @@ Files:
 - `src/homelab/coral_config.py` - Update LXC config with correct USB path
 - `src/homelab/coral_automation.py` - Orchestrates the full workflow
 
-### Pycoral Source (`/root/code/coral/pycoral/`)
+### Pycoral Source (`/root/code/coral/pycoral/` on host)
 Can be used to build wheels for Python 3.10+:
 - `scripts/build.sh` - Build pycoral
 - `scripts/build_deb.sh` - Build deb package
