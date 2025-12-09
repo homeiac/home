@@ -17,18 +17,30 @@ Proxmox container settings including:
 
 ### After Coral USB Replug
 
-The device number changes when Coral is physically unplugged/replugged:
+The device number changes when Coral is physically unplugged/replugged. **Use the coral-tpu automation** - it handles initialization and config updates:
 
 ```bash
-# Find new device number
+# Container must be stopped first
+pct stop 113
+
+# Run automation - initializes Coral AND updates config
+coral-tpu
+
+# If Coral was just plugged in, run twice:
+# 1st run: initializes Coral (Unichip -> Google mode)
+# 2nd run: updates LXC config with new device path
+
+# Start container
+pct start 113
+```
+
+**Manual method (if automation unavailable):**
+```bash
 lsusb | grep -i google
-# Output: Bus 003 Device 009: ID 18d1:9302 Google Inc.
+# Output: Bus 003 Device 011: ID 18d1:9302 Google Inc.
 
-# Update LXC config
-sed -i 's|dev0: /dev/bus/usb/003/.*|dev0: /dev/bus/usb/003/009|' /etc/pve/lxc/113.conf
-
-# Restart container
-pct stop 113 && pct start 113
+sed -i 's|dev0: /dev/bus/usb/003/.*|dev0: /dev/bus/usb/003/011|' /etc/pve/lxc/113.conf
+pct start 113
 ```
 
 ## Frigate App Config (`frigate-app-config.yml`)
