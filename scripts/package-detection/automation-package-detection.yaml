@@ -49,9 +49,10 @@ condition:
 action:
   # Step 1: IMMEDIATELY capture snapshot when person detected
   # No delay - catch them while they're still in frame
+  # Using direct Reolink camera (not Frigate) while Frigate is being configured
   - service: camera.snapshot
     target:
-      entity_id: camera.reolink_doorbell
+      entity_id: camera.reolink_video_doorbell_wifi_fluent
     data:
       filename: /config/www/tmp/doorbell_snapshot.jpg
 
@@ -85,7 +86,7 @@ action:
     data:
       name: Package Detection
       message: "LLM Vision response: {{ llm_response.response_text }}"
-      entity_id: camera.reolink_doorbell
+      entity_id: camera.reolink_video_doorbell_wifi_fluent
 
   # Step 4: Check if package detected
   - condition: template
@@ -100,7 +101,7 @@ action:
           title: "📦 Package Delivered!"
           message: "A package was detected at your front door."
           data:
-            image: /api/camera_proxy/camera.reolink_doorbell
+            image: /api/camera_proxy/camera.reolink_video_doorbell_wifi_fluent
             tag: package_delivery
             channel: Package Alerts
             importance: high
@@ -108,14 +109,13 @@ action:
               - action: VIEW_CAMERA
                 title: View Camera
 
-      # Voice PE LED pulse (blue for 30 seconds)
+      # Voice PE LED solid blue (no pulse - device doesn't support effects)
       - service: light.turn_on
         target:
           entity_id: light.home_assistant_voice_09f5a3_led_ring
         data:
           rgb_color: [0, 100, 255]
           brightness: 200
-          effect: pulse
 
       # Optional: Voice announcement
       # - service: assist_satellite.announce
@@ -124,9 +124,5 @@ action:
       #   data:
       #     message: "A package has been delivered to your front door."
 
-  # Step 6: Reset LED after 30 seconds
-  - delay:
-      seconds: 30
-  - service: light.turn_off
-    target:
-      entity_id: light.home_assistant_voice_09f5a3_led_ring
+  # LED stays on until user asks "what's my notification"
+  # The acknowledgment automation handles turning it off
