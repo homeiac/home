@@ -624,6 +624,28 @@ curl -s https://api.github.com/repos/blakeblackshear/frigate/releases/latest | j
 
 **Rationale**: Manual updates break LXC integration, hardware acceleration, and rollback capabilities on underpowered hardware.
 
+### **Coral USB TPU - CRITICAL RULES**
+
+**NEVER DO THIS - WILL CORRUPT CORAL STATE:**
+```bash
+# NEVER test Coral from host while LXC has it mounted
+# NEVER run pycoral/tflite tests on host after container has used it
+# NEVER try to "initialize" Coral on host while container is running or was recently using it
+```
+
+**If you violate this rule:**
+- Coral enters "did not claim interface 0" state
+- ONLY FIX: Physical unplug and replug of Coral USB device
+- There is NO software fix - user must physically touch the hardware
+
+**Correct troubleshooting procedure:**
+1. Check Frigate logs INSIDE container: `pct exec 113 -- cat /dev/shm/logs/frigate/current | grep -i TPU`
+2. Check detector stats: `pct exec 113 -- curl -s http://127.0.0.1:5000/api/stats | jq '.detectors'`
+3. If not working, ask user to replug Coral USB
+4. NEVER run Coral tests on the Proxmox host
+
+**Reference**: `docs/reference/frigate-016-upgrade-lessons.md`
+
 ## Notes
 - The homelab runs GPU-accelerated AI workloads (RTX 3070 passthrough)
 - Extensive documentation exists for troubleshooting common issues
