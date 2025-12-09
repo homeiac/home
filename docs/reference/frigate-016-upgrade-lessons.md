@@ -129,6 +129,83 @@ lxc.cgroup2.devices.allow: c 226:128 rwm
 lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir
 ```
 
+## Coral TPU Critical Configuration (Version Independent)
+
+### USB Device Path Changes After Replug
+
+**CRITICAL**: The USB device number changes every time Coral is physically unplugged/replugged:
+
+```bash
+# Before replug: Bus 003 Device 004
+# After replug:  Bus 003 Device 009 (NEW NUMBER!)
+
+# Always check current device number
+lsusb | grep -i google
+
+# Update LXC config with new path
+sed -i 's|dev0: /dev/bus/usb/003/.*|dev0: /dev/bus/usb/003/NEW_NUM|' /etc/pve/lxc/113.conf
+pct stop 113 && pct start 113
+```
+
+### Use dev0: Passthrough (NOT Bind Mount)
+
+**Working method**:
+```
+dev0: /dev/bus/usb/003/009
+```
+
+**Does NOT work** (permissions reset on container restart):
+```
+lxc.mount.entry: /dev/bus/usb dev/bus/usb none bind,optional,create=dir
+```
+
+The bind mount method doesn't preserve host udev permissions inside the container.
+
+### USB Permissions Must Be 666
+
+The host udev rules must set 666 permissions:
+```bash
+# /etc/udev/rules.d/98-coral.rules
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", MODE="0666", GROUP="plugdev"
+```
+
+Verify on host: `ls -la /dev/bus/usb/003/XXX` should show `crw-rw-rw-`
+
+### Hardware Timeout = Physical Replug Required
+
+Symptoms in dmesg:
+```
+xhci_hcd: Timeout while waiting for setup device command
+usb 3-3: device not accepting address, error -62
+```
+
+**Only fix**: Physically unplug and replug the Coral USB device.
+
+### pycoral Detection vs tflite Delegate Loading
+
+These can have different results:
+```bash
+# This may succeed (reads sysfs):
+python3 -c "from pycoral.utils.edgetpu import list_edge_tpus; print(list_edge_tpus())"
+# Output: [{'type': 'usb', 'path': '/sys/bus/usb/devices/3-3'}]
+
+# But this may fail (actually uses USB device):
+python3 -c "from tflite_runtime.interpreter import load_delegate; load_delegate('libedgetpu.so.1')"
+# ValueError: Failed to load delegate
+
+# If detection works but loading fails → hardware issue → replug Coral
+```
+
+### Verify Coral Working in Frigate
+
+```bash
+# Check Frigate logs for TPU detection
+pct exec 113 -- cat /dev/shm/logs/frigate/current | grep -i "TPU found"
+
+# Check detector stats (should show inference_speed)
+pct exec 113 -- curl -s http://127.0.0.1:5000/api/stats | jq '.detectors'
+```
+
 ## Why LXC not VM
 - Lower overhead on AMD A9-9400
 - Direct USB passthrough works
@@ -136,5 +213,15 @@ lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir
 - Simpler than VFIO/IOMMU for VM
 
 ## Reference Files
-- Working config: `/etc/pve/lxc/113.conf`
+
+### On Proxmox Host (fun-bedbug.maas)
+- Working LXC config: `/etc/pve/lxc/113.conf`
 - Coral automation: `/root/coral-automation/scripts/coral_tpu_automation.py`
+- Config backups: `/root/coral-backups/`
+
+### In Repository
+- LXC container config backup: `proxmox/backups/lxc-113-container-config.conf`
+- Frigate app config backup: `proxmox/backups/frigate-app-config.yml`
+- Backup restore procedures: `proxmox/backups/README.md`
+- Coral TPU integration guide: `proxmox/guides/google-coral-tpu-frigate-integration.md`
+- Coral automation runbook: `docs/source/md/coral-tpu-automation-runbook.md`
