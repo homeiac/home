@@ -52,10 +52,12 @@ GPU Acceleration: AMD Radeon R5 with VA-API
 - Performance: Offloads video decode/encode from CPU
 
 TPU Acceleration: Google Coral USB
-- Device: /dev/bus/usb/003/003
+- Device: /dev/bus/usb/003/XXX (changes after replug!)
 - Automation: coral-tpu-init.service (auto-initialization)
+- Working Config Backup: proxmox/backups/lxc-113-container-config.conf
 - Purpose: Object detection inference
 - Status Check: coral-tpu --status-only
+- Critical Info: docs/reference/frigate-016-upgrade-lessons.md#coral-tpu-critical-configuration-version-independent
 ```
 
 ### Why Manual Updates Are Prohibited
