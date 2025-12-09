@@ -4,424 +4,302 @@ This runbook provides procedures for maintaining, updating, and troubleshooting 
 
 ## 🔍 System Overview
 
-The Coral TPU automation system eliminates manual initialization after system restarts by automatically:
-- Detecting Coral TPU device state
-- Initializing TPU when needed (safely)
-- Managing LXC container configuration
-- Providing comprehensive logging and monitoring
+The Coral TPU automation system eliminates manual initialization after system restarts using two mechanisms:
+
+1. **udev rule** - Automatically loads firmware when Coral USB is detected in bootloader mode
+2. **LXC hookscript** - Updates container device path before container starts
+
+### How It Works
+
+```
+Boot / USB plug-in
+    ↓
+Coral appears as 1a6e:089a (Global Unichip - bootloader mode)
+    ↓
+udev rule triggers dfu-util → loads firmware (apex_latest_single_ep.bin)
+    ↓
+Device re-enumerates as 18d1:9302 (Google Inc - ready)
+    ↓
+Container start requested (manual or onboot)
+    ↓
+LXC hookscript (pre-start) → updates dev0 path if device moved
+    ↓
+Container starts with correct device path
+    ↓
+Frigate works with Coral TPU
+```
+
+### Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **dfu-util** | `/usr/bin/dfu-util` | Loads firmware into Coral USB |
+| **Firmware** | `/usr/local/lib/firmware/apex_latest_single_ep.bin` | EdgeTPU runtime (~10KB) |
+| **udev rule** | `/etc/udev/rules.d/95-coral-init.rules` | Triggers firmware load on device detection |
+| **LXC hookscript** | `/var/lib/vz/snippets/coral-lxc-hook.sh` | Updates container config before start |
+
+### Legacy System (Disabled)
+
+The old Python-based systemd service (`coral-tpu-init.service`) is disabled but preserved as fallback. It required pycoral, numpy, and model files to run inference for initialization - fragile and slow.
 
 ## 📊 Health Check Procedures
 
 ### Quick Status Check
 
 ```bash
-# Check overall system health
-coral-tpu --status-only
+# Check Coral USB state
+lsusb | grep -E "(18d1:9302|1a6e:089a)"
+# Expected: "ID 18d1:9302 Google Inc." (initialized)
 
-# Expected output for healthy system:
-# ✅ Coral Mode: GOOGLE
-# ✅ Config Matches: ✅
-# ✅ Container Status: running
-# ✅ Actions: ['no_action']
+# Check LXC container configuration
+pct config 113 | grep -E "(dev0|hookscript)"
+# Expected: dev0 pointing to correct USB device path
+# Expected: hookscript: local:snippets/coral-lxc-hook.sh
+
+# Check container status
+pct status 113
 ```
 
-### Detailed Service Verification
+### Verify udev Rule
 
 ```bash
-# 1. Check systemd service status
-systemctl status coral-tpu-init.service
+# Check rule exists
+cat /etc/udev/rules.d/95-coral-init.rules
 
-# Expected: Active (exited) and enabled
+# Check dfu-util is installed
+which dfu-util
+dfu-util --version
 
-# 2. Review recent service logs
-journalctl -u coral-tpu-init.service --since "1 hour ago" --no-pager
+# Check firmware exists
+ls -la /usr/local/lib/firmware/apex_latest_single_ep.bin
+```
 
-# Expected: No errors, "System was already optimal"
+### Verify Hookscript
 
-# 3. Verify service is enabled for boot
-systemctl is-enabled coral-tpu-init.service
+```bash
+# Check hookscript exists and is executable
+ls -la /var/lib/vz/snippets/coral-lxc-hook.sh
 
-# Expected: enabled
+# Check it's attached to container
+grep hookscript /etc/pve/lxc/113.conf
 
-# 4. Check USB device detection
-lsusb | grep -E "(18d1:9302|1a6e:089a)"
-
-# Expected: "ID 18d1:9302 Google Inc." (Google mode)
-
-# 5. Verify LXC container configuration
-pct config 113 | grep -E "(dev0|cgroup.*189)"
-
-# Expected: dev0 pointing to correct USB device path
+# View recent hookscript logs
+journalctl -t coral-hook --no-pager -n 20
 ```
 
 ### Hardware Verification
 
 ```bash
-# 1. Check Coral device accessibility
-ls -l /dev/bus/usb/003/004
+# Check Coral device accessibility on host
+CORAL=$(lsusb | grep "18d1:9302" | sed 's/Bus \([0-9]*\) Device \([0-9]*\).*/\1 \2/')
+BUS=$(echo $CORAL | cut -d' ' -f1)
+DEV=$(echo $CORAL | cut -d' ' -f2)
+ls -l /dev/bus/usb/$BUS/$DEV
 
-# Expected: Device file exists with proper permissions
+# Verify container can access device (when running)
+pct exec 113 -- lsusb | grep Google
 
-# 2. Verify container can access device
-pct exec 113 -- ls -l /dev/bus/usb/003/004
-
-# Expected: Device accessible from within container
-
-# 3. Test Coral inference (optional - only if Frigate not using)
+# Test Coral inference (optional - only if Frigate not using)
 pct exec 113 -- python3 -c "from pycoral.utils import edgetpu; print('TPU available:', len(edgetpu.list_edge_tpus()) > 0)"
-
-# Expected: TPU available: True
-```
-
-## 🔄 Update Procedures
-
-### Updating Automation Code
-
-When automation code changes are made in the repository:
-
-```bash
-# 1. Navigate to repository root
-cd /path/to/homelab/repo
-
-# 2. Ensure latest changes are committed
-git status
-git pull origin master
-
-# 3. Run deployment script
-./proxmox/homelab/scripts/sync_coral_automation.sh fun-bedbug.maas
-
-# 4. Verify deployment
-ssh root@fun-bedbug.maas "coral-tpu --status-only"
-
-# 5. Restart service to pick up changes
-ssh root@fun-bedbug.maas "systemctl restart coral-tpu-init.service"
-
-# 6. Verify service restart
-ssh root@fun-bedbug.maas "systemctl status coral-tpu-init.service"
-```
-
-### Testing Updates Safely
-
-```bash
-# 1. Always test with dry-run first
-coral-tpu --dry-run
-
-# 2. Check what actions would be taken
-# Expected for healthy system: "System was already optimal"
-
-# 3. If changes are needed, create backup first
-cp /etc/pve/lxc/113.conf /root/coral-backups/manual-backup-$(date +%Y%m%d_%H%M%S).conf
-
-# 4. Run automation with verbose logging
-coral-tpu --verbose
-
-# 5. Verify no unexpected changes
-diff /etc/pve/lxc/113.conf /root/coral-backups/manual-backup-*.conf
-```
-
-### Rolling Back Updates
-
-If an update causes issues:
-
-```bash
-# 1. Stop the service immediately
-systemctl stop coral-tpu-init.service
-
-# 2. Restore previous automation code (if needed)
-git log --oneline -10  # Find previous commit
-git checkout <previous-commit-hash> -- proxmox/homelab/src/homelab/coral_*
-
-# 3. Redeploy previous version
-./proxmox/homelab/scripts/sync_coral_automation.sh fun-bedbug.maas
-
-# 4. Restore LXC config from backup (if modified)
-ls -la /root/coral-backups/
-cp /root/coral-backups/lxc_113_<timestamp>.conf /etc/pve/lxc/113.conf
-
-# 5. Restart container (if config was restored)
-pct stop 113 && pct start 113
-
-# 6. Verify system health
-coral-tpu --status-only
-
-# 7. Re-enable service only when confirmed working
-systemctl start coral-tpu-init.service
 ```
 
 ## 🚨 Troubleshooting Guide
 
-### Common Issues and Solutions
+### Issue: Coral Stuck in Bootloader Mode (1a6e:089a)
 
-#### Issue: Service Fails at Boot with "Config file not found"
-
-This is the most common issue - the service runs before Proxmox mounts `/etc/pve/`.
+The device didn't get initialized by the udev rule.
 
 ```bash
-# Diagnosis - check for this specific error
-journalctl -u coral-tpu-init.service --no-pager | grep "Config file not found"
+# Check current state
+lsusb | grep -E "(18d1|1a6e)"
 
-# Example error:
-# homelab.coral_config - WARNING - Config file not found: /etc/pve/lxc/113.conf
+# Manual initialization with dfu-util
+dfu-util -D /usr/local/lib/firmware/apex_latest_single_ep.bin -d '1a6e:089a' -R
 
-# Root cause: Service started before pve-cluster.service mounted /etc/pve/
-# The /etc/pve/ directory is a FUSE filesystem (pmxcfs) that's only available
-# after the Proxmox cluster services start.
+# Wait 2 seconds, then verify
+sleep 2
+lsusb | grep "18d1:9302"
 
-# Solution: Update service dependencies
-cat > /etc/systemd/system/coral-tpu-init.service << 'EOF'
-[Unit]
-Description=Coral TPU Initialization Service
-After=pve-cluster.service pveproxy.service
-Wants=pve-cluster.service
-Requires=pve-cluster.service
+# Check if udev rule is loaded
+udevadm control --reload-rules
 
-[Service]
-Type=oneshot
-ExecStartPre=/bin/sleep 10
-ExecStart=/usr/bin/python3 /root/coral-automation/scripts/coral_tpu_automation.py
-Environment=PYTHONPATH=/root/coral-automation/src
-WorkingDirectory=/root/coral-automation
-StandardOutput=journal
-StandardError=journal
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Reload and restart
-systemctl daemon-reload
-systemctl restart coral-tpu-init.service
+# Check dmesg for USB errors
+dmesg | tail -30 | grep -i usb
 ```
 
-#### Issue: Service Fails to Start (Other Causes)
+### Issue: Container Cannot Access Coral
 
 ```bash
-# Diagnosis
-systemctl status coral-tpu-init.service -l
-journalctl -u coral-tpu-init.service --no-pager
+# Check current dev0 in config
+grep dev0 /etc/pve/lxc/113.conf
+
+# Find actual device path
+lsusb | grep "18d1:9302"
+# Note the Bus and Device numbers
+
+# Manually update config if needed
+# Edit /etc/pve/lxc/113.conf and set dev0 to correct path
+# Example: dev0: /dev/bus/usb/003/011
+
+# Restart container
+pct stop 113 && pct start 113
+```
+
+### Issue: Hookscript Not Running
+
+```bash
+# Verify hookscript is attached
+pct config 113 | grep hookscript
+
+# If missing, attach it
+pct set 113 --hookscript local:snippets/coral-lxc-hook.sh
+
+# Check hookscript permissions
+ls -la /var/lib/vz/snippets/coral-lxc-hook.sh
+# Should be: -rwxr-xr-x
+
+# Fix permissions if needed
+chmod +x /var/lib/vz/snippets/coral-lxc-hook.sh
+
+# Test hookscript manually (dry run - just check output)
+/var/lib/vz/snippets/coral-lxc-hook.sh 113 pre-start
+```
+
+### Issue: Hookscript Fails
+
+```bash
+# Check logs
+journalctl -t coral-hook --no-pager
 
 # Common causes:
-# 1. Python import errors
-# 2. Missing dependencies
-# 3. Permission issues
-# 4. File path problems
-
-# Solutions
-# Install missing dependencies
-pip3 install typing-extensions dataclasses pathlib
-
-# Check file permissions
-ls -la /root/coral-automation/scripts/coral_tpu_automation.py
-chmod +x /root/coral-automation/scripts/coral_tpu_automation.py
-
-# Verify Python path
-export PYTHONPATH="/root/coral-automation/src"
-python3 /root/coral-automation/scripts/coral_tpu_automation.py --help
+# 1. Coral not initialized yet (udev rule didn't run)
+# 2. Permission issues with /etc/pve/lxc/113.conf
+# 3. Syntax error in hookscript
 ```
 
-#### Issue: Coral Device Not Detected
+### Issue: Device Path Changes After Reboot
+
+This is normal - USB device numbers can change. The hookscript handles this automatically. If it's not working:
 
 ```bash
-# Diagnosis
-lsusb | grep -E "(18d1:9302|1a6e:089a)"
-coral-tpu --status-only
+# Check what path Coral is at now
+lsusb | grep "18d1:9302"
 
-# Solutions
-# Check USB connections
-lsusb | grep -i google
-lsusb | grep -i unichip
+# Check what config has
+grep dev0 /etc/pve/lxc/113.conf
 
-# Verify device paths
-ls -la /dev/bus/usb/*/
+# Manually trigger hookscript logic
+/var/lib/vz/snippets/coral-lxc-hook.sh 113 pre-start
 
-# Check for device changes
-dmesg | grep -i coral
-dmesg | grep -i usb
-```
-
-#### Issue: Container Cannot Access Coral
-
-```bash
-# Diagnosis
-pct config 113 | grep dev0
-pct exec 113 -- ls -l /dev/bus/usb/003/004
-
-# Solutions
-# Update device path in config
-coral-tpu --dry-run  # See what would be changed
-coral-tpu            # Apply changes
-
-# Manual config update (emergency)
-nano /etc/pve/lxc/113.conf
-# Update dev0 line to correct device path
-pct stop 113 && pct start 113
-```
-
-#### Issue: Frigate Loses TPU Access
-
-```bash
-# Immediate response
-systemctl stop coral-tpu-init.service
-
-# Restore from backup
-ls -la /root/coral-backups/
-cp /root/coral-backups/lxc_113_<latest>.conf /etc/pve/lxc/113.conf
-pct stop 113 && pct start 113
-
-# Verify Frigate can access TPU
-pct exec 113 -- python3 -c "from pycoral.utils import edgetpu; print(edgetpu.list_edge_tpus())"
-
-# Check Frigate logs
-pct exec 113 -- tail -f /opt/frigate/logs/frigate.log
-```
-
-### Log Analysis
-
-#### Key Log Messages
-
-**Healthy Operation:**
-```
-INFO - Coral detected in Google mode: Google Inc.
-INFO - System is optimal - Coral initialized and config correct
-INFO - ✓ No actions required - system is optimal
-```
-
-**Initialization Needed:**
-```
-INFO - Coral detected in Unichip mode: Global Unichip Corp.
-INFO - Container stopped, safe to initialize
-INFO - Initializing Coral TPU...
-INFO - ✓ Coral initialization successful
-```
-
-**Safety Abort:**
-```
-ERROR - SAFETY VIOLATION: Cannot initialize Coral in Google mode
-ERROR - Container running while Coral needs init - not safe
-ERROR - Aborting automation due to unsafe conditions
-```
-
-#### Log Locations
-
-```bash
-# Application logs
-tail -f /var/log/coral-tpu-automation.log
-
-# Systemd journal
-journalctl -u coral-tpu-init.service -f
-
-# Filter for errors only
-journalctl -u coral-tpu-init.service --since "1 day ago" | grep -i error
-
-# Get service start/stop events
-journalctl -u coral-tpu-init.service --since "1 week ago" | grep -E "(Started|Stopped|Failed)"
-```
-
-## 📅 Maintenance Schedule
-
-### Daily Checks (Automated)
-
-The system performs self-checks on every boot via systemd service.
-
-### Weekly Verification (Manual)
-
-```bash
-# 1. Check service health
-systemctl status coral-tpu-init.service
-
-# 2. Review logs for any issues
-journalctl -u coral-tpu-init.service --since "1 week ago" | grep -i error
-
-# 3. Verify Coral detection
-coral-tpu --status-only
-
-# 4. Check backup directory
-ls -la /root/coral-backups/ | tail -10
-```
-
-### Monthly Tasks
-
-```bash
-# 1. Clean old backups (keep last 30 days)
-find /root/coral-backups/ -name "lxc_113_*.conf" -mtime +30 -delete
-
-# 2. Verify test suite still passes (development)
-cd /path/to/homelab/repo
-poetry run pytest tests/test_coral_*.py -v
-
-# 3. Check for automation updates
-git log --oneline --since="1 month ago" -- proxmox/homelab/src/homelab/coral_*
-
-# 4. Review system performance
-journalctl -u coral-tpu-init.service --since "1 month ago" | grep "execution time"
+# Verify config was updated
+grep dev0 /etc/pve/lxc/113.conf
 ```
 
 ## 🔧 Emergency Procedures
 
-### Complete System Recovery
+### Manual Coral Initialization (No dfu-util)
 
-If the automation system is completely broken:
+If dfu-util approach fails, fall back to Python method:
 
 ```bash
-# 1. Stop automation service
-systemctl stop coral-tpu-init.service
-systemctl disable coral-tpu-init.service
-
-# 2. Manual Coral initialization (emergency only)
+# This is the OLD method - only use in emergency
 cd /root/code/coral/pycoral/examples
-python3 classify_image.py --model ../test_data/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite --labels ../test_data/inat_bird_labels.txt --input ../test_data/parrot.jpg
-
-# 3. Restore LXC config from known good backup
-cp /root/coral-backups/113.conf.pre-service /etc/pve/lxc/113.conf
-pct stop 113 && pct start 113
-
-# 4. Verify Frigate functionality
-# Check Frigate web interface for TPU detection
-
-# 5. Re-deploy automation when issue resolved
-cd /path/to/homelab/repo
-./proxmox/homelab/scripts/sync_coral_automation.sh fun-bedbug.maas
+python3 classify_image.py \
+  --model ../test_data/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite \
+  --labels ../test_data/inat_bird_labels.txt \
+  --input ../test_data/parrot.jpg
 ```
 
-### Contact and Escalation
+### Re-enable Legacy Systemd Service
 
-If issues persist after following this runbook:
-
-1. **Check GitHub Issues**: Look for similar problems in the repository
-2. **Create New Issue**: Document the problem with logs and steps taken
-3. **Manual Operation**: Fall back to manual Coral initialization as temporary measure
-4. **System Documentation**: Refer to `README_CORAL_AUTOMATION.md` for detailed architecture
-
-## 📚 Reference Commands
-
-### Quick Reference
+If udev/hookscript approach completely fails:
 
 ```bash
-# Status and health
-coral-tpu --status-only
-systemctl status coral-tpu-init.service
-journalctl -u coral-tpu-init.service --since "1 hour ago"
-
-# Operations
-coral-tpu --dry-run                    # Preview actions
-coral-tpu                             # Execute automation
-coral-tpu --verbose                   # Detailed logging
-
-# Service management
+# Re-enable old service
+systemctl enable coral-tpu-init.service
 systemctl start coral-tpu-init.service
-systemctl stop coral-tpu-init.service
-systemctl restart coral-tpu-init.service
-systemctl disable coral-tpu-init.service
 
-# Configuration
-pct config 113 | grep dev0           # Check LXC config
-ls -la /root/coral-backups/          # List backups
-lsusb | grep -E "(Google|Unichip)"   # Check USB devices
-
-# Emergency manual initialization
-cd /root/code/coral/pycoral/examples
-python3 classify_image.py --model ../test_data/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite --labels ../test_data/inat_bird_labels.txt --input ../test_data/parrot.jpg
+# Check status
+systemctl status coral-tpu-init.service
 ```
 
-This runbook ensures reliable operation and maintenance of the Coral TPU automation system while providing clear procedures for updates, troubleshooting, and emergency recovery.
+### Complete Fresh Setup
+
+If everything is broken, reinstall the automation:
+
+```bash
+# 1. Install dfu-util
+apt install dfu-util
+
+# 2. Download firmware
+mkdir -p /usr/local/lib/firmware
+wget -O /usr/local/lib/firmware/apex_latest_single_ep.bin \
+  'https://github.com/google-coral/libedgetpu/raw/master/driver/usb/apex_latest_single_ep.bin'
+
+# 3. Create udev rule
+cat > /etc/udev/rules.d/95-coral-init.rules << 'EOF'
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a6e", ATTR{idProduct}=="089a", RUN+="/usr/bin/dfu-util -D /usr/local/lib/firmware/apex_latest_single_ep.bin -d 1a6e:089a -R"
+EOF
+udevadm control --reload-rules
+
+# 4. Create hookscript (see full script in repository)
+# Location: /var/lib/vz/snippets/coral-lxc-hook.sh
+
+# 5. Attach hookscript
+pct set 113 --hookscript local:snippets/coral-lxc-hook.sh
+```
+
+## 📚 Reference
+
+### USB Device IDs
+
+| State | Vendor:Product | Description |
+|-------|----------------|-------------|
+| Bootloader | `1a6e:089a` | Global Unichip Corp - needs firmware |
+| Initialized | `18d1:9302` | Google Inc - ready to use |
+
+### Key Files
+
+```
+/etc/udev/rules.d/95-coral-init.rules     # udev rule for auto-init
+/usr/local/lib/firmware/apex_latest_single_ep.bin  # EdgeTPU firmware
+/var/lib/vz/snippets/coral-lxc-hook.sh    # LXC pre-start hookscript
+/etc/pve/lxc/113.conf                     # Frigate container config
+```
+
+### Log Locations
+
+```bash
+# Hookscript logs
+journalctl -t coral-hook
+
+# udev/USB events
+dmesg | grep -i usb
+journalctl -k | grep -i coral
+
+# Legacy service logs (if re-enabled)
+journalctl -u coral-tpu-init.service
+```
+
+### Quick Commands
+
+```bash
+# Check Coral state
+lsusb | grep -E "(18d1|1a6e)"
+
+# Manual init with dfu-util
+dfu-util -D /usr/local/lib/firmware/apex_latest_single_ep.bin -d '1a6e:089a' -R
+
+# Check container config
+pct config 113 | grep -E "(dev0|hookscript|cgroup)"
+
+# View hookscript logs
+journalctl -t coral-hook --no-pager -n 20
+
+# Test hookscript
+/var/lib/vz/snippets/coral-lxc-hook.sh 113 pre-start
+```
+
+## Tags
+
+coral, coral-tpu, edge-tpu, google-coral, usb-accelerator, frigate, proxmox, lxc, udev, dfu-util, hookscript, fun-bedbug
