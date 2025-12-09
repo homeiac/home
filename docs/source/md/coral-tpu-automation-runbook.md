@@ -127,6 +127,19 @@ udevadm control --reload-rules
 dmesg | tail -30 | grep -i usb
 ```
 
+### Issue: Coral Not Working After Extended Use
+
+If Coral stops responding or enters a bad state, the simplest fix is a USB replug:
+
+1. **Physical replug** - Unplug and replug the Coral USB device
+2. **udev rule triggers automatically** - Device initializes via dfu-util
+3. **Verify** - `lsusb | grep "18d1:9302"` should show Google Inc
+
+This is faster than rebooting and works because:
+- USB replug triggers the udev `add` action
+- dfu-util loads firmware into Coral's volatile memory
+- Device re-enumerates as `18d1:9302` (ready state)
+
 ### Issue: Container Cannot Access Coral
 
 ```bash
