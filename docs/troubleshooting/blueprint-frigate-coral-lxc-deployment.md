@@ -213,6 +213,7 @@ lsusb | grep "18d1:9302"  # Google Inc
 ### Phase 9: Coral Verification
 1. Run `32-verify-frigate-api.sh`
 2. Run `33-verify-coral-detection.sh` - Verify inference speed < 20ms
+3. Verify CPU load reduced compared to OpenVINO/CPU
 
 ### Phase 10: Storage Passthrough (For Recordings)
 
