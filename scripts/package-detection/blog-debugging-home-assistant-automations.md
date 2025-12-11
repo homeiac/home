@@ -182,6 +182,36 @@ Now I can:
 - **Track decisions** (package_detected=True/False)
 - **Debug failures** by finding where the trace stops
 
+## Bonus Bug: The Phantom "Configuration Error"
+
+After fixing the automation, I noticed the LLM Vision dashboard showed a red "Configuration error" badge. Time for another debugging session, right?
+
+We checked:
+- All 3 LLM Vision config entries → `state: loaded` ✓
+- The Ollama provider → responding correctly ✓
+- The llava:7b model → available ✓
+- Test service call → worked perfectly ✓
+
+Everything was fine. The AI assistant went deep—checking Lovelace storage files, trying SSH (which was down during a core update), attempting qm guest commands...
+
+Then I realized: **I had uBlock Origin blocking unpkg.com**, which the LLM Vision card uses to load its JavaScript dependencies.
+
+One click to whitelist the domain. Problem solved.
+
+### The Lesson: Know When Human Intuition Beats Systematic Investigation
+
+The AI was doing everything right—systematic elimination, checking each component, following the evidence. But sometimes the fastest path to a solution is human intuition and domain knowledge.
+
+**Signs it might be a client-side issue:**
+- Backend API calls work fine
+- Error only appears in the UI
+- "Configuration error" is vague (real config errors usually have specific messages)
+- You recently changed browser extensions or settings
+
+**The meta-lesson:** AI assistants excel at systematic investigation, but they can't see your browser extensions, know your recent changes, or apply the "have you tried turning it off and on again" intuition that comes from years of debugging.
+
+The best debugging happens when human intuition and AI systematic analysis work together.
+
 ## Lessons Learned
 
 ### 1. Automation Mode Matters
@@ -213,15 +243,21 @@ We obsess over observability in cloud systems but ignore it in smart homes. Yet 
 
 They deserve the same observability patterns.
 
-### 4. AI Assistants Excel at Systematic Debugging
+### 4. AI + Human = Best Debugging Team
 
-Working with Claude Code, the debugging followed a clear pattern:
-1. Check entity states
-2. Test individual components (camera, LLM, LED)
-3. Trace the execution path
-4. Find the gap
+AI assistants excel at:
+- Systematic component testing
+- API exploration and state checking
+- Code analysis and pattern recognition
+- Tireless iteration through possibilities
 
-The AI didn't magically know the answer—it systematically eliminated possibilities until the root cause emerged.
+Humans excel at:
+- Intuition about recent changes
+- Knowledge of their own environment quirks
+- "Obvious" checks the AI might overlook
+- Recognizing when to stop and try something different
+
+The best results come from collaboration, not replacement.
 
 ## The Code
 
@@ -251,9 +287,14 @@ Key sections:
 
 ## Conclusion
 
-A one-word fix (`single` → `queued`) solved the immediate problem. But the real win was adding observability that will make future debugging trivial.
+Two bugs, two very different solutions:
 
-The next time my smart home misbehaves, I won't be guessing. I'll grep the logs for `[PKG-` and follow the trace.
+1. **Automation mode bug**: Fixed by changing `single` → `queued` and adding observability
+2. **Dashboard "error" bug**: Fixed by human noticing their browser extension was blocking JavaScript
+
+A one-word fix and a one-click fix. But getting there required both systematic AI investigation AND human intuition. Neither alone would have been as fast.
+
+The next time my smart home misbehaves, I'll grep the logs for `[PKG-` and follow the trace. And if the UI looks broken but the API works fine? I'll check my browser extensions first.
 
 ---
 

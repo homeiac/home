@@ -568,6 +568,25 @@ Network Access: [Available/Missing] - <DNS/LoadBalancer/ports>
 Recommendation: <next steps based on complete findings>
 ```
 
+### **Home Assistant UI Debugging: Pre-Flight Check (MANDATORY)**
+
+**BEFORE deep-diving into backend investigation for HA UI errors, run:**
+```bash
+./scripts/package-detection/preflight-check.sh
+```
+
+**If the API works but the UI shows errors, CHECK CLIENT-SIDE ISSUES FIRST:**
+- Browser extensions blocking JavaScript (uBlock Origin, NoScript, Privacy Badger)
+  - Common blocked domains: `unpkg.com`, `jsdelivr.net`, `cdnjs.cloudflare.com`
+- Browser cache issues (Ctrl+Shift+R or try incognito mode)
+- Multiple HA tabs open (can cause WebSocket conflicts)
+- VPN/proxy interfering with connections
+- Check browser console (F12 → Console) for JavaScript errors
+
+**Real example:** LLM Vision showed "Configuration error" in the UI, but all API calls worked perfectly. The AI spent time checking config entries, SSH'ing into the VM, and investigating Lovelace storage. **The actual fix: user had uBlock blocking unpkg.com.** One click to whitelist, problem solved.
+
+**Lesson:** Human intuition about recent changes (browser extensions, settings) can be faster than systematic backend investigation. When UI fails but API works → check the client first.
+
 ### **Critical Configuration Validation Examples**
 
 #### **Home Assistant Integration Pitfalls**
