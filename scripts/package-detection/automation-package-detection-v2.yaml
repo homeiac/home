@@ -1,0 +1,284 @@
+# Package Delivery Detection Automation v2.0
+#
+# CHANGELOG v2.0:
+# - Fixed: Changed mode from 'single' to 'queued' to allow person_left trigger
+#   to execute even while person_arrived is still processing
+# - Added: OpenTelemetry-style logging with trace_id for easy event correlation
+# - Added: Span-like logging for each major step (START/END with duration)
+# - Added: Structured event logging to system_log for debugging
+#
+# TRACING: All logs use format "[PKG-{trace_id}] {span}: {message}"
+# To trace a delivery: Search logbook for "PKG-" or filter by "Package Detection"
+
+id: package_delivery_detection
+alias: Package Delivery Detection
+description: >-
+  Detects package deliveries using Reolink + LLM Vision.
+  v2.0: Fixed mode blocking, added OpenTelemetry-style tracing.
+
+# CRITICAL FIX: Changed from 'single' to 'queued'
+# 'single' was blocking person_left trigger while person_arrived was processing
+mode: queued
+
+triggers:
+  - platform: state
+    entity_id: binary_sensor.reolink_video_doorbell_wifi_person
+    from: "off"
+    to: "on"
+    id: person_arrived
+
+  - platform: state
+    entity_id: binary_sensor.reolink_video_doorbell_wifi_person
+    from: "on"
+    to: "off"
+    for:
+      seconds: 3
+    id: person_left
+
+conditions:
+  - condition: time
+    after: "08:00:00"
+    before: "21:00:00"
+
+actions:
+  # Generate trace_id for this execution (like OpenTelemetry trace)
+  - variables:
+      trace_id: "{{ now().strftime('%H%M%S') }}-{{ range(1000,9999) | random }}"
+      trigger_name: "{{ trigger.id }}"
+      start_time: "{{ now().isoformat() }}"
+
+  # TRACE: Log automation start
+  - action: logbook.log
+    data:
+      name: "Package Detection"
+      message: "[PKG-{{ trace_id }}] TRACE_START | trigger={{ trigger_name }} | time={{ start_time }}"
+      entity_id: automation.package_delivery_detection
+
+  - choose:
+      # ============================================================
+      # SPAN: person_arrived - Analyze who is at the door
+      # ============================================================
+      - alias: "PERSON ARRIVED - Analyze visitor"
+        conditions:
+          - condition: trigger
+            id: person_arrived
+        sequence:
+          # SPAN START: visitor_analysis
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] SPAN_START:visitor_analysis | Waiting 2s for person to settle"
+              entity_id: automation.package_delivery_detection
+
+          - delay:
+              seconds: 2
+
+          # EVENT: Taking snapshot
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:snapshot | file=doorbell_visitor.jpg"
+              entity_id: camera.reolink_video_doorbell_wifi_fluent
+
+          - action: camera.snapshot
+            target:
+              entity_id: camera.reolink_video_doorbell_wifi_fluent
+            data:
+              filename: /config/www/tmp/doorbell_visitor.jpg
+
+          # EVENT: Calling LLM
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:llm_call | model=llava:7b | prompt=describe_visitor"
+              entity_id: automation.package_delivery_detection
+
+          - action: llmvision.image_analyzer
+            data:
+              provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
+              model: llava:7b
+              image_file: /config/www/tmp/doorbell_visitor.jpg
+              message: "Describe the person at this door in 10 words or less. Include: delivery uniform (UPS/FedEx/Amazon/USPS), or regular visitor, or unknown person. Mention if holding a package."
+              max_tokens: 50
+              target_width: 1280
+            response_variable: visitor_analysis
+
+          # EVENT: LLM Response
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:llm_response | result={{ visitor_analysis.response_text }}"
+              entity_id: automation.package_delivery_detection
+
+          # Store visitor info
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.pending_notification_message
+            data:
+              value: "Visitor at {{ now().strftime('%I:%M %p') }}: {{ visitor_analysis.response_text }}"
+
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.pending_notification_type
+            data:
+              value: "visitor"
+
+          # EVENT: Send notification
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:notify | type=mobile | title=Someone at door"
+              entity_id: automation.package_delivery_detection
+
+          - action: notify.mobile_app_pixel_10_pro
+            data:
+              title: "Someone at door"
+              message: "{{ visitor_analysis.response_text }}"
+              data:
+                image: /api/camera_proxy/camera.reolink_video_doorbell_wifi_fluent
+                tag: doorbell_visitor
+                channel: Doorbell
+                importance: default
+
+          # SPAN END: visitor_analysis
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] SPAN_END:visitor_analysis | status=complete"
+              entity_id: automation.package_delivery_detection
+
+      # ============================================================
+      # SPAN: person_left - Check for packages after person leaves
+      # ============================================================
+      - alias: "PERSON LEFT - Check for packages"
+        conditions:
+          - condition: trigger
+            id: person_left
+        sequence:
+          # SPAN START: package_check
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] SPAN_START:package_check | Person left, checking for packages"
+              entity_id: automation.package_delivery_detection
+
+          # EVENT: Taking snapshot
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:snapshot | file=doorbell_after.jpg"
+              entity_id: camera.reolink_video_doorbell_wifi_fluent
+
+          - action: camera.snapshot
+            target:
+              entity_id: camera.reolink_video_doorbell_wifi_fluent
+            data:
+              filename: /config/www/tmp/doorbell_after.jpg
+
+          # EVENT: Calling LLM for package detection
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:llm_call | model=llava:7b | prompt=package_check"
+              entity_id: automation.package_delivery_detection
+
+          - action: llmvision.image_analyzer
+            data:
+              provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
+              model: llava:7b
+              image_file: /config/www/tmp/doorbell_after.jpg
+              message: "Answer ONLY YES or NO: Is there a package, box, or delivery item visible on this porch/doorstep?"
+              max_tokens: 10
+              target_width: 1280
+            response_variable: package_check
+
+          # EVENT: LLM Response with decision
+          - variables:
+              package_detected: "{{ 'yes' in (package_check.response_text | default('') | lower) }}"
+
+          - action: logbook.log
+            data:
+              name: "Package Detection"
+              message: "[PKG-{{ trace_id }}] EVENT:llm_response | result={{ package_check.response_text }} | package_detected={{ package_detected }}"
+              entity_id: automation.package_delivery_detection
+
+          # DECISION: Package detected?
+          - if:
+              - condition: template
+                value_template: "{{ package_detected }}"
+            then:
+              # EVENT: Package confirmed!
+              - action: logbook.log
+                data:
+                  name: "Package Detection"
+                  message: "[PKG-{{ trace_id }}] EVENT:package_confirmed | Activating LED and notifications"
+                  entity_id: automation.package_delivery_detection
+
+              # Update notification state
+              - action: input_text.set_value
+                target:
+                  entity_id: input_text.pending_notification_message
+                data:
+                  value: >-
+                    Package delivered at {{ now().strftime('%I:%M %p') }} by
+                    {{ states('input_text.pending_notification_message').split(': ')[-1]
+                       if 'Visitor' in states('input_text.pending_notification_message')
+                       else 'unknown carrier' }}
+
+              - action: input_text.set_value
+                target:
+                  entity_id: input_text.pending_notification_type
+                data:
+                  value: "package"
+
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.has_pending_notification
+
+              # Notify and turn on LED in parallel
+              - parallel:
+                  - action: notify.mobile_app_pixel_10_pro
+                    data:
+                      title: "Package Delivered!"
+                      message: "Ask your Voice Assistant: 'What's my notification?'"
+                      data:
+                        image: /api/camera_proxy/camera.reolink_video_doorbell_wifi_fluent
+                        tag: package_delivery
+                        channel: Package Alerts
+                        importance: high
+
+                  - sequence:
+                      - action: logbook.log
+                        data:
+                          name: "Package Detection"
+                          message: "[PKG-{{ trace_id }}] EVENT:led_on | entity=voice_pe_led | color=blue"
+                          entity_id: light.home_assistant_voice_09f5a3_led_ring
+
+                      - action: light.turn_on
+                        target:
+                          entity_id: light.home_assistant_voice_09f5a3_led_ring
+                        data:
+                          rgb_color: [0, 100, 255]
+                          brightness: 200
+
+              # SPAN END: package_check (with package)
+              - action: logbook.log
+                data:
+                  name: "Package Detection"
+                  message: "[PKG-{{ trace_id }}] SPAN_END:package_check | status=PACKAGE_DETECTED | led=ON"
+                  entity_id: automation.package_delivery_detection
+
+            else:
+              # SPAN END: package_check (no package)
+              - action: logbook.log
+                data:
+                  name: "Package Detection"
+                  message: "[PKG-{{ trace_id }}] SPAN_END:package_check | status=NO_PACKAGE"
+                  entity_id: automation.package_delivery_detection
+
+  # TRACE: Log automation end
+  - action: logbook.log
+    data:
+      name: "Package Detection"
+      message: "[PKG-{{ trace_id }}] TRACE_END | trigger={{ trigger_name }} | duration={{ (now() - as_datetime(start_time)).total_seconds() | round(1) }}s"
+      entity_id: automation.package_delivery_detection
