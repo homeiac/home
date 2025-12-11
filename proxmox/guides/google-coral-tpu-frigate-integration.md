@@ -477,11 +477,99 @@ Forum](https://forum.proxmox.com/threads/pass-usb-device-to-lxc.124205/)
 
 ---
 
-## TODO
+---
+
+## 11. Hookscript Approach for Reliable USB Passthrough
+
+The standard `dev0:` approach has a limitation: USB device numbers change after
+reboot or re-enumeration. The **hookscript approach** solves this by
+automatically resetting the USB device and updating the config before container
+start.
+
+### Prerequisites for Hookscript Approach
+
+```bash
+apt install -y usbutils jq
+```
+
+### Using the Automated Scripts
+
+A complete set of deployment scripts is available in `scripts/frigate-coral-lxc/`:
+
+```bash
+# 1. Update config.env with your target host
+vi scripts/frigate-coral-lxc/config.env
+
+# 2. Run pre-flight checks
+./scripts/frigate-coral-lxc/01-check-prerequisites.sh
+./scripts/frigate-coral-lxc/02-verify-coral-usb.sh
+./scripts/frigate-coral-lxc/03-find-sysfs-path.sh
+./scripts/frigate-coral-lxc/04-check-udev-rules.sh
+
+# 3. Create container (manual step via PVE Helper Script)
+# SSH to host and run:
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/frigate.sh)"
+# Note the assigned VMID and update config.env
+
+# 4. Configure USB passthrough
+./scripts/frigate-coral-lxc/10-stop-container.sh
+./scripts/frigate-coral-lxc/11-add-usb-passthrough.sh
+./scripts/frigate-coral-lxc/12-add-cgroup-permissions.sh
+
+# 5. Create and attach hookscript
+./scripts/frigate-coral-lxc/20-create-hookscript.sh
+./scripts/frigate-coral-lxc/21-attach-hookscript.sh
+
+# 6. Start and verify
+./scripts/frigate-coral-lxc/30-start-container.sh
+./scripts/frigate-coral-lxc/33-verify-coral-detection.sh
+```
+
+### Hookscript Features
+
+The hookscript (`/var/lib/vz/snippets/coral-lxc-hook-<VMID>.sh`) performs:
+
+1. **Coral Detection**: Searches `/sys/bus/usb/devices/` for vendor IDs `1a6e`
+   (uninitialized) or `18d1` (initialized)
+2. **USB Reset**: Unbinds and rebinds the USB device to refresh state
+3. **Config Update**: Updates `dev0:` path with current device number
+4. **Logging**: All actions logged to syslog (`journalctl -t coral-hook-<VMID>`)
+
+### Documentation
+
+- **Blueprint**: `docs/troubleshooting/blueprint-frigate-coral-lxc-deployment.md`
+- **Action Log Template**: `docs/templates/action-log-template-frigate-coral-lxc.md`
+- **Example Action Log**: `docs/troubleshooting/action-log-still-fawn-frigate-coral.md`
+
+---
+
+## CRITICAL: Never Test Coral on Host While Container Uses It
+
+**NEVER DO THIS** - will corrupt Coral state:
+```bash
+# WRONG: Running Coral test on host while container has it mounted
+cd /root/code && python3 coral/pycoral/examples/classify_image.py ...
+```
+
+If you violate this rule:
+- Coral enters "did not claim interface 0" state
+- **ONLY FIX**: Physical unplug and replug of Coral USB device
+- There is NO software fix - user must physically touch the hardware
+
+**Correct troubleshooting procedure:**
+1. Check Frigate logs INSIDE container: `pct exec <VMID> -- cat /dev/shm/logs/frigate/current | grep -i TPU`
+2. Check detector stats: `pct exec <VMID> -- curl -s http://127.0.0.1:5000/api/stats | jq '.detectors'`
+3. If not working, ask user to replug Coral USB
+4. NEVER run Coral tests on the Proxmox host while container is using it
+
+---
+
+## TODO (Legacy)
 
 * **Verify that the `dev0: /dev/bus/usb/003/005` entry works consistently**—if
   you move the Coral to a different port, update this path accordingly and
-  restart the LXC.
+  restart the LXC. **Note: The hookscript approach above handles this
+  automatically.**
 * Also whether `lxc.mount.entry: /dev/bus/usb/003/005 dev/bus/usb/003/005 none
   bind,optional,create=file` which was stopping from the container starting due
   to
