@@ -210,7 +210,7 @@ SUBSYSTEMS=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", MODE="0666
 
 ---
 
-## Phase 9: Final Verification
+## Phase 9: Coral Verification
 
 ### Step 9.1: Verify Coral Detection
 **Script**: `33-verify-coral-detection.sh`

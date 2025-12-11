@@ -347,7 +347,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/Proxmo
 
 ---
 
-## Phase 9: Final Verification
+## Phase 9: Coral Verification
 
 ### Step 9.1: Verify Frigate API
 **Script**: `32-verify-frigate-api.sh`
@@ -423,6 +423,20 @@ mount /dev/sdX1 /mnt/frigate-storage
 [PASTE OUTPUT]
 ```
 **Status**: ✅/❌/⚠️
+
+---
+
+### Step 10.4: Migrate Old Recordings (Optional)
+**Timestamp**: [HH:MM]
+**Skip if**: This is a fresh install with no existing recordings
+**Old Recordings Location**: [ZFS subvolume path, e.g., /pool/subvol-XXX-disk-0/frigate/]
+**Old Mount**: `mp0: [old path],mp=/media/frigate`
+**New Mount**: `mp0: [new path to old frigate folder],mp=/media/frigate`
+**Old Recordings Found**:
+- `recordings/`: [X GB]
+- `clips/`: [X GB]
+- `exports/`: [exists/empty]
+**Status**: ✅/❌/⚠️/Skipped
 
 ---
 
@@ -586,9 +600,10 @@ mount /dev/sdX1 /mnt/frigate-storage
 ## Follow-Up Actions
 
 - [ ] Monitor container stability for 24 hours
-- [ ] Add camera configuration to Frigate
-- [ ] Update documentation
+- [ ] Set up MQTT for Home Assistant (if applicable)
+- [ ] Configure retention policies for recordings
 - [ ] Close GitHub issue
+- [ ] Update blueprint if issues were found
 
 ---
 
