@@ -207,6 +207,20 @@ The AI handles the tedious parts (finding versions, updating lock files, writing
 
 That's the sweet spot for AI-assisted development: not replacing judgment, but eliminating busywork so I can focus on the decisions that matter.
 
+## The Result
+
+Before:
+```
+remote: GitHub found 7 vulnerabilities on homeiac/home's default branch (6 high, 1 moderate).
+```
+
+After:
+```
+remote: GitHub found 3 vulnerabilities on homeiac/home's default branch (2 high, 1 moderate).
+```
+
+**4 high-severity vulnerabilities resolved in under a minute.** The remaining 3 are documented, explained, and tracked - waiting for upstream fixes that are out of my control.
+
 ---
 
 *Written after Claude Code fixed my urllib3 vulnerabilities in December 2025*
