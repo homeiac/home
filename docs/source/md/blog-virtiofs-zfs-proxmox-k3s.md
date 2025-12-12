@@ -165,11 +165,46 @@ I've packaged all of this into reusable scripts:
 | `05-mount-in-vm.sh` | Mount virtiofs via qm guest exec |
 | `06-verify-frigate-access.sh` | Verify pod can access recordings |
 | `07-fix-service-selector.sh` | Fix service selector mismatch |
+| `08-run-import.sh` | Import old recordings into Frigate database |
+| `09-verify-import.sh` | Verify recording import statistics |
 | `99-rollback.sh` | Undo everything if needed |
+
+## The Database Problem
+
+After mounting, I could see the files but Frigate's UI showed nothing. The old recordings existed on disk but weren't in the database.
+
+**The catch**: Frigate has no native import feature. The [documentation](https://docs.frigate.video/configuration/record/) is clear:
+
+> "Tracked object and recording information is managed in a sqlite database at /config/frigate.db. If that database is deleted, recordings will be orphaned."
+
+The original LXC backup only contained the recordings folder—no `frigate.db`. I needed to generate database entries from the files.
+
+### The Import Script
+
+I wrote a Python script that:
+1. Scans `/import/recordings/` for all `.mp4` files
+2. Parses the path (`YYYY-MM-DD/HH/camera/MM.SS.mp4`) to extract timestamps
+3. Generates Frigate-style IDs (`{timestamp}.0-{random6chars}`)
+4. Inserts records into `/config/frigate.db`
+
+```python
+# Key insight: timestamp from path
+# 2025-12-09/17/reolink_doorbell/35.57.mp4
+# → datetime(2025, 12, 9, 17, 35, 57).timestamp()
+```
+
+The Frigate container has Python3 with sqlite3, so the script runs directly in the pod:
+
+```bash
+kubectl cp import-old-recordings.py frigate/frigate-pod:/tmp/
+kubectl exec -n frigate frigate-pod -- python3 /tmp/import-old-recordings.py
+```
 
 ## Results
 
-- **118GB of old recordings** accessible to Frigate
+- **42,342 old recordings** imported into database
+- **Total recordings**: 44,118 (old + new)
+- **Date range**: May 31, 2025 → December 12, 2025
 - **Zero copy time** (mounted existing dataset)
 - **K3s cluster stable** (3/3 nodes Ready)
 - **VirtioFS persistent** (survives reboots via fstab)
@@ -182,9 +217,11 @@ I've packaged all of this into reusable scripts:
 
 3. **qemu-guest-agent is your friend.** When SSH fails, `qm guest exec` works—but only if the agent is installed. Use a privileged pod to install it.
 
-4. **Kustomize labels can break services.** If you apply manifests directly (not via kustomize), watch out for selector mismatches.
+4. **Frigate recordings need the database.** Files on disk are useless without corresponding entries in `frigate.db`. If you only backup recordings, you'll need to regenerate the database entries.
 
-5. **Document everything.** The action log I kept during this process made writing this post trivial and will help when I inevitably forget how this works in 6 months.
+5. **Kustomize labels can break services.** If you apply manifests directly (not via kustomize), watch out for selector mismatches.
+
+6. **Document everything.** The action log I kept during this process made writing this post trivial and will help when I inevitably forget how this works in 6 months.
 
 ---
 
