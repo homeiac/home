@@ -117,8 +117,8 @@ spec:
         - name: dri
           hostPath:
             path: /dev/dri
-        # Old Frigate recordings from LXC 113
+        # Old Frigate recordings via virtiofs from host
         - name: old-recordings
           hostPath:
-            path: /local-3TB-backup/subvol-113-disk-0
+            path: /mnt/frigate-import/frigate
             type: Directory
