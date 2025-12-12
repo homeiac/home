@@ -200,11 +200,121 @@ kubectl cp import-old-recordings.py frigate/frigate-pod:/tmp/
 kubectl exec -n frigate frigate-pod -- python3 /tmp/import-old-recordings.py
 ```
 
+## Restoring from PBS Backups
+
+After running the import script, I had recordings in the database but no Review UI entries. The old Frigate had detected events with thumbnails—where did that data go?
+
+### Finding the Old Database
+
+I checked the obvious places first:
+- **fun-bedbug** (current Frigate host): Only 6 recordings from testing
+- **still-fawn**: No Frigate data at all
+- **/mnt/frigate-import**: Only recordings and clips—no database file
+
+The original `frigate.db` was gone. I needed the old database to get the review segments back.
+
+### PBS to the Rescue
+
+Then I remembered: **Proxmox Backup Server**.
+
+LXC 113 (the old Frigate container) had been backing up to the `homelab-backup` PBS datastore. I found backups dating back months:
+
+```bash
+pvesm list homelab-backup | grep 113
+# homelab-backup:backup/ct/113/2025-12-06T06:35:41Z  159.40GB
+```
+
+The December 6 backup was 159GB—definitely had the database.
+
+### Restore to Temporary Container
+
+Rather than restore over the current system, I restored to a temporary container ID:
+
+```bash
+pct restore 9113 "homelab-backup:backup/ct/113/2025-12-06T06:35:41Z" \
+  --storage local-3TB-backup \
+  --unprivileged 1
+```
+
+Started the container and grabbed the database:
+
+```bash
+pct start 9113
+pct exec 9113 -- ls -lh /config/frigate.db
+# -rw-r--r-- 1 root root 58M Dec  6 06:30 /config/frigate.db
+```
+
+### Schema Mismatch Challenge
+
+Copying the old database directly failed. The old Frigate had a `has_been_reviewed` column in the `reviewsegment` table that the new version doesn't have.
+
+**Solution**: Extract just the data I needed (review segments and events) and insert into the new database with the correct schema.
+
+### Safe Database Copy
+
+First challenge: getting the database out of the container. `kubectl cp` corrupts binary files due to tar issues, so I used base64 encoding:
+
+```bash
+# Extract from temp container
+pct exec 9113 -- cat /config/frigate.db | base64 > /tmp/old-frigate.db.b64
+
+# Decode on host
+base64 -d /tmp/old-frigate.db.b64 > /tmp/old-frigate.db
+
+# Copy into Frigate pod
+cat /tmp/old-frigate.db | base64 | kubectl exec -n frigate frigate-pod -i -- \
+  bash -c 'base64 -d > /tmp/old-frigate.db'
+```
+
+### Merging the Data
+
+Inside the pod, I merged the review segments and events:
+
+```bash
+kubectl exec -n frigate frigate-pod -- sqlite3 /config/frigate.db <<EOF
+ATTACH DATABASE '/tmp/old-frigate.db' AS old;
+
+INSERT OR IGNORE INTO reviews SELECT * FROM old.reviews;
+INSERT OR IGNORE INTO reviewsegment
+  SELECT camera, duration, end_time, has_been_reviewed, id,
+         motion_box_count, person_box_count, review_id, severity,
+         start_time, thumb_path, zones
+  FROM old.reviewsegment;
+INSERT OR IGNORE INTO event SELECT * FROM old.event;
+
+DETACH DATABASE old;
+EOF
+```
+
+### Thumbnail Symlinks
+
+The old thumbnails were at `/import/clips/review/` but Frigate expected them at `/media/frigate/clips/review/`. Created symlinks:
+
+```bash
+kubectl exec -n frigate frigate-pod -- bash -c '
+cd /media/frigate/clips/review
+for f in /import/clips/review/*.jpg; do
+  ln -sf "$f" "$(basename "$f")"
+done
+'
+# Linked 2,507 thumbnail files
+```
+
+After restarting Frigate, the Review UI came alive with all the old detections, complete with thumbnails.
+
+```bash
+pct stop 9113
+pct destroy 9113  # Clean up temp container
+```
+
 ## Results
 
 - **42,342 old recordings** imported into database
 - **Total recordings**: 44,118 (old + new)
+- **1,977 review segments** (Review UI entries)
+- **3,820 events** with detection data
 - **Date range**: May 31, 2025 → December 12, 2025
+- **Old recordings with thumbnails** visible in Review UI
 - **Zero copy time** (mounted existing dataset)
 - **K3s cluster stable** (3/3 nodes Ready)
 - **VirtioFS persistent** (survives reboots via fstab)
@@ -219,9 +329,11 @@ kubectl exec -n frigate frigate-pod -- python3 /tmp/import-old-recordings.py
 
 4. **Frigate recordings need the database.** Files on disk are useless without corresponding entries in `frigate.db`. If you only backup recordings, you'll need to regenerate the database entries.
 
-5. **Kustomize labels can break services.** If you apply manifests directly (not via kustomize), watch out for selector mismatches.
+5. **PBS backups are gold.** When you need old database state, restore to a temp container, extract what you need, then destroy it.
 
-6. **Document everything.** The action log I kept during this process made writing this post trivial and will help when I inevitably forget how this works in 6 months.
+6. **Kustomize labels can break services.** If you apply manifests directly (not via kustomize), watch out for selector mismatches.
+
+7. **Document everything.** The action log I kept during this process made writing this post trivial and will help when I inevitably forget how this works in 6 months.
 
 ---
 
