@@ -1,15 +1,25 @@
 # Package Detection System
 
 Rock-solid package delivery detection for homelab using:
-- **Frigate 0.16+** - Person detection with Coral TPU
+- **Reolink Doorbell** - Person detection sensor
 - **LLM Vision** - Ollama llava:7b for package confirmation (zero false alarms)
-- **Voice PE** - LED ring visual notification
+- **Voice PE** - LED ring visual notification (stays on until acknowledged)
 - **HA Companion** - Phone push notifications
+
+## Current Version: v3.0
+
+**Key behavior**: Alerts ONLY when a package is detected. No notifications for person-only events.
 
 ## Architecture
 
 ```
-Person at door → Frigate (Coral TPU) → Person detected
+Person detected → Reolink Doorbell → person_arrived trigger
+                         ↓
+                  Wait 2s, capture snapshot
+                         ↓
+              LLM Vision (llava:7b) → Identify visitor (silent)
+                         ↓
+                  Person leaves → person_left trigger
                          ↓
                   Capture snapshot
                          ↓
@@ -17,8 +27,24 @@ Person at door → Frigate (Coral TPU) → Person detected
                          ↓
                     YES? ───────────────────┐
                          ↓                  ↓
-              Voice PE LED pulse    Phone notification
-              (blue, 30 seconds)    (with camera image)
+              Voice PE LED (blue)    Phone notification
+              (stays on until        (with camera image)
+               voice acknowledgment)
+```
+
+## OBSOLETE: Legacy LLM Vision Automations
+
+The following automations have been **DISABLED** (2025-12-12):
+- `automation.llm_vision` - Spammed on every motion event
+- `automation.ai_event_summary_v1_5_0` - Spammed on every motion event
+
+These were blueprint automations from the LLM Vision HACS integration that triggered
+on ALL motion, not just person detection. They've been replaced by
+`automation.package_delivery_detection` (v3) which only alerts on packages.
+
+To re-enable if needed:
+```bash
+./disable-legacy-automations.sh  # Shows current state, can be modified to re-enable
 ```
 
 ## Prerequisites
@@ -91,20 +117,23 @@ Person at door → Frigate (Coral TPU) → Person detected
 
 ## Installation
 
-### 1. Deploy Automation
+### 1. Deploy Automation v3
 
-Copy `automation-package-detection.yaml` content to Home Assistant:
+```bash
+./deploy-automation-v3.sh
+```
 
-**Option A: Via UI**
-1. Settings → Automations → Create Automation
-2. Switch to YAML mode (⋮ menu → Edit in YAML)
-3. Paste the content
+This deploys `automation-package-detection-v3.yaml` via the HA API and reloads automations.
 
-**Option B: Via File**
-1. Copy to `/config/automations.yaml`
-2. Reload automations: Developer Tools → YAML → Automations
+### 2. Disable Legacy Automations (if present)
 
-### 2. Update Entity Names (when Frigate 0.16 ready)
+```bash
+./disable-legacy-automations.sh
+```
+
+Disables the spammy `automation.llm_vision` and `automation.ai_event_summary_v1_5_0`.
+
+### 3. Update Entity Names (when Frigate 0.16 ready)
 
 Edit the automation to match your new Frigate camera names:
 ```yaml
@@ -190,7 +219,20 @@ The automation has multiple safeguards:
 ```
 scripts/package-detection/
 ├── README.md                          # This file
-├── automation-package-detection.yaml  # Main HA automation
+│
+├── # Automation (v3 - current)
+├── automation-package-detection-v3.yaml  # Package-only alerts
+├── deploy-automation-v3.sh               # Deploy v3 via API
+├── disable-legacy-automations.sh         # Disable spammy LLM Vision automations
+│
+├── # Debugging & Investigation
+├── investigate-package-detection.sh      # Full system verification
+├── get-automation-traces.sh              # Get HA automation traces
+├── find-all-doorbell-automations.sh      # Find all related automations
+├── timeline.sh                           # Build event timeline
+├── check-recent-alerts.sh                # Check recent alert activity
+│
+├── # Component Tests
 ├── check-prerequisites.sh             # Verify all components
 ├── check-llmvision-config.sh          # Check LLM Vision setup
 ├── list-cameras.sh                    # List camera entities
@@ -199,6 +241,7 @@ scripts/package-detection/
 ├── test-notification.sh               # Test phone notifications
 ├── test-voice-pe-led.sh               # Test Voice PE LED
 │
+├── # LED Notification Fix
 ├── LED-NOTIFICATION-FIX.md            # LED acknowledgment issue analysis
 ├── INVESTIGATION-SUMMARY.md           # Complete investigation findings
 ├── test-led-off.sh                    # Test notification LED flow
