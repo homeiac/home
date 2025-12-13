@@ -694,6 +694,47 @@ curl -s https://api.github.com/repos/blakeblackshear/frigate/releases/latest | j
 
 **Reference**: `docs/reference/frigate-016-upgrade-lessons.md`
 
+### **GPU Passthrough (PCI Passthrough / VFIO) - CRITICAL**
+
+**BEFORE any GPU passthrough troubleshooting, READ:**
+- `proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md`
+
+**MANDATORY FIRST STEP - Check BIOS VT-d:**
+```bash
+# Check if IOMMU/VT-d is working
+ls /sys/kernel/iommu_groups/ | wc -l
+# If 0 → VT-d is DISABLED in BIOS, no kernel changes will help!
+
+# Check for DMAR tables (VT-d hardware support)
+dmesg | grep -i DMAR | head -5
+# If only "DMAR: IOMMU enabled" with no table info → VT-d disabled in BIOS
+```
+
+**BIOS Settings (ASUS Intel boards):**
+- **Path**: BIOS → Advanced → System Agent Configuration → VT-d → **Enabled**
+- VT-d is often hidden under "System Agent" - NOT under CPU or Virtualization
+- VT-x (CPU virtualization) is different from VT-d (I/O virtualization)
+- VMs can run with just VT-x; PCI passthrough requires VT-d
+
+**Common Mistakes:**
+1. Spending hours on kernel cmdline (`intel_iommu=on`, `vfio-pci.ids=`) when VT-d is disabled in BIOS
+2. Confusing VT-x (for VMs) with VT-d (for passthrough) - VMs working doesn't mean VT-d is on
+3. Not checking `/sys/kernel/iommu_groups/` first - if empty, BIOS is the problem
+
+**Verification after enabling VT-d:**
+```bash
+# Should show numbered directories (1, 2, 3, etc.)
+ls /sys/kernel/iommu_groups/
+
+# Should show DMAR table details, not just "IOMMU enabled"
+dmesg | grep -i DMAR
+
+# GPU should bind to vfio-pci after proper setup
+lspci -nnk -s 01:00 | grep "Kernel driver"
+```
+
+**Reference**: `proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md`
+
 ## Notes
 - The homelab runs GPU-accelerated AI workloads (RTX 3070 passthrough)
 - Extensive documentation exists for troubleshooting common issues
