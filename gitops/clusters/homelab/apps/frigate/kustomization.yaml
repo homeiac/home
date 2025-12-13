@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: frigate
+
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+
+# Note: frigate-credentials Secret is created manually (not in git)
+# See frigate-secrets.yaml.example for template

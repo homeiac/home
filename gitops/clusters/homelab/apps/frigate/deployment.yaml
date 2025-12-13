@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frigate
+  namespace: frigate
+  labels:
+    app: frigate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frigate
+  strategy:
+    type: Recreate  # Single replica for GPU access
+  template:
+    metadata:
+      labels:
+        app: frigate
+    spec:
+      # Use NVIDIA runtime for GPU access
+      runtimeClassName: nvidia
+      # Schedule on GPU node only
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+        - name: frigate
+          # Regular 0.16.0 with Coral TPU support
+          # NVIDIA NVDEC still works for hardware decode
+          image: ghcr.io/blakeblackshear/frigate:0.16.0
+          imagePullPolicy: IfNotPresent
+          # Privileged for GPU access (can be removed if GPU device plugin handles it)
+          securityContext:
+            privileged: true
+          envFrom:
+            - secretRef:
+                name: frigate-credentials
+          env:
+            - name: TZ
+              value: "America/Los_Angeles"
+          ports:
+            - name: web
+              containerPort: 5000
+              protocol: TCP
+            - name: rtsp
+              containerPort: 8554
+              protocol: TCP
+            - name: webrtc-tcp
+              containerPort: 8555
+              protocol: TCP
+            - name: webrtc-udp
+              containerPort: 8555
+              protocol: UDP
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+          volumeMounts:
+            # Frigate config (from ConfigMap)
+            - name: config
+              mountPath: /config/config.yml
+              subPath: config.yml
+            # Frigate database and internal state
+            - name: config-pvc
+              mountPath: /config
+            # Media storage for recordings
+            - name: media
+              mountPath: /media/frigate
+            # USB bus for Coral TPU
+            - name: usb
+              mountPath: /dev/bus/usb
+            # Shared memory for FFmpeg
+            - name: shm
+              mountPath: /dev/shm
+            # GPU device access
+            - name: dri
+              mountPath: /dev/dri
+          livenessProbe:
+            httpGet:
+              path: /api/version
+              port: 5000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/version
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        # ConfigMap with Frigate configuration
+        - name: config
+          configMap:
+            name: frigate-config
+        # PVC for Frigate database/state
+        - name: config-pvc
+          persistentVolumeClaim:
+            claimName: frigate-config
+        # PVC for recordings
+        - name: media
+          persistentVolumeClaim:
+            claimName: frigate-media
+        # Host USB bus for Coral TPU passthrough
+        - name: usb
+          hostPath:
+            path: /dev/bus/usb
+            type: Directory
+        # Shared memory (tmpfs)
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+        # GPU device node
+        - name: dri
+          hostPath:
+            path: /dev/dri
