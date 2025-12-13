@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frigate-config
+  namespace: frigate
+data:
+  config.yml: |
+    mqtt:
+      enabled: true
+      host: homeassistant.maas
+      port: 1883
+      user: frigate
+      password: "{FRIGATE_MQTT_PASSWORD}"
+      client_id: frigate-k8s
+
+    # NVIDIA GPU for hardware-accelerated decoding (NVDEC) and face recognition
+    # Note: Recordings use stream copy (-c copy), not re-encoding. GPU encoding
+    # only used for birdseye view. For MJPEG cameras, go2rtc handles transcoding.
+    ffmpeg:
+      hwaccel_args: preset-nvidia-h264
+      output_args:
+        record: preset-record-generic-audio-aac
+
+    go2rtc:
+      streams:
+        # Re-encode MJPEG to H264 for old camera
+        mjpeg_cam: "ffmpeg:http://{FRIGATE_CAM_MJPEG_USER}:{FRIGATE_CAM_MJPEG_PASS}@192.168.1.220/videostream.cgi#video=h264#hardware"
+        reolink_doorbell: "rtsp://{FRIGATE_CAM_REOLINK_USER}:{FRIGATE_CAM_REOLINK_PASS}@192.168.1.160:554/h264Preview_01_sub"
+
+    cameras:
+      old_ip_camera:
+        enabled: true
+        ffmpeg:
+          inputs:
+            - path: rtsp://127.0.0.1:8554/mjpeg_cam
+              roles:
+                - detect
+                - record
+        detect:
+          enabled: true
+          width: 640
+          height: 480
+          fps: 5
+        objects:
+          track:
+            - person
+            - car
+        motion:
+          threshold: 10
+          mask:
+            - 0.001,0.001,1,0.001,0.998,0.306,0.857,0.317,0.813,0.313,0.796,0.286,0.769,0.319,0.755,0.318,0.737,0.268,0.707,0.325,0.693,0.326,0.671,0.263,0.634,0.293,0.467,0.289,0.002,0.254
+        record:
+          enabled: true
+          retain:
+            days: 5
+            mode: motion
+
+      trendnet_ip_572w:
+        enabled: true
+        ffmpeg:
+          inputs:
+            - path: "rtsp://{FRIGATE_CAM_TRENDNET_USER}:{FRIGATE_CAM_TRENDNET_PASS}@192.168.1.107/play1.sdp"
+              roles:
+                - detect
+                - record
+        detect:
+          enabled: true
+          width: 1280
+          height: 800
+          fps: 5
+        objects:
+          track:
+            - person
+        motion:
+          threshold: 30
+          contour_area: 10
+          improve_contrast: true
+        record:
+          enabled: true
+          retain:
+            days: 5
+            mode: motion
+
+      reolink_doorbell:
+        enabled: true
+        ffmpeg:
+          inputs:
+            - path: rtsp://127.0.0.1:8554/reolink_doorbell
+              roles:
+                - detect
+                - record
+        detect:
+          enabled: true
+          width: 1920
+          height: 1080
+          fps: 5
+        objects:
+          track:
+            - person
+            - car
+        motion:
+          threshold: 25
+          contour_area: 50
+        record:
+          enabled: true
+          retain:
+            days: 7
+            mode: motion
+
+    # Coral Edge TPU for object detection - ~10ms inference
+    # GPU used for: decoding (NVDEC), face recognition, birdseye encoding
+    detectors:
+      coral:
+        type: edgetpu
+        device: usb
+
+    # Face recognition using GPU (Frigate 0.16+ feature)
+    face_recognition:
+      enabled: true
+      model_size: large
+
+    version: "0.16"
