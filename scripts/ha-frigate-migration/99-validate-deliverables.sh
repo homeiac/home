@@ -33,18 +33,6 @@ check_file() {
     fi
 }
 
-check_no_secrets() {
-    local path="$1"
-    if [[ -f "$REPO_ROOT/$path" ]]; then
-        if grep -qiE "password|secret|token|apikey" "$REPO_ROOT/$path" 2>/dev/null; then
-            echo "WARN: $path may contain secrets - review required"
-        else
-            echo "PASS: No secrets in $path"
-            PASS=$((PASS+1))
-        fi
-    fi
-}
-
 echo "--- Deliverable Files ---"
 check_file "docs/troubleshooting/blueprint-ha-frigate-ip-migration.md" "Blueprint"
 check_file "docs/templates/action-log-template-ha-frigate-ip-migration.md" "Action Log Template"
@@ -52,10 +40,17 @@ check_file "docs/troubleshooting/2025-12-13-action-log-ha-frigate-ip-migration.m
 check_file "scripts/ha-frigate-migration/99-validate-deliverables.sh" "Validation Script"
 echo ""
 
-echo "--- Security Checks ---"
-check_no_secrets "docs/troubleshooting/blueprint-ha-frigate-ip-migration.md"
-check_no_secrets "docs/templates/action-log-template-ha-frigate-ip-migration.md"
-check_no_secrets "scripts/ha-frigate-migration/99-validate-deliverables.sh"
+echo "--- Security Check (git-secrets) ---"
+if git secrets --list &> /dev/null; then
+    if git secrets --scan -- docs/troubleshooting/blueprint-ha-frigate-ip-migration.md docs/templates/action-log-template-ha-frigate-ip-migration.md 2>/dev/null; then
+        echo "PASS: No secrets detected by git-secrets"
+        PASS=$((PASS+1))
+    else
+        echo "WARN: git-secrets found potential secrets - review required"
+    fi
+else
+    echo "SKIP: git-secrets not configured (run: git secrets --install)"
+fi
 echo ""
 
 echo "--- Existing Scripts Check ---"

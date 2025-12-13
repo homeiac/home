@@ -5,8 +5,20 @@
 
 set -e
 
-HA_URL="http://192.168.4.240:8123"
-HA_TOKEN="REDACTED_HA_TOKEN"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../../proxmox/homelab/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+    HA_TOKEN=$(grep "^HA_TOKEN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
+    HA_URL=$(grep "^HA_URL=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
+fi
+
+HA_URL="${HA_URL:-http://homeassistant.maas:8123}"
+
+if [[ -z "$HA_TOKEN" ]]; then
+    echo "ERROR: HA_TOKEN not found. Set it in $ENV_FILE or export HA_TOKEN"
+    exit 1
+fi
 
 echo "=== Clearing Notification and LED ==="
 echo
