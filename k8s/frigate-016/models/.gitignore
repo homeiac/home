@@ -1,5 +1,0 @@
-# Exclude large ONNX model files from git
-# Build locally using: /Users/10381054/code/home/scripts/frigate/build-yolov9-onnx.sh
-*.onnx
-*.pt
-*.weights
