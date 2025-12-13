@@ -17,18 +17,15 @@ spec:
       labels:
         app: frigate
     spec:
-      # Use NVIDIA runtime for GPU access
-      runtimeClassName: nvidia
-      # Schedule on GPU node only
+      # Schedule on still-fawn (AMD VAAPI + Coral TPU)
       nodeSelector:
-        nvidia.com/gpu.present: "true"
+        kubernetes.io/hostname: k3s-vm-still-fawn
       containers:
         - name: frigate
-          # Regular 0.16.0 with Coral TPU support
-          # NVIDIA NVDEC still works for hardware decode
+          # Frigate 0.16.0 with Coral TPU + AMD VAAPI hwaccel
           image: ghcr.io/blakeblackshear/frigate:0.16.0
           imagePullPolicy: IfNotPresent
-          # Privileged for GPU access (can be removed if GPU device plugin handles it)
+          # Privileged for /dev/dri and USB access
           securityContext:
             privileged: true
           envFrom:
@@ -51,8 +48,6 @@ spec:
               containerPort: 8555
               protocol: UDP
           resources:
-            limits:
-              nvidia.com/gpu: "1"
             requests:
               memory: "2Gi"
               cpu: "1000m"
