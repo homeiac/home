@@ -13,11 +13,10 @@ data:
       password: "{FRIGATE_MQTT_PASSWORD}"
       client_id: frigate-k8s
 
-    # NVIDIA GPU for hardware-accelerated decoding (NVDEC) and face recognition
-    # Note: Recordings use stream copy (-c copy), not re-encoding. GPU encoding
-    # only used for birdseye view. For MJPEG cameras, go2rtc handles transcoding.
+    # AMD VAAPI for hardware-accelerated decoding
+    # Note: Recordings use stream copy (-c copy), not re-encoding
     ffmpeg:
-      hwaccel_args: preset-nvidia-h264
+      hwaccel_args: preset-vaapi
       output_args:
         record: preset-record-generic-audio-aac
 

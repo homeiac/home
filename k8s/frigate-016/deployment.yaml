@@ -17,23 +17,23 @@ spec:
       labels:
         app: frigate
     spec:
-      # Use NVIDIA runtime for GPU access
-      runtimeClassName: nvidia
-      # Schedule on GPU node only
+      # Schedule on node with Coral TPU and AMD GPU for VAAPI
       nodeSelector:
-        nvidia.com/gpu.present: "true"
+        feature.node.kubernetes.io/usb-ff_18d1_9302.present: "true"
       containers:
         - name: frigate
           # Regular 0.16.0 with Coral TPU support
-          # NVIDIA NVDEC still works for hardware decode
+          # AMD VAAPI for hardware decode
           image: ghcr.io/blakeblackshear/frigate:0.16.0
           imagePullPolicy: IfNotPresent
-          # Privileged for GPU access (can be removed if GPU device plugin handles it)
+          # Privileged for GPU/DRI access
           securityContext:
             privileged: true
           env:
             - name: TZ
               value: "America/Los_Angeles"
+            - name: LIBVA_DRIVER_NAME
+              value: "radeonsi"
           ports:
             - name: web
               containerPort: 5000
@@ -48,8 +48,6 @@ spec:
               containerPort: 8555
               protocol: UDP
           resources:
-            limits:
-              nvidia.com/gpu: "1"
             requests:
               memory: "2Gi"
               cpu: "1000m"
