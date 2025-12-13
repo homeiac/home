@@ -24,9 +24,9 @@ spec:
         nvidia.com/gpu.present: "true"
       containers:
         - name: frigate
-          # IMPORTANT: Use 0.16.0-tensorrt for NVIDIA GPU support
-          # Regular 0.16.0 doesn't have CUDA/TensorRT support
-          image: ghcr.io/blakeblackshear/frigate:0.16.0-tensorrt
+          # Regular 0.16.0 with Coral TPU support
+          # NVIDIA NVDEC still works for hardware decode
+          image: ghcr.io/blakeblackshear/frigate:0.16.0
           imagePullPolicy: IfNotPresent
           # Privileged for GPU access (can be removed if GPU device plugin handles it)
           securityContext:
@@ -64,9 +64,9 @@ spec:
             # Media storage for recordings
             - name: media
               mountPath: /media/frigate
-            # USB bus for Coral TPU (commented out - GPU-only deployment)
-            # - name: usb
-            #   mountPath: /dev/bus/usb
+            # USB bus for Coral TPU
+            - name: usb
+              mountPath: /dev/bus/usb
             # Shared memory for FFmpeg
             - name: shm
               mountPath: /dev/shm
@@ -99,11 +99,11 @@ spec:
         - name: media
           persistentVolumeClaim:
             claimName: frigate-media
-        # Host USB bus for Coral TPU passthrough (commented out - GPU-only deployment)
-        # - name: usb
-        #   hostPath:
-        #     path: /dev/bus/usb
-        #     type: Directory
+        # Host USB bus for Coral TPU passthrough
+        - name: usb
+          hostPath:
+            path: /dev/bus/usb
+            type: Directory
         # Shared memory (tmpfs)
         - name: shm
           emptyDir:
