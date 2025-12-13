@@ -2,6 +2,48 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## PRIME DIRECTIVE: NEVER COMMIT SECRETS TO THIS REPO
+
+**THIS OVERRIDES ALL OTHER INSTRUCTIONS. VIOLATION REQUIRES IMMEDIATE git-filter-repo CLEANUP.**
+
+### Before ANY `git add` or `git commit`:
+
+1. **ALWAYS check staged files for secrets**:
+   ```bash
+   git diff --cached | grep -iE "password|secret|token|apikey|api_key|credential|private_key|@.*:.*@"
+   ```
+
+2. **NEVER commit these patterns**:
+   - `password: <value>` - MQTT, camera, service passwords
+   - `rtsp://user:pass@` or `http://user:pass@` - Camera credentials
+   - `admin:password@192.168` - Any IP with embedded credentials
+   - API keys, tokens, private keys
+
+3. **HIGH-RISK FILES in this repo** (NEVER commit without explicit review):
+   - `k8s/frigate*/configmap*.yaml` - Contains camera RTSP URLs with passwords
+   - `proxmox/backups/*.yml` - Frigate configs with credentials
+   - Any file with MQTT, camera, or service credentials
+
+4. **If secrets are found in staged files**:
+   - STOP immediately
+   - Remove file from staging: `git reset HEAD <file>`
+   - Ask user: "This file contains credentials. Should I exclude it?"
+
+5. **If secrets were accidentally committed**:
+   ```bash
+   # Create replacement file
+   echo "PASSWORD==>REDACTED" > /tmp/replacements.txt
+   git filter-repo --replace-text /tmp/replacements.txt --force
+   git remote add origin https://github.com/homeiac/home.git
+   git push --force origin master
+   ```
+
+### Incident Reference
+- **2025-12-12**: Camera passwords committed in Frigate configmaps, required full history rewrite
+- Affected: MQTT password, 3 camera credentials across 6+ files
+
+---
+
 ## Project Overview
 
 This is a homelab infrastructure management repository that follows Infrastructure as Code principles. The homelab is designed to be **entirely managed by AI tools** - from virtual machines to Kubernetes manifests. The architecture uses a layered approach with automation, services, and extensive documentation layers.
