@@ -40,7 +40,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Incident Reference
 - **2025-12-12**: Camera passwords committed in Frigate configmaps, required full history rewrite
-- Affected: MQTT password, 3 camera credentials across 6+ files
+- **2025-12-13**: Hardcoded HA_TOKEN JWT in scripts, required git-filter-repo cleanup
+
+---
+
+## NEVER WRITE CREDENTIALS IN SCRIPTS
+
+**When writing ANY script that needs credentials, ALWAYS start with .env sourcing FIRST:**
+
+```bash
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../../proxmox/homelab/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+    HA_TOKEN=$(grep "^HA_TOKEN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
+    HA_URL=$(grep "^HA_URL=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
+fi
+
+HA_URL="${HA_URL:-http://homeassistant.maas:8123}"
+
+if [[ -z "$HA_TOKEN" ]]; then
+    echo "ERROR: HA_TOKEN not found. Set it in $ENV_FILE or export HA_TOKEN"
+    exit 1
+fi
+```
+
+**NEVER write literal tokens, passwords, or API keys. Not even as "placeholders" or "examples".**
 
 ---
 
