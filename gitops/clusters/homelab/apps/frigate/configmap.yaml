@@ -13,11 +13,11 @@ data:
       password: "{FRIGATE_MQTT_PASSWORD}"
       client_id: frigate-k8s
 
-    # NVIDIA GPU for hardware-accelerated decoding (NVDEC) and face recognition
-    # Note: Recordings use stream copy (-c copy), not re-encoding. GPU encoding
-    # only used for birdseye view. For MJPEG cameras, go2rtc handles transcoding.
+    # AMD VAAPI for hardware-accelerated decoding
+    # Note: Recordings use stream copy (-c copy), not re-encoding.
+    # For MJPEG cameras, go2rtc handles transcoding.
     ffmpeg:
-      hwaccel_args: preset-nvidia-h264
+      hwaccel_args: preset-vaapi
       output_args:
         record: preset-record-generic-audio-aac
 
@@ -108,13 +108,12 @@ data:
             mode: motion
 
     # Coral Edge TPU for object detection - ~10ms inference
-    # GPU used for: decoding (NVDEC), face recognition, birdseye encoding
     detectors:
       coral:
         type: edgetpu
         device: usb
 
-    # Face recognition using GPU (Frigate 0.16+ feature)
+    # Face recognition (CPU-based without NVIDIA GPU)
     face_recognition:
       enabled: true
       model_size: large
