@@ -318,6 +318,28 @@ Before committing Python code, ensure:
    - Use GitOps, Kubernetes, Proxmox, and network investigation patterns
    - Present complete findings before proposing any changes
 
+4. **MANDATORY: Identify Process Before Assuming Application**
+   - For high I/O issues, ALWAYS identify the actual process first
+   - **Check for system operations BEFORE application-level investigation**:
+     ```bash
+     # Step 1: Find processes with highest I/O
+     for pid in $(ls /proc | grep -E '^[0-9]+$'); do
+       bytes=$(awk '/read_bytes/ {print $2}' /proc/$pid/io 2>/dev/null)
+       if [ "$bytes" -gt 1000000000 ] 2>/dev/null; then
+         echo "$pid: $bytes - $(cat /proc/$pid/comm 2>/dev/null)"
+       fi
+     done | sort -t: -k2 -rn | head -10
+
+     # Step 2: Check for backups
+     ps aux | grep -E 'vzdump|proxmox-backup'
+     qm config <VMID> | grep lock
+
+     # Step 3: Check ZFS operations
+     zpool status | grep -E 'scan|scrub|resilver'
+     ```
+   - NEVER assume an application is causing I/O without process-level verification
+   - Reference: `docs/source/md/runbook-investigate-high-io.md`
+
 2. **MANDATORY Solution Testing**
    - ALWAYS test proposed solutions with actual commands in real systems
    - NEVER suggest untested solutions as "simple fixes"

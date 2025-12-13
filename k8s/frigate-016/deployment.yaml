@@ -73,10 +73,6 @@ spec:
             # GPU device access
             - name: dri
               mountPath: /dev/dri
-            # Old Frigate recordings for import (read-only)
-            - name: old-recordings
-              mountPath: /import
-              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/version
@@ -117,8 +113,3 @@ spec:
         - name: dri
           hostPath:
             path: /dev/dri
-        # Old Frigate recordings via virtiofs from host
-        - name: old-recordings
-          hostPath:
-            path: /mnt/frigate-import/frigate
-            type: Directory
