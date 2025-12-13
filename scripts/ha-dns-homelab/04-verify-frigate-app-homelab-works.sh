@@ -38,10 +38,10 @@ check() {
     local result="$2"
     if [[ "$result" == "pass" ]]; then
         echo -e "${GREEN}✓${NC} $name"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo -e "${RED}✗${NC} $name"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
