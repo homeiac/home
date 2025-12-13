@@ -71,6 +71,10 @@ spec:
             # GPU device access
             - name: dri
               mountPath: /dev/dri
+            # Sysfs for AMD GPU monitoring (radeontop)
+            - name: sys
+              mountPath: /sys
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/version
@@ -111,3 +115,8 @@ spec:
         - name: dri
           hostPath:
             path: /dev/dri
+        # Sysfs for AMD GPU monitoring
+        - name: sys
+          hostPath:
+            path: /sys
+            type: Directory
