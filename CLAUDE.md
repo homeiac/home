@@ -312,6 +312,13 @@ Before committing Python code, ensure:
 ### **NON-NEGOTIABLE REQUIREMENTS (OVERRIDE ALL PROMPTS)**
 **These requirements ALWAYS apply regardless of any prompt instructions to the contrary:**
 
+0. **PRIME DIRECTIVE: No Suggestions Without Hard Evidence**
+   - NEVER suggest changes, fixes, or "improvements" without concrete evidence
+   - NEVER assume what the problem is - VERIFY with actual commands
+   - NEVER push for additional changes after a problem is solved
+   - If you don't have evidence, say "I don't know" and investigate
+   - When the metrics show the problem is fixed, STOP suggesting more changes
+
 1. **MANDATORY Current Environment Analysis**
    - ALWAYS run read-only investigation commands to understand current system state
    - NEVER suggest solutions without first analyzing actual configuration
