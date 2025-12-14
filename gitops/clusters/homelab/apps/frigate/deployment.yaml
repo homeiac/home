@@ -54,11 +54,7 @@ spec:
               memory: "2Gi"
               cpu: "1000m"
           volumeMounts:
-            # Frigate config (from ConfigMap)
-            - name: config
-              mountPath: /config/config.yml
-              subPath: config.yml
-            # Frigate database and internal state
+            # Frigate database, config, and internal state (editable)
             - name: config-pvc
               mountPath: /config
             # Media storage for recordings
@@ -91,11 +87,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
       volumes:
-        # ConfigMap with Frigate configuration
-        - name: config
-          configMap:
-            name: frigate-config
-        # PVC for Frigate database/state
+        # PVC for Frigate database/state/config (editable via UI)
         - name: config-pvc
           persistentVolumeClaim:
             claimName: frigate-config
