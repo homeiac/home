@@ -8,806 +8,234 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Before ANY `git add` or `git commit`:
 
-1. **ALWAYS check staged files for secrets**:
-   ```bash
-   git diff --cached | grep -iE "password|secret|token|apikey|api_key|credential|private_key|@.*:.*@"
-   ```
-
-2. **NEVER commit these patterns**:
-   - `password: <value>` - MQTT, camera, service passwords
-   - `rtsp://user:pass@` or `http://user:pass@` - Camera credentials
-   - `admin:password@192.168` - Any IP with embedded credentials
-   - API keys, tokens, private keys
-
-3. **HIGH-RISK FILES in this repo** (NEVER commit without explicit review):
-   - `k8s/frigate*/configmap*.yaml` - Contains camera RTSP URLs with passwords
-   - `proxmox/backups/*.yml` - Frigate configs with credentials
-   - Any file with MQTT, camera, or service credentials
-
-4. **If secrets are found in staged files**:
-   - STOP immediately
-   - Remove file from staging: `git reset HEAD <file>`
-   - Ask user: "This file contains credentials. Should I exclude it?"
-
-5. **If secrets were accidentally committed**:
-   ```bash
-   # Create replacement file
-   echo "PASSWORD==>REDACTED" > /tmp/replacements.txt
-   git filter-repo --replace-text /tmp/replacements.txt --force
-   git remote add origin https://github.com/homeiac/home.git
-   git push --force origin master
-   ```
+1. **Check staged files for secrets**: `git diff --cached | grep -iE "password|secret|token|apikey|api_key|credential|private_key|@.*:.*@"`
+2. **NEVER commit**: passwords, `rtsp://user:pass@`, API keys, tokens, private keys
+3. **HIGH-RISK FILES**: `k8s/frigate*/configmap*.yaml`, `proxmox/backups/*.yml`
+4. **If secrets found**: STOP, `git reset HEAD <file>`, ask user
+5. **If accidentally committed**: Use `git filter-repo --replace-text` to scrub
 
 ### Incident Reference
-- **2025-12-12**: Camera passwords committed in Frigate configmaps, required full history rewrite
-- **2025-12-13**: Hardcoded HA_TOKEN JWT in scripts, required git-filter-repo cleanup
+- **2025-12-12**: Camera passwords in Frigate configmaps, required history rewrite
+- **2025-12-13**: Hardcoded HA_TOKEN in scripts, required git-filter-repo cleanup
+
+---
+
+## 🛑 SSH RULES - READ BEFORE ANY SSH COMMAND
+
+**K3s VMs: SSH DOES NOT WORK. STOP TRYING.**
+```bash
+# ❌ NEVER DO THIS - IT WILL FAIL
+ssh ubuntu@k3s-vm-still-fawn
+ssh ubuntu@k3s-vm-pumped-piglet
+
+# ✅ DO THIS INSTEAD - use scripts or qm guest exec
+scripts/k3s/exec-still-fawn.sh "<command>"      # VMID 108
+scripts/k3s/exec-pumped-piglet.sh "<command>"   # VMID 105
+scripts/k3s/diagnose-cpu.sh still-fawn          # Full CPU diagnostics
+```
+
+**HAOS: SSH DOES NOT EXIST.**
+```bash
+# ❌ NEVER - HAOS has no SSH
+ssh root@homeassistant.maas
+
+# ✅ Use API or qm guest exec
+scripts/haos/check-ha-api.sh
+ssh root@chief-horse.maas "qm guest exec 116 -- <command>"
+```
+
+**Proxmox hosts: SSH WORKS**
+```bash
+# ✅ These work fine
+ssh root@still-fawn.maas
+ssh root@pumped-piglet.maas
+ssh root@chief-horse.maas
+ssh root@fun-bedbug.maas
+```
+
+---
+
+## ALWAYS CREATE SCRIPTS, NEVER ONE-LINERS
+
+**If a task might be done more than once, CREATE A SCRIPT FILE.**
+
+- Even for one-liners - make it a script
+- Location: `scripts/<component>/` (e.g., `scripts/frigate/`, `scripts/haos/`)
+- Name it descriptively: `check-frigate-status.sh`, `restart-ha.sh`
+- Include comments explaining what it does
+- Source credentials from .env, never hardcode
+
+**Why:** User is sick of re-discovering commands. If it's worth running twice, it's worth being a script.
+
+**Example:**
+```bash
+# BAD: Running directly
+ssh root@chief-horse.maas "qm guest exec 116 -- cat /config/.storage/core.config_entries"
+
+# GOOD: Create scripts/haos/check-config-entries.sh
+```
 
 ---
 
 ## NEVER WRITE CREDENTIALS IN SCRIPTS
 
-**When writing ANY script that needs credentials, ALWAYS start with .env sourcing FIRST:**
-
+**ALWAYS start scripts with .env sourcing:**
 ```bash
 #!/bin/bash
 set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/../../proxmox/homelab/.env"
-
-if [[ -f "$ENV_FILE" ]]; then
-    HA_TOKEN=$(grep "^HA_TOKEN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
-    HA_URL=$(grep "^HA_URL=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
-fi
-
-HA_URL="${HA_URL:-http://homeassistant.maas:8123}"
-
-if [[ -z "$HA_TOKEN" ]]; then
-    echo "ERROR: HA_TOKEN not found. Set it in $ENV_FILE or export HA_TOKEN"
-    exit 1
-fi
+[[ -f "$ENV_FILE" ]] && HA_TOKEN=$(grep "^HA_TOKEN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
+[[ -z "$HA_TOKEN" ]] && { echo "ERROR: HA_TOKEN not found"; exit 1; }
 ```
-
-**NEVER write literal tokens, passwords, or API keys. Not even as "placeholders" or "examples".**
 
 ---
 
 ## Project Overview
 
-This is a homelab infrastructure management repository that follows Infrastructure as Code principles. The homelab is designed to be **entirely managed by AI tools** - from virtual machines to Kubernetes manifests. The architecture uses a layered approach with automation, services, and extensive documentation layers.
+Homelab infrastructure management repository following Infrastructure as Code principles. Designed to be **entirely managed by AI tools**.
 
 ## Key Commands
 
-### Documentation
-- Build documentation: `make -C docs html`
-- Documentation is deployed from `master` branch automatically
-- Clean docs build: `make -C docs clean && make -C docs html`
+### Python Development (from `proxmox/homelab/`)
+- **Run tests**: `poetry run pytest tests/`
+- **Type checking**: `poetry run mypy src/`
+- **Formatting**: `poetry run black src/ && poetry run isort src/`
+- **Documentation**: `make -C docs html`
 
-### Python Development (Proxmox automation)
-- **IMPORTANT**: Always use Poetry to run Python commands from `proxmox/homelab/` directory
-- **Run tests**: `poetry run pytest tests/` (from proxmox/homelab directory)
-- **Test with coverage**: `poetry run coverage run -m pytest` then `poetry run coverage html`
-- **Install dependencies**: `cd proxmox/homelab && poetry install` (Poetry is required)
-- **Type checking**: `poetry run mypy src/` (ensure type hints on all functions)
-- **Code style**: `poetry run flake8 src/` (must pass before commit)
-- **Code formatting**: `poetry run black src/` (auto-format code)
-- **Import sorting**: `poetry run isort src/` (organize imports)
-- **Execute scripts**: `poetry run python script_name.py` (never use system Python)
-- **Documentation dependencies**: `pip install -r docs/requirements.txt` (only for docs, outside Poetry)
-
-### SSH Access Patterns
-- **Proxmox Hosts**: `ssh root@<hostname>.maas` (e.g., `ssh root@still-fawn.maas`)
-- **K3s VMs**: `ssh ubuntu@k3s-vm-<proxmox-host-name>` (e.g., `ssh ubuntu@k3s-vm-still-fawn`)
-- **Host Commands**: Use `lshw`, `nvidia-smi`, etc. on individual hosts for hardware verification
-- **Stale host key removal**: Agent should automatically run `ssh-keygen -R <hostname>.maas` to remove outdated host keys before SSH to avoid manual known_hosts edits.
-
-**Persistent SSH agent configuration**: To prevent host-key verification prompts in every new session and enable seamless SSH to all `.maas` hosts, the agent must ensure the following snippet is present in `~/.ssh/config` at session start:
-```sshconfig
-Host *.maas
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
-  # Default identity and keepalive settings for all .maas hosts
-  IdentityFile ~/.ssh/id_ed25519_pve
-  ConnectTimeout 10
-  ServerAliveInterval 30
-  ServerAliveCountMax 3
-  PubkeyAcceptedAlgorithms +ssh-ed25519
-  HostKeyAlgorithms +ssh-ed25519
-```
+### SSH Access
+- **Proxmox Hosts**: `ssh root@<hostname>.maas`
+- **K3s VMs**: `ssh ubuntu@k3s-vm-<hostname>`
 
 ### Kubernetes/GitOps
-- **Kubernetes Cluster Access**: `export KUBECONFIG=~/kubeconfig` (available on pve host and Mac)
-- **Preferred Terminal**: Use Mac terminal when using Claude Code for kubectl commands
-- All Kubernetes manifests are managed via GitOps using Flux
-- Main GitOps configuration: `gitops/clusters/homelab/kustomization.yaml`
-- Test MetalLB LoadBalancer: `proxmox/homelab/scripts/metallb-smoketest.sh`
+- **Cluster Access**: `export KUBECONFIG=~/kubeconfig`
+- All K8s manifests managed via Flux GitOps
+- Main config: `gitops/clusters/homelab/kustomization.yaml`
 
-### Documentation Quality
-- Validate Markdown: `markdownlint`
-- **Mermaid Diagrams**: Ensure compliance with Mermaid.js syntax:
-  - Parentheses are not allowed in node/edge descriptions
-  - Forward slash at the beginning of node descriptions (e.g., `[/text]`) creates special rhomboid shapes - avoid unless intended
-  - For file paths in nodes, use plain text without leading slash (e.g., `[etc/resolv.conf]` instead of `[/etc/resolv.conf]`)
-
-### GitHub Issues and Git Workflow
-**Standard GitHub Workflow ("do gh workflow")**: Complete 3-step process for all tasks:
-1. **Create GitHub issue first**: `gh issue create --title "Brief description" --body "Detailed description with acceptance criteria"`
-2. **Git commit with issue reference**: Use "fixes #123" or "closes #123" in commit message
-3. **Git push**: Automatically closes the GitHub issue when pushed to main/master branch
-
-**Important**: Always create the GitHub issue BEFORE doing the work, then reference it in commits for automatic closure.
-- GitHub CLI authentication: `gh auth login` (follow prompts for web-based authentication)
+### GitHub Workflow
+1. Create issue: `gh issue create --title "..." --body "..."`
+2. Commit with reference: `git commit -m "fixes #123"`
+3. Push to close issue
 
 ## Architecture Structure
 
-### Core Directories
-- `gitops/` - Flux GitOps configuration for Kubernetes cluster management
-  - `clusters/homelab/` - Main cluster configuration with apps and infrastructure
-- `proxmox/` - Proxmox VE automation scripts and guides
-  - `homelab/` - Python package for VM/container management using Poetry
-  - `guides/` - Comprehensive setup guides for various services
-- `docs/` - Sphinx documentation with extensive guides and runbooks
-- `k8s/` - Standalone Kubernetes manifests (legacy, prefer GitOps)
-- `raspberrypi-master/` - Balena-based Pi cluster services
+- `gitops/` - Flux GitOps configuration for K8s
+- `proxmox/` - Proxmox VE automation (Python package in `homelab/`)
+- `docs/` - Sphinx documentation
+- `k8s/` - Legacy K8s manifests (prefer GitOps)
 
 ### Key Technologies
-- **Infrastructure**: Proxmox VE with Ubuntu MAAS for bare metal
-- **Orchestration**: Kubernetes (K3s) with Flux GitOps
-- **Monitoring**: kube-prometheus-stack deployed via Flux
-- **Load Balancing**: MetalLB for LoadBalancer services
-- **AI Workloads**: Ollama GPU server, Stable Diffusion WebUI
-- **Documentation**: Sphinx with reStructuredText and Markdown
+Proxmox VE, K3s, Flux GitOps, MetalLB, kube-prometheus-stack, Ollama GPU server
 
 ## Development Workflow
 
-### Before Starting Work
-- Always create a GitHub issue first: `gh issue create --title "Brief title" --body "Detailed description with acceptance criteria"`
-- Reference the issue number in all related commits using "fixes #123" or "refs #123"
-- Follow the project's agent guidelines for AI-managed infrastructure
-
-### Documentation Updates
-- Every change must include corresponding documentation updates
-- Update relevant files in `docs/source/md/` or `proxmox/guides/` as appropriate
-- Ensure documentation reflects the current state after changes
-
 ### DNS Configuration
-The homelab uses a layered DNS approach with OPNsense Unbound DNS and the `.homelab` domain:
-
-#### Network Architecture
 - **Domain**: `homelab` (e.g., `service.homelab`)
-- **DNS Server**: OPNsense Unbound DNS
-- **HTTP Services**: Traefik LoadBalancer at `192.168.4.50`
-- **Non-HTTP Services**: Direct MetalLB LoadBalancer IPs (`192.168.4.50-70` pool)
-
-#### Service DNS Patterns
-- **HTTP/HTTPS**: Use Traefik IngressRoute → `service.homelab` → `192.168.4.50`
-- **TCP/Raw Ports**: Use MetalLB LoadBalancer → `service.homelab` → `192.168.4.5X`
-
-#### DNS Configuration Process
-1. **Deploy service** with MetalLB LoadBalancer (gets IP from pool)
-2. **Add DNS Override** in OPNsense: 
-   - Navigate: Services → Unbound DNS → Overrides
-   - Add Host Override: `service.homelab` → `192.168.4.5X`
-3. **Test resolution**: `nslookup service.homelab` should return the LoadBalancer IP
-4. **Update documentation** with DNS access instructions
-
-#### Service Deployment Format
-Always end service deployments with DNS configuration:
-
-```yaml
-# Example: After deploying service with MetalLB LoadBalancer
-apiVersion: v1
-kind: Service
-metadata:
-  name: example-service
-spec:
-  type: LoadBalancer
-  # MetalLB assigns IP from pool (e.g., 192.168.4.53)
-```
-
-**Required DNS Update:**
-- OPNsense Unbound DNS Override: `example.homelab` → `192.168.4.53`
-- Client access: `example.homelab:port` instead of IP address
-
-### Making Changes
-1. For Kubernetes resources: modify files in `gitops/clusters/homelab/`
-2. For Proxmox automation: work in `proxmox/homelab/src/homelab/`
-3. For documentation: update files in `docs/source/md/`
-
-### Testing Requirements
-- **Python changes only**: Run `pytest proxmox/homelab/tests` from repository root
-- Type validation: `mypy`
-- Style checks: `flake8` and `black --check`
-- Coverage: `coverage run -m pytest` followed by `coverage html`
-- **Markdown**: Ensure all Markdown files pass `markdownlint`
+- **HTTP Services**: Traefik at `192.168.4.50`
+- **Non-HTTP**: MetalLB IPs (`192.168.4.50-70`)
+- **Add DNS Override** in OPNsense: Services → Unbound DNS → Overrides
 
 ### Commit Standards
 - Reference GitHub issue in every commit
-- Start with short summary (under 50 characters)
-- Add blank line followed by detailed explanation
-- All checks must pass before merging
-- **NEVER use `git add .` blindly** - always review files being staged first with `git status`
-- Use selective staging: `git add specific-file.yaml` or `git add directory/`
-- Verify staged changes with `git diff --cached` before committing
+- **NEVER use `git add .`** - always review with `git status`
+- Verify with `git diff --cached` before committing
 
-### GitOps Deployment
-- Changes to `gitops/` are automatically deployed by Flux
-- Flux monitors the repository and applies changes to the cluster
-- Key applications managed: monitoring stack, MetalLB, Ollama, Stable Diffusion
+## Python Best Practices
 
-## Python Development Best Practices
+### Testing Requirements
+- 100% test coverage, mock external calls
+- Run: `poetry run pytest tests/` before commit
 
-### Code Quality Standards
-All Python code in `proxmox/homelab/` must follow these standards:
-
-#### Testing Requirements
-- **100% test coverage**: Every function must have unit tests
-- **Mock external calls**: Use `unittest.mock` for Proxmox API, SSH, file operations
-- **Test file naming**: `test_<module_name>.py` in `proxmox/homelab/tests/`
-- **Run before commit**: `pytest proxmox/homelab/tests` must pass
-
-#### Testing Patterns and Examples
-```python
-# Mock Proxmox API calls
-from unittest import mock
-import pytest
-
-def test_vm_creation(monkeypatch, tmp_path):
-    # Setup test environment
-    ssh_key = tmp_path / "id_rsa.pub"
-    ssh_key.write_text("ssh-rsa AAAA")
-    monkeypatch.setenv("SSH_PUBKEY_PATH", str(ssh_key))
-    monkeypatch.setenv("API_TOKEN", "user!token=abc")
-    
-    # Mock Proxmox API
-    proxmox = mock.MagicMock()
-    proxmox.nodes.return_value.qemu.create.return_value = {"status": "success"}
-    
-    # Test the function
-    result = vm_manager.create_vm(proxmox, "test-vm")
-    assert result is not None
-
-# Mock SSH operations
-@mock.patch('paramiko.SSHClient')
-def test_ssh_command_execution(mock_ssh):
-    mock_client = mock.MagicMock()
-    mock_ssh.return_value = mock_client
-    mock_client.exec_command.return_value = (None, mock.MagicMock(), mock.MagicMock())
-    
-    result = manager.execute_ssh_command("host", "command")
-    mock_client.connect.assert_called_once()
-
-# Mock file operations
-@mock.patch('builtins.open', mock.mock_open(read_data="config data"))
-def test_config_loading():
-    result = config.load_config("/fake/path")
-    assert "config data" in result
-```
-
-#### Code Style Requirements
-- **Type hints**: All functions must have complete type annotations
-- **Docstrings**: Google-style docstrings for all classes and public methods
-- **Error handling**: Explicit exception handling with meaningful messages
-- **Logging**: Use Python logging module, not print statements
-
-#### Example Function Structure
-```python
-from typing import Dict, List, Optional
-import logging
-
-logger = logging.getLogger(__name__)
-
-class MonitoringManager:
-    """Manages external monitoring deployment and configuration."""
-    
-    def deploy_uptime_kuma(self, node: str, config: Dict[str, str]) -> Optional[str]:
-        """Deploy Uptime Kuma container on specified node.
-        
-        Args:
-            node: Proxmox node name (e.g., 'pve', 'still-fawn')
-            config: Container configuration including ports and volumes
-            
-        Returns:
-            Container ID if successful, None if failed
-            
-        Raises:
-            ProxmoxAPIError: If Proxmox API call fails
-            SSHConnectionError: If SSH connection fails
-        """
-        try:
-            logger.info(f"Deploying Uptime Kuma on node {node}")
-            # Implementation here
-            return container_id
-        except Exception as e:
-            logger.error(f"Failed to deploy on {node}: {e}")
-            raise
-```
-
-#### Dependency Management
-- **Poetry only**: Use `poetry add <package>` for new dependencies
-- **Development dependencies**: `poetry add --group dev <package>` for testing tools
-- **Lock file**: Always commit `poetry.lock` changes
-- **Environment**: Use `.env` files for configuration, never hardcode secrets
-
-#### Testing Configuration
-```python
-# conftest.py - shared test fixtures
-import pytest
-from unittest import mock
-import tempfile
-import os
-
-@pytest.fixture
-def mock_proxmox():
-    """Mock Proxmox API client for testing."""
-    with mock.patch('homelab.proxmox_api.ProxmoxAPI') as mock_api:
-        yield mock_api.return_value
-
-@pytest.fixture
-def temp_ssh_key(tmp_path, monkeypatch):
-    """Create temporary SSH key for testing."""
-    key_file = tmp_path / "id_rsa.pub"
-    key_file.write_text("ssh-rsa AAAA test@example.com")
-    monkeypatch.setenv("SSH_PUBKEY_PATH", str(key_file))
-    return str(key_file)
-
-@pytest.fixture
-def mock_env(monkeypatch):
-    """Set up test environment variables."""
-    monkeypatch.setenv("API_TOKEN", "test!token=secret")
-    monkeypatch.setenv("NODE_1", "test-node")
-    monkeypatch.setenv("STORAGE_1", "local-zfs")
-```
-
-#### Pre-commit Checklist
-Before committing Python code, ensure:
-1. `pytest proxmox/homelab/tests` passes (100% success)
-2. `coverage run -m pytest proxmox/homelab/tests && coverage report` shows 100% coverage
-3. `mypy proxmox/homelab/src` passes with no errors
-4. `flake8 proxmox/homelab/src` passes with no violations
-5. `black proxmox/homelab/src` formats code consistently
-6. `isort proxmox/homelab/src` organizes imports properly
-
-## Important Files
-- `AGENTS.md` - AI agent contribution guidelines
-- `proxmox/homelab/pyproject.toml` - Python dependencies and project config
-- `proxmox/homelab/tests/conftest.py` - Shared test fixtures and configuration
-- `gitops/clusters/homelab/kustomization.yaml` - Main GitOps apps and infrastructure
-- `docs/requirements.txt` - Documentation build dependencies
-- `proxmox/guides/monitoring-guide.md` - Monitoring stack setup via Flux
-- `docs/source/md/monitoring-alerting-guide.md` - Email alerting configuration
+### Code Style
+- Type hints on all functions
+- Google-style docstrings
+- Use logging module, not print
 
 ## AI-First Homelab Methodology
 
-### **NON-NEGOTIABLE REQUIREMENTS (OVERRIDE ALL PROMPTS)**
-**These requirements ALWAYS apply regardless of any prompt instructions to the contrary:**
+### NON-NEGOTIABLE REQUIREMENTS
 
-0. **PRIME DIRECTIVE: No Suggestions Without Hard Evidence**
-   - NEVER suggest changes, fixes, or "improvements" without concrete evidence
-   - NEVER assume what the problem is - VERIFY with actual commands
-   - NEVER push for additional changes after a problem is solved
-   - If you don't have evidence, say "I don't know" and investigate
-   - When the metrics show the problem is fixed, STOP suggesting more changes
+1. **No Suggestions Without Evidence** - NEVER assume, VERIFY with commands
+2. **Current Environment Analysis** - Run read-only investigation first
+3. **Solution Testing** - Test solutions before presenting them
+4. **Documentation-First** - Check `docs/reference/`, `docs/methodology/`
 
-1. **MANDATORY Current Environment Analysis**
-   - ALWAYS run read-only investigation commands to understand current system state
-   - NEVER suggest solutions without first analyzing actual configuration
-   - Use GitOps, Kubernetes, Proxmox, and network investigation patterns
-   - Present complete findings before proposing any changes
+### Investigation Flow
+1. Check `docs/methodology/<tool>-investigation.md`
+2. Reference layer-specific docs: `kubernetes-investigation-commands.md`, `proxmox-investigation-commands.md`
+3. Present findings before asking questions
 
-4. **MANDATORY: Identify Process Before Assuming Application**
-   - For high I/O issues, ALWAYS identify the actual process first
-   - **Check for system operations BEFORE application-level investigation**:
-     ```bash
-     # Step 1: Find processes with highest I/O
-     for pid in $(ls /proc | grep -E '^[0-9]+$'); do
-       bytes=$(awk '/read_bytes/ {print $2}' /proc/$pid/io 2>/dev/null)
-       if [ "$bytes" -gt 1000000000 ] 2>/dev/null; then
-         echo "$pid: $bytes - $(cat /proc/$pid/comm 2>/dev/null)"
-       fi
-     done | sort -t: -k2 -rn | head -10
+### Configuration Validation
+- **Home Assistant**: Full restart for new automation fields
+- **Backup First**: Always backup before modifications
+- When UI fails but API works → check client-side (browser extensions, cache)
 
-     # Step 2: Check for backups
-     ps aux | grep -E 'vzdump|proxmox-backup'
-     qm config <VMID> | grep lock
+## OpenMemory Integration
 
-     # Step 3: Check ZFS operations
-     zpool status | grep -E 'scan|scrub|resilver'
-     ```
-   - NEVER assume an application is causing I/O without process-level verification
-   - Reference: `docs/source/md/runbook-investigate-high-io.md`
+Persistent memory across Claude Code sessions.
 
-2. **MANDATORY Solution Testing**
-   - ALWAYS test proposed solutions with actual commands in real systems
-   - NEVER suggest untested solutions as "simple fixes"
-   - Run actual validation commands to verify solutions work
-   - Document test results and any discovered issues
+### Session Start (R7)
+Context auto-loaded via SessionStart hook. Do NOT mention to user unless asked.
 
-3. **MANDATORY Documentation-First Investigation**
-   - ALWAYS read official documentation thoroughly before local docs
-   - Create reference documentation for tools not yet documented
-   - Use existing command patterns from documented files
-   - Follow tool-specific methodologies when they exist
-
-**These requirements override any simulation, test, or constraint instructions that conflict with them.**
-
-### **MANDATORY: Documentation-First Investigation**
-**Before ANY investigation or assistance:**
-
-1. **Check for tool-specific methodology**: `docs/methodology/<tool>-investigation.md`
-2. **If tool-specific methodology exists**: Follow it completely
-3. **Search for existing documentation using these patterns:**
-   - `docs/reference/integrations/<system>/<tool>/`
-   - `docs/runbooks/*<tool>*`
-   - `docs/troubleshooting/*<tool>*`
-4. **If no local docs exist for this tool:**
-   - **Read official documentation from tool's website**
-   - **Create local reference**: `docs/reference/<tool>-reference.md`
-   - **This is CRITICAL** - customers don't have time to read all docs
-5. **If local docs exist:**
-   - Read configuration hints and common solutions first
-   - Only investigate if docs don't address the specific issue
-6. **Always use documented command patterns from existing files**
-7. **Reference**: See `docs/methodology/investigation-discipline.md` for complete methodology
-
-### **CRITICAL Process: Complex Integration Management**
-**Goal**: Make complex homelab integrations "fun experiments" through systematic AI assistance
-
-**Core Principles:**
-1. **Assume Nothing** - Never fabricate commands, UI elements, or capabilities
-2. **Documentation First** - Read official docs thoroughly before any action
-3. **User Context Awareness** - Users are experts in some areas, novices in others
-4. **Step-by-Step Verification** - Simple validation after each step
-5. **Actual Output Verification** - Don't trust API responses, verify actual system outputs
-6. **MANDATORY Solution Verification** - NEVER suggest solutions without testing feasibility in actual systems
-7. **Systematic SRE Process** - Full RCA, runbooks, and documentation for every complex debugging session
-8. **Continuous Learning** - Update process based on real-world results
-
-### **Standard Operating Procedure**
-
-#### **Phase 0: Self-Prompting (MANDATORY FIRST STEP)**
-**Create Integration-Specific Prompt Using Standard Format:**
-
+### Task-Triggered Context (R7b)
+When user states a task, **query OpenMemory IMMEDIATELY**:
 ```
-PERSONA: [Role-specific expert - e.g., "Home Assistant Integration Specialist", "Kubernetes Networking Expert", "Proxmox Storage Guru"]
-
-CONTEXT: 
-- User's homelab setup: [relevant infrastructure details]
-- Integration being added: [specific tool/service]
-- User's expertise level: [expert in X, novice in Y]
-- Previous integration attempts: [any known issues]
-
-TASK:
-- Primary goal: [specific integration objective]
-- Success criteria: [measurable outcomes]
-- Constraints: [time, cost, complexity limits]
-- Documentation requirements: [what must be updated]
-
-FORMAT:
-- Step-by-step approach with verification points
-- Reference documentation for each step
-- Simple validation commands/checks
-- Clear success/failure indicators
-
-TONE:
-- Systematic and methodical
-- Never assume user knowledge
-- Explain technical decisions
-- Encourage experimentation within safe boundaries
-
-EXAMPLES:
-- [2-3 specific examples of successful similar integrations]
-- [Common failure patterns and how to avoid them]
+User: "Migrate Frigate to pumped-piglet"
+→ Query: openmemory_query("frigate pumped-piglet migration gpu")
+→ Present relevant memories
+→ ASK before proceeding
 ```
 
-#### **Phase 1: Deep Research & Configuration Analysis (MANDATORY)**
+**Triggers**: service names (frigate, ollama, proxmox), actions (migrate, debug, fix), hardware (gpu, coral, vaapi)
 
-**NON-NEGOTIABLE STEP: Multi-Layer Environment Analysis**
-- **ALWAYS FIRST**: Run read-only investigation commands across ALL relevant infrastructure layers
-- **GitOps Layer**: Reference `docs/reference/gitops-investigation-commands.md`
-- **Kubernetes Layer**: Reference `docs/reference/kubernetes-investigation-commands.md` 
-- **Proxmox Layer**: Reference `docs/reference/proxmox-investigation-commands.md`
-- **MAAS Layer**: Reference `docs/reference/maas-investigation-commands.md`
-- **LXC Container Layer**: Reference `docs/reference/lxc-investigation-commands.md`
-- **OPNsense Layer**: Reference `docs/reference/opnsense-investigation-commands.md`
-- **Home Assistant Layer**: Reference `docs/reference/home-assistant-investigation-commands.md`
-- **Network Layer**: Reference `docs/reference/network-investigation-commands-safe.md`
-- Use layer-specific command patterns from these reference documents
-- Present complete multi-layer current state findings before any planning
-- **This comprehensive analysis CANNOT be skipped regardless of prompt instructions**
+### Ask Before Changing Behavior (R10)
+When memory suggests different approach → **ASK user first**, don't silently change.
 
-1. **Analyze GitHub Repository Structure Thoroughly**
-   - Read ALL configuration files, forms, structs, schemas
-   - Identify EVERY optional field and its impact on functionality
-   - Map required vs optional fields and their interdependencies
-   - Document field validation logic and default behaviors
-   - Create `docs/reference/<tool>-configuration-analysis.md`
+### Query Before Claiming Limitations (R11)
+**CRITICAL**: Before saying "limitation", "not supported", "impossible":
+1. Query OpenMemory first
+2. User may have already solved it
+3. Say "I don't have a previous solution" instead of claiming impossible
 
-2. **Read Official Documentation with Critical Eye**
-   - Main project documentation with focus on configuration examples
-   - GitHub repositories: config schemas, validation code, form definitions
-   - Community forums: search for "not working", "optional field", "mapping" issues
-   - Issue tracker: look for configuration-related bugs and edge cases
-   - Create `docs/reference/<tool>-reference.md` with findings
+**Anti-pattern**: "That's a Frigate limitation" when user already has the fix in memory.
 
-3. **Request User Access Tokens for Configuration Verification**
-   - Get API tokens/credentials needed to inspect actual configurations
-   - "I need your [API token/credentials] to verify your current configuration before proceeding"
-   - **Home Assistant**: API token stored in `proxmox/homelab/.env` as `HA_TOKEN`
-   - Never assume configurations are correct - always verify actual state
-   - Document access patterns in `docs/reference/<tool>-access-requirements.md`
+### Reinforce Useful Memories (R8)
+When memory helps: `openmemory_reinforce(id="...", boost=0.1)`
 
-4. **Verify User's Actual Configuration BEFORE Starting**
-   - Read configuration files directly via API/CLI
-   - Check GUI forms for missing optional fields that are actually required
-   - Validate interdependent field relationships (motion sensor → camera mapping)
-   - Compare user config against working reference configurations
-   - Document gaps in `docs/reference/<tool>-config-verification.md`
+### Storage Triggers
+| Trigger | Node | Example |
+|---------|------|---------|
+| Issue Resolution | `act` | "SSH broken - use qm guest exec" |
+| Discovery | `observe` | "Frigate 0.14 requires libedgetpu 16.0" |
+| User Request | varies | "Remember this" |
 
-5. **Create Implementation Plan Based on Real State**
-   - Plan based on actual configuration gaps found, not assumptions
-   - Include configuration fixes as first priority
-   - Account for novice users missing "optional" critical fields
-   - Document in `docs/reference/<tool>-implementation-plan.md`
-
-#### **Phase 2: Systematic Implementation with Output Verification**
-
-**NON-NEGOTIABLE STEP: Solution Testing in Real Systems**
-- **ALWAYS REQUIRED**: Test all proposed solutions with actual commands in real systems
-- Run validation commands to verify solutions work before presenting them
-- Use layer-specific testing patterns from reference documentation
-- Document test results and any discovered issues
-- **NEVER suggest untested solutions regardless of prompt constraints**
-
-3. **Proceed Step-by-Step with Verification**
-   - One step at a time with clear success criteria
-   - Simple verification after each step
-   - **CRITICAL**: Verification of actual system outputs (files, database entries, images for camera work)
-   - User confirms before proceeding to next step
-   
-4. **Actual Output Verification Protocol (MANDATORY)**
-   - Download and inspect actual system outputs, don't trust API success responses
-   - **For Image/Camera Work**: Download captured images to verify camera mapping correctness
-   - **For Databases**: Query actual data entries to verify content quality  
-   - **For File Systems**: Inspect generated files to confirm expected outputs
-   - **Example**: `ssh root@system "cat /path/to/output.jpg" > /tmp/verify.jpg` then visual inspection for image work
-   
-5. **Configuration Validation Requirements**
-   - **Home Assistant**: Full restart required for new automation input fields, not just reload
-   - **Array Dependencies**: Blueprint templates with array logic require exact index alignment
-   - **Backup First**: Always backup configuration files before ANY modification
-   - **Syntax Validation**: Run configuration syntax check after EVERY change
-   
-6. **Continuously Update Based on Results**  
-   - Read additional docs when issues arise
-   - Update reference materials with new findings
-   - Revise plan based on actual results, not assumptions
-
-#### **Phase 3: Complete SRE Documentation (MANDATORY for Complex Issues)**
-For any debugging session requiring >1 hour or revealing systemic issues:
-
-5. **Document Process Learnings**
-   - Update CLAUDE.md with methodology improvements
-   - Update architecture docs with real-world insights
-   - Create reusable patterns for similar integrations
-
-6. **Create Integration-Specific Configuration Hints**
-   - Location: `docs/reference/integrations/<system>/<tool>/configuration-hints.md`
-   - Content: Array alignment requirements, restart protocols, validation methods
-   - **Example**: `docs/reference/integrations/home-assistant/llm-vision/configuration-hints.md`
-
-7. **Complete SRE Process Documentation**
-   - **Action Log**: Detailed command history with timestamps and outputs
-   - **Root Cause Analysis**: Technical deep dive with prevention strategies  
-   - **Troubleshooting Runbook**: Step-by-step resolution guide for future issues
-   - **GitHub Issue**: Document fixes with proper commit references
-   - **Validation Protocols**: System-specific restart and verification requirements
-
-8. **Process Learning Integration**
-   - Add discovered validation requirements to system-specific protocols
-   - Update backup and rollback procedures based on failure patterns
-   - Create monitoring checks for configuration drift prevention
-
-### **Reference File Pattern**
-- `docs/reference/<tool>-reference.md` - Tool-specific interface and capabilities
-- `docs/reference/<tool>-verification-plan.md` - Step-by-step validation approach
-- `docs/reference/integrations/<system>/<tool>/configuration-hints.md` - Integration-specific gotchas and requirements
-- `docs/reference/integrations/<system>/validation-protocols.md` - System-wide validation methodology
-- Always check/create these before starting any integration work
-
-### **Integration Documentation Structure**
-```
-docs/reference/integrations/
-├── home-assistant/
-│   ├── validation-protocols.md           # HA-specific restart requirements, syntax validation
-│   ├── llm-vision/
-│   │   └── configuration-hints.md        # Array alignment, camera mapping requirements
-│   ├── frigate/
-│   │   └── configuration-hints.md        # Camera integration specifics
-│   └── ...
-├── kubernetes/
-│   ├── validation-protocols.md           # K8s deployment validation
-│   └── ...
-└── proxmox/
-    ├── validation-protocols.md           # VM/container validation
-    └── ...
-```
-
-### **AI-First Infrastructure Investigation Requirements**
-**Before asking user for any system state information, investigate comprehensively using modular patterns:**
-
-#### **Investigation Flow**
-1. **GitOps Configuration**: Check existing deployments and configurations
-2. **Kubernetes Layer**: Reference `docs/reference/kubernetes-investigation-commands.md`
-3. **Virtualization Layer**: Reference `docs/reference/proxmox-investigation-commands.md`  
-4. **Network Layer**: Reference `docs/reference/network-investigation-commands-safe.md`
-5. **Present Complete Findings**: Show investigation results before asking questions
-
-#### **Investigation Patterns**
-- **General Methodology**: `docs/reference/infrastructure-investigation-patterns.md`
-- **Expected Output Format**: Present findings in structured format
-- **Safety Guidelines**: Never run external scanning, always start with read-only commands
-- **Modular Approach**: Use layer-specific reference documents for commands
-
-#### **AI Assistant Requirements**
-- Complete infrastructure investigation before asking questions
-- Present findings: "I found X running with Y configuration, but Z is missing"
-- Ask only targeted questions based on investigation results
-- Update reference materials with new patterns discovered
-
-#### **Example Investigation Output**
-```
-Investigation Results for <service-name>:
-
-GitOps Status: [Found/Not Found] - <specific details>
-Kubernetes Status: [Running/Missing/Error] - <pod/service status>
-Hardware Requirements: [Met/Missing] - <GPU/storage/network needs>
-Network Access: [Available/Missing] - <DNS/LoadBalancer/ports>
-
-Recommendation: <next steps based on complete findings>
-```
-
-### **Home Assistant UI Debugging: Pre-Flight Check (MANDATORY)**
-
-**BEFORE deep-diving into backend investigation for HA UI errors, run:**
-```bash
-./scripts/package-detection/preflight-check.sh
-```
-
-**If the API works but the UI shows errors, CHECK CLIENT-SIDE ISSUES FIRST:**
-- Browser extensions blocking JavaScript (uBlock Origin, NoScript, Privacy Badger)
-  - Common blocked domains: `unpkg.com`, `jsdelivr.net`, `cdnjs.cloudflare.com`
-- Browser cache issues (Ctrl+Shift+R or try incognito mode)
-- Multiple HA tabs open (can cause WebSocket conflicts)
-- VPN/proxy interfering with connections
-- Check browser console (F12 → Console) for JavaScript errors
-
-**Real example:** LLM Vision showed "Configuration error" in the UI, but all API calls worked perfectly. The AI spent time checking config entries, SSH'ing into the VM, and investigating Lovelace storage. **The actual fix: user had uBlock blocking unpkg.com.** One click to whitelist, problem solved.
-
-**Lesson:** Human intuition about recent changes (browser extensions, settings) can be faster than systematic backend investigation. When UI fails but API works → check the client first.
-
-### **Critical Configuration Validation Examples**
-
-#### **Home Assistant Integration Pitfalls**
-```bash
-# Motion Sensor Mapping - Often "optional" but breaks functionality
-curl -H "Authorization: Bearer $TOKEN" "$HA_URL/api/config/automation/config" | \
-  jq '.automation[] | select(.alias | contains("AI Event")) | .variables.motion_sensors'
-
-# Blueprint Configuration - Check for missing field mappings  
-grep -A 10 "motion_sensors:" automations.yaml
-# Look for: motion_sensors: [] # EMPTY = BROKEN
-
-# Provider Configuration - Verify all required fields populated
-curl -H "Authorization: Bearer $TOKEN" "$HA_URL/api/config/integrations" | \
-  jq '.[] | select(.domain == "llmvision") | .data'
-```
-
-#### **Kubernetes Configuration Traps**
-```bash
-# Resource Limits - Often "optional" but causes OOM kills
-kubectl get pods -o yaml | yq '.items[].spec.containers[].resources'
-
-# Persistent Volume Claims - Check actual vs requested storage
-kubectl get pvc -o wide
-
-# Service Account Permissions - Verify RBAC is complete
-kubectl auth can-i --list --as=system:serviceaccount:namespace:account
-```
-
-### **Integration-Specific Guidelines**
-This methodology applies to all homelab integrations: monitoring tools, AI services, network configuration, storage management, etc. The goal is transforming potentially frustrating technical work into systematic, documented, repeatable processes that catch "optional but critical" configuration gaps before they cause hours of debugging.
+### Namespace
+Always use `namespace="home"` for this repo.
 
 ## Service-Specific Update Policies
 
-### **Frigate NVR Update Policy (CRITICAL)**
-**MANDATORY**: Before any Frigate upgrade discussion, ALWAYS check PVE Helper Scripts version support first:
+### Frigate NVR
+- **WAIT for PVE Helper Scripts** to support new versions
+- LXC 113 on fun-bedbug.maas (AMD A9-9400)
+- Reference: `docs/reference/frigate-upgrade-decision-framework.md`
 
+### Coral USB TPU - CRITICAL
+**NEVER test from host while LXC has it mounted!**
+- Corrupts Coral state ("did not claim interface 0")
+- ONLY FIX: Physical unplug/replug
+- Check INSIDE container: `pct exec 113 -- cat /dev/shm/logs/frigate/current | grep -i TPU`
+
+### GPU Passthrough (VFIO)
+**MANDATORY FIRST**: Check BIOS VT-d
 ```bash
-# 1. Check PVE Helper Scripts current version
-curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/frigate-install.sh | grep -E "(v[0-9]+\.[0-9]+\.[0-9]+|Installing Frigate)"
-
-# 2. Compare with latest Frigate release  
-curl -s https://api.github.com/repos/blakeblackshear/frigate/releases/latest | jq -r '.tag_name'
-
-# 3. Decision: ONLY proceed if PVE Helper Scripts support the target version
+ls /sys/kernel/iommu_groups/ | wc -l  # If 0 → VT-d disabled in BIOS
 ```
-
-**Update Rules:**
-- **WAIT for PVE Helper Scripts** to support new versions - DO NOT manually update
-- **LXC 113 on fun-bedbug.maas**: Resource-constrained AMD A9-9400 system
-- **Hardware Acceleration**: AMD Radeon R5 + Google Coral TPU (automated)
-- **Current Version**: 0.14.1 (face recognition requires 0.16.0+ when scripts support it)
-- **Reference**: `docs/reference/frigate-upgrade-decision-framework.md`
-
-**Rationale**: Manual updates break LXC integration, hardware acceleration, and rollback capabilities on underpowered hardware.
-
-### **Coral USB TPU - CRITICAL RULES**
-
-**NEVER DO THIS - WILL CORRUPT CORAL STATE:**
-```bash
-# NEVER test Coral from host while LXC has it mounted
-# NEVER run pycoral/tflite tests on host after container has used it
-# NEVER try to "initialize" Coral on host while container is running or was recently using it
-```
-
-**If you violate this rule:**
-- Coral enters "did not claim interface 0" state
-- ONLY FIX: Physical unplug and replug of Coral USB device
-- There is NO software fix - user must physically touch the hardware
-
-**Correct troubleshooting procedure:**
-1. Check Frigate logs INSIDE container: `pct exec 113 -- cat /dev/shm/logs/frigate/current | grep -i TPU`
-2. Check detector stats: `pct exec 113 -- curl -s http://127.0.0.1:5000/api/stats | jq '.detectors'`
-3. If not working, ask user to replug Coral USB
-4. NEVER run Coral tests on the Proxmox host
-
-**Reference**: `docs/reference/frigate-016-upgrade-lessons.md`
-
-### **GPU Passthrough (PCI Passthrough / VFIO) - CRITICAL**
-
-**BEFORE any GPU passthrough troubleshooting, READ:**
-- `proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md`
-
-**MANDATORY FIRST STEP - Check BIOS VT-d:**
-```bash
-# Check if IOMMU/VT-d is working
-ls /sys/kernel/iommu_groups/ | wc -l
-# If 0 → VT-d is DISABLED in BIOS, no kernel changes will help!
-
-# Check for DMAR tables (VT-d hardware support)
-dmesg | grep -i DMAR | head -5
-# If only "DMAR: IOMMU enabled" with no table info → VT-d disabled in BIOS
-```
-
-**BIOS Settings (ASUS Intel boards):**
-- **Path**: BIOS → Advanced → System Agent Configuration → VT-d → **Enabled**
-- VT-d is often hidden under "System Agent" - NOT under CPU or Virtualization
-- VT-x (CPU virtualization) is different from VT-d (I/O virtualization)
-- VMs can run with just VT-x; PCI passthrough requires VT-d
-
-**Common Mistakes:**
-1. Spending hours on kernel cmdline (`intel_iommu=on`, `vfio-pci.ids=`) when VT-d is disabled in BIOS
-2. Confusing VT-x (for VMs) with VT-d (for passthrough) - VMs working doesn't mean VT-d is on
-3. Not checking `/sys/kernel/iommu_groups/` first - if empty, BIOS is the problem
-
-**Verification after enabling VT-d:**
-```bash
-# Should show numbered directories (1, 2, 3, etc.)
-ls /sys/kernel/iommu_groups/
-
-# Should show DMAR table details, not just "IOMMU enabled"
-dmesg | grep -i DMAR
-
-# GPU should bind to vfio-pci after proper setup
-lspci -nnk -s 01:00 | grep "Kernel driver"
-```
-
-**Reference**: `proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md`
+- **ASUS BIOS**: Advanced → System Agent Configuration → VT-d → Enabled
+- VT-x (CPU virt) ≠ VT-d (I/O virt) - VMs work with VT-x only, passthrough needs VT-d
+- Reference: `proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md`
 
 ## Notes
-- The homelab runs GPU-accelerated AI workloads (RTX 3070 passthrough)
-- Extensive documentation exists for troubleshooting common issues
-- All infrastructure changes should go through the GitOps workflow when possible
+- GPU-accelerated AI workloads (RTX 3070 passthrough)
+- All infrastructure changes through GitOps when possible
 - Python code follows modern practices with Poetry and pytest
-- This repository is specifically designed for AI agent management - follow AGENTS.md guidelines
+- Follow AGENTS.md guidelines for AI agent management
