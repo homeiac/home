@@ -48,9 +48,11 @@ echo "--- Applying DNS Fix ---"
 echo "Setting DNS to $OPNSENSE_DNS on primary interface..."
 
 # Get the primary connection name (usually "Supervisor enp0s18" or similar)
-CONN_NAME=$(ssh "root@$HA_HOST" "qm guest exec $HA_VM_ID -- nmcli -t -f NAME connection show --active" 2>/dev/null | head -1 || echo "")
+# qm guest exec returns JSON, need to parse out-data field
+CONN_NAME=$(ssh "root@$HA_HOST" "qm guest exec $HA_VM_ID -- nmcli -t -f NAME connection show --active" 2>/dev/null | \
+    jq -r '.["out-data"] // ""' | head -1 | tr -d '\r' || echo "")
 
-if [[ -z "$CONN_NAME" ]]; then
+if [[ -z "$CONN_NAME" || "$CONN_NAME" == "null" ]]; then
     echo "Could not determine active connection name"
     echo "Trying common names..."
     CONN_NAME="Supervisor enp0s18"
