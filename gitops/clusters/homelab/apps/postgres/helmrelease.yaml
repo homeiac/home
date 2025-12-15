@@ -1,0 +1,54 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: postgres
+  namespace: database
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: postgresql
+      version: "16.x"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: database
+      interval: 12h
+  values:
+    image:
+      registry: docker.io
+      repository: timescale/timescaledb-ha
+      tag: pg16-latest
+    auth:
+      existingSecret: postgres-credentials
+      secretKeys:
+        adminPasswordKey: postgres-password
+        userPasswordKey: postgres-password
+    primary:
+      persistence:
+        enabled: true
+        size: 10Gi
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 500m
+        limits:
+          memory: 4Gi
+          cpu: 2000m
+      initdb:
+        scripts:
+          init-extensions.sql: |
+            -- Enable TimescaleDB extension
+            CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+            -- Enable pgvector for vector/embeddings operations
+            CREATE EXTENSION IF NOT EXISTS vector;
+            -- Enable PostGIS for geospatial/graph operations
+            CREATE EXTENSION IF NOT EXISTS postgis;
+            CREATE EXTENSION IF NOT EXISTS postgis_topology;
+            -- Enable additional useful extensions
+            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+            CREATE EXTENSION IF NOT EXISTS pg_trgm;
+            CREATE EXTENSION IF NOT EXISTS btree_gin;
+            CREATE EXTENSION IF NOT EXISTS btree_gist;
+    metrics:
+      enabled: true
