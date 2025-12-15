@@ -5,3 +5,4 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - secret.yaml
+  - ingressroutetcp.yaml
