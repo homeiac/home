@@ -21,7 +21,7 @@ spec:
         # Copy auth.db from green deployment's container image if blue PVC is empty
         # This seeds the blue deployment with user registrations
         - name: init-auth-db
-          image: ghcr.io/homeiac/claudecodeui:1.14.0
+          image: ghcr.io/homeiac/claudecodeui:1.15.0
           command:
             - sh
             - -c
@@ -38,7 +38,7 @@ spec:
               mountPath: /data
       containers:
         - name: claudecodeui
-          image: ghcr.io/homeiac/claudecodeui:1.14.0
+          image: ghcr.io/homeiac/claudecodeui:1.15.0
           imagePullPolicy: Always
           ports:
             - containerPort: 3001
