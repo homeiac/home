@@ -222,6 +222,7 @@ Interact with Claude Code through multiple physical interfaces (voice, text, vis
 
 | Device | Location | Role | I/O | Firmware |
 |--------|----------|------|-----|----------|
+| **Module-LLM** | With AtomS3R | Edge AI brain | NPU + LLM + ASR + TTS | StackFlow |
 | **AtomS3R-CAM** | Living room | Ambient AI presence | Camera + Mic + Speaker + IMU | Custom PlatformIO |
 | **Voice PE** | Office/Kitchen | HA voice satellite | Mic + Speaker + LED ring | HA Native |
 | **Status Puck** | Desk | Glanceable control surface | Display + Rotary + Touch + LEDs | Custom PlatformIO |
@@ -229,6 +230,26 @@ Interact with Claude Code through multiple physical interfaces (voice, text, vis
 | Google/Alexa | Various | Secondary voice | Voice | Native |
 
 ### Device Specifications
+
+#### M5Stack Module-LLM (AX630C) - Edge AI Brain
+- **SoC:** AX630C with 3.2 TOPS (INT8) / 12.8 TOPS (INT4) NPU
+- **Memory:** 4GB LPDDR4 (1GB user, 3GB NPU-dedicated)
+- **Storage:** 32GB eMMC
+- **Power:** ~1.5W operating
+- **Price:** $49.90
+- **Built-in AI Models:**
+  - **KWS:** Wake word detection
+  - **ASR:** Whisper (tiny/base) for speech-to-text
+  - **LLM:** Qwen2.5-0.5B/1.5B, Llama-3.2-1B, DeepSeek-R1-distill
+  - **TTS:** MeloTTS for text-to-speech
+  - **Vision:** YOLO11, InternVL2, CLIP
+- **Framework:** StackFlow (Arduino/UiFlow compatible)
+- **Reference:** https://docs.m5stack.com/en/module/Module-LLM
+
+**Use with AtomS3R:** Module-LLM provides the AI brain while AtomS3R provides camera, mic, and speaker. Combined, they create a fully offline ambient AI device capable of:
+- Local wake word → Whisper STT → LLM response → TTS output
+- Visual recognition without cloud dependency
+- ~2W total power consumption
 
 #### M5Stack AtomS3R-CAM AI Chatbot Kit
 - **Processor:** ESP32-S3 @ 240MHz
@@ -262,6 +283,78 @@ Interact with Claude Code through multiple physical interfaces (voice, text, vis
 - **LED ring:** Visual feedback
 - **Integration:** Native Assist pipeline
 - **Reference:** https://www.home-assistant.io/voice-pe/
+
+---
+
+## Edge vs Cloud AI Strategy
+
+The Module-LLM enables a **hybrid edge/cloud architecture** where simple queries stay local and complex tasks go to Claude.
+
+### Processing Tiers
+
+| Tier | Processor | Latency | Use Cases |
+|------|-----------|---------|-----------|
+| **Edge (Module-LLM)** | Qwen2.5-1.5B | <500ms | Wake word, simple Q&A, status queries, TTS |
+| **Local (Ollama)** | Llama 3.2 7B | 1-3s | Complex reasoning, code review |
+| **Cloud (Claude)** | Claude Opus/Sonnet | 2-5s | Code generation, multi-file edits, planning |
+
+### Query Routing Logic
+
+```
+User speaks → Module-LLM (wake word + Whisper STT)
+    ↓
+"Hey Claude, what time is it?"
+    ↓
+Module-LLM Qwen: Simple query → Local response → TTS
+    (No network needed, <1s total)
+
+"Hey Claude, fix the auth bug in login.py"
+    ↓
+Module-LLM: Complex query → MQTT → claudecodeui → Claude API
+    (Cloud processing, 3-5s total)
+```
+
+### Benefits
+
+- **Privacy:** Voice never leaves device for simple queries
+- **Speed:** Sub-second response for common questions
+- **Reliability:** Works during internet outages
+- **Cost:** Reduces Claude API calls by ~60% (estimated)
+
+### Module-LLM + AtomS3R Stack
+
+```
+┌─────────────────────────────────────────┐
+│           AtomS3R-CAM                   │
+│  ┌─────────┐ ┌─────────┐ ┌──────────┐ │
+│  │ Camera  │ │   Mic   │ │ Speaker  │ │
+│  │ GC0308  │ │ MSM381A │ │  ES8311  │ │
+│  └────┬────┘ └────┬────┘ └────┬─────┘ │
+│       │          │           │        │
+│       └──────────┼───────────┘        │
+│                  │ I2S/I2C            │
+│       ┌──────────▼───────────┐        │
+│       │      ESP32-S3        │        │
+│       │   (coordinator)      │        │
+│       └──────────┬───────────┘        │
+└──────────────────┼────────────────────┘
+                   │ UART/SPI
+┌──────────────────▼────────────────────┐
+│           Module-LLM                   │
+│  ┌─────────────────────────────────┐  │
+│  │         AX630C SoC              │  │
+│  │  ┌─────┐ ┌─────┐ ┌─────┐       │  │
+│  │  │ KWS │ │ ASR │ │ LLM │       │  │
+│  │  │     │ │Whisper│Qwen │       │  │
+│  │  └─────┘ └─────┘ └─────┘       │  │
+│  │  ┌─────┐ ┌─────┐ ┌─────┐       │  │
+│  │  │ TTS │ │Vision│ │ NPU │       │  │
+│  │  │Melo │ │YOLO │ │3.2T │       │  │
+│  │  └─────┘ └─────┘ └─────┘       │  │
+│  └─────────────────────────────────┘  │
+│           ~1.5W total                  │
+└────────────────────────────────────────┘
+```
 
 ---
 
