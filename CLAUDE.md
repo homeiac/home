@@ -98,14 +98,21 @@ Homelab infrastructure management repository following Infrastructure as Code pr
 ## Key Commands
 
 ### Python Development (from `proxmox/homelab/`)
-- **Run tests**: `poetry run pytest tests/`
+- **Run all tests**: `poetry run pytest tests/`
+- **Run single test**: `poetry run pytest tests/test_foo.py::test_bar -v`
 - **Type checking**: `poetry run mypy src/`
 - **Formatting**: `poetry run black src/ && poetry run isort src/`
+- **Linting**: `poetry run flake8 src/`
 - **Documentation**: `make -C docs html`
+
+### CLI Tools (from `proxmox/homelab/`)
+- **homelab**: General infrastructure management (`poetry run homelab --help`)
+- **pbs**: Proxmox Backup Server operations (`poetry run pbs --help`)
+- **crucible**: Storage integration CLI (`poetry run crucible --help`)
 
 ### SSH Access
 - **Proxmox Hosts**: `ssh root@<hostname>.maas`
-- **K3s VMs**: `ssh ubuntu@k3s-vm-<hostname>`
+- **K3s VMs**: Use `scripts/k3s/exec-*.sh` (see SSH Rules above - direct SSH fails)
 
 ### Kubernetes/GitOps
 - **Cluster Access**: `export KUBECONFIG=~/kubeconfig`
@@ -234,8 +241,10 @@ ls /sys/kernel/iommu_groups/ | wc -l  # If 0 → VT-d disabled in BIOS
 - VT-x (CPU virt) ≠ VT-d (I/O virt) - VMs work with VT-x only, passthrough needs VT-d
 - Reference: `proxmox/guides/nvidia-RTX-3070-k3s-PCI-passthrough.md`
 
-## Notes
-- GPU-accelerated AI workloads (RTX 3070 passthrough)
-- All infrastructure changes through GitOps when possible
-- Python code follows modern practices with Poetry and pytest
-- Follow AGENTS.md guidelines for AI agent management
+## Proxmox Host Inventory
+| Hostname | Role | Key Hardware |
+|----------|------|--------------|
+| still-fawn.maas | K3s VM host | RTX 3070 GPU |
+| pumped-piglet.maas | K3s VM host | - |
+| chief-horse.maas | HAOS host (VMID 116) | - |
+| fun-bedbug.maas | LXC host | Coral TPU, Frigate LXC 113 |

@@ -6,3 +6,4 @@ resources:
   - helmrelease.yaml
   - secret.yaml
   - ingressroutetcp.yaml
+  - backup-cronjob.yaml
