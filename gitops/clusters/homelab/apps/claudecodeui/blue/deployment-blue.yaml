@@ -17,6 +17,25 @@ spec:
     spec:
       imagePullSecrets:
         - name: ghcr-credentials
+      initContainers:
+        # Copy auth.db from green deployment's container image if blue PVC is empty
+        # This seeds the blue deployment with user registrations
+        - name: init-auth-db
+          image: ghcr.io/homeiac/claudecodeui:1.13.0
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -s /data/auth.db ]; then
+                echo "Copying auth.db from image to PVC..."
+                cp /app/server/database/auth.db /data/auth.db 2>/dev/null || echo "No source auth.db"
+                chmod 644 /data/auth.db 2>/dev/null || true
+              else
+                echo "auth.db already exists ($(stat -c%s /data/auth.db) bytes)"
+              fi
+          volumeMounts:
+            - name: claude-data
+              mountPath: /data
       containers:
         - name: claudecodeui
           image: ghcr.io/homeiac/claudecodeui:1.13.0
