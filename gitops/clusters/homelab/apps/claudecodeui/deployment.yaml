@@ -17,11 +17,8 @@ spec:
     spec:
       containers:
         - name: claudecodeui
-          # Build locally: docker build -t claudecodeui:latest .
-          # Then: docker tag claudecodeui:latest localhost:5000/claudecodeui:latest
-          # Or use: ghcr.io/homeiac/claudecodeui:latest after CI builds
-          image: ghcr.io/homeiac/claudecodeui:latest
-          imagePullPolicy: Always
+          image: ghcr.io/homeiac/claudecodeui:76d5818
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
           env:
