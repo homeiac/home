@@ -26,14 +26,19 @@ echo "========================================="
 echo "Remote: $REMOTE_NAME:$BACKUP_FOLDER"
 echo ""
 
-# Check rclone
-if ! command -v rclone &>/dev/null; then
-    echo "ERROR: rclone not installed. Run setup-rclone-gdrive.sh first."
-    exit 1
+# Check rclone in PATH or common locations
+RCLONE="${RCLONE:-rclone}"
+if ! command -v "$RCLONE" &>/dev/null; then
+    if [ -x "$HOME/.local/bin/rclone" ]; then
+        RCLONE="$HOME/.local/bin/rclone"
+    else
+        echo "ERROR: rclone not installed. Run install-rclone.sh first."
+        exit 1
+    fi
 fi
 
 # Check rclone remote
-if ! rclone listremotes 2>/dev/null | grep -q "^${REMOTE_NAME}:$"; then
+if ! $RCLONE listremotes 2>/dev/null | grep -q "^${REMOTE_NAME}:$"; then
     echo "ERROR: rclone remote '$REMOTE_NAME' not found."
     echo "Run setup-rclone-gdrive.sh to configure Google Drive."
     exit 1
@@ -42,30 +47,46 @@ fi
 # Create local temp directory
 mkdir -p "$LOCAL_BACKUP_DIR"
 
-# Find the pod that has the backup PVC mounted
-echo "Finding PostgreSQL backup pod..."
-BACKUP_POD=$($KUBECTL get pods -n "$NAMESPACE" -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep postgres || true)
+# The backup PVC is not mounted on the main postgres pod
+# Create a helper pod to access the PVC
+echo "Creating helper pod to access backup PVC..."
 
-if [ -z "$BACKUP_POD" ]; then
-    echo "ERROR: No PostgreSQL pod found in namespace $NAMESPACE"
-    exit 1
-fi
-echo "Using pod: $BACKUP_POD"
+HELPER_POD="backup-helper-$$"
 
-# Copy backups from PVC to local temp dir
-echo ""
-echo "Copying backups from PVC..."
+# Create helper pod
+$KUBECTL apply -n "$NAMESPACE" -f - << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $HELPER_POD
+spec:
+  containers:
+  - name: helper
+    image: busybox
+    command: ["sleep", "300"]
+    volumeMounts:
+    - name: backup
+      mountPath: /backup
+  volumes:
+  - name: backup
+    persistentVolumeClaim:
+      claimName: postgres-backup
+  restartPolicy: Never
+EOF
 
-# First, check what backups exist by running ls in the pod
-# The backup cronjob creates files at /backup/
-BACKUP_FILES=$($KUBECTL exec -n "$NAMESPACE" "$BACKUP_POD" -- ls -1 /backup/ 2>/dev/null | grep "pg_dumpall" || true)
+# Wait for pod to be ready
+echo "Waiting for helper pod..."
+$KUBECTL wait --for=condition=Ready pod/$HELPER_POD -n "$NAMESPACE" --timeout=60s
+
+# List backups
+BACKUP_FILES=$($KUBECTL exec -n "$NAMESPACE" $HELPER_POD -- ls -1 /backup/ 2>/dev/null | grep "pg_dumpall" || true)
 
 if [ -z "$BACKUP_FILES" ]; then
-    echo "No backup files found in /backup/"
-    echo "The backup CronJob may not have run yet."
+    echo "No backup files found in PVC"
+    $KUBECTL delete pod $HELPER_POD -n "$NAMESPACE" --ignore-not-found
     echo ""
     echo "To run backup manually:"
-    echo "  kubectl create job --from=cronjob/postgres-backup postgres-backup-manual -n database"
+    echo "  $KUBECTL create job --from=cronjob/postgres-backup postgres-backup-manual -n database"
     exit 0
 fi
 
@@ -73,13 +94,17 @@ echo "Found backups:"
 echo "$BACKUP_FILES"
 echo ""
 
-# Copy each backup file
+# Copy each backup file using kubectl cp
 for file in $BACKUP_FILES; do
     echo "Copying $file..."
-    $KUBECTL cp "$NAMESPACE/$BACKUP_POD:/backup/$file" "$LOCAL_BACKUP_DIR/$file" 2>/dev/null || {
+    $KUBECTL cp "$NAMESPACE/$HELPER_POD:/backup/$file" "$LOCAL_BACKUP_DIR/$file" || {
         echo "WARNING: Failed to copy $file"
     }
 done
+
+# Cleanup helper pod
+echo "Cleaning up helper pod..."
+$KUBECTL delete pod $HELPER_POD -n "$NAMESPACE" --ignore-not-found
 
 # Verify local copies
 echo ""
@@ -89,7 +114,7 @@ ls -lh "$LOCAL_BACKUP_DIR"/ 2>/dev/null || echo "No files copied"
 # Sync to Google Drive
 echo ""
 echo "Syncing to Google Drive..."
-rclone sync "$LOCAL_BACKUP_DIR/" "$REMOTE_NAME:$BACKUP_FOLDER/" \
+$RCLONE sync "$LOCAL_BACKUP_DIR/" "$REMOTE_NAME:$BACKUP_FOLDER/" \
     --progress \
     --stats-one-line \
     -v
@@ -97,12 +122,12 @@ rclone sync "$LOCAL_BACKUP_DIR/" "$REMOTE_NAME:$BACKUP_FOLDER/" \
 # Verify remote
 echo ""
 echo "Google Drive contents:"
-rclone ls "$REMOTE_NAME:$BACKUP_FOLDER/" 2>/dev/null || echo "Empty or error"
+$RCLONE ls "$REMOTE_NAME:$BACKUP_FOLDER/" 2>/dev/null || echo "Empty or error"
 
 # Show Google Drive space
 echo ""
 echo "Google Drive usage:"
-rclone about "$REMOTE_NAME:" 2>/dev/null | head -5 || echo "Could not retrieve"
+$RCLONE about "$REMOTE_NAME:" 2>/dev/null | head -5 || echo "Could not retrieve"
 
 # Cleanup local temp
 rm -rf "$LOCAL_BACKUP_DIR"
