@@ -10,6 +10,9 @@ spec:
     name: bitnami-postgresql
     namespace: database
   values:
+    global:
+      security:
+        allowInsecureImages: true
     image:
       registry: docker.io
       repository: timescale/timescaledb-ha
