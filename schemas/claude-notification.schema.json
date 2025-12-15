@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://homelab/schemas/claude-notification.schema.json",
+  "title": "Claude Code Notification",
+  "description": "High-priority notification published to claude/{server}/notification",
+  "type": "object",
+  "required": ["priority", "title", "message"],
+  "properties": {
+    "priority": {
+      "type": "string",
+      "enum": ["critical", "warning", "info"],
+      "description": "Notification priority level"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Short notification title"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Detailed notification message"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": ["dismiss"],
+      "description": "Available actions user can take"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the notification was generated"
+    },
+    "source": {
+      "type": "string",
+      "description": "What generated this notification (task_id, service name, etc.)"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "priority": "critical",
+      "title": "K8s Pod CrashLoopBackOff",
+      "message": "frigate-7f8899f485-jvqqv restarting every 30s",
+      "actions": ["view_logs", "restart_pod", "dismiss"],
+      "timestamp": "2025-12-14T10:30:00Z",
+      "source": "kubernetes-monitor"
+    },
+    {
+      "priority": "warning",
+      "title": "Uncommitted changes",
+      "message": "3 files modified in home repo for 2 hours",
+      "actions": ["commit", "stash", "dismiss"]
+    },
+    {
+      "priority": "info",
+      "title": "Task completed",
+      "message": "pytest tests/ finished successfully",
+      "actions": ["dismiss"],
+      "source": "task_1234"
+    }
+  ]
+}

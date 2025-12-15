@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://homelab/schemas/claude-status.schema.json",
+  "title": "Claude Code Server Status",
+  "description": "Status message published to claude/{server}/status",
+  "type": "object",
+  "required": ["server", "online", "sessions", "git_dirty", "last_activity"],
+  "properties": {
+    "server": {
+      "type": "string",
+      "enum": ["home", "work"],
+      "description": "Server identifier"
+    },
+    "online": {
+      "type": "boolean",
+      "description": "Whether the server is currently online"
+    },
+    "sessions": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of active Claude Code sessions"
+    },
+    "git_dirty": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of repositories with uncommitted changes"
+    },
+    "active_task": {
+      "type": ["string", "null"],
+      "description": "Description of currently running task, or null if idle"
+    },
+    "last_activity": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last activity"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "server": "home",
+      "online": true,
+      "sessions": 2,
+      "git_dirty": 1,
+      "active_task": "Running pytest tests/",
+      "last_activity": "2025-12-14T10:30:00Z"
+    },
+    {
+      "server": "work",
+      "online": false,
+      "sessions": 0,
+      "git_dirty": 0,
+      "active_task": null,
+      "last_activity": "2025-12-13T18:00:00Z"
+    }
+  ]
+}

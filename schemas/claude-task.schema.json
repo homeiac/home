@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://homelab/schemas/claude-task.schema.json",
+  "title": "Claude Code Task Event",
+  "description": "Task event published to claude/{server}/task/{task_id}",
+  "type": "object",
+  "required": ["event", "task_id", "description"],
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": ["started", "completed", "failed", "waiting"],
+      "description": "Task lifecycle event"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the task"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable task description"
+    },
+    "duration_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Task duration in milliseconds (only on completed/failed)"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "Error message (only on failed event)"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "event": { "const": "completed" } }
+      },
+      "then": {
+        "required": ["duration_ms"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "event": { "const": "failed" } }
+      },
+      "then": {
+        "required": ["error"]
+      }
+    }
+  ],
+  "examples": [
+    {
+      "event": "started",
+      "task_id": "task_1234",
+      "description": "Running pytest tests/"
+    },
+    {
+      "event": "completed",
+      "task_id": "task_1234",
+      "description": "pytest tests/ - 42 passed",
+      "duration_ms": 45000
+    },
+    {
+      "event": "failed",
+      "task_id": "task_5678",
+      "description": "kubectl apply -f deployment.yaml",
+      "duration_ms": 30000,
+      "error": "Error: ImagePullBackOff - registry.homelab/app:latest"
+    }
+  ]
+}
