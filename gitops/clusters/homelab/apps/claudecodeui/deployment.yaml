@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claudecodeui
+  namespace: claudecodeui
+  labels:
+    app: claudecodeui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claudecodeui
+  template:
+    metadata:
+      labels:
+        app: claudecodeui
+    spec:
+      containers:
+        - name: claudecodeui
+          # Build locally: docker build -t claudecodeui:latest .
+          # Then: docker tag claudecodeui:latest localhost:5000/claudecodeui:latest
+          # Or use: ghcr.io/homeiac/claudecodeui:latest after CI builds
+          image: ghcr.io/homeiac/claudecodeui:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            - name: NODE_ENV
+              value: "production"
+            # Claude CLI will look for credentials in ~/.claude
+            - name: HOME
+              value: "/home/claude"
+          volumeMounts:
+            # Persist Claude credentials and settings
+            - name: claude-data
+              mountPath: /home/claude/.claude
+            # Persist projects
+            - name: claude-projects
+              mountPath: /home/claude/projects
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+      volumes:
+        - name: claude-data
+          persistentVolumeClaim:
+            claimName: claude-data
+        - name: claude-projects
+          persistentVolumeClaim:
+            claimName: claude-projects

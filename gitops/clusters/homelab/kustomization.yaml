@@ -12,4 +12,5 @@ resources:
   - apps/stable-diffusion
   - apps/samba
   - apps/frigate                        # Coral TPU + NVIDIA GPU (secret: frigate-credentials)
+  - apps/claudecodeui                    # Claude Code web UI (ghcr.io/homeiac/claudecodeui)
 
