@@ -166,7 +166,7 @@ Located at repository root: `/home/claude/projects/home/.sops.yaml`
 creation_rules:
   - path_regex: .*.yaml
     encrypted_regex: ^(data|stringData)$
-    age: age1234567890abcdefghijklmnopqrstuvwxyz
+    age: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
 ```
 
 This tells SOPS:
@@ -327,6 +327,25 @@ git commit -m "feat: add encrypted secret"
 # 5. Delete example (optional)
 git rm secret.yaml.example
 ```
+
+## Current Encrypted Secrets
+
+| Secret | Namespace | Purpose |
+|--------|-----------|---------|
+| `postgres-credentials` | database | PostgreSQL admin password |
+| `rclone-gdrive-config` | database | Google Drive OAuth token for backups |
+| `mqtt-credentials` | claudecodeui | MQTT broker credentials |
+
+## Key Backup Locations
+
+The age private key should be backed up to multiple locations:
+
+- [x] Proxmox host: `chief-horse.maas:/root/.sops-age-backup/`
+- [x] Proxmox host: `still-fawn.maas:/root/.sops-age-backup/`
+- [ ] Google Drive (encrypted)
+- [ ] Password manager
+
+**Current Public Key:** `age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna`
 
 ## References
 

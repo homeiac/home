@@ -4,6 +4,15 @@
 
 This runbook documents recovery procedures for the homelab infrastructure using **PBS-native** (Proxmox Backup Server) functionality.
 
+### Backup Schedule
+
+| Time | Component | Method |
+|------|-----------|--------|
+| 2:00 AM | PostgreSQL dump | K8s CronJob (`postgres-backup`) |
+| 2:30 AM | VM/LXC backups | PBS scheduled job |
+| 3:00 AM | GDrive sync | K8s CronJob (`postgres-gdrive-sync`) |
+| 10:30 PM | VM/LXC backups | PBS scheduled job |
+
 ### Backup Tiers
 
 | Tier | Method | RPO | Purpose |
@@ -11,7 +20,7 @@ This runbook documents recovery procedures for the homelab infrastructure using 
 | 1 | ZFS Snapshots | 1 hour | Quick recovery from deletion/corruption |
 | 2 | PBS + External HDD | 24 hours | Survive host failure (PBS sync job) |
 | 3 | PostgreSQL dumps | 24 hours | Fast database recovery |
-| 4 | Google Drive | 24 hours | Survive site disaster |
+| 4 | Google Drive | 24 hours | Survive site disaster (automated via K8s CronJob) |
 
 ### What's Backed Up
 
@@ -436,6 +445,25 @@ rclone sync /path/to/backups gdrive-backup:homelab-backup/ -vv
 
 ---
 
+## GitOps Manifests
+
+PostgreSQL backup automation is deployed via Flux GitOps:
+
+| File | Purpose |
+|------|---------|
+| `gitops/.../postgres/backup-cronjob.yaml` | Daily pg_dumpall at 2 AM |
+| `gitops/.../postgres/gdrive-sync-cronjob.yaml` | Daily GDrive sync at 3 AM |
+| `gitops/.../postgres/rclone-secret.yaml` | SOPS-encrypted Google Drive OAuth token |
+
+To manually trigger:
+```bash
+# Trigger backup
+kubectl create job --from=cronjob/postgres-backup postgres-backup-manual -n database
+
+# Trigger GDrive sync
+kubectl create job --from=cronjob/postgres-gdrive-sync gdrive-sync-manual -n database
+```
+
 ## Setup Scripts
 
 Scripts to configure the backup infrastructure:
@@ -446,8 +474,11 @@ Scripts to configure the backup infrastructure:
 | `scripts/backup/setup-pbs-sync-job.sh` | Create PBS sync job for replication |
 | `scripts/backup/setup-pbs-verify-job.sh` | Create PBS verify job for integrity |
 | `scripts/backup/setup-zfs-snapshots.sh` | Configure sanoid for ZFS snapshots |
-| `scripts/backup/setup-rclone-gdrive.sh` | Configure rclone for Google Drive |
-| `scripts/backup/sync-postgres-to-gdrive.sh` | Sync PostgreSQL backups to GDrive |
+| `scripts/backup/setup-rclone-gdrive.sh` | Configure rclone for Google Drive (headless OAuth) |
+| `scripts/backup/install-rclone.sh` | Install rclone locally (no sudo required) |
+| `scripts/backup/sync-postgres-to-gdrive.sh` | Manual sync (CronJob is preferred) |
+| `scripts/backup/test-backup-strategy.sh` | Comprehensive backup test suite |
+| `scripts/backup/test-postgres-restore.sh` | Test restore from GDrive or local PVC |
 
 **Initial Setup Order:**
 
@@ -455,7 +486,8 @@ Scripts to configure the backup infrastructure:
 2. `setup-pbs-sync-job.sh` - Create sync job after datastore exists
 3. `setup-pbs-verify-job.sh` - Create verify jobs for integrity
 4. `setup-zfs-snapshots.sh` - Configure sanoid on each host
-5. `setup-rclone-gdrive.sh` - Configure Google Drive (needs OAuth)
+5. `install-rclone.sh` - Install rclone (if not present)
+6. `setup-rclone-gdrive.sh` - Configure Google Drive (headless OAuth)
 
 ---
 
