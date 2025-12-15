@@ -5,15 +5,10 @@ metadata:
   namespace: database
 spec:
   interval: 30m
-  chart:
-    spec:
-      chart: postgresql
-      version: "16.x"
-      sourceRef:
-        kind: HelmRepository
-        name: bitnami
-        namespace: database
-      interval: 12h
+  chartRef:
+    kind: OCIRepository
+    name: bitnami-postgresql
+    namespace: database
   values:
     image:
       registry: docker.io
