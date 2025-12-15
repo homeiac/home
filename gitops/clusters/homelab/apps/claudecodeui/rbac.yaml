@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: claudecodeui-flux-secrets
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: claudecodeui-flux-secrets
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: claudecodeui
+roleRef:
+  kind: ClusterRole
+  name: claudecodeui-flux-secrets
+  apiGroup: rbac.authorization.k8s.io
