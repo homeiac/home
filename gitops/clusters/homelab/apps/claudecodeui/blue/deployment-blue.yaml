@@ -30,6 +30,8 @@ spec:
               value: "production"
             - name: HOME
               value: "/home/claude"
+            - name: DATABASE_PATH
+              value: "/home/claude/.claude/auth.db"
             # MQTT Bridge Configuration
             - name: MQTT_ENABLED
               value: "true"
