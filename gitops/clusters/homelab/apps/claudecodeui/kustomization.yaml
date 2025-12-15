@@ -7,3 +7,8 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  # Blue deployment (v1.13.0 with MQTT)
+  - blue/pvc-blue.yaml
+  - blue/mqtt-secret.yaml
+  - blue/deployment-blue.yaml
+  - blue/service-blue.yaml
