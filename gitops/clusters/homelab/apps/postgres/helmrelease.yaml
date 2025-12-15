@@ -26,6 +26,12 @@ spec:
       persistence:
         enabled: true
         size: 10Gi
+      extraVolumes:
+        - name: run
+          emptyDir: {}
+      extraVolumeMounts:
+        - name: run
+          mountPath: /var/run/postgresql
       resources:
         requests:
           memory: 512Mi
@@ -49,4 +55,4 @@ spec:
             CREATE EXTENSION IF NOT EXISTS btree_gin;
             CREATE EXTENSION IF NOT EXISTS btree_gist;
     metrics:
-      enabled: true
+      enabled: false
