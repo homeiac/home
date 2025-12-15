@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-gdrive-sync
+  namespace: database
+spec:
+  schedule: "0 3 * * *"  # 3 AM daily (1 hour after pg_dump at 2 AM)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          containers:
+          - name: sync
+            image: rclone/rclone:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting PostgreSQL backup sync to Google Drive..."
+              echo "Backup files in PVC:"
+              ls -la /backup/
+              echo ""
+              echo "Syncing to Google Drive..."
+              rclone sync /backup/ gdrive-backup:homelab-backup/postgres/ \
+                --config /config/rclone/rclone.conf \
+                --progress \
+                --stats-one-line \
+                -v
+              echo ""
+              echo "Google Drive contents:"
+              rclone ls gdrive-backup:homelab-backup/postgres/ --config /config/rclone/rclone.conf
+              echo ""
+              echo "Sync complete!"
+            volumeMounts:
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+            - name: rclone-config
+              mountPath: /config/rclone
+              readOnly: true
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+          volumes:
+          - name: backup
+            persistentVolumeClaim:
+              claimName: postgres-backup
+          - name: rclone-config
+            secret:
+              secretName: rclone-gdrive-config
+          restartPolicy: OnFailure

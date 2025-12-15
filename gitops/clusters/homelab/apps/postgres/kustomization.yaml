@@ -7,3 +7,5 @@ resources:
   - secret.yaml
   - ingressroutetcp.yaml
   - backup-cronjob.yaml
+  - rclone-secret.yaml
+  - gdrive-sync-cronjob.yaml
