@@ -16,7 +16,7 @@ spec:
     image:
       registry: docker.io
       repository: timescale/timescaledb-ha
-      tag: pg16-latest
+      tag: pg16-all
     auth:
       existingSecret: postgres-credentials
       secretKeys:
