@@ -15,9 +15,11 @@ spec:
       labels:
         app: claudecodeui
     spec:
+      imagePullSecrets:
+        - name: ghcr-credentials
       containers:
         - name: claudecodeui
-          image: ghcr.io/homeiac/claudecodeui:76d5818
+          image: ghcr.io/homeiac/claudecodeui:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
