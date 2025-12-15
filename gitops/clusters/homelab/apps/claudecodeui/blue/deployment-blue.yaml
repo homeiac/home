@@ -18,18 +18,25 @@ spec:
       imagePullSecrets:
         - name: ghcr-credentials
       initContainers:
-        # Copy auth.db from green deployment's container image if blue PVC is empty
-        # This seeds the blue deployment with user registrations
-        - name: init-auth-db
+        # Fix permissions on PVC data and copy auth.db if needed
+        # Runs as root to fix ownership, then main container runs as claude user
+        - name: init-permissions
           image: ghcr.io/homeiac/claudecodeui:1.15.0
+          securityContext:
+            runAsUser: 0
           command:
             - sh
             - -c
             - |
+              # Fix ownership of entire .claude directory to claude user (uid 1000)
+              echo "Fixing ownership of /data to claude user..."
+              chown -R 1000:1000 /data
+
+              # Copy auth.db if missing
               if [ ! -s /data/auth.db ]; then
                 echo "Copying auth.db from image to PVC..."
                 cp /app/server/database/auth.db /data/auth.db 2>/dev/null || echo "No source auth.db"
-                chmod 644 /data/auth.db 2>/dev/null || true
+                chown 1000:1000 /data/auth.db 2>/dev/null || true
               else
                 echo "auth.db already exists ($(stat -c%s /data/auth.db) bytes)"
               fi
