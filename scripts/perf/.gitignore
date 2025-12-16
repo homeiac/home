@@ -1,0 +1,4 @@
+# Runtime outputs - not source code
+reports/*.json
+reports/*.log
+flames/*.svg
