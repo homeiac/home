@@ -92,7 +92,7 @@ action:
             target:
               entity_id: light.home_assistant_voice_09f5a3_led_ring
 
-      # Approval requested - amber LED + store requestId + set helper
+      # Approval requested - amber LED + store requestId + voice prompt
       - conditions:
           - condition: trigger
             id: approval_request
@@ -118,6 +118,13 @@ action:
               - service: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.claude_awaiting_approval
+          # Voice prompt for approval
+          - service: tts.speak
+            target:
+              entity_id: tts.piper
+            data:
+              media_player_entity_id: media_player.home_assistant_voice_09f5a3_media_player
+              message: "Run {{ trigger.payload_json.input.command | default('this command') | truncate(50) }}?"
 
       # Dial clockwise - approve
       - conditions:
