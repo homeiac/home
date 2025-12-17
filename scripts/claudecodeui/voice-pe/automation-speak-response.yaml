@@ -1,8 +1,8 @@
-# Speak Claude responses via Google Speaker AND Voice PE
+# Speak Claude responses via Voice PE only
 # Listens to claude/home/response and announces via TTS
 
 alias: Claude Speak Response
-description: Announces Claude Code responses via Google speaker and Voice PE
+description: Announces Claude Code responses via Voice PE
 mode: queued
 max: 10
 
@@ -12,12 +12,10 @@ trigger:
     id: response_received
 
 condition:
-  # Trigger on simplified 'answer' messages (preferred) or result messages
   - condition: template
     value_template: "{{ '\"type\":\"answer\"' in trigger.payload or '\"type\":\"result\"' in trigger.payload }}"
 
 action:
-  # Extract the result text first
   - variables:
       result_text: >-
         {% set p = trigger.payload | from_json %}
@@ -32,18 +30,8 @@ action:
         {% else %}
           Request completed
         {% endif %}
-  # Run both in parallel so they don't block each other
-  - parallel:
-      # Google speaker (fast)
-      - service: tts.speak
-        target:
-          entity_id: tts.piper
-        data:
-          media_player_entity_id: media_player.family_room_wifi
-          message: "{{ result_text }}"
-      # Voice PE (slow but local)
-      - service: assist_satellite.announce
-        target:
-          entity_id: assist_satellite.home_assistant_voice_09f5a3_assist_satellite
-        data:
-          message: "{{ result_text }}"
+  - service: assist_satellite.announce
+    target:
+      entity_id: assist_satellite.home_assistant_voice_09f5a3_assist_satellite
+    data:
+      message: "{{ result_text }}"
