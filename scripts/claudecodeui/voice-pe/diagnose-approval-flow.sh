@@ -76,7 +76,7 @@ if [[ -z "$CONFIG" || "$CONFIG" == "null" ]]; then
     echo "   ✗ Could not fetch automation config"
 else
     # Check if approval_request trigger exists
-    TRIGGERS=$(echo "$CONFIG" | jq -r '.trigger[]?.id // empty' 2>/dev/null)
+    TRIGGERS=$(echo "$CONFIG" | jq -r '.triggers[]?.id // empty' 2>/dev/null)
     echo "   Available trigger IDs:"
     echo "$TRIGGERS" | sed 's/^/      /'
 
