@@ -1,0 +1,236 @@
+alias: Claude Code LED Feedback V2
+description: Voice PE LED feedback for Claude Code integration with ESPHome effects and approval controls
+mode: restart
+trigger:
+  # Claude starts processing a command
+  - platform: mqtt
+    topic: claude/command
+    id: command_received
+
+  # Claude completes response
+  - platform: mqtt
+    topic: claude/home/response
+    id: response_complete
+
+  # Claude requests approval
+  - platform: mqtt
+    topic: claude/approval-request
+    id: approval_request
+
+  # User responds to approval request
+  - platform: mqtt
+    topic: claude/approval-response
+    id: approval_response
+
+  # Dial rotation events (ESPHome)
+  - platform: event
+    event_type: esphome.voice_pe_dial
+    id: dial_event
+
+  # Button press event (ESPHome)
+  - platform: event
+    event_type: esphome.voice_pe_button
+    id: button_event
+
+condition: []
+
+action:
+  - choose:
+      # Command received - start thinking effect
+      - conditions:
+          - condition: trigger
+            id: command_received
+        sequence:
+          - choose:
+              # Try ESPHome thinking effect first
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ has_value('light.home_assistant_voice_09f5a3_led_ring') and
+                         state_attr('light.home_assistant_voice_09f5a3_led_ring', 'effect_list') is not none and
+                         'Thinking' in state_attr('light.home_assistant_voice_09f5a3_led_ring', 'effect_list') }}
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: light.home_assistant_voice_09f5a3_led_ring
+                    data:
+                      effect: Thinking
+            # Fallback to cyan RGB
+            default:
+              - service: light.turn_on
+                target:
+                  entity_id: light.home_assistant_voice_09f5a3_led_ring
+                data:
+                  rgb_color: [0, 255, 255]
+                  brightness: 128
+
+      # Response complete - turn off LED
+      - conditions:
+          - condition: trigger
+            id: response_complete
+          - condition: template
+            value_template: "{{ trigger.payload_json.type == 'complete' }}"
+        sequence:
+          - choose:
+              # Try to stop effect if supported
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ has_value('light.home_assistant_voice_09f5a3_led_ring') and
+                         state_attr('light.home_assistant_voice_09f5a3_led_ring', 'effect_list') is not none }}
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: light.home_assistant_voice_09f5a3_led_ring
+                    data:
+                      effect: "None"
+                  - delay:
+                      milliseconds: 100
+            # Turn off regardless
+            default: []
+          - service: light.turn_off
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+
+      # Approval requested - amber LED + store requestId + set helper
+      - conditions:
+          - condition: trigger
+            id: approval_request
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              rgb_color: [255, 191, 0]
+              brightness: 255
+              effect: "None"
+          # Store the requestId for later response
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.claude_approval_request_id
+            data:
+              value: "{{ trigger.payload_json.requestId }}"
+          # Set helper if it exists
+          - if:
+              - condition: template
+                value_template: "{{ states('input_boolean.claude_awaiting_approval') != 'unavailable' }}"
+            then:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.claude_awaiting_approval
+
+      # Dial clockwise - approve
+      - conditions:
+          - condition: trigger
+            id: dial_event
+          - condition: template
+            value_template: "{{ trigger.event.data.direction == 'clockwise' }}"
+          - condition: template
+            value_template: >
+              {{ states('input_boolean.claude_awaiting_approval') == 'unavailable' or
+                 is_state('input_boolean.claude_awaiting_approval', 'on') }}
+        sequence:
+          - service: mqtt.publish
+            data:
+              topic: claude/approval-response
+              payload: >
+                {{ {"requestId": states("input_text.claude_approval_request_id"), "approved": true, "source": "voice_pe_dial"} | to_json }}
+          # Turn off helper if it exists
+          - if:
+              - condition: template
+                value_template: "{{ states('input_boolean.claude_awaiting_approval') != 'unavailable' }}"
+            then:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.claude_awaiting_approval
+
+      # Dial anticlockwise - reject
+      - conditions:
+          - condition: trigger
+            id: dial_event
+          - condition: template
+            value_template: "{{ trigger.event.data.direction == 'anticlockwise' }}"
+          - condition: template
+            value_template: >
+              {{ states('input_boolean.claude_awaiting_approval') == 'unavailable' or
+                 is_state('input_boolean.claude_awaiting_approval', 'on') }}
+        sequence:
+          - service: mqtt.publish
+            data:
+              topic: claude/approval-response
+              payload: >
+                {{ {"requestId": states("input_text.claude_approval_request_id"), "approved": false, "source": "voice_pe_dial"} | to_json }}
+          # Turn off helper if it exists
+          - if:
+              - condition: template
+                value_template: "{{ states('input_boolean.claude_awaiting_approval') != 'unavailable' }}"
+            then:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.claude_awaiting_approval
+
+      # Button press - quick approve
+      - conditions:
+          - condition: trigger
+            id: button_event
+          - condition: template
+            value_template: >
+              {{ states('input_boolean.claude_awaiting_approval') == 'unavailable' or
+                 is_state('input_boolean.claude_awaiting_approval', 'on') }}
+        sequence:
+          - service: mqtt.publish
+            data:
+              topic: claude/approval-response
+              payload: >
+                {{ {"requestId": states("input_text.claude_approval_request_id"), "approved": true, "source": "voice_pe_button"} | to_json }}
+          # Turn off helper if it exists
+          - if:
+              - condition: template
+                value_template: "{{ states('input_boolean.claude_awaiting_approval') != 'unavailable' }}"
+            then:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.claude_awaiting_approval
+
+      # Approval response - approved (green flash)
+      - conditions:
+          - condition: trigger
+            id: approval_response
+          - condition: template
+            value_template: "{{ trigger.payload_json.approved == true }}"
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              rgb_color: [0, 255, 0]
+              brightness: 255
+              effect: "None"
+          - delay:
+              seconds: 2
+          - service: light.turn_off
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+
+      # Approval response - rejected (red flash)
+      - conditions:
+          - condition: trigger
+            id: approval_response
+          - condition: template
+            value_template: "{{ trigger.payload_json.approved == false }}"
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              rgb_color: [255, 0, 0]
+              brightness: 255
+              effect: "None"
+          - delay:
+              seconds: 2
+          - service: light.turn_off
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+
+    # Default - no action
+    default: []
