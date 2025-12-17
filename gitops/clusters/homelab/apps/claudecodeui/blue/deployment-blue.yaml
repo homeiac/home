@@ -21,7 +21,7 @@ spec:
         # Fix permissions on PVC data and copy auth.db if needed
         # Runs as root to fix ownership, then main container runs as claude user
         - name: init-permissions
-          image: ghcr.io/homeiac/claudecodeui:1.15.0
+          image: ghcr.io/homeiac/claudecodeui:main
           securityContext:
             runAsUser: 0
           command:
@@ -45,7 +45,7 @@ spec:
               mountPath: /data
       containers:
         - name: claudecodeui
-          image: ghcr.io/homeiac/claudecodeui:1.15.0
+          image: ghcr.io/homeiac/claudecodeui:main
           imagePullPolicy: Always
           ports:
             - containerPort: 3001
