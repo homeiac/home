@@ -1,6 +1,103 @@
 # Voice PE Claude Approval - Architecture
 
-*Updated: 2025-12-17*
+*Updated: 2025-12-17 - Post-Feasibility Testing*
+
+---
+
+## Feasibility Testing Results (2025-12-17)
+
+### ✅ VERIFIED WORKING
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **MQTT Pub/Sub** | ✅ | HA ↔ ClaudeCodeUI via `homeassistant.maas:1883` |
+| **Approval Request** | ✅ | ClaudeCodeUI publishes `claude/approval-request` |
+| **RequestId Storage** | ✅ | HA stores in `input_text.claude_approval_request_id` |
+| **Dial CW/CCW** | ✅ | Triggers approve/reject automation via events |
+| **MQTT Response** | ✅ | HA publishes `claude/approval-response` with matching requestId |
+| **LED Control** | ✅ | Orange (waiting), Green (approved), Red (rejected) |
+| **Voice TTS** | ✅ | Piper → Voice PE media player |
+| **Response Speak** | ✅ | Claude response → Voice PE (not Google) |
+
+### 🔧 ISSUES DISCOVERED & FIXED
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| **Duplicate approval requests** | Local Docker + K8s pod both subscribed | Message deduplication in `mqtt-bridge.js` |
+| **Missing voice prompt** | Disabled automation had TTS | Merged TTS into v2 automation |
+| **Google speaking responses** | `claude_speak_response` targeted both speakers | Removed Google target |
+| **RequestId mismatch** | Test script bug (missing `tail -1`) | Fixed test script |
+
+### 🏗️ ARCHITECTURAL LEARNINGS
+
+#### 1. Topic Isolation is Essential
+
+**Problem**: Local development container and K8s pod both subscribe to same MQTT topics → duplicate processing.
+
+**Solution**: Topic prefix isolation for non-prod environments.
+
+```
+Production:  claude/command, claude/home/response, claude/approval-*
+Test mode:   test/claude/command, test/claude/home/response, test/claude/approval-*
+```
+
+**Implementation**:
+```bash
+# ClaudeCodeUI run-local.sh
+docker run ... \
+  -e MQTT_COMMAND_TOPIC="${TOPIC_PREFIX}claude/command" \
+  -e MQTT_RESPONSE_TOPIC="${TOPIC_PREFIX}claude/home/response" \
+  ...
+
+# Test scripts
+./test-mqtt.sh --test  # Uses test/ prefix
+```
+
+#### 2. Message Deduplication Required
+
+MQTT can deliver duplicate messages. ClaudeCodeUI must deduplicate.
+
+```javascript
+// mqtt-bridge.js
+const recentMessages = new Map();
+const DEDUPE_WINDOW_MS = 5000;
+
+function isDuplicateMessage(payload) {
+  const key = `${payload.source || ''}-${payload.message || ''}`;
+  // Check and update map with 5s TTL
+}
+```
+
+#### 3. Single Instance or Topic Isolation
+
+**Constraint**: Only ONE instance of ClaudeCodeUI should subscribe to production topics at a time.
+
+**Enforcement Options**:
+- Stop local container before testing prod K8s
+- Use `--test` flag for local development
+- Future: MQTT shared subscriptions (not supported by HA broker)
+
+#### 4. RequestId Flow Verified
+
+```
+┌─────────────┐     claude/approval-request     ┌─────────────┐
+│ ClaudeCodeUI│────────────────────────────────►│     HA      │
+│             │     {requestId: "abc123",       │             │
+│             │      command: "kubectl..."}     │             │
+└─────────────┘                                 └──────┬──────┘
+                                                       │
+                                               Store requestId in
+                                               input_text entity
+                                                       │
+                                                       ▼
+┌─────────────┐     claude/approval-response    ┌─────────────┐
+│ ClaudeCodeUI│◄────────────────────────────────│     HA      │
+│             │     {requestId: "abc123",       │  (dial/btn) │
+│             │      approved: true}            │             │
+└─────────────┘                                 └─────────────┘
+```
+
+**Critical**: HA automation must extract `requestId` from the stored input_text entity, NOT from the trigger payload (which may be stale).
 
 ---
 
@@ -922,100 +1019,52 @@ scripts/claudecodeui/voice-pe/
 
 ## Implementation Phases
 
-### Phase 0: Feasibility Tests (Before Implementation)
+### Phase 0: Feasibility Tests ✅ COMPLETE
 
-Validate the existing infrastructure before building the state machine.
+**Status**: All core data paths verified working (2025-12-17).
 
-**Goal**: Prove the data path works end-to-end.
+**What We Tested:**
 
 ```
-┌──────────┐    ┌─────────┐    ┌─────────────┐    ┌────────────┐
-│ Voice PE │───►│   HA    │───►│ ClaudeCodeUI│───►│ Claude Code│
-│   STT    │    │  MQTT   │    │   Bridge    │    │   (ask)    │
-└──────────┘    └─────────┘    └─────────────┘    └────────────┘
-                                     │
-                                     ▼
-                              claude/response
-                              {type: "approval",
-                               command: "kubectl..."}
-                                     │
-                                     ▼
-                              ┌─────────────┐
-                              │ Feasibility │
-                              │ Test Script │
-                              │ (auto-yes)  │
-                              └─────────────┘
+Voice PE → HA → ClaudeCodeUI → Claude Code → Approval Request
+    │                                              │
+    │         ← claude/approval-request ←──────────┘
+    │
+    └──► HA stores requestId → Dial CW/CCW → MQTT Response
+                                              │
+                                              ▼
+                               ClaudeCodeUI receives approval
+                               Claude executes command
+                               Response speaks on Voice PE
 ```
 
-**Test Scripts:**
+**Test Scripts Created:**
 
 ```bash
 scripts/claudecodeui/voice-pe/
-├── 00-test-mqtt-flow.sh          # Verify MQTT pub/sub works
-├── 01-test-voice-to-mqtt.sh      # Voice PE → HA → MQTT
-├── 02-test-auto-approve.sh       # Auto-approve read-only commands
-└── 03-test-e2e-voice-approval.sh # Full voice → Claude → approval → response
+├── 00-test-mqtt-flow.sh          # ✅ Verify MQTT pub/sub
+├── clean-trace-test.sh           # ✅ Single command → single request verification
+├── diagnose-approval-flow.sh     # ✅ Trace requestId through system
+├── trace-approval-requests.sh    # ✅ Monitor approval-request topic
+│
+├── test-mqtt.sh (in claudecodeui repo)  # ✅ Full E2E test with --test flag
+└── run-local.sh (in claudecodeui repo)  # ✅ Local dev with --test flag
 ```
 
-**02-test-auto-approve.sh Logic:**
+**Key Verification Results:**
 
 ```bash
-# Subscribe to claude/response, auto-approve read-only commands
-mosquitto_sub -h homeassistant.maas -t "claude/response" | while read msg; do
-  type=$(echo "$msg" | jq -r '.type')
-  command=$(echo "$msg" | jq -r '.command // empty')
-  requestId=$(echo "$msg" | jq -r '.requestId')
+# ONE command produces ONE approval-request
+$ ./clean-trace-test.sh
+=== Approval-requests captured ===
+Count: 1
+98f6646f-6bc4-497d-ab18-92a788e68deb
 
-  if [[ "$type" == "approval" ]]; then
-    # Auto-approve read-only operations
-    if [[ "$command" =~ ^kubectl\ (get|describe|logs|top) ]] || \
-       [[ "$command" =~ ^(cat|ls|head|tail|grep|find|which|echo|date) ]]; then
-      echo "AUTO-APPROVE (read-only): $command"
-      mosquitto_pub -h homeassistant.maas -t "claude/approval-response" \
-        -m "{\"requestId\":\"$requestId\",\"type\":\"approved\"}"
-    else
-      echo "NEEDS MANUAL APPROVAL: $command"
-    fi
-  fi
-done
+# RequestId matches stored value
+$ ./diagnose-approval-flow.sh
+stored_request_id: "98f6646f-6bc4-497d-ab18-92a788e68deb"
+✓ RequestId matches!
 ```
-
-**Test Procedure:**
-
-```
-1. Start ClaudeCodeUI locally: ./scripts/run-local.sh
-2. Run auto-approve script: ./02-test-auto-approve.sh
-3. Voice: "Hey Nabu, ask Claude to get me the home cluster status"
-4. Verify:
-   - ClaudeCodeUI receives request
-   - Claude asks for approval (kubectl get nodes or similar)
-   - Auto-approve script approves it
-   - Claude executes and responds
-   - Voice PE speaks the response
-```
-
-**Read-Only Command Patterns (auto-approve):**
-
-| Pattern | Example |
-|---------|---------|
-| `kubectl get *` | kubectl get nodes, kubectl get pods -A |
-| `kubectl describe *` | kubectl describe node still-fawn |
-| `kubectl logs *` | kubectl logs -n frigate deployment/frigate |
-| `kubectl top *` | kubectl top nodes |
-| `cat`, `ls`, `head`, `tail` | cat /etc/hosts |
-| `grep`, `find`, `which` | find . -name "*.yaml" |
-| `echo`, `date`, `uptime` | date, uptime |
-
-**NOT auto-approved (destructive):**
-
-| Pattern | Example |
-|---------|---------|
-| `kubectl delete *` | kubectl delete pod ... |
-| `kubectl apply *` | kubectl apply -f ... |
-| `kubectl edit *` | kubectl edit deployment ... |
-| `rm`, `mv`, `cp` | rm -rf ... |
-| `systemctl *` | systemctl restart ... |
-| `reboot`, `shutdown` | reboot |
 
 ---
 
@@ -1086,6 +1135,26 @@ done
 
 ## Testing Strategy
 
+### Parallel Testing (Local vs K8s)
+
+**CRITICAL**: Use topic isolation to test locally without affecting production.
+
+```bash
+# LOCAL DEVELOPMENT (uses test/ prefix - isolated)
+cd /Users/10381054/code/claudecodeui
+./scripts/run-local.sh --test       # Subscribes to test/claude/*
+./scripts/test-mqtt.sh --test       # Publishes to test/claude/*
+
+# PRODUCTION (no prefix)
+# K8s pod subscribes to claude/command
+./scripts/test-mqtt.sh              # Tests prod (no --test flag)
+```
+
+**Before testing production**: Verify local container is stopped.
+```bash
+docker stop claudecodeui-local || true
+```
+
 ### Unit Tests (HA Developer Tools)
 
 ```yaml
@@ -1114,14 +1183,14 @@ data:
 
 ```bash
 # Simulate ClaudeCodeUI approval request
-mosquitto_pub -h homeassistant.maas -t "claude/response" \
-  -m '{"type":"approval","requestId":"test-123","command":"kubectl get pods"}'
+mosquitto_pub -h homeassistant.maas -t "claude/approval-request" \
+  -m '{"requestId":"test-123","toolName":"Bash","input":{"command":"kubectl get pods"}}'
 
 # Monitor approval response
 mosquitto_sub -h homeassistant.maas -t "claude/approval-response"
 
 # Then: rotate dial CW, press button
-# Verify: MQTT receives {"requestId":"test-123","type":"approved"}
+# Verify: MQTT receives {"requestId":"test-123","approved":true}
 ```
 
 ### E2E Scenario Tests
@@ -1136,6 +1205,22 @@ Each scenario from `APPROVAL-UX-SCENARIOS.md`:
 | Approval Timeout | wait 15s → verify "Never mind" + IDLE |
 | Multiple Choice | dial through options → verify voice announces each |
 | Error | Disconnect MQTT → verify error TTS |
+
+### Verified Test Commands
+
+```bash
+# Check requestId is stored correctly
+scripts/claudecodeui/voice-pe/diagnose-approval-flow.sh
+
+# Verify single request (no duplicates)
+scripts/claudecodeui/voice-pe/clean-trace-test.sh
+
+# List HA automations
+scripts/haos/list-automations.sh claude
+
+# Get automation config
+scripts/haos/get-automation-config.sh <automation_id>
+```
 
 ---
 
@@ -1176,3 +1261,757 @@ mosquitto_sub -h homeassistant.maas -t "claude/response" -C 1
 - [Voice PE DeepWiki](https://deepwiki.com/esphome/home-assistant-voice-pe)
 - [HA FSM Sensor](https://github.com/edalquist/ha_state_machine) (optional)
 - Scenarios: `APPROVAL-UX-SCENARIOS.md`
+
+---
+
+# System Architecture Views
+
+*Standard architectural diagrams for the Voice PE + Claude integration*
+
+---
+
+## C4 Level 1: System Context
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SYSTEM CONTEXT                                     │
+│                                                                              │
+│                              ┌─────────┐                                    │
+│                              │  User   │                                    │
+│                              │(Person) │                                    │
+│                              └────┬────┘                                    │
+│                                   │ Voice                                   │
+│                                   ▼                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                                                                       │   │
+│  │                    Claude Voice Assistant                            │   │
+│  │                       [Software System]                              │   │
+│  │                                                                       │   │
+│  │   Accepts voice commands, gets AI responses, speaks answers          │   │
+│  │                                                                       │   │
+│  └───────────────────────────────┬───────────────────────────────────────┘   │
+│                                   │ API                                     │
+│                                   ▼                                         │
+│                         ┌─────────────────┐                                 │
+│                         │   Claude API    │                                 │
+│                         │ [External System]│                                │
+│                         └─────────────────┘                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## C4 Level 2: Container Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CONTAINER DIAGRAM                                   │
+│                                                                              │
+│    ┌──────────────┐                                                         │
+│    │     User     │                                                         │
+│    └──────┬───────┘                                                         │
+│           │ Voice / Touch                                                   │
+│           ▼                                                                 │
+│    ┌──────────────┐         ┌──────────────┐         ┌──────────────┐      │
+│    │   Voice PE   │ Events  │     Home     │  MQTT   │ ClaudeCodeUI │      │
+│    │  [Device]    │────────►│  Assistant   │◄───────►│ [Container]  │      │
+│    │              │◄────────│ [Container]  │         │              │      │
+│    │ ESPHome      │ Services│              │         │ Node.js      │      │
+│    │ Wake word    │         │ Automations  │         │ Claude SDK   │      │
+│    │ STT/TTS      │         │ State machine│         │ MQTT Bridge  │      │
+│    │ LED/Button   │         │ MQTT client  │         │              │      │
+│    └──────────────┘         └──────────────┘         └──────┬───────┘      │
+│                                                              │              │
+│                                                              │ HTTPS        │
+│                                                              ▼              │
+│                                                       ┌──────────────┐      │
+│                                                       │  Claude API  │      │
+│                                                       │  [External]  │      │
+│                                                       └──────────────┘      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## C4 Level 3: Component Diagram (Home Assistant)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    HOME ASSISTANT - COMPONENTS                               │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         AUTOMATIONS                                  │   │
+│  │                                                                       │   │
+│  │  ┌───────────────────┐  ┌───────────────────┐  ┌─────────────────┐  │   │
+│  │  │ claude_send_      │  │ claude_speak_     │  │ claude_handle_  │  │   │
+│  │  │ request           │  │ response          │  │ interrupt       │  │   │
+│  │  │                   │  │                   │  │                 │  │   │
+│  │  │ Intent trigger    │  │ MQTT trigger      │  │ Button/Dial     │  │   │
+│  │  │ → Set state       │  │ → Set state       │  │ trigger         │  │   │
+│  │  │ → LED blue        │  │ → LED off         │  │ → Beep/Cancel   │  │   │
+│  │  │ → Voice prompt    │  │ → Voice answer    │  │                 │  │   │
+│  │  │ → MQTT publish    │  │                   │  │                 │  │   │
+│  │  └─────────┬─────────┘  └─────────┬─────────┘  └────────┬────────┘  │   │
+│  │            │                      │                      │           │   │
+│  └────────────┼──────────────────────┼──────────────────────┼───────────┘   │
+│               │                      │                      │               │
+│               ▼                      ▼                      ▼               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                          HELPER ENTITIES                             │   │
+│  │                                                                       │   │
+│  │  input_select.claude_state     [IDLE | THINKING | WAITING | ...]    │   │
+│  │  input_text.claude_approval_request_id                              │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                          INTEGRATIONS                                │   │
+│  │                                                                       │   │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐              │   │
+│  │  │    MQTT     │    │   ESPHome   │    │    Piper    │              │   │
+│  │  │             │    │             │    │    (TTS)    │              │   │
+│  │  │ Pub/Sub to  │    │ Voice PE    │    │             │              │   │
+│  │  │ ClaudeCodeUI│    │ events/svcs │    │ Text→Speech │              │   │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘              │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Deployment View
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DEPLOYMENT VIEW                                    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Physical: Kitchen Counter                                            │   │
+│  │                                                                       │   │
+│  │   ┌─────────────────────────────┐                                    │   │
+│  │   │ Voice PE                    │                                    │   │
+│  │   │ [ESP32-S3 Device]           │                                    │   │
+│  │   │                             │                                    │   │
+│  │   │ • ESPHome firmware          │                                    │   │
+│  │   │ • 192.168.86.245 (WiFi)     │                                    │   │
+│  │   └──────────────┬──────────────┘                                    │   │
+│  │                  │ WiFi (Google Mesh)                                │   │
+│  └──────────────────┼──────────────────────────────────────────────────┘   │
+│                     │                                                       │
+│                     ▼                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Proxmox Host: chief-horse.maas (192.168.4.19)                       │   │
+│  │                                                                       │   │
+│  │   ┌─────────────────────────────┐                                    │   │
+│  │   │ VM 116: Home Assistant OS   │                                    │   │
+│  │   │ [QEMU/KVM]                  │                                    │   │
+│  │   │                             │                                    │   │
+│  │   │ • homeassistant.maas        │                                    │   │
+│  │   │ • 192.168.4.240:8123 (API)  │                                    │   │
+│  │   │ • :1883 (MQTT broker)       │                                    │   │
+│  │   │                             │                                    │   │
+│  │   │ Add-ons:                    │                                    │   │
+│  │   │ • Mosquitto MQTT            │                                    │   │
+│  │   │ • Piper TTS                 │                                    │   │
+│  │   │ • Whisper STT               │                                    │   │
+│  │   │ • ESPHome Dashboard         │                                    │   │
+│  │   └─────────────────────────────┘                                    │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                     │                                                       │
+│                     │ MQTT :1883                                           │
+│                     ▼                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Proxmox Host: still-fawn.maas                                        │   │
+│  │                                                                       │   │
+│  │   ┌─────────────────────────────┐                                    │   │
+│  │   │ VM 108: K3s Node            │                                    │   │
+│  │   │ [QEMU/KVM]                  │                                    │   │
+│  │   │                             │                                    │   │
+│  │   │ Namespace: claudecodeui     │                                    │   │
+│  │   │ ┌─────────────────────────┐ │                                    │   │
+│  │   │ │ Pod: claudecodeui-blue  │ │                                    │   │
+│  │   │ │                         │ │                                    │   │
+│  │   │ │ • Node.js server        │ │                                    │   │
+│  │   │ │ • Claude SDK            │ │                                    │   │
+│  │   │ │ • MQTT Bridge           │ │                                    │   │
+│  │   │ └─────────────────────────┘ │                                    │   │
+│  │   └─────────────────────────────┘                                    │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                     │                                                       │
+│                     │ HTTPS                                                │
+│                     ▼                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ External: api.anthropic.com                                          │   │
+│  │                                                                       │   │
+│  │   Claude API                                                         │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Network View (with socat proxy)
+
+**CRITICAL**: Voice PE and HAOS are on different networks that cannot route directly.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              NETWORK VIEW                                        │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                    GOOGLE WIFI (192.168.86.0/24)                           │  │
+│  │                                                                             │  │
+│  │     ┌─────────────┐                      ┌─────────────┐                   │  │
+│  │     │  Voice PE   │        WiFi          │ Google WiFi │                   │  │
+│  │     │ .86.245     │◄────────────────────►│   Router    │                   │  │
+│  │     │             │                      │   .86.1     │                   │  │
+│  │     └──────┬──────┘                      └──────┬──────┘                   │  │
+│  │            │                                    │                           │  │
+│  │            │ ESPHome API :6053                  │                           │  │
+│  │            │ (TTS streaming)                    │                           │  │
+│  │            │                                    │                           │  │
+│  └────────────┼────────────────────────────────────┼───────────────────────────┘  │
+│               │                                    │                              │
+│               │                                    │ Uplink                       │
+│               │                                    ▼                              │
+│  ┌────────────┼──────────────────────────────────────────────────────────────┐   │
+│  │            │           ISP NETWORK (192.168.1.0/24)                        │   │
+│  │            │                                                               │   │
+│  │            │     ┌─────────────┐          ┌─────────────────────┐         │   │
+│  │            │     │ ISP Router  │          │    pve (Proxmox)    │         │   │
+│  │            │     │  .1.254     │◄────────►│    .1.122           │         │   │
+│  │            │     └─────────────┘          │                     │         │   │
+│  │            │                              │  ┌───────────────┐  │         │   │
+│  │            │                              │  │  socat proxy  │  │         │   │
+│  │            │                              │  │  :8123        │  │         │   │
+│  │            │ HTTP                         │  │  ↓ forward    │  │         │   │
+│  │            └─────────────────────────────►│  │  192.168.4.240│  │         │   │
+│  │              TTS audio fetch              │  └───────────────┘  │         │   │
+│  │              (via proxy)                  │                     │         │   │
+│  │                                           └──────────┬──────────┘         │   │
+│  └──────────────────────────────────────────────────────┼────────────────────┘   │
+│                                                         │                        │
+│                                                         │ .4.122                 │
+│                                                         ▼                        │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │                      HOMELAB NETWORK (192.168.4.0/24)                     │   │
+│  │                                                                           │   │
+│  │    ┌─────────────┐        ┌─────────────┐        ┌─────────────┐         │   │
+│  │    │chief-horse  │        │  HAOS VM    │        │ still-fawn  │         │   │
+│  │    │  .4.19      │        │  116        │        │  K3s VM 108 │         │   │
+│  │    │             │        │  .4.240     │        │             │         │   │
+│  │    │ vmbr2 ──────┼───────►│  :8123 API  │        │ ClaudeCodeUI│         │   │
+│  │    │ (86.22)     │        │  :1883 MQTT │◄──────►│  Pod        │         │   │
+│  │    └─────────────┘        └─────────────┘        └─────────────┘         │   │
+│  │          │                                                                │   │
+│  │          │ USB Ethernet + Flint 3 bridge                                 │   │
+│  │          │ (ESPHome API path back to Voice PE)                           │   │
+│  │          ▼                                                                │   │
+│  │    ┌──────────────────────────────────────────────────────────────────┐  │   │
+│  │    │  PATH 2: HA → Voice PE (ESPHome API :6053)                       │  │   │
+│  │    │  chief-horse vmbr2 (86.22) → Flint 3 → Google WiFi → Voice PE    │  │   │
+│  │    └──────────────────────────────────────────────────────────────────┘  │   │
+│  │                                                                           │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Two Communication Paths (Critical!)
+
+| Path | Direction | Purpose | Route |
+|------|-----------|---------|-------|
+| **PATH 1** | Voice PE → HAOS | HTTP API, TTS audio fetch | 86.245 → Google WiFi → ISP → **socat on pve** → 4.240:8123 |
+| **PATH 2** | HAOS → Voice PE | ESPHome API, TTS streaming | 4.240 → chief-horse vmbr2 (86.22) → Flint 3 → 86.245:6053 |
+
+### socat Proxy Configuration
+
+```ini
+# /etc/systemd/system/ha-proxy.service on pve
+[Service]
+ExecStart=/usr/bin/socat TCP-LISTEN:8123,bind=192.168.1.122,reuseaddr,fork TCP:192.168.4.240:8123
+```
+
+**HA must advertise `http://192.168.1.122:8123`** as its internal URL so Voice PE fetches media from the reachable proxy.
+
+---
+
+## CI/CD Pipeline View
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              CI/CD PIPELINE                                      │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                         DEVELOPMENT                                        │  │
+│  │                                                                             │  │
+│  │    ┌─────────────┐        ┌─────────────┐        ┌─────────────┐          │  │
+│  │    │   macOS     │  git   │   GitHub    │        │   GitHub    │          │  │
+│  │    │   Dev       │───────►│   Repo      │───────►│   Actions   │          │  │
+│  │    │             │  push  │ homeiac/    │ trigger│             │          │  │
+│  │    │ Claude Code │        │ claudecodeui│        │ • build     │          │  │
+│  │    └─────────────┘        └─────────────┘        │ • test      │          │  │
+│  │                                                   │ • docker    │          │  │
+│  │                                                   └──────┬──────┘          │  │
+│  └──────────────────────────────────────────────────────────┼────────────────┘  │
+│                                                              │                   │
+│                                                              │ push image        │
+│                                                              ▼                   │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                         REGISTRY                                           │  │
+│  │                                                                             │  │
+│  │                      ┌─────────────────────┐                               │  │
+│  │                      │  ghcr.io/homeiac/   │                               │  │
+│  │                      │  claudecodeui:main  │                               │  │
+│  │                      └──────────┬──────────┘                               │  │
+│  │                                 │                                           │  │
+│  └─────────────────────────────────┼───────────────────────────────────────────┘  │
+│                                    │                                              │
+│                                    │ Flux ImagePolicy                             │
+│                                    ▼                                              │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                         GITOPS (home repo)                                 │  │
+│  │                                                                             │  │
+│  │    ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │    │  gitops/clusters/homelab/apps/claudecodeui/                      │    │  │
+│  │    │                                                                   │    │  │
+│  │    │  ├── blue/                                                        │    │  │
+│  │    │  │   ├── deployment-blue.yaml  ◄── image: ghcr.io/.../main       │    │  │
+│  │    │  │   ├── service.yaml                                             │    │  │
+│  │    │  │   └── pvc.yaml                                                 │    │  │
+│  │    │  └── kustomization.yaml                                           │    │  │
+│  │    └─────────────────────────────────────────────────────────────────┘    │  │
+│  │                                 │                                           │  │
+│  └─────────────────────────────────┼───────────────────────────────────────────┘  │
+│                                    │                                              │
+│                                    │ Flux reconcile                               │
+│                                    ▼                                              │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                         K3S CLUSTER                                        │  │
+│  │                                                                             │  │
+│  │    ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │    │  Namespace: claudecodeui                                         │    │  │
+│  │    │                                                                   │    │  │
+│  │    │    ┌─────────────────┐     ┌─────────────────┐                   │    │  │
+│  │    │    │ Flux            │     │ claudecodeui-   │                   │    │  │
+│  │    │    │ source-controller────►│ blue            │                   │    │  │
+│  │    │    │ kustomize-ctrl  │     │ (Deployment)    │                   │    │  │
+│  │    │    └─────────────────┘     └─────────────────┘                   │    │  │
+│  │    │                                                                   │    │  │
+│  │    └─────────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                             │  │
+│  └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ESPHome Firmware Update View
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         ESPHOME FIRMWARE UPDATES                                 │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                    INITIAL FLASH (USB)                                     │  │
+│  │                                                                             │  │
+│  │    ┌─────────────┐        ┌─────────────┐        ┌─────────────┐          │  │
+│  │    │   macOS     │  USB   │  Voice PE   │        │   HAOS      │          │  │
+│  │    │             │◄──────►│  (ESP32-S3) │        │  ESPHome    │          │  │
+│  │    │ esptool.py  │        │             │        │  Dashboard  │          │  │
+│  │    │ or Docker   │        │ Boot mode:  │        │  (Add-on)   │          │  │
+│  │    │             │        │ Hold button │        │             │          │  │
+│  │    └──────┬──────┘        │ + plug USB  │        └─────────────┘          │  │
+│  │           │               └─────────────┘                                  │  │
+│  │           │                                                                │  │
+│  │           │ esphome run voice-pe.yaml --device /dev/cu.usbmodem*          │  │
+│  │           │                                                                │  │
+│  └───────────┼────────────────────────────────────────────────────────────────┘  │
+│              │                                                                   │
+│              │ After initial flash, device connects to WiFi                      │
+│              ▼                                                                   │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                    OTA UPDATES (WiFi)                                      │  │
+│  │                                                                             │  │
+│  │    ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │    │                    HAOS VM 116                                   │    │  │
+│  │    │                                                                   │    │  │
+│  │    │    ┌─────────────────┐                                           │    │  │
+│  │    │    │ ESPHome Add-on  │                                           │    │  │
+│  │    │    │                 │                                           │    │  │
+│  │    │    │ • Dashboard UI  │                                           │    │  │
+│  │    │    │ • YAML editor   │                                           │    │  │
+│  │    │    │ • Compile       │                                           │    │  │
+│  │    │    │ • OTA push      │                                           │    │  │
+│  │    │    └────────┬────────┘                                           │    │  │
+│  │    │             │                                                     │    │  │
+│  │    └─────────────┼─────────────────────────────────────────────────────┘    │  │
+│  │                  │                                                          │  │
+│  │                  │ ESPHome API :6053 (OTA upload)                           │  │
+│  │                  │ via chief-horse vmbr2 → Flint 3 → Google WiFi            │  │
+│  │                  ▼                                                          │  │
+│  │    ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │    │                    Voice PE                                      │    │  │
+│  │    │                    192.168.86.245                                │    │  │
+│  │    │                                                                   │    │  │
+│  │    │    Receives OTA update, reboots with new firmware                │    │  │
+│  │    │                                                                   │    │  │
+│  │    └─────────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                             │  │
+│  └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## HAOS Add-ons View
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         HAOS ADD-ONS (VM 116)                                    │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                    Home Assistant OS                                       │  │
+│  │                    chief-horse.maas / 192.168.4.240                        │  │
+│  │                                                                             │  │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                         CORE                                         │  │  │
+│  │  │                                                                       │  │  │
+│  │  │    Home Assistant Core        Supervisor         DNS                 │  │  │
+│  │  │    :8123 (HTTP API)           (Add-on mgmt)      (internal)          │  │  │
+│  │  │                                                                       │  │  │
+│  │  └─────────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                             │  │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                    VOICE PIPELINE ADD-ONS                            │  │  │
+│  │  │                                                                       │  │  │
+│  │  │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │  │
+│  │  │  │   Whisper   │   │   Piper     │   │ openWakeWord│                │  │  │
+│  │  │  │   (STT)     │   │   (TTS)     │   │  (optional) │                │  │  │
+│  │  │  │             │   │             │   │              │                │  │  │
+│  │  │  │ Wyoming     │   │ Wyoming     │   │ Wyoming      │                │  │  │
+│  │  │  │ :10300      │   │ :10200      │   │ :10400       │                │  │  │
+│  │  │  └──────┬──────┘   └──────┬──────┘   └──────────────┘                │  │  │
+│  │  │         │                 │                                           │  │  │
+│  │  │         │    Wyoming Protocol (audio streaming)                       │  │  │
+│  │  │         │                 │                                           │  │  │
+│  │  │         ▼                 ▼                                           │  │  │
+│  │  │  ┌─────────────────────────────────────────────────────────────┐    │  │  │
+│  │  │  │              Assist Pipeline                                 │    │  │  │
+│  │  │  │              (HA Core integration)                           │    │  │  │
+│  │  │  │                                                               │    │  │  │
+│  │  │  │  Voice PE ──► Whisper STT ──► Intent ──► Piper TTS ──► Voice PE│  │  │  │
+│  │  │  └─────────────────────────────────────────────────────────────┘    │  │  │
+│  │  │                                                                       │  │  │
+│  │  └─────────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                             │  │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                    INFRASTRUCTURE ADD-ONS                            │  │  │
+│  │  │                                                                       │  │  │
+│  │  │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │  │
+│  │  │  │  Mosquitto  │   │  ESPHome    │   │  File       │                │  │  │
+│  │  │  │  (MQTT)     │   │  Dashboard  │   │  Editor     │                │  │  │
+│  │  │  │             │   │             │   │             │                │  │  │
+│  │  │  │ :1883       │   │ :6052 (UI)  │   │             │                │  │  │
+│  │  │  │ (broker)    │   │             │   │             │                │  │  │
+│  │  │  └──────┬──────┘   └─────────────┘   └─────────────┘                │  │  │
+│  │  │         │                                                             │  │  │
+│  │  │         │ MQTT pub/sub                                                │  │  │
+│  │  │         ▼                                                             │  │  │
+│  │  │  ┌──────────────────────────────────────────────────────┐            │  │  │
+│  │  │  │  Claude Topics:                                       │            │  │  │
+│  │  │  │  • claude/command         (Voice PE → ClaudeCodeUI)  │            │  │  │
+│  │  │  │  • claude/home/response   (ClaudeCodeUI → HA)        │            │  │  │
+│  │  │  │  • claude/approval-request  (ClaudeCodeUI → HA)      │            │  │  │
+│  │  │  │  • claude/approval-response (HA → ClaudeCodeUI)      │            │  │  │
+│  │  │  └──────────────────────────────────────────────────────┘            │  │  │
+│  │  │                                                                       │  │  │
+│  │  └─────────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                             │  │
+│  └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Blue/Green Deployment View
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         BLUE/GREEN DEPLOYMENT                                    │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                    K3S NAMESPACE: claudecodeui                             │  │
+│  │                                                                             │  │
+│  │  ┌─────────────────────────────┐   ┌─────────────────────────────┐        │  │
+│  │  │      BLUE (Active)          │   │      GREEN (Standby)        │        │  │
+│  │  │                             │   │                             │        │  │
+│  │  │  deployment-blue.yaml       │   │  deployment-green.yaml      │        │  │
+│  │  │  ┌───────────────────────┐  │   │  ┌───────────────────────┐  │        │  │
+│  │  │  │ claudecodeui-blue     │  │   │  │ claudecodeui-green    │  │        │  │
+│  │  │  │ replicas: 1           │  │   │  │ replicas: 0           │  │        │  │
+│  │  │  │ image: :main          │  │   │  │ image: :main          │  │        │  │
+│  │  │  └───────────────────────┘  │   │  └───────────────────────┘  │        │  │
+│  │  │                             │   │                             │        │  │
+│  │  │  MQTT Topics:               │   │  MQTT Topics:               │        │  │
+│  │  │  • claude/*            ◄────┼───┼── staging/claude/*          │        │  │
+│  │  │    (production)             │   │    (pre-prod testing)       │        │  │
+│  │  │                             │   │                             │        │  │
+│  │  └─────────────────────────────┘   └─────────────────────────────┘        │  │
+│  │                                                                             │  │
+│  │  ⚠️  CONSTRAINT: Only ONE deployment per topic prefix                      │  │
+│  │                                                                             │  │
+│  └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                  │
+│  PROMOTION WORKFLOW:                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                                                                             │  │
+│  │  1. Deploy new code to GREEN with staging/ topics                          │  │
+│  │  2. Test: ./scripts/test-mqtt.sh --staging                                 │  │
+│  │  3. If pass, swap topic env vars in deployments                            │  │
+│  │  4. Flux reconciles → GREEN becomes prod, BLUE becomes staging             │  │
+│  │  5. Rollback = swap topics back                                            │  │
+│  │                                                                             │  │
+│  └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Dev/Test Workflow
+
+### Fast Local Development (~45s cycle)
+
+```
+┌──────────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
+│  Edit    │ ───► │  Build   │ ───► │  Run     │ ───► │  Test    │
+│  code    │      │  local   │      │  --test  │      │  --test  │
+└──────────┘      └──────────┘      └──────────┘      └──────────┘
+     │                 │                 │                 │
+     ▼                 ▼                 ▼                 ▼
+vim/vscode      docker build       run-local.sh      test-mqtt.sh
+                -t :local          --test            --test
+                (~30s)             (~5s)             (~10s)
+
+Topics: test/claude/*  ◄── ISOLATED FROM PROD
+```
+
+### Topic Isolation
+
+| Environment | Topic Prefix | Use Case |
+|-------------|--------------|----------|
+| **Local dev** | `test/` | Fast iteration, won't touch K8s |
+| **Staging** | `staging/` | Pre-prod validation on green |
+| **Production** | (none) | Live traffic on blue |
+
+---
+
+## MQTT Event Schema
+
+### Topic Hierarchy
+
+```
+claude/
+├── command                    # Voice PE → ClaudeCodeUI (user request)
+├── home/
+│   └── response               # ClaudeCodeUI → HA (all response types)
+├── approval-request           # ClaudeCodeUI → HA (needs user decision)
+└── approval-response          # HA → ClaudeCodeUI (user decision)
+
+test/claude/...                # Same structure, isolated for dev
+staging/claude/...             # Same structure, isolated for pre-prod
+```
+
+### Event: `claude/command`
+
+**Direction**: Voice PE → HA → ClaudeCodeUI
+
+```json
+{
+  "source": "voice_pe",
+  "message": "what is the status of my k8s cluster",
+  "session_id": "voice-pe-1702847123",
+  "stream": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `source` | string | ✓ | Origin device identifier |
+| `message` | string | ✓ | User's natural language query |
+| `session_id` | string | | Conversation continuity |
+| `stream` | boolean | | true = streaming TTS |
+
+### Event: `claude/home/response`
+
+**Direction**: ClaudeCodeUI → HA
+
+#### Type: `answer`
+
+```json
+{
+  "type": "answer",
+  "text": "All three nodes are healthy.",
+  "session_id": "voice-pe-1702847123",
+  "timestamp": 1702847125000
+}
+```
+
+#### Type: `chunk` (streaming)
+
+```json
+{
+  "type": "chunk",
+  "content": {"data": {"type": "text", "text": "Checking"}},
+  "session_id": "voice-pe-1702847123",
+  "timestamp": 1702847124500
+}
+```
+
+#### Type: `complete`
+
+```json
+{
+  "type": "complete",
+  "session_id": "voice-pe-1702847123",
+  "duration_ms": 3420,
+  "timestamp": 1702847126000
+}
+```
+
+#### Type: `error`
+
+```json
+{
+  "type": "error",
+  "error": "Claude CLI not authenticated.",
+  "session_id": "voice-pe-1702847123",
+  "timestamp": 1702847124000
+}
+```
+
+### Event: `claude/approval-request`
+
+**Direction**: ClaudeCodeUI → HA
+
+```json
+{
+  "requestId": "9f279968-9540-44a0-a498-450b262a6ea6",
+  "toolName": "Bash",
+  "input": {
+    "command": "kubectl get nodes -o wide",
+    "description": "List Kubernetes nodes"
+  },
+  "sessionId": "voice-pe-1702847123",
+  "sourceDevice": "voice_pe",
+  "timestamp": 1702847124000
+}
+```
+
+### Event: `claude/approval-response`
+
+**Direction**: HA → ClaudeCodeUI
+
+#### Approved
+
+```json
+{
+  "requestId": "9f279968-9540-44a0-a498-450b262a6ea6",
+  "approved": true
+}
+```
+
+#### Rejected
+
+```json
+{
+  "requestId": "9f279968-9540-44a0-a498-450b262a6ea6",
+  "approved": false,
+  "reason": "user_reject"
+}
+```
+
+---
+
+## Script Organization (Proposed)
+
+```
+scripts/claudecodeui/voice-pe/
+│
+├── README.md                      # Index
+│
+├── tests/                         # Automated test suite
+│   ├── run-all.sh                 # Test runner
+│   ├── unit/                      # Single component
+│   │   ├── test-mqtt-publish.sh
+│   │   ├── test-led-service.sh
+│   │   └── test-tts-service.sh
+│   ├── integration/               # Two components
+│   │   ├── test-approval-roundtrip.sh
+│   │   └── test-dial-to-mqtt.sh
+│   └── e2e/                       # Full workflow
+│       └── test-scenario-*.sh
+│
+├── diagnostics/                   # Troubleshooting
+│   ├── trace-mqtt.sh              # Live MQTT viewer
+│   ├── trace-approval-flow.sh     # Follow requestId
+│   ├── dump-ha-state.sh           # Snapshot entities
+│   └── check-health.sh            # System health
+│
+├── deploy/                        # Deployment
+│   ├── deploy-automations.sh
+│   └── deploy-helpers.sh
+│
+├── utils/                         # Utilities
+│   ├── backup-config.sh
+│   ├── restore-config.sh
+│   └── cleanup-old-automations.sh
+│
+└── archive/                       # Deprecated
+```
+
+---
+
+## Observability
+
+### Current (MVP)
+
+| Layer | Implementation | Notes |
+|-------|----------------|-------|
+| **Correlation ID** | `requestId` in all messages | Already implemented |
+| **Structured Logs** | JSON logs in ClaudeCodeUI | `kubectl logs` |
+| **Live Tracing** | `mosquitto_sub -t "claude/#"` | Real-time |
+| **HA Traces** | Automation traces in UI | Last 20 runs |
+
+### Future Enhancements
+
+| Enhancement | Effort | Value |
+|-------------|--------|-------|
+| MQTT trace topics (`claude/trace/*`) | 2h | Real-time debugging |
+| Loki log aggregation | 4h | Persistent, searchable |
+| Prometheus metrics | 4h | Dashboards, alerts |
+| Grafana dashboard | 2h | Visualization |
+
+---
+
+## Protocols Summary
+
+| Connection | Protocol | Port | Direction |
+|------------|----------|------|-----------|
+| Voice PE ↔ HAOS | ESPHome Native API | 6053 | Bidirectional |
+| Voice PE ← HAOS | Media stream | dynamic | HAOS → Voice PE |
+| Voice PE → HAOS | HTTP (via socat) | 8123 | Voice PE → pve → HAOS |
+| HAOS ↔ ClaudeCodeUI | MQTT | 1883 | Bidirectional |
+| ClaudeCodeUI → Claude | HTTPS | 443 | Outbound only |
