@@ -81,12 +81,28 @@
 
 **Spikes**:
 - [ ] Does ClaudeCodeUI send approval index/total? (approvalIndex, approvalTotal)
-- [x] Can Voice PE LED ring address individual LEDs? → **NO** (factory). Possible with custom ESPHome firmware.
-- [x] What ESPHome service controls individual LED segments? → **None**. Only full-ring `light.turn_on` with rgb_color/brightness.
+- [x] Can Voice PE LED ring address individual LEDs? → **YES**. 12 WS2812 LEDs, firmware uses `it[i]` in `addressable_lambda`.
+- [x] What ESPHome service controls individual LED segments? → **None exposed yet**. Need to add ~20 lines to ESPHome config.
 
-**Implication**: Progress LEDs require either:
-1. Custom ESPHome firmware exposing `addressable_light`, OR
-2. Workaround: full-ring color changes to indicate progress (e.g., green→orange→green)
+**Solution**: Add ESPHome API service to `voice-pe-config.yaml`:
+```yaml
+api:
+  services:
+    - service: set_led
+      variables:
+        index: int
+        red: int
+        green: int
+        blue: int
+      then:
+        - light.addressable_set:
+            id: leds_internal
+            range_from: !lambda return index;
+            range_to: !lambda return index;
+            red: !lambda return red;
+            green: !lambda return green;
+            blue: !lambda return blue;
+```
 
 **Needed**:
 - Progress LED (green segments for completed)
@@ -107,9 +123,7 @@
 **Spikes**:
 - [ ] Does ClaudeCodeUI track conversationId/turnNumber?
 - [ ] Is context timeout exposed via MQTT or internal only?
-- [x] Can LED ring show gradient (brightness per LED)? → **NO**. Full-ring brightness only.
-
-**Implication**: Color aging must use full-ring color changes (white→gray→dim), not per-LED gradients.
+- [x] Can LED ring show gradient (brightness per LED)? → **YES**. Same `set_led` service can set per-LED brightness.
 
 **Needed**:
 - Context timer (ring drains)
@@ -130,21 +144,17 @@
 - [ ] Does Voice PE firmware support tap count detection? (or HA-side debounce?)
 - [ ] Can dial event include rotation amount or just CW/CCW direction?
 - [ ] How does ClaudeCodeUI signal multiple choice? (type:choice? options array?)
-- [x] LED segments for options? → **NO** (factory). Same limitation as Workflow tier.
-
-**Implication**: Multi-choice options need alternative UX:
-1. Voice announces options, user says option name, OR
-2. Cycle through options with dial (full-ring color per option)
+- [x] LED segments for options? → **YES**. Same `set_led` service enables colored segments.
 
 **Needed**:
-- ~~LED segments for options (3-5)~~ → Alternative UX required
+- LED segments for options (3-5)
 - Dial to select, button to confirm
 - Voice option names
 - Tap patterns (1-5 taps)
 
 **Acceptance**:
-- [ ] "Which service?" announces options via TTS
-- [ ] Dial rotates selection with voice announcement (full-ring color change per option)
+- [ ] "Which service?" shows 3 colored LED segments
+- [ ] Dial rotates selection with voice announcement
 - [ ] Button confirms selection
 
 ---
