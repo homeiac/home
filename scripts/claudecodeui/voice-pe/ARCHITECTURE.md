@@ -1823,8 +1823,98 @@ Topics: test/claude/*  ◄── ISOLATED FROM PROD
 | Environment | Topic Prefix | Use Case |
 |-------------|--------------|----------|
 | **Local dev** | `test/` | Fast iteration, won't touch K8s |
-| **Staging** | `staging/` | Pre-prod validation on green |
-| **Production** | (none) | Live traffic on blue |
+| **Standby pod** | `test/` | Pre-switchover validation |
+| **Production** | (none) | Live traffic (LIVE pod only) |
+
+### MQTT Flow for Blue/Green Testing
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                    MQTT TOPIC FLOW - BLUE/GREEN                                  │
+│                                                                                  │
+│  BEFORE SWITCHOVER (Blue is LIVE)                                               │
+│  ═══════════════════════════════════════════════════════════════════════════    │
+│                                                                                  │
+│  Voice PE / HA                    MQTT Broker                  ClaudeCodeUI     │
+│       │                         (homeassistant.maas:1883)           │           │
+│       │                                  │                          │           │
+│       │   claude/command ───────────────►│──────────────────────────►│ BLUE     │
+│       │◄──────────────────────────────────│◄── claude/home/response ─│ (LIVE)   │
+│       │                                  │                          │           │
+│       │                                  │                          │           │
+│       │   test/claude/command ──────────►│──────────────────────────►│ GREEN    │
+│       │   (manual test only)             │◄── test/claude/response ──│ (STANDBY)│
+│       │                                  │                          │           │
+│                                                                                  │
+│  VALIDATION STEPS (before switchover)                                           │
+│  ═══════════════════════════════════════════════════════════════════════════    │
+│                                                                                  │
+│  1. GREEN subscribes to: test/claude/*                                          │
+│                                                                                  │
+│  2. Test GREEN directly:                                                        │
+│     $ ./scripts/test-mqtt.sh --test                                             │
+│     → Publishes to test/claude/command                                          │
+│     → GREEN responds on test/claude/home/response                               │
+│     → Verify response is correct                                                │
+│                                                                                  │
+│  3. Test approval flow:                                                         │
+│     $ ./scripts/test-mqtt.sh --test --approval                                  │
+│     → Verify test/claude/approval-request received                              │
+│     → Send test/claude/approval-response                                        │
+│     → Verify execution completes                                                │
+│                                                                                  │
+│  SWITCHOVER                                                                      │
+│  ═══════════════════════════════════════════════════════════════════════════    │
+│                                                                                  │
+│  Step 1: Update GREEN to subscribe to prod topics                               │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  kubectl set env deployment/claudecodeui-green \                        │   │
+│  │    MQTT_COMMAND_TOPIC=claude/command \                                  │   │
+│  │    MQTT_RESPONSE_TOPIC=claude/home/response \                           │   │
+│  │    MQTT_APPROVAL_REQUEST_TOPIC=claude/approval-request \                │   │
+│  │    MQTT_APPROVAL_RESPONSE_TOPIC=claude/approval-response                │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+│  Step 2: Update BLUE to subscribe to test topics (becomes standby)              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  kubectl set env deployment/claudecodeui-blue \                         │   │
+│  │    MQTT_COMMAND_TOPIC=test/claude/command \                             │   │
+│  │    MQTT_RESPONSE_TOPIC=test/claude/home/response \                      │   │
+│  │    MQTT_APPROVAL_REQUEST_TOPIC=test/claude/approval-request \           │   │
+│  │    MQTT_APPROVAL_RESPONSE_TOPIC=test/claude/approval-response           │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+│  Step 3: Update Ingress (claude.app.homelab → green service)                    │
+│                                                                                  │
+│  AFTER SWITCHOVER (Green is LIVE)                                               │
+│  ═══════════════════════════════════════════════════════════════════════════    │
+│                                                                                  │
+│  Voice PE / HA                    MQTT Broker                  ClaudeCodeUI     │
+│       │                                  │                          │           │
+│       │   claude/command ───────────────►│──────────────────────────►│ GREEN    │
+│       │◄──────────────────────────────────│◄── claude/home/response ─│ (LIVE)   │
+│       │                                  │                          │           │
+│       │   test/claude/command ──────────►│──────────────────────────►│ BLUE     │
+│       │   (manual test only)             │◄── test/claude/response ──│ (STANDBY)│
+│       │                                  │                          │           │
+│                                                                                  │
+│  ROLLBACK = Reverse Steps 1-3                                                   │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Critical: Avoid Duplicate Subscriptions
+
+⚠️ **Never have both pods subscribe to `claude/*` simultaneously**
+
+During switchover, there's a brief moment where both might receive messages.
+The MQTT bridge includes deduplication, but best practice:
+
+1. Scale down STANDBY before changing its topics
+2. Change topics
+3. Scale back up
+
+Or use MQTT client ID collision (same client ID = broker disconnects old client).
 
 ---
 
