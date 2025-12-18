@@ -177,46 +177,52 @@ Proxmox VE, K3s, Flux GitOps, MetalLB, kube-prometheus-stack, Ollama GPU server
 - **Backup First**: Always backup before modifications
 - When UI fails but API works → check client-side (browser extensions, cache)
 
-## Outcome-Anchored Research (Plan-Execute-Replan)
+## RESEARCH QUESTIONS - READ BEFORE ANSWERING
 
-**TRIGGER**: "How should I integrate...", "How to best...", "Research how to...", "What's the best way to..."
+**WHEN USER ASKS**: "How should I...", "How to integrate...", "Research how to...", "What's the best way to..."
 
-**SKILL**: `.claude/skills/outcome-anchored-research/SKILL.md` - auto-invokes on research questions
-
-### Key Behavior
-
+**YOU MUST**:
 1. **DO NOT ask clarifying questions** - user's vagueness is intentional
-2. **Discover outcomes autonomously** - that's YOUR job, not user's
-3. **Present top 3 outcomes for confirmation** - only interaction needed
-4. **Apply quality check** - "What if too much?" for precision dimension
+2. **Run discovery yourself** - that's YOUR job
+3. **Present top 3 outcomes for confirmation** - then wait
 
-### Quick Flow
-1. User asks vague question: "How should I integrate X with Y?"
-2. You run quick discovery (1-2 min) using baseline research
-3. Present top 3 outcomes: "User can `<verb>` without `<pain>`"
-4. Wait for confirmation
-5. Execute full research with subagents
-6. Present outcome→solution mapping
-7. Store in OpenMemory
+### The Flow
 
-### Top 3 Outcomes Template
 ```
-Based on discovery, here are the top 3 outcomes:
-
-1. **User can [X] without [Y]**
-2. **User can [A] without [B]**
-3. **User can [P] without [Q]**
-
-Confirm, or adjust?
+User: "How should I integrate X with Y?"
+         ↓
+You: Run quick discovery (1-2 min):
+     - Baseline research on X (what does vendor provide?)
+     - Baseline research on Y (what does vendor provide?)
+     - What gap remains?
+         ↓
+You: Present top 3 outcomes:
+     "Based on discovery:
+      1. User can [verb] without [pain]
+      2. User can [verb] without [pain]
+      3. User can [verb] without [pain]
+      Confirm, or adjust?"
+         ↓
+User: Confirms or adjusts
+         ↓
+You: Full research with subagents → outcome→solution mapping
+         ↓
+You: Store in OpenMemory
 ```
 
-### Anti-Patterns
-- Asking "What are your requirements?" (discover them yourself)
-- Aimless exploration without outcome anchors
-- First-fit selection without quality check
-- Missing precision dimension ("what if too much?")
+### Quality Checks (MUST APPLY)
+- **Baseline Before Custom**: Research what vendor provides FIRST
+- **Quality dimension**: "What if too much?" (precision/filtering)
+- **Consolidation**: Dedupe, prioritize by pain severity
+- **User experience framing**: "User can X without Y" (not tool behavior)
 
-**Reference**: `docs/methodology/outcome-anchored-research.md`
+### Anti-Patterns (DO NOT)
+- ❌ Asking "What are your requirements?"
+- ❌ Asking "How important is latency?"
+- ❌ Jumping to solutions without outcomes
+- ❌ First-fit selection ("this API looks good enough")
+
+**Full Methodology**: `docs/methodology/outcome-anchored-research.md`
 
 ## OpenMemory Integration
 
