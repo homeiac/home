@@ -966,6 +966,252 @@ automation:
 
 ---
 
+## Sequence Diagrams
+
+### Scenario 1: Simple Question
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐   ┌───────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │   │Claude API │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘   └─────┬─────┘
+   │            │              │               │                │                │
+   │ "Hey Nabu, │              │               │                │                │
+   │  what's    │              │               │                │                │
+   │  2+2?"     │              │               │                │                │
+   │───────────►│              │               │                │                │
+   │            │              │               │                │                │
+   │            │ STT: "what's 2+2"            │                │                │
+   │            │─────────────►│               │                │                │
+   │            │              │               │                │                │
+   │            │              │ intent: ask_claude             │                │
+   │            │              │ set state: THINKING            │                │
+   │            │              │───────────────┼───────────────►│                │
+   │            │              │ claude/command│                │                │
+   │            │              │ {message:"what's 2+2"}         │                │
+   │            │              │               │                │                │
+   │            │◄─────────────│               │                │                │
+   │            │ LED: blue    │               │                │                │
+   │            │              │               │                │                │
+   │            │◄─────────────│               │                │                │
+   │            │ TTS: "Asking │               │                │                │
+   │            │      Claude" │               │                │                │
+   │            │              │               │                │ POST /messages │
+   │            │              │               │                │───────────────►│
+   │            │              │               │                │                │
+   │            │              │               │                │◄───────────────│
+   │            │              │               │                │ "Four"         │
+   │            │              │               │                │                │
+   │            │              │◄──────────────┼────────────────│                │
+   │            │              │ claude/home/response           │                │
+   │            │              │ {type:"answer",text:"Four"}    │                │
+   │            │              │               │                │                │
+   │            │              │ set state: IDLE                │                │
+   │            │◄─────────────│               │                │                │
+   │            │ LED: off     │               │                │                │
+   │            │              │               │                │                │
+   │            │◄─────────────│               │                │                │
+   │            │ TTS: "Four"  │               │                │                │
+   │            │              │               │                │                │
+   │◄───────────│              │               │                │                │
+   │ (hears     │              │               │                │                │
+   │  "Four")   │              │               │                │                │
+   │            │              │               │                │                │
+```
+
+### Scenario 2a: Binary Approval (Approve via Dial)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐   ┌───────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │   │Claude API │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘   └─────┬─────┘
+   │            │              │               │                │                │
+   │ "check my  │              │               │                │                │
+   │  k8s nodes"│              │               │                │                │
+   │───────────►│──────────────►──────────────►│───────────────►│───────────────►│
+   │            │              │               │                │                │
+   │            │◄─────────────│ LED: blue     │                │◄───────────────│
+   │            │              │               │                │ tool_use:      │
+   │            │              │               │                │ Bash(kubectl)  │
+   │            │              │               │                │                │
+   │            │              │◄──────────────┼────────────────│                │
+   │            │              │ claude/approval-request        │                │
+   │            │              │ {requestId:"abc",              │                │
+   │            │              │  command:"kubectl get nodes"}  │                │
+   │            │              │               │                │                │
+   │            │              │ state: WAITING, store requestId│                │
+   │            │◄─────────────│ LED: orange   │                │                │
+   │            │◄─────────────│ TTS: "Run kubectl get nodes?"  │                │
+   │            │              │               │                │                │
+   │ [rotate CW]│              │               │                │                │
+   │───────────►│─────────────►│               │                │                │
+   │            │              │ state: PREVIEW_APPROVE         │                │
+   │            │◄─────────────│ LED: lt_green │                │                │
+   │            │              │               │                │                │
+   │ [press btn]│              │               │                │                │
+   │───────────►│─────────────►│               │                │                │
+   │            │              │ state: EXECUTING               │                │
+   │            │◄─────────────│ LED: green(1s)│                │                │
+   │            │              │───────────────┼───────────────►│                │
+   │            │              │ {requestId:"abc",approved:true}│                │
+   │            │◄─────────────│ LED: blue     │                │                │
+   │            │              │               │                │ (executes...)  │
+   │            │              │◄──────────────┼────────────────│                │
+   │            │              │ {type:"answer",text:"3 ready"} │                │
+   │            │              │ state: IDLE   │                │                │
+   │            │◄─────────────│ LED: off, TTS:"3 nodes ready"  │                │
+   │            │              │               │                │                │
+```
+
+### Scenario 2b: Binary Approval (Reject via Dial)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │  ... (approval request arrives, LED orange, TTS prompt) ...│
+   │            │              │ state: WAITING                 │
+   │            │              │               │                │
+   │[rotate CCW]│              │               │                │
+   │───────────►│─────────────►│               │                │
+   │            │              │ state: PREVIEW_REJECT          │
+   │            │◄─────────────│ LED: lt_red   │                │
+   │            │              │               │                │
+   │ [press btn]│              │               │                │
+   │───────────►│─────────────►│               │                │
+   │            │              │ state: IDLE   │                │
+   │            │◄─────────────│ LED: red(1s)  │                │
+   │            │              │───────────────┼───────────────►│
+   │            │              │ {approved:false}               │
+   │            │◄─────────────│ TTS:"Cancelled", LED: off      │
+   │            │              │               │                │
+```
+
+### Scenario 2c: Binary Approval (Voice "yes")
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │  ... (approval request arrives, LED orange, TTS prompt) ...│
+   │            │              │ state: WAITING                 │
+   │            │              │               │                │
+   │ "yes"      │              │               │                │
+   │───────────►│ STT: "yes"   │               │                │
+   │            │─────────────►│               │                │
+   │            │              │ intent: claude_approve         │
+   │            │              │ state: EXECUTING               │
+   │            │◄─────────────│ LED: green(1s)│                │
+   │            │              │───────────────┼───────────────►│
+   │            │              │ {approved:true}                │
+   │            │◄─────────────│ LED: blue     │ (executes...)  │
+   │            │              │               │                │
+   │            │  ... (response comes back, TTS speaks it) ... │
+   │            │              │               │                │
+```
+
+### Scenario 2d: Timeout
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │  ... (approval request arrives, LED orange, TTS prompt) ...│
+   │            │              │ state: WAITING                 │
+   │            │              │ timer: 15s    │                │
+   │            │              │               │                │
+   │ (no input) │              │               │                │
+   │            │              │ ─── 10 seconds ───             │
+   │            │◄─────────────│ TTS: "Still there?"            │
+   │            │              │               │                │
+   │ (no input) │              │               │                │
+   │            │              │ ─── 5 more seconds ───         │
+   │            │              │ timer: finished                │
+   │            │              │ state: IDLE   │                │
+   │            │              │───────────────┼───────────────►│
+   │            │              │ {approved:false,reason:"timeout"}
+   │            │◄─────────────│ TTS: "Never mind", LED: off    │
+   │            │              │               │                │
+```
+
+### Scenario 3: Multiple Approvals (3 commands)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │ "deploy my app"           │               │                │
+   │───────────►│──────────────►──────────────►│───────────────►│
+   │            │              │               │                │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ approval-request               │
+   │            │              │ {r1, cmd:"kubectl apply",      │
+   │            │              │  approvalIndex:1, total:3}     │
+   │            │              │               │                │
+   │            │◄─────────────│ LED: [◯◯◯◯◯◯◯◯◯◯◯●]            │
+   │            │              │ (12 o'clock blinks orange)     │
+   │            │◄─────────────│ TTS: "1 of 3: kubectl apply?"  │
+   │            │              │               │                │
+   │ [approve]  │              │               │                │
+   │───────────►│─────────────►│───────────────┼───────────────►│
+   │            │◄─────────────│ LED: [●◯◯◯◯◯◯◯◯◯◯◯]            │
+   │            │              │ (12 solid green)               │
+   │            │              │               │                │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ {r2, "docker push", 2/3}       │
+   │            │◄─────────────│ LED: [●●◯◯◯◯◯◯◯◯◯◯]            │
+   │            │◄─────────────│ TTS: "2 of 3: docker push?"    │
+   │            │              │               │                │
+   │ [approve]  │              │               │                │
+   │───────────►│─────────────►│───────────────┼───────────────►│
+   │            │◄─────────────│ LED: [●●◯◯◯◯◯◯◯◯◯◯]            │
+   │            │              │ (2 solid green)                │
+   │            │              │               │                │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ {r3, "notify", 3/3}            │
+   │            │◄─────────────│ LED: [●●●◯◯◯◯◯◯◯◯◯]            │
+   │            │◄─────────────│ TTS: "3 of 3: send notify?"    │
+   │            │              │               │                │
+   │ [approve]  │              │               │                │
+   │───────────►│─────────────►│───────────────┼───────────────►│
+   │            │◄─────────────│ LED: [●●●] flash → off         │
+   │            │              │               │                │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ response: "Deployed!"          │
+   │            │◄─────────────│ TTS: "Deployed successfully"   │
+   │            │              │               │                │
+```
+
+### Scenario 5: Error (MQTT Timeout)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │ "check status"            │               │                │
+   │───────────►│──────────────►               │                │
+   │            │              │───────────────►      ╳         │
+   │            │              │ claude/command│  (broker down) │
+   │            │              │               │                │
+   │            │              │ ─── 10 second timeout ───      │
+   │            │              │               │                │
+   │            │              │ MQTT publish failed            │
+   │            │              │ state: ERROR  │                │
+   │            │◄─────────────│ LED: red      │                │
+   │            │◄─────────────│ TTS: "MQTT publish to claude   │
+   │            │              │  request timed out after 10    │
+   │            │              │  seconds."    │                │
+   │            │              │ state: IDLE   │                │
+   │            │◄─────────────│ LED: off      │                │
+   │            │              │               │                │
+```
+
+---
+
 ## File Structure
 
 ```
