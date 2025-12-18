@@ -177,52 +177,29 @@ Proxmox VE, K3s, Flux GitOps, MetalLB, kube-prometheus-stack, Ollama GPU server
 - **Backup First**: Always backup before modifications
 - When UI fails but API works → check client-side (browser extensions, cache)
 
-## RESEARCH QUESTIONS - READ BEFORE ANSWERING
+## Research Questions
 
-**WHEN USER ASKS**: "How should I...", "How to integrate...", "Research how to...", "What's the best way to..."
-
-**YOU MUST**:
-1. **DO NOT ask clarifying questions** - user's vagueness is intentional
-2. **Run discovery yourself** - that's YOUR job
-3. **Present top 3 outcomes for confirmation** - then wait
-
-### The Flow
+**For integration/architecture questions, use the outcome-researcher agent:**
 
 ```
-User: "How should I integrate X with Y?"
-         ↓
-You: Run quick discovery (1-2 min):
-     - Baseline research on X (what does vendor provide?)
-     - Baseline research on Y (what does vendor provide?)
-     - What gap remains?
-         ↓
-You: Present top 3 outcomes:
-     "Based on discovery:
-      1. User can [verb] without [pain]
-      2. User can [verb] without [pain]
-      3. User can [verb] without [pain]
-      Confirm, or adjust?"
-         ↓
-User: Confirms or adjusts
-         ↓
-You: Full research with subagents → outcome→solution mapping
-         ↓
-You: Store in OpenMemory
+@outcome-researcher
 ```
 
-### Quality Checks (MUST APPLY)
-- **Baseline Before Custom**: Research what vendor provides FIRST
-- **Quality dimension**: "What if too much?" (precision/filtering)
-- **Consolidation**: Dedupe, prioritize by pain severity
-- **User experience framing**: "User can X without Y" (not tool behavior)
+**Trigger phrases**:
+- "How should I integrate X with Y?"
+- "Research how to..."
+- "What's the best way to..."
+- "Design X for Y"
 
-### Anti-Patterns (DO NOT)
-- ❌ Asking "What are your requirements?"
-- ❌ Asking "How important is latency?"
-- ❌ Jumping to solutions without outcomes
-- ❌ First-fit selection ("this API looks good enough")
+The agent runs outcome-anchored discovery autonomously:
+1. Extracts outcomes (no clarifying questions - discovery is its job)
+2. Queries OpenMemory for prior solutions
+3. Researches baseline before custom
+4. Presents top 3 outcomes for confirmation
+5. Maps solutions to outcomes
 
 **Full Methodology**: `docs/methodology/outcome-anchored-research.md`
+**Agent Definition**: `.claude/agents/outcome-researcher/agent.md`
 
 ## OpenMemory Integration
 
