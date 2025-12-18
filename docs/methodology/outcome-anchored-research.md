@@ -128,6 +128,19 @@ for iteration in 1..5:
     │  3. RESEARCH each noun                                  │
     │     - What is it?                                       │
     │     - WHY does it exist? What problem does it solve?    │
+    │                                                         │
+    │     ⚠️  BASELINE BEFORE CUSTOM (Critical):              │
+    │     - What does the VENDOR/SOURCE officially provide?   │
+    │     - Read THEIR docs first, not community solutions    │
+    │     - What LIMITATIONS do official docs acknowledge?    │
+    │     - What GAP remains after using official features?   │
+    │     - Only THEN consider custom/third-party solutions   │
+    │                                                         │
+    │     Example: Before building OpenMemory integration,    │
+    │     research: "What does Claude Code provide for        │
+    │     instruction persistence? Where do official docs     │
+    │     say it falls short?"                                │
+    │                                                         │
     │     - Read docs, code, APIs (especially "Why" docs)     │
     │     - Query OpenMemory for prior knowledge              │
     │     - VALIDATE with code review (not just docs)         │
@@ -324,6 +337,7 @@ openmemory_store(
 | Solution-shaped outcomes | "SQLite + hook = survives" | Outcomes describe HOW, not WHAT user wants | DISCOVERY: Use template "User can X without Y" |
 | Noun-only thinking | Only identify entities, miss behaviors | User pain often verb-shaped: "stop doing X" | DISCOVERY: Step 2 includes verbs AND anti-patterns |
 | Missing anti-goals | Only ask what user wants, not what they want STOPPED | Repeated corrections become invisible | DISCOVERY: Step 4 extracts anti-goals from frustrations |
+| Skipping baseline | Jump to custom solution without researching vendor's offering | May rebuild what exists or miss known limitations | DISCOVERY: Step 3 requires "Baseline Before Custom" |
 
 ---
 
