@@ -1751,39 +1751,49 @@ ExecStart=/usr/bin/socat TCP-LISTEN:8123,bind=192.168.1.122,reuseaddr,fork TCP:1
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                         BLUE/GREEN DEPLOYMENT                                    │
 │                                                                                  │
+│  PRODUCTION ENDPOINT (traffic switch)                                            │
 │  ┌───────────────────────────────────────────────────────────────────────────┐  │
-│  │                    K3S NAMESPACE: claudecodeui                             │  │
 │  │                                                                             │  │
-│  │  ┌─────────────────────────────┐   ┌─────────────────────────────┐        │  │
-│  │  │      BLUE (Active)          │   │      GREEN (Standby)        │        │  │
-│  │  │                             │   │                             │        │  │
-│  │  │  deployment-blue.yaml       │   │  deployment-green.yaml      │        │  │
-│  │  │  ┌───────────────────────┐  │   │  ┌───────────────────────┐  │        │  │
-│  │  │  │ claudecodeui-blue     │  │   │  │ claudecodeui-green    │  │        │  │
-│  │  │  │ replicas: 1           │  │   │  │ replicas: 0           │  │        │  │
-│  │  │  │ image: :main          │  │   │  │ image: :main          │  │        │  │
-│  │  │  └───────────────────────┘  │   │  └───────────────────────┘  │        │  │
-│  │  │                             │   │                             │        │  │
-│  │  │  MQTT Topics:               │   │  MQTT Topics:               │        │  │
-│  │  │  • claude/*            ◄────┼───┼── staging/claude/*          │        │  │
-│  │  │    (production)             │   │    (pre-prod testing)       │        │  │
-│  │  │                             │   │                             │        │  │
-│  │  └─────────────────────────────┘   └─────────────────────────────┘        │  │
-│  │                                                                             │  │
-│  │  ⚠️  CONSTRAINT: Only ONE deployment per topic prefix                      │  │
+│  │  claude.app.homelab  ─────────────────────┐                                │  │
+│  │  (Ingress - points to LIVE deployment)    │                                │  │
+│  │                                           ▼                                │  │
+│  │  MQTT topics: claude/*            ┌──────────────┐                         │  │
+│  │  (prod traffic)                   │   ACTIVE     │                         │  │
+│  │                                   │  (blue OR    │                         │  │
+│  │                                   │   green)     │                         │  │
+│  │                                   └──────────────┘                         │  │
 │  │                                                                             │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                  │
-│  PROMOTION WORKFLOW:                                                             │
+│  K3S NAMESPACE: claudecodeui                                                     │
+│  ┌─────────────────────────────┐   ┌─────────────────────────────┐             │
+│  │  claude-blue.app.homelab    │   │  claude-green.app.homelab   │             │
+│  │  (direct access)            │   │  (direct access)            │             │
+│  │                             │   │                             │             │
+│  │  claudecodeui-blue          │   │  claudecodeui-green         │             │
+│  │  replicas: 1                │   │  replicas: 1                │             │
+│  │  image: :v1.2.0             │   │  image: :v1.3.0             │             │
+│  │                             │   │                             │             │
+│  │  ◄── LIVE                   │   │  ◄── STANDBY                │             │
+│  │  Subscribes: claude/*       │   │  Subscribes: test/claude/*  │             │
+│  │                             │   │                             │             │
+│  └─────────────────────────────┘   └─────────────────────────────┘             │
+│                                                                                  │
+│  SWITCHOVER WORKFLOW:                                                            │
 │  ┌───────────────────────────────────────────────────────────────────────────┐  │
 │  │                                                                             │  │
-│  │  1. Deploy new code to GREEN with staging/ topics                          │  │
-│  │  2. Test: ./scripts/test-mqtt.sh --staging                                 │  │
-│  │  3. If pass, swap topic env vars in deployments                            │  │
-│  │  4. Flux reconciles → GREEN becomes prod, BLUE becomes staging             │  │
-│  │  5. Rollback = swap topics back                                            │  │
+│  │  1. Deploy v1.3.0 to GREEN (standby)                                       │  │
+│  │  2. Validate via claude-green.app.homelab + test/claude/* topics           │  │
+│  │  3. Update GREEN env: MQTT topics → claude/* (prod)                        │  │
+│  │  4. Update Ingress: claude.app.homelab → green service                     │  │
+│  │  5. Update BLUE env: MQTT topics → test/claude/* (standby)                 │  │
+│  │  6. GREEN is now LIVE, BLUE is now STANDBY                                 │  │
+│  │                                                                             │  │
+│  │  Rollback = reverse steps 3-5 (switch Ingress + topics back)               │  │
 │  │                                                                             │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                  │
+│  ⚠️  CONSTRAINT: Only LIVE pod subscribes to claude/* at any time               │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
