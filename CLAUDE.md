@@ -177,6 +177,47 @@ Proxmox VE, K3s, Flux GitOps, MetalLB, kube-prometheus-stack, Ollama GPU server
 - **Backup First**: Always backup before modifications
 - When UI fails but API works → check client-side (browser extensions, cache)
 
+## Outcome-Anchored Research (Plan-Execute-Replan)
+
+**TRIGGER**: "How should I integrate...", "How to best...", "Research how to...", "What's the best way to..."
+
+**SKILL**: `.claude/skills/outcome-anchored-research/SKILL.md` - auto-invokes on research questions
+
+### Key Behavior
+
+1. **DO NOT ask clarifying questions** - user's vagueness is intentional
+2. **Discover outcomes autonomously** - that's YOUR job, not user's
+3. **Present top 3 outcomes for confirmation** - only interaction needed
+4. **Apply quality check** - "What if too much?" for precision dimension
+
+### Quick Flow
+1. User asks vague question: "How should I integrate X with Y?"
+2. You run quick discovery (1-2 min) using baseline research
+3. Present top 3 outcomes: "User can `<verb>` without `<pain>`"
+4. Wait for confirmation
+5. Execute full research with subagents
+6. Present outcome→solution mapping
+7. Store in OpenMemory
+
+### Top 3 Outcomes Template
+```
+Based on discovery, here are the top 3 outcomes:
+
+1. **User can [X] without [Y]**
+2. **User can [A] without [B]**
+3. **User can [P] without [Q]**
+
+Confirm, or adjust?
+```
+
+### Anti-Patterns
+- Asking "What are your requirements?" (discover them yourself)
+- Aimless exploration without outcome anchors
+- First-fit selection without quality check
+- Missing precision dimension ("what if too much?")
+
+**Reference**: `docs/methodology/outcome-anchored-research.md`
+
 ## OpenMemory Integration
 
 Persistent memory across Claude Code sessions.
@@ -218,6 +259,44 @@ When memory helps: `openmemory_reinforce(id="...", boost=0.1)`
 
 ### Namespace
 Always use `namespace="home"` for this repo.
+
+## Performance Diagnosis - USE Method
+
+**TRIGGER**: When user reports: slow, latency, performance degraded, timeout, lag, unresponsive
+
+**RECOMMENDED STEPS** (in this order):
+
+1. **Check OpenMemory FIRST** for existing fix:
+   ```
+   openmemory_query("<service> <symptom> solved fix", k=5)
+   ```
+   If found → Report it was already solved, don't re-investigate
+
+2. **Run USE Method** via orchestrator:
+   ```bash
+   scripts/perf/diagnose.sh --target <context>
+   ```
+   Contexts: `proxmox-vm:116` (HAOS), `proxmox-vm:108` (K3s VM), `k8s-pod:ns/pod`, `ssh:root@host.maas`
+
+3. **Follow the flowchart** - don't skip to conclusions:
+   - Check Errors → Utilization → Saturation (E→U→S order)
+   - Check ALL resources (CPU, Memory, Disk, Network, GPU)
+   - Check BOTH layers for VMs/containers (workload + host)
+
+4. **Store resolution** in OpenMemory if new issue solved:
+   ```
+   openmemory_lgm_store(node="act", content="<service> <symptom> - SOLVED. Fix: <resolution>", tags=["performance", "solved"])
+   ```
+
+**ANTI-PATTERNS**:
+- Jumping to "it's probably network" without data
+- Skipping USE Method to check app logs first
+- Not checking OpenMemory for previous fixes
+- Stopping after finding one issue without checking other resources
+
+**Note**: These are strong recommendations. Skip with explicit justification if user requests specific investigation (e.g., "just check the logs").
+
+**Reference**: `docs/methodology/performance-diagnosis-runbook.md`
 
 ## Service-Specific Update Policies
 
