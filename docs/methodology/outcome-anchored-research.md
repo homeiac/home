@@ -130,16 +130,24 @@ for iteration in 1..5:
     │     - WHY does it exist? What problem does it solve?    │
     │                                                         │
     │     ⚠️  BASELINE BEFORE CUSTOM (Critical):              │
+    │     For EACH noun in the integration:                   │
     │     - What does the VENDOR/SOURCE officially provide?   │
     │     - Read THEIR docs first, not community solutions    │
     │     - What LIMITATIONS do official docs acknowledge?    │
     │     - What GAP remains after using official features?   │
     │     - Only THEN consider custom/third-party solutions   │
     │                                                         │
-    │     Example: Before building OpenMemory integration,    │
-    │     research: "What does Claude Code provide for        │
-    │     instruction persistence? Where do official docs     │
-    │     say it falls short?"                                │
+    │     Apply to ALL sides of integration:                  │
+    │     • "OpenMemory + Claude Code" means research BOTH:   │
+    │       - Claude Code: What does it provide for memory?   │
+    │       - OpenMemory: What does it provide? Limitations?  │
+    │     • Don't research one side and assume the other      │
+    │                                                         │
+    │     Example questions:                                  │
+    │     - "What does Claude Code provide for instruction    │
+    │       persistence? Where do docs say it falls short?"   │
+    │     - "What does OpenMemory provide for LLM memory?     │
+    │       What limitations does their README acknowledge?"  │
     │                                                         │
     │     - Read docs, code, APIs (especially "Why" docs)     │
     │     - Query OpenMemory for prior knowledge              │
