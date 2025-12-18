@@ -186,6 +186,28 @@ for iteration in 1..5:
     │     ❌ BAD:  "SQLite + hook survives compaction"        │
     │     ✅ GOOD: "User can /compact without losing context" │
     │                                                         │
+    │     QUALITY CHECK: For each outcome, ask:               │
+    │     - "What if user gets TOO MUCH of this?"             │
+    │     - "What's the failure mode of imprecision?"         │
+    │     - "Is there a relevance/filtering dimension?"       │
+    │                                                         │
+    │     Example:                                            │
+    │     - Outcome: "User can load context automatically"    │
+    │     - Quality check: "What if irrelevant context loads?"│
+    │     - Refined: "User gets task-relevant context only"   │
+    │                                                         │
+    │     CONSOLIDATION: Before finalizing outcomes:          │
+    │     - Group similar outcomes (deduplicate)              │
+    │     - Check against CORE value proposition              │
+    │     - Prioritize by user pain severity                  │
+    │                                                         │
+    │     SCENARIOS: For each outcome, write a concrete       │
+    │     scenario showing the before/after:                  │
+    │     - Before: "User mentions Frigate, all 800 memories  │
+    │       load, context bloats, hits /compact"              │
+    │     - After: "User mentions Frigate, only Frigate       │
+    │       memories load, context stays small"               │
+    │                                                         │
     │  ⚠️  SOLUTION QUARANTINE: If you discover solutions     │
     │      during Discovery, write them in a SEPARATE         │
     │      "Solutions Found" section. Do NOT mix into         │
@@ -351,6 +373,8 @@ openmemory_store(
 | Noun-only thinking | Only identify entities, miss behaviors | User pain often verb-shaped: "stop doing X" | DISCOVERY: Step 2 includes verbs AND anti-patterns |
 | Missing anti-goals | Only ask what user wants, not what they want STOPPED | Repeated corrections become invisible | DISCOVERY: Step 4 extracts anti-goals from frustrations |
 | Skipping baseline | Jump to custom solution without researching vendor's offering | May rebuild what exists or miss known limitations | DISCOVERY: Step 3 requires "Baseline Before Custom" |
+| Missing quality dimension | "User can load context" without asking "what if too much loads?" | Outcomes lack precision; junk/noise not addressed | DISCOVERY: Step 7 quality check for "too much" failure mode |
+| No consolidation | List 10 outcomes, 3 are duplicates, core value buried at #8 | Diluted focus, missed priorities | DISCOVERY: Step 7 consolidation - dedupe, prioritize by pain |
 
 ---
 
