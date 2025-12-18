@@ -144,6 +144,18 @@ for iteration in 1..5:
     │  7. DETERMINE outcomes to achieve                       │
     │     - Specific, testable behaviors                      │
     │     - Derived from understanding, not assumed           │
+    │     - MUST be user experience, NOT tool behavior        │
+    │     - VALIDATION: If outcome mentions HOW (API, tech,   │
+    │       storage, hook), REWRITE as WHAT user experiences  │
+    │                                                         │
+    │     Template: "User can <verb> without <pain point>"    │
+    │     ❌ BAD:  "SQLite + hook survives compaction"        │
+    │     ✅ GOOD: "User can /compact without losing context" │
+    │                                                         │
+    │  ⚠️  SOLUTION QUARANTINE: If you discover solutions     │
+    │      during Discovery, write them in a SEPARATE         │
+    │      "Solutions Found" section. Do NOT mix into         │
+    │      outcomes. Solutions belong in EXECUTE phase.       │
     │                                                         │
     │  8. WRITE/UPDATE technical paper                        │
     │     - Consolidate findings                              │
@@ -301,6 +313,7 @@ openmemory_store(
 | Implicit outcomes | Outcomes in conversation only | Must be explicit checklist | PLAN: write to plan file |
 | Re-researching | Investigating already-solved problem | Wasted effort | PLAN: query OpenMemory first |
 | Not storing | Didn't save new findings | Future sessions lose knowledge | RESPONSE: store in OpenMemory |
+| Solution-shaped outcomes | "SQLite + hook = survives" | Outcomes describe HOW, not WHAT user wants | DISCOVERY: Use template "User can X without Y" |
 
 ---
 
