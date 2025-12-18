@@ -1210,6 +1210,151 @@ automation:
    │            │              │               │                │
 ```
 
+### Scenario 6: Multiple Choice (Dial Selection)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │ "restart a service"       │               │                │
+   │───────────►│──────────────►──────────────►│───────────────►│
+   │            │              │               │                │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ {type:"choice",                │
+   │            │              │  question:"Which service?",    │
+   │            │              │  options:["nginx","postgres",  │
+   │            │              │           "redis"],            │
+   │            │              │  requestId:"ch1"}              │
+   │            │              │               │                │
+   │            │              │ state: MULTIPLE_CHOICE         │
+   │            │              │ store options, selected=1      │
+   │            │◄─────────────│ LED: [████    ████    ████]    │
+   │            │              │ (3 segments, #1 bright)        │
+   │            │◄─────────────│ TTS: "Which service? 1 nginx,  │
+   │            │              │       2 postgres, 3 redis"     │
+   │            │              │               │                │
+   │ [rotate CW]│              │               │                │
+   │───────────►│─────────────►│ selected = 2  │                │
+   │            │◄─────────────│ LED: segment 2 bright          │
+   │            │◄─────────────│ TTS: "postgres"                │
+   │            │              │               │                │
+   │ [rotate CW]│              │               │                │
+   │───────────►│─────────────►│ selected = 3  │                │
+   │            │◄─────────────│ LED: segment 3 bright          │
+   │            │◄─────────────│ TTS: "redis"  │                │
+   │            │              │               │                │
+   │ [press btn]│              │               │                │
+   │───────────►│─────────────►│               │                │
+   │            │              │ state: WAITING                 │
+   │            │◄─────────────│ LED: orange   │                │
+   │            │◄─────────────│ TTS: "Restart redis?"          │
+   │            │              │               │                │
+   │ [approve]  │              │               │                │
+   │───────────►│─────────────►│───────────────┼───────────────►│
+   │            │              │ {type:"choice", selectedOption:3}
+   │            │◄─────────────│ LED: blue     │ (executes...)  │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ {text:"Redis restarted"}       │
+   │            │◄─────────────│ TTS: "Redis restarted", LED:off│
+   │            │              │               │                │
+```
+
+### Scenario 6b: Multiple Choice (Voice Selection)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │  ... (choice prompt arrives, LED segments, TTS options) ...│
+   │            │              │ state: MULTIPLE_CHOICE         │
+   │            │              │               │                │
+   │ "postgres" │              │               │                │
+   │───────────►│ STT:"postgres"               │                │
+   │            │─────────────►│               │                │
+   │            │              │ intent: claude_select          │
+   │            │              │ match "postgres" → option 2    │
+   │            │              │ state: WAITING                 │
+   │            │◄─────────────│ LED: orange   │                │
+   │            │◄─────────────│ TTS: "Restart postgres?"       │
+   │            │              │               │                │
+   │            │  ... (approval flow continues) ...            │
+   │            │              │               │                │
+```
+
+### Scenario 7: Resume Previous Conversation (V2)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘
+   │            │              │               │                │
+   │            │              │ (context timer expired,        │
+   │            │              │  LED ring empty)               │
+   │            │              │               │                │
+   │ "Hey Nabu, ask Claude to resume"          │                │
+   │───────────►│ STT: "ask claude to resume"  │                │
+   │            │─────────────►│               │                │
+   │            │              │ intent: claude_resume          │
+   │            │              │───────────────┼───────────────►│
+   │            │              │ {message:"resume", resume:true}│
+   │            │◄─────────────│ LED: blue     │                │
+   │            │              │               │ (loads last    │
+   │            │              │               │  conversation) │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ {text:"Resuming. We were       │
+   │            │              │  discussing server status.",   │
+   │            │              │  session_id:"restored-abc"}    │
+   │            │              │               │                │
+   │            │              │ restore context color          │
+   │            │◄─────────────│ LED: context ring (gray)       │
+   │            │◄─────────────│ TTS: "Resuming. We were        │
+   │            │              │  discussing server status."    │
+   │            │              │               │                │
+   │ "which has the most pods?"│               │                │
+   │───────────►│──────────────►──────────────►│───────────────►│
+   │            │              │               │ (uses restored │
+   │            │              │               │  context)      │
+   │            │              │◄──────────────┼────────────────│
+   │            │              │ {text:"Node 2 has 47 pods"}    │
+   │            │◄─────────────│ TTS: "Node 2 has 47 pods"      │
+   │            │              │               │                │
+```
+
+### Scenario 8: Cancel During Execution (V2)
+
+```
+┌──────┐   ┌─────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────┐   ┌───────────┐
+│ User │   │Voice PE │   │    HA      │   │  MQTT    │   │ClaudeCodeUI │   │  Shell    │
+└──┬───┘   └────┬────┘   └─────┬──────┘   └────┬─────┘   └──────┬──────┘   └─────┬─────┘
+   │            │              │               │                │                │
+   │  ... (user approved, now executing long-running command) ..│                │
+   │            │              │ state: EXECUTING               │                │
+   │            │◄─────────────│ LED: blue     │                │ kubectl logs   │
+   │            │              │               │                │ --follow       │
+   │            │              │               │                │───────────────►│
+   │            │              │               │                │ (streaming...) │
+   │            │              │               │                │◄───────────────│
+   │            │              │               │                │                │
+   │ "stop" or [long press]    │               │                │                │
+   │───────────►│─────────────►│               │                │                │
+   │            │              │ intent: claude_cancel          │                │
+   │            │              │───────────────┼───────────────►│                │
+   │            │              │ {type:"cancel"}                │                │
+   │            │              │               │                │ SIGINT         │
+   │            │              │               │                │───────────────►│
+   │            │              │               │                │◄───────────────│
+   │            │              │               │                │ (terminated)   │
+   │            │              │◄──────────────┼────────────────│                │
+   │            │              │ {type:"cancelled",             │                │
+   │            │              │  text:"Command stopped"}       │                │
+   │            │              │ state: IDLE   │                │                │
+   │            │◄─────────────│ LED: red(1s) → off             │                │
+   │            │◄─────────────│ TTS: "Stopping"                │                │
+   │            │              │               │                │                │
+```
+
 ---
 
 ## File Structure
