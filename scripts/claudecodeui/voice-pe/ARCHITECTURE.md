@@ -1863,28 +1863,48 @@ Topics: test/claude/*  ◄── ISOLATED FROM PROD
 │     → Send test/claude/approval-response                                        │
 │     → Verify execution completes                                                │
 │                                                                                  │
-│  SWITCHOVER                                                                      │
+│  SWITCHOVER (GitOps)                                                             │
 │  ═══════════════════════════════════════════════════════════════════════════    │
 │                                                                                  │
-│  Step 1: Update GREEN to subscribe to prod topics                               │
+│  Step 1: Edit deployment-green.yaml - set prod topics                           │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │  kubectl set env deployment/claudecodeui-green \                        │   │
-│  │    MQTT_COMMAND_TOPIC=claude/command \                                  │   │
-│  │    MQTT_RESPONSE_TOPIC=claude/home/response \                           │   │
-│  │    MQTT_APPROVAL_REQUEST_TOPIC=claude/approval-request \                │   │
-│  │    MQTT_APPROVAL_RESPONSE_TOPIC=claude/approval-response                │   │
+│  │  # gitops/clusters/homelab/apps/claudecodeui/green/deployment-green.yaml│   │
+│  │  env:                                                                   │   │
+│  │    - name: MQTT_COMMAND_TOPIC                                           │   │
+│  │      value: "claude/command"           # was: test/claude/command       │   │
+│  │    - name: MQTT_RESPONSE_TOPIC                                          │   │
+│  │      value: "claude/home/response"     # was: test/claude/home/response │   │
 │  └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
-│  Step 2: Update BLUE to subscribe to test topics (becomes standby)              │
+│  Step 2: Edit deployment-blue.yaml - set test topics (becomes standby)          │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │  kubectl set env deployment/claudecodeui-blue \                         │   │
-│  │    MQTT_COMMAND_TOPIC=test/claude/command \                             │   │
-│  │    MQTT_RESPONSE_TOPIC=test/claude/home/response \                      │   │
-│  │    MQTT_APPROVAL_REQUEST_TOPIC=test/claude/approval-request \           │   │
-│  │    MQTT_APPROVAL_RESPONSE_TOPIC=test/claude/approval-response           │   │
+│  │  # gitops/clusters/homelab/apps/claudecodeui/blue/deployment-blue.yaml  │   │
+│  │  env:                                                                   │   │
+│  │    - name: MQTT_COMMAND_TOPIC                                           │   │
+│  │      value: "test/claude/command"      # was: claude/command            │   │
+│  │    - name: MQTT_RESPONSE_TOPIC                                          │   │
+│  │      value: "test/claude/home/response"# was: claude/home/response      │   │
 │  └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
-│  Step 3: Update Ingress (claude.app.homelab → green service)                    │
+│  Step 3: Edit ingress.yaml - point to green service                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  # gitops/clusters/homelab/apps/claudecodeui/ingress.yaml               │   │
+│  │  rules:                                                                 │   │
+│  │    - host: claude.app.homelab                                           │   │
+│  │      http:                                                              │   │
+│  │        paths:                                                           │   │
+│  │          - backend:                                                     │   │
+│  │              service:                                                   │   │
+│  │                name: claudecodeui-green  # was: claudecodeui-blue       │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+│  Step 4: Commit, push, Flux reconciles                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  git add gitops/clusters/homelab/apps/claudecodeui/                     │   │
+│  │  git commit -m "chore: switch live to green"                            │   │
+│  │  git push                                                               │   │
+│  │  flux reconcile kustomization claudecodeui --with-source                │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
 │  AFTER SWITCHOVER (Green is LIVE)                                               │
 │  ═══════════════════════════════════════════════════════════════════════════    │
