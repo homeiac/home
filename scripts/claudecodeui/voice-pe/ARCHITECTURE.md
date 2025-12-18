@@ -104,10 +104,107 @@ function isDuplicateMessage(payload) {
 ## Design Principles
 
 1. **Voice PE = I/O only** - Events in, LED/TTS out
-2. **HA = State machine** - Single source of truth
-3. **ClaudeCodeUI = Bridge** - MQTT ↔ Claude Code
+2. **HA = Router** - Stateless pass-through during session
+3. **ClaudeCodeUI = State owner** - ALL state logic lives here
 4. **No firmware mods** - Use Voice PE as-is
 5. **DRY** - Define patterns/templates once, reuse everywhere
+
+---
+
+## Session Architecture
+
+**Key insight: HA is stateless during an active session. ClaudeCodeUI owns all state.**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SESSION LIFECYCLE                                    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ BEFORE SESSION (normal Assist)                                       │   │
+│  │                                                                       │   │
+│  │   "Hey Nabu, turn on lights" → Assist pipeline (not Claude)         │   │
+│  │   "Hey Nabu, what time is it" → Assist pipeline (not Claude)        │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                               │
+│                              │ "Hey Nabu, ask Claude..."                    │
+│                              ▼                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ SESSION START                                                        │   │
+│  │                                                                       │   │
+│  │   HA sets: input_boolean.claude_session_active = true               │   │
+│  │   HA forwards first message to claude/command                        │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                               │
+│                              ▼                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ DURING SESSION (HA = pass-through)                                   │   │
+│  │                                                                       │   │
+│  │   Voice text      ──► claude/command      (all text forwarded)      │   │
+│  │   Dial/button     ──► claude/event        (all events forwarded)    │   │
+│  │   claude/led      ──► Voice PE LED        (execute command)         │   │
+│  │   claude/voice    ──► Voice PE TTS        (execute command)         │   │
+│  │                                                                       │   │
+│  │   HA has NO state logic. Just routing.                              │   │
+│  │   ClaudeCodeUI decides what "yes" means based on ITS state.         │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                               │
+│                              │ Session end trigger                          │
+│                              ▼                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ SESSION END                                                          │   │
+│  │                                                                       │   │
+│  │   Triggers:                                                          │   │
+│  │   • ClaudeCodeUI sends {type: "session_end"}                        │   │
+│  │   • Timeout (60s no activity)                                        │   │
+│  │   • User says "cancel" / long press in IDLE                         │   │
+│  │                                                                       │   │
+│  │   HA sets: input_boolean.claude_session_active = false              │   │
+│  │   Back to normal Assist pipeline                                     │   │
+│  │                                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### HA Entities (Minimal)
+
+```yaml
+# Session tracking - just ONE boolean
+input_boolean:
+  claude_session_active:
+    name: Claude Session Active
+
+# Context timeout
+timer:
+  claude_session_timeout:
+    duration: "00:01:00"  # 60s default
+```
+
+### State Machine Lives in ClaudeCodeUI
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      ClaudeCodeUI STATE MACHINE                              │
+│                                                                              │
+│  States: IDLE, THINKING, WAITING, PREVIEW_*, EXECUTING, MULTIPLE_CHOICE    │
+│                                                                              │
+│  ClaudeCodeUI:                                                               │
+│  • Receives voice text via claude/command                                   │
+│  • Receives dial/button via claude/event                                    │
+│  • Maintains state internally                                               │
+│  • Sends LED commands via claude/led                                        │
+│  • Sends TTS commands via claude/voice                                      │
+│  • Sends session_end when conversation complete                             │
+│                                                                              │
+│  HA does NOT interpret "yes"/"no" - ClaudeCodeUI does.                     │
+│  HA does NOT track approval state - ClaudeCodeUI does.                     │
+│  HA just forwards and executes.                                             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -128,32 +225,25 @@ function isDuplicateMessage(payload) {
                                      │
 ┌────────────────────────────────────┴────────────────────────────────────┐
 │                         HOME ASSISTANT                                   │
-│                        STATE MACHINE OWNER                               │
+│                    ROUTER (stateless during session)                     │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     STATE MACHINE                                │   │
-│  │  input_select.claude_state                                       │   │
+│  │                     ROUTING LOGIC                                │   │
 │  │                                                                   │   │
-│  │  IDLE ←──────────────────────────────────────────────────────┐  │   │
-│  │    │                                                          │  │   │
-│  │    ▼ (request_sent)                                           │  │   │
-│  │  THINKING ──────────────────────────────────────────────────┐ │  │   │
-│  │    │         │           │                                   │ │  │   │
-│  │    │    (response)  (approval)  (choice)                     │ │  │   │
-│  │    │         │           │           │                       │ │  │   │
-│  │    │         ▼           ▼           ▼                       │ │  │   │
-│  │    │       IDLE      WAITING    MULTIPLE_CHOICE              │ │  │   │
-│  │    │                   │ │           │                       │ │  │   │
-│  │    │          (dial_cw)│ │(dial_ccw) │                       │ │  │   │
-│  │    │                   ▼ ▼           │                       │ │  │   │
-│  │    │         PREVIEW_APPROVE         │                       │ │  │   │
-│  │    │         PREVIEW_REJECT          │                       │ │  │   │
-│  │    │                   │             │                       │ │  │   │
-│  │    │            (confirm)            │                       │ │  │   │
-│  │    │                   ▼             │                       │ │  │   │
-│  │    │              EXECUTING ─────────┘                       │ │  │   │
-│  │    │                   │                                     │ │  │   │
-│  │    └───────────────────┴─────────────────────────────────────┘ │  │   │
+│  │  input_boolean.claude_session_active = false?                    │   │
+│  │    → Normal Assist pipeline                                      │   │
+│  │                                                                   │   │
+│  │  input_boolean.claude_session_active = true?                     │   │
+│  │    → Forward ALL input to ClaudeCodeUI:                          │   │
+│  │        Voice text  ──► claude/command                            │   │
+│  │        Dial/button ──► claude/event                              │   │
+│  │                                                                   │   │
+│  │    → Execute commands FROM ClaudeCodeUI:                         │   │
+│  │        claude/led   ──► light.voice_pe_led                       │   │
+│  │        claude/voice ──► tts.speak on Voice PE                    │   │
+│  │                                                                   │   │
+│  │  NO state machine in HA. Just routing.                           │   │
+│  │                                                                   │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │
@@ -238,34 +328,31 @@ function isDuplicateMessage(payload) {
 
 ---
 
-## HA as Router (Voice Text Routing)
+## HA as Router (Session-Based)
 
-**HA is just a router.** Voice PE sends text, HA checks state, routes accordingly.
+**HA is a stateless router.** It only knows: "is session active?" - not what state ClaudeCodeUI is in.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         VOICE TEXT ROUTING                                   │
+│                         HA ROUTING (simple)                                  │
 │                                                                              │
-│  Voice PE ──► STT (Whisper) ──► text ──► HA ──► check state ──► route       │
+│  Voice PE ──► STT (Whisper) ──► text ──► HA ──► check session ──► route     │
 │                                                                              │
-│  ┌────────────────┬───────────────────┬─────────────────────────────────┐   │
-│  │ Current State  │ Voice Text        │ Action                          │   │
-│  ├────────────────┼───────────────────┼─────────────────────────────────┤   │
-│  │ IDLE           │ any               │ → claude/command (new question) │   │
-│  │ THINKING       │ any               │ → beep (busy)                   │   │
-│  │ WAITING        │ "yes"/"approve"   │ → approve, send to ClaudeCodeUI │   │
-│  │ WAITING        │ "no"/"cancel"     │ → reject, send to ClaudeCodeUI  │   │
-│  │ WAITING        │ other             │ → new question (cancel pending) │   │
-│  │ MULTIPLE_CHOICE│ matches option    │ → select option, go to WAITING  │   │
-│  │ MULTIPLE_CHOICE│ no match          │ → beep (say option name)        │   │
-│  │ EXECUTING      │ "stop"/"cancel"   │ → cancel execution (V2)         │   │
-│  │ EXECUTING      │ other             │ → beep (busy)                   │   │
-│  └────────────────┴───────────────────┴─────────────────────────────────┘   │
+│  ┌───────────────────────┬──────────────────────────────────────────────┐   │
+│  │ Session Active?       │ Action                                       │   │
+│  ├───────────────────────┼──────────────────────────────────────────────┤   │
+│  │ NO                    │ Normal Assist pipeline (turn on lights, etc) │   │
+│  │ NO + "ask Claude..."  │ Start session, forward to claude/command     │   │
+│  │ YES                   │ Forward ALL text to claude/command           │   │
+│  │ YES                   │ Forward ALL dial/button to claude/event      │   │
+│  └───────────────────────┴──────────────────────────────────────────────┘   │
 │                                                                              │
-│  Pattern matching (case-insensitive):                                        │
-│  • approve: yes, yeah, yep, approve, do it, go ahead, confirmed             │
-│  • reject:  no, nope, cancel, stop, nevermind, don't                        │
-│  • option:  exact match or "number N" (e.g., "number 2", "postgres")        │
+│  HA does NOT interpret "yes"/"no"/"postgres" - that's ClaudeCodeUI's job.  │
+│  HA does NOT know if ClaudeCodeUI is WAITING or THINKING - doesn't matter. │
+│  HA just forwards everything during session.                                │
+│                                                                              │
+│  Pattern matching for "ask Claude" trigger (starts session):                │
+│  • "ask Claude...", "tell Claude...", "Claude, ..."                        │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
