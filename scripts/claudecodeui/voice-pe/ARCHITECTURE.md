@@ -238,6 +238,40 @@ function isDuplicateMessage(payload) {
 
 ---
 
+## HA as Router (Voice Text Routing)
+
+**HA is just a router.** Voice PE sends text, HA checks state, routes accordingly.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         VOICE TEXT ROUTING                                   │
+│                                                                              │
+│  Voice PE ──► STT (Whisper) ──► text ──► HA ──► check state ──► route       │
+│                                                                              │
+│  ┌────────────────┬───────────────────┬─────────────────────────────────┐   │
+│  │ Current State  │ Voice Text        │ Action                          │   │
+│  ├────────────────┼───────────────────┼─────────────────────────────────┤   │
+│  │ IDLE           │ any               │ → claude/command (new question) │   │
+│  │ THINKING       │ any               │ → beep (busy)                   │   │
+│  │ WAITING        │ "yes"/"approve"   │ → approve, send to ClaudeCodeUI │   │
+│  │ WAITING        │ "no"/"cancel"     │ → reject, send to ClaudeCodeUI  │   │
+│  │ WAITING        │ other             │ → new question (cancel pending) │   │
+│  │ MULTIPLE_CHOICE│ matches option    │ → select option, go to WAITING  │   │
+│  │ MULTIPLE_CHOICE│ no match          │ → beep (say option name)        │   │
+│  │ EXECUTING      │ "stop"/"cancel"   │ → cancel execution (V2)         │   │
+│  │ EXECUTING      │ other             │ → beep (busy)                   │   │
+│  └────────────────┴───────────────────┴─────────────────────────────────┘   │
+│                                                                              │
+│  Pattern matching (case-insensitive):                                        │
+│  • approve: yes, yeah, yep, approve, do it, go ahead, confirmed             │
+│  • reject:  no, nope, cancel, stop, nevermind, don't                        │
+│  • option:  exact match or "number N" (e.g., "number 2", "postgres")        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Helper Entities
 
 ```yaml
