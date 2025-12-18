@@ -104,107 +104,123 @@ function isDuplicateMessage(payload) {
 ## Design Principles
 
 1. **Voice PE = I/O only** - Events in, LED/TTS out
-2. **HA = Router** - Stateless pass-through during session
-3. **ClaudeCodeUI = State owner** - ALL state logic lives here
+2. **HA = Local I/O handler** - Dial/button events, LED, TTS, minimal state
+3. **ClaudeCodeUI = Conversation owner** - Claude API, conversation context
 4. **No firmware mods** - Use Voice PE as-is
 5. **DRY** - Define patterns/templates once, reuse everywhere
 
 ---
 
-## Session Architecture
+## Verified MVP Architecture
 
-**Key insight: HA is stateless during an active session. ClaudeCodeUI owns all state.**
+**Based on tested scripts: `test-ha-approval.sh`, `test-mqtt.sh`, `automation-claude-led-v2.yaml`**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SESSION LIFECYCLE                                    │
+│                    MVP ARCHITECTURE (VERIFIED)                               │
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ BEFORE SESSION (normal Assist)                                       │   │
+│  │                         ClaudeCodeUI                                 │   │
 │  │                                                                       │   │
-│  │   "Hey Nabu, turn on lights" → Assist pipeline (not Claude)         │   │
-│  │   "Hey Nabu, what time is it" → Assist pipeline (not Claude)        │   │
-│  │                                                                       │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                              │                                               │
-│                              │ "Hey Nabu, ask Claude..."                    │
-│                              ▼                                               │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ SESSION START                                                        │   │
-│  │                                                                       │   │
-│  │   HA sets: input_boolean.claude_session_active = true               │   │
-│  │   HA forwards first message to claude/command                        │   │
+│  │  Owns:                                                                │   │
+│  │  • Conversation with Claude API                                      │   │
+│  │  • Knows when approval is needed (tool_use requiring approval)       │   │
+│  │  • Publishes: claude/approval-request {requestId, command}          │   │
+│  │  • Receives: claude/approval-response {requestId, approved}         │   │
+│  │  • Executes command after approval                                   │   │
+│  │  • Publishes: claude/home/response {type, text}                     │   │
 │  │                                                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                              │                                               │
+│                              │ MQTT                                          │
 │                              ▼                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ DURING SESSION (HA = pass-through)                                   │   │
+│  │                         HOME ASSISTANT                               │   │
 │  │                                                                       │   │
-│  │   Voice text      ──► claude/command      (all text forwarded)      │   │
-│  │   Dial/button     ──► claude/event        (all events forwarded)    │   │
-│  │   claude/led      ──► Voice PE LED        (execute command)         │   │
-│  │   claude/voice    ──► Voice PE TTS        (execute command)         │   │
+│  │  Handles:                                                             │   │
+│  │  • Receives claude/approval-request → LED orange, TTS prompt         │   │
+│  │  • Stores requestId in input_text.claude_approval_request_id        │   │
+│  │  • Dial CW → publishes claude/approval-response {approved: true}    │   │
+│  │  • Dial CCW → publishes claude/approval-response {approved: false}  │   │
+│  │  • Button → publishes claude/approval-response {approved: true}     │   │
+│  │  • Receives approval-response → LED green/red flash                 │   │
+│  │  • Receives claude/command → LED blue (thinking)                    │   │
+│  │  • Receives response complete → LED off                             │   │
 │  │                                                                       │   │
-│  │   HA has NO state logic. Just routing.                              │   │
-│  │   ClaudeCodeUI decides what "yes" means based on ITS state.         │   │
+│  │  State (minimal):                                                     │   │
+│  │  • input_text.claude_approval_request_id (stores current requestId) │   │
+│  │  • input_boolean.claude_awaiting_approval (guards dial events)      │   │
 │  │                                                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                              │                                               │
-│                              │ Session end trigger                          │
+│                              │ ESPHome API                                   │
 │                              ▼                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ SESSION END                                                          │   │
+│  │                         VOICE PE                                     │   │
 │  │                                                                       │   │
-│  │   Triggers:                                                          │   │
-│  │   • ClaudeCodeUI sends {type: "session_end"}                        │   │
-│  │   • Timeout (60s no activity)                                        │   │
-│  │   • User says "cancel" / long press in IDLE                         │   │
-│  │                                                                       │   │
-│  │   HA sets: input_boolean.claude_session_active = false              │   │
-│  │   Back to normal Assist pipeline                                     │   │
+│  │  • Sends dial/button events to HA                                    │   │
+│  │  • Receives LED commands from HA                                     │   │
+│  │  • Receives TTS from HA (via Piper)                                  │   │
 │  │                                                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### HA Entities (Minimal)
+### MVP MQTT Flow (Verified)
+
+```
+1. User sends command via MQTT or voice
+   → claude/command {message: "delete /tmp/test.txt"}
+
+2. ClaudeCodeUI receives, calls Claude API
+   → Claude returns tool_use requiring approval
+
+3. ClaudeCodeUI publishes approval request
+   → claude/approval-request {requestId: "abc", command: "rm /tmp/test.txt"}
+
+4. HA automation triggers:
+   → LED: orange
+   → TTS: "Run rm /tmp/test.txt?"
+   → Store: input_text.claude_approval_request_id = "abc"
+   → Set: input_boolean.claude_awaiting_approval = true
+
+5. User rotates dial CW (approve)
+   → HA automation publishes:
+   → claude/approval-response {requestId: "abc", approved: true}
+
+6. ClaudeCodeUI receives approval, executes command
+   → Calls Claude to continue
+   → Publishes result to claude/home/response
+
+7. HA automation receives response
+   → LED: green flash → off
+   → TTS: speaks response
+```
+
+### HA Entities (MVP)
 
 ```yaml
-# Session tracking - just ONE boolean
+# Request tracking
+input_text:
+  claude_approval_request_id:
+    name: Claude Approval Request ID
+    max: 255
+
+# Approval guard
 input_boolean:
-  claude_session_active:
-    name: Claude Session Active
-
-# Context timeout
-timer:
-  claude_session_timeout:
-    duration: "00:01:00"  # 60s default
+  claude_awaiting_approval:
+    name: Claude Awaiting Approval
 ```
 
-### State Machine Lives in ClaudeCodeUI
+### Key Files (MVP)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      ClaudeCodeUI STATE MACHINE                              │
-│                                                                              │
-│  States: IDLE, THINKING, WAITING, PREVIEW_*, EXECUTING, MULTIPLE_CHOICE    │
-│                                                                              │
-│  ClaudeCodeUI:                                                               │
-│  • Receives voice text via claude/command                                   │
-│  • Receives dial/button via claude/event                                    │
-│  • Maintains state internally                                               │
-│  • Sends LED commands via claude/led                                        │
-│  • Sends TTS commands via claude/voice                                      │
-│  • Sends session_end when conversation complete                             │
-│                                                                              │
-│  HA does NOT interpret "yes"/"no" - ClaudeCodeUI does.                     │
-│  HA does NOT track approval state - ClaudeCodeUI does.                     │
-│  HA just forwards and executes.                                             │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| File | Purpose |
+|------|---------|
+| `automation-claude-led-v2.yaml` | HA automation handling all MQTT/events |
+| `test-mqtt.sh` | E2E test script |
+| `test-ha-approval.sh` | Approval flow test (requires physical dial) |
+| `run-local.sh` | Local Docker dev environment |
 
 ---
 
@@ -225,24 +241,25 @@ timer:
                                      │
 ┌────────────────────────────────────┴────────────────────────────────────┐
 │                         HOME ASSISTANT                                   │
-│                    ROUTER (stateless during session)                     │
+│                    LOCAL I/O HANDLER (minimal state)                     │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     ROUTING LOGIC                                │   │
+│  │                     MQTT ↔ EVENT HANDLER                         │   │
+│  │                     (automation-claude-led-v2.yaml)              │   │
 │  │                                                                   │   │
-│  │  input_boolean.claude_session_active = false?                    │   │
-│  │    → Normal Assist pipeline                                      │   │
+│  │  MQTT Triggers → Actions:                                        │   │
+│  │    claude/command         → LED blue                             │   │
+│  │    claude/approval-request→ LED orange, TTS, store requestId    │   │
+│  │    claude/home/response   → LED off, TTS response               │   │
+│  │    claude/approval-response→ LED green/red flash                │   │
 │  │                                                                   │   │
-│  │  input_boolean.claude_session_active = true?                     │   │
-│  │    → Forward ALL input to ClaudeCodeUI:                          │   │
-│  │        Voice text  ──► claude/command                            │   │
-│  │        Dial/button ──► claude/event                              │   │
+│  │  ESPHome Events → Actions:                                       │   │
+│  │    dial CW  + awaiting → publish approval-response: true        │   │
+│  │    dial CCW + awaiting → publish approval-response: false       │   │
+│  │    button   + awaiting → publish approval-response: true        │   │
 │  │                                                                   │   │
-│  │    → Execute commands FROM ClaudeCodeUI:                         │   │
-│  │        claude/led   ──► light.voice_pe_led                       │   │
-│  │        claude/voice ──► tts.speak on Voice PE                    │   │
-│  │                                                                   │   │
-│  │  NO state machine in HA. Just routing.                           │   │
+│  │  State: input_text.claude_approval_request_id                   │   │
+│  │         input_boolean.claude_awaiting_approval                  │   │
 │  │                                                                   │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
@@ -328,31 +345,30 @@ timer:
 
 ---
 
-## HA as Router (Session-Based)
+## HA Event Handling (MVP)
 
-**HA is a stateless router.** It only knows: "is session active?" - not what state ClaudeCodeUI is in.
+**HA handles dial/button events locally.** It doesn't forward to ClaudeCodeUI - it acts on them directly.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         HA ROUTING (simple)                                  │
+│                         HA EVENT HANDLING (MVP)                              │
 │                                                                              │
-│  Voice PE ──► STT (Whisper) ──► text ──► HA ──► check session ──► route     │
+│  ┌───────────────────────────────┬──────────────────────────────────────┐   │
+│  │ Event                         │ HA Action                            │   │
+│  ├───────────────────────────────┼──────────────────────────────────────┤   │
+│  │ MQTT: claude/command          │ LED blue (thinking effect)          │   │
+│  │ MQTT: claude/approval-request │ LED orange, TTS prompt, store ID    │   │
+│  │ MQTT: claude/home/response    │ LED off (if complete), TTS response │   │
+│  │ MQTT: claude/approval-response│ LED green/red flash                 │   │
+│  │ ESPHome: dial CW              │ Publish approval-response: approved │   │
+│  │ ESPHome: dial CCW             │ Publish approval-response: rejected │   │
+│  │ ESPHome: button press         │ Publish approval-response: approved │   │
+│  └───────────────────────────────┴──────────────────────────────────────┘   │
 │                                                                              │
-│  ┌───────────────────────┬──────────────────────────────────────────────┐   │
-│  │ Session Active?       │ Action                                       │   │
-│  ├───────────────────────┼──────────────────────────────────────────────┤   │
-│  │ NO                    │ Normal Assist pipeline (turn on lights, etc) │   │
-│  │ NO + "ask Claude..."  │ Start session, forward to claude/command     │   │
-│  │ YES                   │ Forward ALL text to claude/command           │   │
-│  │ YES                   │ Forward ALL dial/button to claude/event      │   │
-│  └───────────────────────┴──────────────────────────────────────────────┘   │
+│  Guard: Dial/button events only act if awaiting_approval = true             │
 │                                                                              │
-│  HA does NOT interpret "yes"/"no"/"postgres" - that's ClaudeCodeUI's job.  │
-│  HA does NOT know if ClaudeCodeUI is WAITING or THINKING - doesn't matter. │
-│  HA just forwards everything during session.                                │
-│                                                                              │
-│  Pattern matching for "ask Claude" trigger (starts session):                │
-│  • "ask Claude...", "tell Claude...", "Claude, ..."                        │
+│  HA owns: LED control, TTS, dial/button → approval-response                │
+│  ClaudeCodeUI owns: conversation, when to request approval                 │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
