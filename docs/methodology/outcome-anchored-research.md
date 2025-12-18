@@ -139,6 +139,21 @@ for iteration in 1..5:
     │                                                         │
     │     Don't skip any noun. Don't assume. Research ALL.    │
     │                                                         │
+    │     Example - "Integrate Foo with Bar":                 │
+    │     ❌ BAD: Research Foo, assume Bar works as expected  │
+    │     ✅ GOOD: Research Foo baseline + Bar baseline, then │
+    │             identify gap that requires custom work      │
+    │                                                         │
+    │     Example - "Add memory to Claude Code":              │
+    │     ❌ BAD: Jump straight to OpenMemory integration     │
+    │     ✅ GOOD:                                            │
+    │       1. What does Claude Code provide for memory?      │
+    │          (CLAUDE.md, project files, etc.)               │
+    │       2. What are its acknowledged limitations?         │
+    │       3. What does OpenMemory provide?                  │
+    │       4. What are OpenMemory's limitations?             │
+    │       5. What gap remains for custom work?              │
+    │                                                         │
     │     - Read docs, code, APIs (especially "Why" docs)     │
     │     - Query OpenMemory for prior knowledge              │
     │     - VALIDATE with code review (not just docs)         │
