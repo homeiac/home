@@ -1,0 +1,98 @@
+substitutions:
+  name: home-assistant-voice-09f5a3
+  friendly_name: Home Assistant Voice 09f5a3
+packages:
+  # Pin to 25.11.0 - 25.12.0 has broken hey_jarvis model
+  Nabu Casa.Home Assistant Voice PE: github://esphome/home-assistant-voice-pe/home-assistant-voice.yaml@25.11.0
+esphome:
+  name: ${name}
+  name_add_mac_suffix: false
+  friendly_name: ${friendly_name}
+api:
+  encryption:
+    key: REDACTED_API_KEY
+
+# Test effect with per-LED control
+light:
+  - id: !extend led_ring
+    effects:
+      - addressable_lambda:
+          name: "Progress 1"
+          update_interval: 100ms
+          lambda: |-
+            it[0] = Color(0, 255, 0);  // LED 0 green
+            for (int i = 1; i < 12; i++) it[i] = Color::BLACK;
+      - addressable_lambda:
+          name: "Progress 2"
+          update_interval: 100ms
+          lambda: |-
+            it[0] = Color(0, 255, 0);  // LED 0 green
+            it[1] = Color(0, 255, 0);  // LED 1 green
+            for (int i = 2; i < 12; i++) it[i] = Color::BLACK;
+      - addressable_lambda:
+          name: "Progress 3"
+          update_interval: 100ms
+          lambda: |-
+            for (int i = 0; i < 3; i++) it[i] = Color(0, 255, 0);
+            for (int i = 3; i < 12; i++) it[i] = Color::BLACK;
+      - addressable_lambda:
+          name: "Segment Test"
+          update_interval: 100ms
+          lambda: |-
+            // Red-Green-Blue-White segments (3 LEDs each)
+            for (int i = 0; i < 3; i++) it[i] = Color(255, 0, 0);
+            for (int i = 3; i < 6; i++) it[i] = Color(0, 255, 0);
+            for (int i = 6; i < 9; i++) it[i] = Color(0, 0, 255);
+            for (int i = 9; i < 12; i++) it[i] = Color(255, 255, 255);
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  fast_connect: true
+
+# Extend dial sensor: ADD HA event + KEEP existing volume/hue logic
+# !extend REPLACES on_clockwise, so we must include ALL original behavior
+sensor:
+  - id: !extend dial
+    on_clockwise:
+      # NEW: Fire event to HA for ClaudeCodeUI approval
+      - homeassistant.event:
+          event: esphome.voice_pe_dial
+          data:
+            direction: clockwise
+            device_id: ${name}
+      # ORIGINAL: Volume/hue control from upstream package
+      - lambda: id(dial_touched) = true;
+      - if:
+          condition:
+            binary_sensor.is_off: center_button
+          then:
+            - script.execute:
+                id: control_volume
+                increase_volume: true
+          else:
+            - script.execute:
+                id: control_hue
+                increase_hue: true
+    on_anticlockwise:
+      # NEW: Fire event to HA for ClaudeCodeUI approval
+      - homeassistant.event:
+          event: esphome.voice_pe_dial
+          data:
+            direction: anticlockwise
+            device_id: ${name}
+      # ORIGINAL: Volume/hue control from upstream package
+      - lambda: id(dial_touched) = true;
+      - if:
+          condition:
+            binary_sensor.is_off: center_button
+          then:
+            - script.execute:
+                id: control_volume
+                increase_volume: false
+          else:
+            - script.execute:
+                id: control_hue
+                increase_hue: false
+

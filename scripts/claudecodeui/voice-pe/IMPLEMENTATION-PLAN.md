@@ -84,25 +84,20 @@
 - [x] Can Voice PE LED ring address individual LEDs? → **YES**. 12 WS2812 LEDs, firmware uses `it[i]` in `addressable_lambda`.
 - [x] What ESPHome service controls individual LED segments? → **None exposed yet**. Need to add ~20 lines to ESPHome config.
 
-**Solution**: Add ESPHome API service to `voice-pe-config.yaml`:
+**Solution**: Add `addressable_lambda` effects to `voice-pe-config.yaml`, trigger via HA `light.turn_on` with effect name:
 ```yaml
-api:
-  services:
-    - service: set_led
-      variables:
-        index: int
-        red: int
-        green: int
-        blue: int
-      then:
-        - light.addressable_set:
-            id: leds_internal
-            range_from: !lambda return index;
-            range_to: !lambda return index;
-            red: !lambda return red;
-            green: !lambda return green;
-            blue: !lambda return blue;
+light:
+  - id: !extend led_ring
+    effects:
+      - addressable_lambda:
+          name: "Progress 3"
+          lambda: |-
+            for (int i = 0; i < 3; i++) it[i] = Color(0, 255, 0);
+            for (int i = 3; i < 12; i++) it[i] = Color::BLACK;
 ```
+
+**Verified working**: Segment Test (4 colors), Progress 1/2/3 (incremental LEDs).
+Test script: `scripts/voice-pe/test-per-led.sh "Progress 3"`
 
 **Needed**:
 - Progress LED (green segments for completed)

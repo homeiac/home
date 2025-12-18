@@ -1,0 +1,5 @@
+# ESPHome build cache
+.esphome/
+
+# Secrets
+secrets.yaml
