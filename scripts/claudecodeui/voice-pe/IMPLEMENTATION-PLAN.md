@@ -1,93 +1,164 @@
 # Voice PE Approval - Implementation Plan
 
-## Day 0: MVP Shipped ✅
+## Capability Tiers
 
-Ship it, quirks and all. Find market fit.
+| Tier | Scenarios | What It Enables |
+|------|-----------|-----------------|
+| **Core** | S1, S2 (dial/button) | Ask Claude, approve with dial |
+| **Hands-Free** | + S2 voice yes/no | Approve without touching |
+| **Robust** | + S5 errors | Know when things break |
+| **Workflow** | + S3 multi-approval | Complex tasks (kubectl apply -R) |
+| **Conversational** | + S4 context | Follow-up questions |
+| **Power** | + S6 multi-choice | "Which pod? Which service?" |
+
+---
+
+## Core ✅
+
+**Status**: Shipped. Usable.
 
 **What works**:
-- Voice command → Claude → response
-- Approval request → LED → dial/button → response
+- Voice command → Claude → TTS response (S1)
+- Approval request → LED orange → dial preview → button confirm (S2)
 - RequestId correlation
-- Server-side timeout
+- Server-side 60s timeout
 
-**Known quirks** (acceptable for Day 0):
-- Voice yes/no NOT tested
+**Known quirks**:
 - Edge cases in dial/button handling
-- No HA-side timeout feedback
+- No HA-side timeout feedback (LED stays orange)
 
-**Status**: Deployed. Usable.
-
----
-
-## Day 1: It Takes Off
-
-Real usage. Fix bugs. Make it reliable.
-
-| Issue | Impact | Fix |
-|-------|--------|-----|
-| **Voice yes/no** | Can't approve hands-free | Add intent + guard |
-| **Spurious dial events** | Accidental approve/reject | Tighten guard logic |
-| **Timeout feedback** | LED stuck orange | Clear on server timeout |
-| **Error silence** | User doesn't know it failed | TTS error messages |
-
-**Day 1 Definition of Done**:
-- [ ] Voice yes/no works
-- [ ] No spurious approvals from idle state
-- [ ] Clean state reset after any outcome
-- [ ] Errors are spoken, not silent
+**Spikes** (to stabilize before next tier):
+- [ ] What dial/button edge cases exist? (document specific failures)
+- [ ] Why does clean-trace-test.sh show 2 approval-requests for 1 command?
+- [ ] Does HA receive timeout signal from ClaudeCodeUI to clear LED?
 
 ---
 
-## Day 2: Carrying Water
+## Hands-Free
 
-The boring but critical stuff.
+**Gap**: Voice yes/no NOT implemented
 
-| Area | Work |
-|------|------|
-| **Testing** | Organize 65 scripts → test suite with runner |
-| **CI/CD** | GitOps for HA automation deployment |
-| **Observability** | Structured logs, requestId tracing |
-| **Docs** | Runbook for common issues |
+**Spikes**:
+- [ ] Can HA intent be guarded by input_boolean state?
+- [ ] What phrases does Whisper reliably recognize? ("yes" vs "yeah" vs "yep")
+- [ ] Does intent fire when Voice PE is in "waiting for command" vs idle?
 
-**Day 2 Definition of Done**:
-- [ ] `./run-tests.sh` passes
-- [ ] Deploy via git push
-- [ ] Can trace request end-to-end
-- [ ] Runbook exists
+**Needed**:
+- HA intent for "yes" / "approve" / "do it"
+- HA intent for "no" / "reject" / "cancel"
+- Guard: only active when awaiting approval
 
----
-
-## MVP++ (Full Scenarios)
-
-After Day 1/2 foundations:
-
-| Scenario | When |
-|----------|------|
-| 1. Simple question | ✅ Day 0 |
-| 2. Binary approval | Day 1 |
-| 3. Multiple approvals | MVP++ |
-| 4. Follow-up/context | MVP++ |
-| 5. Error handling | Day 1/2 |
-| 6. Multiple choice | MVP++ |
+**Acceptance**:
+- [ ] "Hey Nabu, yes" approves pending request
+- [ ] "Hey Nabu, no" rejects pending request
+- [ ] Voice ignored when not awaiting approval
 
 ---
 
-## V2
+## Robust
 
-| Feature | Notes |
-|---------|-------|
-| Resume conversation | Beyond timeout |
-| Cancel execution | SIGINT |
-| Two-step preview | Accidental approval prevention |
+**Gap**: Silent failures
+
+**Spikes**:
+- [ ] What error types does ClaudeCodeUI emit? (check MQTT schema)
+- [ ] How is error signaled? (type:error in response? separate topic?)
+- [ ] Can HA detect MQTT timeout or only ClaudeCodeUI?
+
+**Needed**:
+- TTS error messages per APPROVAL-UX-SCENARIOS.md S5
+- LED red on error
+
+**Acceptance**:
+- [ ] MQTT timeout → spoken error
+- [ ] No response → spoken error
+- [ ] LED turns red, then off
 
 ---
 
-## Principal Criteria
+## Workflow
 
-| -ility | Bar |
-|--------|-----|
-| **Testability** | Automated test per scenario |
-| **Maintainability** | Single automation, DRY |
-| **Observability** | RequestId tracing |
-| **Reliability** | Graceful timeout/error handling |
-| **Usability** | Clear feedback every state |
+**Gap**: Only handles single approval
+
+**Spikes**:
+- [ ] Does ClaudeCodeUI send approval index/total? (approvalIndex, approvalTotal)
+- [ ] Can Voice PE LED ring address individual LEDs? (12 addressable?)
+- [ ] What ESPHome service controls individual LED segments?
+
+**Needed**:
+- Progress LED (green segments for completed)
+- Blinking orange for current approval
+- Sequence tracking (N of M)
+
+**Acceptance**:
+- [ ] 3-approval task shows progress on LED ring
+- [ ] Reject mid-sequence cancels entire task
+- [ ] All approved → brief green flash → off
+
+---
+
+## Conversational
+
+**Gap**: No visible context state
+
+**Spikes**:
+- [ ] Does ClaudeCodeUI track conversationId/turnNumber?
+- [ ] Is context timeout exposed via MQTT or internal only?
+- [ ] Can LED ring show gradient (brightness per LED)?
+
+**Needed**:
+- Context timer (ring drains)
+- Color aging per conversation turn
+
+**Acceptance**:
+- [ ] After response, ring shows remaining context time
+- [ ] Follow-up within timeout uses same conversation
+- [ ] After timeout, fresh conversation
+
+---
+
+## Power
+
+**Gap**: Only binary choices
+
+**Spikes**:
+- [ ] Does Voice PE firmware support tap count detection? (or HA-side debounce?)
+- [ ] Can dial event include rotation amount or just CW/CCW direction?
+- [ ] How does ClaudeCodeUI signal multiple choice? (type:choice? options array?)
+
+**Needed**:
+- LED segments for options (3-5)
+- Dial to select, button to confirm
+- Voice option names
+- Tap patterns (1-5 taps)
+
+**Acceptance**:
+- [ ] "Which service?" shows 3 colored segments
+- [ ] Dial rotates selection with voice announcement
+- [ ] Button confirms selection
+
+---
+
+## Scripts to Keep
+
+```
+test-mqtt.sh                  # MQTT connectivity test
+run-local.sh                  # Local dev container
+test-ask-claude-intent.sh     # Voice input test
+00-backup-voice-pe-config.sh  # ESPHome backup
+98-restore-voice-pe-backup.sh # ESPHome restore
+06-check-automation-status.sh # Automation diagnostics
+```
+
+## Scripts to Archive
+
+All numbered 01-15 scripts and diagnose-*/check-*/test-piper-* are POC spikes.
+Move to `archive/` or delete after confirming Core tier is stable.
+
+---
+
+## V2 (Deferred)
+
+| Scenario | Notes |
+|----------|-------|
+| S7: Resume conversation | Beyond timeout window |
+| S8: Cancel execution | SIGINT to running command |
