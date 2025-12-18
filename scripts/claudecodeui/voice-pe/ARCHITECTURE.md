@@ -104,8 +104,8 @@ function isDuplicateMessage(payload) {
 ## Design Principles
 
 1. **Voice PE = I/O only** - Events in, LED/TTS out
-2. **HA = Local I/O handler** - Dial/button events, LED, TTS, minimal state
-3. **ClaudeCodeUI = Conversation owner** - Claude API, conversation context
+2. **HA = Stateless I/O handler** - Dial/button → MQTT, LED, TTS (no state machine)
+3. **ClaudeCodeUI = State owner** - Claude API, conversation context, ALL state logic
 4. **No firmware mods** - Use Voice PE as-is
 5. **DRY** - Define patterns/templates once, reuse everywhere
 
@@ -147,9 +147,9 @@ function isDuplicateMessage(payload) {
 │  │  • Receives claude/command → LED blue (thinking)                    │   │
 │  │  • Receives response complete → LED off                             │   │
 │  │                                                                       │   │
-│  │  State (minimal):                                                     │   │
-│  │  • input_text.claude_approval_request_id (stores current requestId) │   │
-│  │  • input_boolean.claude_awaiting_approval (guards dial events)      │   │
+│  │  HA is stateless (no state machine). Just:                           │   │
+│  │  • input_text.claude_approval_request_id (correlation ID pass-thru) │   │
+│  │  • input_boolean.claude_awaiting_approval (guard/lock)              │   │
 │  │                                                                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                              │                                               │
@@ -198,20 +198,23 @@ function isDuplicateMessage(payload) {
    → TTS: speaks response
 ```
 
-### HA Entities (MVP)
+### HA Entities (MVP) - Not State, Just Plumbing
 
 ```yaml
-# Request tracking
+# Correlation ID pass-through (like HTTP session param)
 input_text:
   claude_approval_request_id:
     name: Claude Approval Request ID
     max: 255
 
-# Approval guard
+# Guard/lock to prevent spurious dial events
 input_boolean:
   claude_awaiting_approval:
     name: Claude Awaiting Approval
 ```
+
+**Note:** These are NOT state machine state. HA doesn't know THINKING vs WAITING.
+ClaudeCodeUI owns all state logic. HA just stores correlation ID and has a lock.
 
 ### Key Files (MVP)
 
@@ -258,8 +261,8 @@ input_boolean:
 │  │    dial CCW + awaiting → publish approval-response: false       │   │
 │  │    button   + awaiting → publish approval-response: true        │   │
 │  │                                                                   │   │
-│  │  State: input_text.claude_approval_request_id                   │   │
-│  │         input_boolean.claude_awaiting_approval                  │   │
+│  │  Correlation: input_text.claude_approval_request_id (pass-thru) │   │
+│  │  Guard:       input_boolean.claude_awaiting_approval (lock)     │   │
 │  │                                                                   │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
