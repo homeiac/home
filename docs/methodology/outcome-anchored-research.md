@@ -116,10 +116,14 @@ for iteration in 1..5:
     │     - Input from previous iteration                     │
     │     - First iteration: may not exist                    │
     │                                                         │
-    │  2. IDENTIFY nouns in the request                       │
-    │     - Key entities/systems mentioned                    │
-    │     - Track emergent nouns across iterations            │
-    │     - Later iterations may discover new nouns           │
+    │  2. IDENTIFY nouns AND verbs in the request              │
+    │     - Key entities/systems mentioned (nouns)            │
+    │     - Key actions/behaviors mentioned (verbs)           │
+    │     - Track emergent nouns/verbs across iterations      │
+    │     - Later iterations may discover new patterns        │
+    │     - ANTI-PATTERNS: What does user want STOPPED?       │
+    │       (e.g., "stop using one-liners", "stop jumping     │
+    │       to conclusions", "stop ignoring this rule")       │
     │                                                         │
     │  3. RESEARCH each noun                                  │
     │     - What is it?                                       │
@@ -132,6 +136,10 @@ for iteration in 1..5:
     │     - Extract goals FROM source docs, don't invent      │
     │     - What does each noun/system want to achieve?       │
     │     - What does the consumer/user want?                 │
+    │     - ANTI-GOALS: What does user want to STOP?          │
+    │       • What corrections has user repeated?             │
+    │       • What frustrations appear in hooks/logs?         │
+    │       • What rules exist because of past pain?          │
     │                                                         │
     │  5. MAP integration points and gaps                     │
     │     - Where do nouns intersect?                         │
@@ -314,6 +322,8 @@ openmemory_store(
 | Re-researching | Investigating already-solved problem | Wasted effort | PLAN: query OpenMemory first |
 | Not storing | Didn't save new findings | Future sessions lose knowledge | RESPONSE: store in OpenMemory |
 | Solution-shaped outcomes | "SQLite + hook = survives" | Outcomes describe HOW, not WHAT user wants | DISCOVERY: Use template "User can X without Y" |
+| Noun-only thinking | Only identify entities, miss behaviors | User pain often verb-shaped: "stop doing X" | DISCOVERY: Step 2 includes verbs AND anti-patterns |
+| Missing anti-goals | Only ask what user wants, not what they want STOPPED | Repeated corrections become invisible | DISCOVERY: Step 4 extracts anti-goals from frustrations |
 
 ---
 
