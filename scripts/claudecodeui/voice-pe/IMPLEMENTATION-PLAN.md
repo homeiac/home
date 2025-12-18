@@ -81,8 +81,12 @@
 
 **Spikes**:
 - [ ] Does ClaudeCodeUI send approval index/total? (approvalIndex, approvalTotal)
-- [ ] Can Voice PE LED ring address individual LEDs? (12 addressable?)
-- [ ] What ESPHome service controls individual LED segments?
+- [x] Can Voice PE LED ring address individual LEDs? → **NO** (factory). Possible with custom ESPHome firmware.
+- [x] What ESPHome service controls individual LED segments? → **None**. Only full-ring `light.turn_on` with rgb_color/brightness.
+
+**Implication**: Progress LEDs require either:
+1. Custom ESPHome firmware exposing `addressable_light`, OR
+2. Workaround: full-ring color changes to indicate progress (e.g., green→orange→green)
 
 **Needed**:
 - Progress LED (green segments for completed)
@@ -103,7 +107,9 @@
 **Spikes**:
 - [ ] Does ClaudeCodeUI track conversationId/turnNumber?
 - [ ] Is context timeout exposed via MQTT or internal only?
-- [ ] Can LED ring show gradient (brightness per LED)?
+- [x] Can LED ring show gradient (brightness per LED)? → **NO**. Full-ring brightness only.
+
+**Implication**: Color aging must use full-ring color changes (white→gray→dim), not per-LED gradients.
 
 **Needed**:
 - Context timer (ring drains)
@@ -124,16 +130,21 @@
 - [ ] Does Voice PE firmware support tap count detection? (or HA-side debounce?)
 - [ ] Can dial event include rotation amount or just CW/CCW direction?
 - [ ] How does ClaudeCodeUI signal multiple choice? (type:choice? options array?)
+- [x] LED segments for options? → **NO** (factory). Same limitation as Workflow tier.
+
+**Implication**: Multi-choice options need alternative UX:
+1. Voice announces options, user says option name, OR
+2. Cycle through options with dial (full-ring color per option)
 
 **Needed**:
-- LED segments for options (3-5)
+- ~~LED segments for options (3-5)~~ → Alternative UX required
 - Dial to select, button to confirm
 - Voice option names
 - Tap patterns (1-5 taps)
 
 **Acceptance**:
-- [ ] "Which service?" shows 3 colored segments
-- [ ] Dial rotates selection with voice announcement
+- [ ] "Which service?" announces options via TTS
+- [ ] Dial rotates selection with voice announcement (full-ring color change per option)
 - [ ] Button confirms selection
 
 ---
