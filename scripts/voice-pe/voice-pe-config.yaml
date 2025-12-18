@@ -12,7 +12,8 @@ api:
   encryption:
     key: REDACTED_API_KEY
 
-# Test effect with per-LED control
+# Per-LED control via named effects
+# (number/select entities cause boot crash - ESPHome bug)
 light:
   - id: !extend led_ring
     effects:
@@ -20,14 +21,13 @@ light:
           name: "Progress 1"
           update_interval: 100ms
           lambda: |-
-            it[0] = Color(0, 255, 0);  // LED 0 green
+            it[0] = Color(0, 255, 0);
             for (int i = 1; i < 12; i++) it[i] = Color::BLACK;
       - addressable_lambda:
           name: "Progress 2"
           update_interval: 100ms
           lambda: |-
-            it[0] = Color(0, 255, 0);  // LED 0 green
-            it[1] = Color(0, 255, 0);  // LED 1 green
+            for (int i = 0; i < 2; i++) it[i] = Color(0, 255, 0);
             for (int i = 2; i < 12; i++) it[i] = Color::BLACK;
       - addressable_lambda:
           name: "Progress 3"
@@ -36,14 +36,38 @@ light:
             for (int i = 0; i < 3; i++) it[i] = Color(0, 255, 0);
             for (int i = 3; i < 12; i++) it[i] = Color::BLACK;
       - addressable_lambda:
-          name: "Segment Test"
+          name: "Progress 4"
           update_interval: 100ms
           lambda: |-
-            // Red-Green-Blue-White segments (3 LEDs each)
-            for (int i = 0; i < 3; i++) it[i] = Color(255, 0, 0);
-            for (int i = 3; i < 6; i++) it[i] = Color(0, 255, 0);
-            for (int i = 6; i < 9; i++) it[i] = Color(0, 0, 255);
-            for (int i = 9; i < 12; i++) it[i] = Color(255, 255, 255);
+            for (int i = 0; i < 4; i++) it[i] = Color(0, 255, 0);
+            for (int i = 4; i < 12; i++) it[i] = Color::BLACK;
+      - addressable_lambda:
+          name: "Progress 5"
+          update_interval: 100ms
+          lambda: |-
+            for (int i = 0; i < 5; i++) it[i] = Color(0, 255, 0);
+            for (int i = 5; i < 12; i++) it[i] = Color::BLACK;
+      - addressable_lambda:
+          name: "Progress 6"
+          update_interval: 100ms
+          lambda: |-
+            for (int i = 0; i < 6; i++) it[i] = Color(0, 255, 0);
+            for (int i = 6; i < 12; i++) it[i] = Color::BLACK;
+      - addressable_lambda:
+          name: "Waiting"
+          update_interval: 100ms
+          lambda: |-
+            for (int i = 0; i < 12; i++) it[i] = Color(255, 165, 0);  // Orange
+      - addressable_lambda:
+          name: "Approved"
+          update_interval: 100ms
+          lambda: |-
+            for (int i = 0; i < 12; i++) it[i] = Color(0, 255, 0);  // Green
+      - addressable_lambda:
+          name: "Rejected"
+          update_interval: 100ms
+          lambda: |-
+            for (int i = 0; i < 12; i++) it[i] = Color(255, 0, 0);  // Red
 
 wifi:
   ssid: !secret wifi_ssid

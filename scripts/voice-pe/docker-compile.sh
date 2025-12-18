@@ -28,15 +28,15 @@ case "$ACTION" in
         time docker run --rm -v "$(pwd):/config" "$ESPHOME_IMAGE" compile "/config/$CONFIG_FILE"
         ;;
     upload)
-        echo "=== OTA upload to $VOICE_PE_IP ==="
-        docker run --rm -v "$(pwd):/config" --network host "$ESPHOME_IMAGE" upload "/config/$CONFIG_FILE" --device "$VOICE_PE_IP"
+        echo "=== USB upload ==="
+        "$SCRIPT_DIR/usb-flash-esptool.sh"
         ;;
     run)
-        echo "=== Compile + Upload ==="
+        echo "=== Compile + USB Upload ==="
         time docker run --rm -v "$(pwd):/config" "$ESPHOME_IMAGE" compile "/config/$CONFIG_FILE"
         echo ""
-        echo "=== Uploading to $VOICE_PE_IP ==="
-        docker run --rm -v "$(pwd):/config" --network host "$ESPHOME_IMAGE" upload "/config/$CONFIG_FILE" --device "$VOICE_PE_IP"
+        echo "=== USB uploading ==="
+        "$SCRIPT_DIR/usb-flash-esptool.sh"
         ;;
     logs)
         echo "=== Streaming logs from $VOICE_PE_IP ==="
