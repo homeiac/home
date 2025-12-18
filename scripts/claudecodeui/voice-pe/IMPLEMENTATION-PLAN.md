@@ -81,10 +81,10 @@
 
 **Spikes**:
 - [ ] Does ClaudeCodeUI send approval index/total? (approvalIndex, approvalTotal)
-- [x] Can Voice PE LED ring address individual LEDs? → **YES**. 12 WS2812 LEDs, firmware uses `it[i]` in `addressable_lambda`.
-- [x] What ESPHome service controls individual LED segments? → **None exposed yet**. Need to add ~20 lines to ESPHome config.
+- [x] Can Voice PE LED ring address individual LEDs? → **YES** ✅ VERIFIED
+- [x] What ESPHome service controls individual LED segments? → **Named effects** ✅ VERIFIED
 
-**Solution**: Add `addressable_lambda` effects to `voice-pe-config.yaml`, trigger via HA `light.turn_on` with effect name:
+**Solution** (verified working 2025-12-18):
 ```yaml
 light:
   - id: !extend led_ring
@@ -96,8 +96,12 @@ light:
             for (int i = 3; i < 12; i++) it[i] = Color::BLACK;
 ```
 
-**Verified working**: Segment Test (4 colors), Progress 1/2/3 (incremental LEDs).
-Test script: `scripts/voice-pe/test-per-led.sh "Progress 3"`
+**Demo verified**:
+- Progress 1/2/3: ✅ Incremental green LEDs
+- Segment Test: ✅ 4 colored segments (R/G/B/W)
+- Test script: `scripts/voice-pe/test-per-led.sh "Progress 3"`
+
+**Remaining**: Add Progress 4-12 effects for full multi-approval support.
 
 **Needed**:
 - Progress LED (green segments for completed)
