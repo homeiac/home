@@ -35,9 +35,9 @@ for iteration in 1..5:
 | Step | Action | Output |
 |------|--------|--------|
 | 1 | Read technical paper | Current understanding |
-| 2 | Identify nouns | List of nouns |
-| 3 | Research nouns | Findings per noun |
-| 4 | Actor goals | Goals table |
+| 2 | Identify nouns (track emergent) | List of nouns |
+| 3 | Research nouns: What? **WHY does it exist?** Code review | Findings per noun |
+| 4 | Actor goals: **Extract FROM source docs, don't invent** | Goals table |
 | 5 | Integration points/gaps | Gap analysis |
 | 6 | Why is this a problem | Problem statement |
 | 7 | Outcomes to achieve | Outcome list |
@@ -977,3 +977,370 @@ When applied systematically:
 ---
 
 **Tags**: test, methodology, outcome-anchored-research, openmemory, action-log, checklist, validated, pass
+
+---
+
+## Action Log Instance #2: Fresh Run with Fixed Methodology
+
+### Context
+
+**Request**: "How to best integrate OpenMemory with Claude Code"
+
+**Why a second run?**: First run passed the `/memory/ingest` test but derived vague outcomes (O1 was "remembers context" instead of something specific from OpenMemory's stated purpose).
+
+**RCA Finding**: Step 3 didn't require reading "WHY" docs. Step 4 allowed invented goals instead of extracting from source.
+
+**Fix Applied**:
+- Step 3: "WHY does it exist? What problem does it solve?"
+- Step 4: "Extract FROM source docs, don't invent"
+
+---
+
+### DISCOVERY Phase Execution (Fresh)
+
+#### ITERATION 1
+
+**1. READ technical paper**: (none exists - fresh start)
+
+**2. IDENTIFY nouns**:
+- OpenMemory
+- Claude Code
+
+**3. RESEARCH each noun**:
+
+*OpenMemory*:
+- **What**: "Long‑term memory for AI systems. A full cognitive memory engine — not a vector database."
+- **WHY does it exist?**: "Modern LLMs forget everything between messages. Vector DBs store flat chunks with no understanding of memory type, importance, time, or relationships. Cloud memory APIs add cost and vendor lock-in."
+- **Problems it solves** (from README):
+  1. LLMs forget everything between messages
+  2. Vector DBs have no structure (flat chunks)
+  3. No memory type, importance, time, or relationships
+  4. Cloud APIs = cost + vendor lock-in
+- **Source**: `/Users/10381054/code/openmemory/README.md`
+
+*Claude Code*:
+- **What**: "Anthropic's official agentic coding tool that operates as a CLI living in your terminal."
+- **WHY does it exist?**: "Addresses the friction between how developers work and where AI coding assistants typically operate. Meets developers where they already work—in the terminal."
+- **Problems it solves** (from docs):
+  1. Context-switching to chat windows or separate IDEs
+  2. AI not integrated with existing workflow
+  3. Needing to manually copy code back and forth
+- **Source**: https://code.claude.com/docs
+
+**4. GOALS of all actors** (extracted FROM source docs):
+
+| Actor | Goal (from their docs) | Source |
+|-------|------------------------|--------|
+| OpenMemory | Give AI systems persistent memory that LLMs lack | README: "LLMs forget everything between messages" |
+| Claude Code | Meet developers where they work (terminal), reduce friction | docs: "addresses friction...in the terminal" |
+| User | (need to extract from request context) | |
+
+**Observation**: Claude Code's docs don't mention "memory" or "statelessness" as their problem. They focus on workflow friction. BUT OpenMemory explicitly states LLMs (which Claude Code is) "forget everything between messages."
+
+**5. INTEGRATION points/gaps**:
+
+| OpenMemory Solves | Claude Code Has This Problem? |
+|-------------------|------------------------------|
+| LLMs forget between messages | YES - Claude Code is LLM-based |
+| No memory structure | YES - CLAUDE.md is flat text |
+| Cost + vendor lock-in | N/A - Claude Code is the vendor |
+
+**Gap identified**: Claude Code's docs don't articulate "memory" as their problem, but logically Claude Code (being LLM-based) inherits the statelessness problem OpenMemory solves.
+
+**6. WHY is this a problem**:
+
+- OpenMemory: "LLMs forget everything between messages" → statelessness
+- Claude Code: Uses LLM → inherits statelessness
+- Current workaround: CLAUDE.md (flat text file)
+- Problem with workaround: (need to research - what's wrong with CLAUDE.md?)
+
+**7. OUTCOMES to achieve**: (need to derive - what behavior would solve "LLMs forget"?)
+
+**8. TECHNICAL PAPER v1**:
+
+### OpenMemory + Claude Code - Technical Summary (v1)
+
+**OpenMemory Purpose** (from their docs):
+> "Modern LLMs forget everything between messages."
+
+**Claude Code Purpose** (from their docs):
+> "Meet developers where they work, reduce friction."
+
+**Integration Logic**:
+- Claude Code is LLM-based → inherits "forgets between messages" problem
+- OpenMemory solves "LLMs forget" → could solve Claude Code's statelessness
+
+**Gap in Iteration 1**:
+- What's wrong with CLAUDE.md as the workaround?
+- What specific behavior should the integration achieve?
+
+---
+
+#### ITERATION 2 (Fill gap: CLAUDE.md limitations)
+
+**1. READ technical paper v1**:
+- OpenMemory solves "LLMs forget between messages"
+- Claude Code uses CLAUDE.md as workaround
+- Gap: What's wrong with CLAUDE.md?
+
+**2. IDENTIFY nouns**: (emergent)
+- CLAUDE.md (the workaround mechanism)
+- Context window (the constraint)
+
+**3. RESEARCH CLAUDE.md limitations** (from web search):
+
+**Problems documented (from GitHub issues, blogs, official docs):**
+
+| Problem | Evidence |
+|---------|----------|
+| **Instruction forgetting after compaction** | GitHub #1027, #668, #7777, #9796, #6120 - Claude forgets CLAUDE.md after `/compact` |
+| **"Lost in the middle" problem** | Research shows LLMs prioritize beginning/end, middle content fades |
+| **Performance degradation with size** | Large CLAUDE.md (>40k chars) causes exponential instruction-following degradation |
+| **Context bloat from MCP** | MCP servers consume 66k+ tokens before conversation starts |
+| **Compact failures** | `/compact` can fail when context is too long |
+
+**Core structural problem** (from research):
+> "LLMs read the entire conversation as one document each response, so CLAUDE.md (at beginning) gets deprioritized. After compaction, summarization loses instruction content."
+
+**Sources**: GitHub issues #1027, #668, #6120; DEV Community; Medium; Anthropic Engineering blog
+
+**4. GOALS refined**:
+
+| Actor | Goal | Source |
+|-------|------|--------|
+| OpenMemory | External storage for AI memory | README |
+| Claude Code | Keep context manageable | Anthropic best practices |
+| User | Instructions followed even after long sessions | GitHub issues |
+
+**5. INTEGRATION points/gaps**:
+
+| CLAUDE.md Problem | OpenMemory Solution |
+|-------------------|---------------------|
+| Bloats context window | External storage, query on demand |
+| Instructions lost in middle | Query surfaces only relevant memories |
+| Compaction loses content | Memories stored externally, not compacted |
+| Large files degrade performance | Small queries, not full context load |
+
+**6. WHY is this a problem**:
+
+CLAUDE.md as workaround fails because:
+1. It lives IN the context window → competes for space
+2. As it grows, instructions fade ("lost in middle")
+3. After compaction, content is lost
+4. Users report Claude "forgets rules" after ~5-10 exchanges
+
+OpenMemory solves this because:
+1. Memories stored EXTERNALLY → don't consume context
+2. Query on demand → only relevant content loaded
+3. Compaction doesn't touch external memories
+4. Decay/reinforcement keeps important things surfaced
+
+**7. OUTCOMES to achieve** (derived from research):
+
+| # | Outcome | Derived From |
+|---|---------|--------------|
+| O1 | Context persists externally without bloating conversation | CLAUDE.md bloat problem |
+| O2 | Instructions followed even after long sessions | "Lost in middle" problem |
+| O3 | Compaction doesn't lose learned knowledge | Compaction data loss problem |
+
+**8. TECHNICAL PAPER v2**:
+
+### OpenMemory + Claude Code - Technical Summary (v2)
+
+**The Problem** (documented):
+CLAUDE.md bloats the context window. As conversations grow, instructions at the beginning are deprioritized ("lost in the middle"). After `/compact`, Claude forgets CLAUDE.md content entirely (GitHub #1027, #668, #6120).
+
+**Why CLAUDE.md Fails**:
+- Lives IN context → competes for space
+- Large files (>40k) degrade instruction following
+- Compaction summarizes away instruction content
+- MCP tools already consume 66k+ tokens
+
+**OpenMemory Solution**:
+- External storage → doesn't consume context
+- Query on demand → only relevant content loaded
+- Memories survive compaction
+- Decay/reinforcement keeps important content surfaced
+
+**Outcomes Derived**:
+1. Context persists externally (not in conversation)
+2. Instructions followed even after long sessions
+3. Compaction doesn't lose knowledge
+
+---
+
+#### ITERATION 3
+
+(validate outcomes against OpenMemory capabilities)
+
+---
+
+## Action Log Instance #3: Honest Re-Run (No Cheating)
+
+### Context
+
+**Date**: 2025-12-18
+**Request**: "Gather the outcomes again and see how OpenMemory can be implemented, tested, and verified"
+
+**Why a third run?**: Previous runs produced outcomes that felt "cheated" - the precision dimension ("task-specific context without junk") emerged because I already knew the answer, not because the methodology discovered it.
+
+**Test Goal**: Run the methodology honestly, without steering toward known answers. See what naturally emerges.
+
+---
+
+### DISCOVERY Phase Execution (Honest)
+
+#### ITERATION 1 (Blind Start)
+
+**1. READ technical paper**: (starting fresh, no prior knowledge)
+
+**2. IDENTIFY nouns and verbs**:
+- Nouns: OpenMemory, Claude Code
+- Verbs: integrate
+- Anti-patterns: Unknown (haven't discovered yet)
+
+**3. RESEARCH baseline** (query OpenMemory first):
+- Found fragments mentioning "30-70% token savings", hooks, context injection
+- Not a complete solution - proceed with research
+
+**4. Web research** (what does each system provide?):
+
+| System | Provides | Limitation |
+|--------|----------|------------|
+| OpenMemory | Semantic search, multi-sector memory, MCP server | Needs integration code |
+| Claude Code | CLAUDE.md, Hooks, MCP support | CLAUDE.md is static, no learning |
+
+**5. First-pass outcomes** (generic, what anyone would think):
+
+| # | Outcome |
+|---|---------|
+| 1 | User can remember things between sessions |
+| 2 | User doesn't repeat explanations |
+| 3 | User can find past solutions |
+
+**Observation**: These are obvious. No precision dimension discovered yet.
+
+**Quality Check Applied**: "What if too much?"
+- Can't answer without experience
+- Would need to TRY loading all memories and fail first
+
+---
+
+#### ITERATION 2 (Discovering Real Problems)
+
+**1. Research actual pain points**:
+
+From OpenMemory query and web search:
+- **66,000+ tokens** consumed by MCP tools before conversation starts
+- **Context limit**: 200K, but 40-45K reserved → only ~155K usable
+- **Auto-compact bugs** (October 2025) caused massive token spikes
+- **Performance degrades** at 80% context usage
+
+**2. List actual memories** (50 memories found):
+
+Memories span multiple projects:
+- Voice PE ESPHome (`lgm:namespace:home`)
+- Frigate secrets migration
+- Bug 561336 - work stuff (ADO, Azure DevOps)
+- ClaudeCodeUI MQTT
+
+**3. Key observation**:
+
+If working on **Frigate**, why would I need:
+- Voice PE TTS latency fix?
+- Bug 561336 race condition (work project)?
+- ClaudeCodeUI MQTT setup?
+
+**Insight emerging**: Context gets polluted with irrelevant memories from other projects.
+
+**4. Updated outcomes**:
+
+| # | Outcome | How Discovered |
+|---|---------|----------------|
+| 1 | User can continue work without re-explaining | Obvious |
+| 2 | User can find the right past solution when asking | Obvious |
+| 3 | User can correct Claude once and have it stick | Anti-goal extraction |
+| 4 | User gets memories relevant to current work | Saw mixed memories in actual data |
+
+---
+
+#### ITERATION 3 (Quality Checks)
+
+Applied "what if too much?" to each outcome:
+
+**#1: Continue work without re-explaining or hitting /compact**
+- What if too much context loads? → Still hits /compact
+- Refined: Must be selective
+
+**#2: Find the right past solution when asking**
+- What if too many solutions return? → Can't find the right one
+- Already refined: "right" solution, not "all"
+
+**#3: Correct Claude once and have it stick**
+- What if correction applies to wrong context?
+- What if homelab correction bleeds into work context?
+- Refined: "where it matters" - corrections should be scoped
+
+**#4: Relevant context surfaced automatically**
+- What if too much surfaces? → Same bloat problem as #1
+- Need to separate: the VALUE is precision, not delivery mechanism
+
+---
+
+#### ITERATION 4 (Final Refinement)
+
+**User feedback**: "#4 'relevant context surfaced' is too close to #2"
+
+**Problem identified**: I conflated PRECISION (what gets filtered out) with DELIVERY (automatic vs manual).
+
+**Correction**:
+- #2: User CAN find what they need (capability)
+- #4: User DOESN'T get what they don't need (precision)
+
+The "without asking" part is delivery mechanism, not the outcome.
+
+---
+
+### Final Outcomes (Honest, No Cheating)
+
+| # | Outcome | Core Concern |
+|---|---------|--------------|
+| 1 | **User can continue work without re-explaining or hitting /compact** | Session longevity |
+| 2 | **User can find the right past solution when asking** | Recall capability |
+| 3 | **User can correct Claude once and have it stick where it matters** | Learning persistence |
+| 4 | **User gets only relevant context, not junk from other work** | Precision / signal-to-noise |
+
+**Key insight**: #4 is about what gets FILTERED OUT, which enables #1 and #2 to work without bloat.
+
+---
+
+### Methodology Observations
+
+**What worked**:
+- "What if too much?" quality check DID surface the precision problem
+- Looking at actual memory data revealed cross-project pollution
+- Multiple iterations refined vague outcomes into specific ones
+
+**What needed coaching**:
+- I kept jumping to implementation ("folder-specific") instead of staying at outcome level
+- I conflated delivery mechanism ("without asking") with the actual value (precision)
+- Separating OUTCOME from MECHANISM required explicit correction
+
+**Proposed methodology enhancement**:
+
+| Gap | Fix |
+|-----|-----|
+| Outcomes drift into implementation | Add check: "If your outcome mentions HOW, you're describing implementation" |
+| Delivery conflated with value | Add check: "Separate WHAT user gets from HOW they get it" |
+| Precision dimension missed | Strengthen "what if too much?" to require specific failure scenario |
+
+---
+
+### Test Result: PARTIAL PASS
+
+The methodology CAN discover the precision dimension, but required:
+- 4 iterations instead of natural emergence
+- User coaching to separate outcome from mechanism
+- Explicit correction when I conflated delivery with value
+
+**Open question**: Would another run on a different question naturally produce the precision outcome without coaching?
