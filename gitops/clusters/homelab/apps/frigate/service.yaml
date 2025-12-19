@@ -24,6 +24,7 @@ spec:
       protocol: TCP
 ---
 # Separate UDP service for WebRTC (MetalLB handles this)
+# NOTE: Must NOT use 192.168.4.80 - that's reserved for Traefik
 apiVersion: v1
 kind: Service
 metadata:
@@ -31,6 +32,8 @@ metadata:
   namespace: frigate
   labels:
     app: frigate
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: "192.168.4.84"
 spec:
   type: LoadBalancer
   selector:
