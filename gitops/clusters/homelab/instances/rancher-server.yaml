@@ -1,0 +1,66 @@
+# Rancher Server VM - RKE2 control plane + Rancher UI
+# This is a TEST VM for validating Crossplane - safe to create/destroy
+# VMID 200 on pumped-piglet
+---
+apiVersion: virtualenvironment.proxmox.crossplane.io/v1alpha1
+kind: EnvironmentVM
+metadata:
+  name: rancher-server
+  labels:
+    app: rancher
+    environment: eval
+    managed-by: crossplane
+spec:
+  forProvider:
+    nodeName: pumped-piglet
+    vmid: 200
+    name: rancher-server
+    description: "RKE2 control plane + Rancher UI (Crossplane-managed)"
+
+    # CPU configuration
+    cpu:
+      cores: 4
+      type: host
+
+    # Memory (8GB)
+    memory:
+      dedicated: 8192
+
+    # Boot disk - 100GB on local ZFS
+    disk:
+      - interface: scsi0
+        storage: local-2TB-zfs
+        size: 100
+        discard: true
+        iothread: true
+        cache: writeback
+
+    # Network on vmbr0 (192.168.4.x)
+    network:
+      - interface: virtio
+        bridge: vmbr0
+
+    # Cloud-init configuration
+    cloudInit:
+      user: ubuntu
+      # Password from external secret - NOT stored in Git
+      # Use scripts/crossplane/set-vm-password.sh to configure
+      ipConfig:
+        - ipv4:
+            address: "192.168.4.200/24"
+            gateway: "192.168.4.1"
+      dns:
+        servers:
+          - "192.168.4.1"
+
+    # Enable QEMU guest agent
+    agent:
+      enabled: true
+
+    # VM behavior
+    onBoot: true
+    started: true
+
+  # Use the default ProviderConfig
+  providerConfigRef:
+    name: default

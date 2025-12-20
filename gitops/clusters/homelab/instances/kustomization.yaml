@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# VM and LXC instances managed by Crossplane
+# These are Proxmox VMs/containers declared in Git, reconciled by Crossplane
+
+resources:
+  # TEST VMs - non-essential, safe to experiment with
+  - rancher-server.yaml          # VMID 200 - RKE2 eval
+
+  # PRODUCTION - adopted existing infrastructure (deletionPolicy: Orphan)
+  # Uncomment after validating Crossplane adoption works
+  # - frigate-nvr.yaml           # LXC 113 - Frigate NVR (adopted)

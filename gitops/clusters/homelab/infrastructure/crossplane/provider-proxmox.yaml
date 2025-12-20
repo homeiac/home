@@ -1,0 +1,24 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-proxmox-bpg
+spec:
+  # Using the community-maintained provider based on bpg/terraform-provider-proxmox
+  # https://marketplace.upbound.io/providers/valkiriaaquaticamendi/provider-proxmox-bpg
+  package: xpkg.upbound.io/valkiriaaquaticamendi/provider-proxmox-bpg:v0.11.1
+  controllerConfigRef:
+    name: provider-proxmox-config
+---
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: provider-proxmox-config
+spec:
+  # Resource limits for the provider controller
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi

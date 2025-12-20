@@ -7,7 +7,11 @@ resources:
   - infrastructure/monitoring            #(kube-prometheus-stack)
   - infrastructure/traefik               #(static IP config)
   - infrastructure/tailscale             #(subnet router + exit node)
+  - infrastructure/crossplane            #(Proxmox VM/LXC provisioning)
   - infrastructure-config/metallb-config        #(address-pool)
+  # Crossplane-managed Proxmox instances (VMs/LXCs)
+  # NOTE: Requires crossplane-system secret first - see scripts/crossplane/create-proxmox-secret.sh
+  # - instances                          # Uncomment after Crossplane is healthy
   - apps/ollama
   - apps/stable-diffusion
   - apps/samba
