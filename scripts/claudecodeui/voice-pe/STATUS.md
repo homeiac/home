@@ -155,7 +155,14 @@ Dial selects from options, voice announces.
 
 ## Process
 
-Before claiming a scenario is done:
+### Starting a Voice PE Session
+1. Run tests for scenarios with test scripts
+2. Update status in this file based on results
+3. Review which scenarios are incomplete
+4. Pick next scenario to implement
+5. Work on it, update status, commit
+
+### Before Claiming a Scenario Done
 1. Run the test script
 2. Verify ALL steps pass
 3. Update this file with ✅/❌
