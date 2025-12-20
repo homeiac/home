@@ -6,9 +6,7 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  # Provider requires Crossplane CRDs - must be applied AFTER Crossplane is healthy
-  # Run: scripts/crossplane/install-provider.sh
-  # Or apply manually after HelmRelease is ready:
-  #   kubectl apply -f provider-proxmox.yaml
-  #   scripts/crossplane/create-proxmox-secret.sh
-  #   kubectl apply -f provider-config.yaml
+  # Provider + config (secret SOPS-encrypted)
+  - provider-proxmox.yaml
+  - proxmox-secret.yaml
+  - provider-config.yaml

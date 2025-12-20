@@ -1,12 +1,7 @@
 # ProviderConfig for Proxmox
-# NOTE: Requires secret 'proxmox-credentials' to exist in crossplane-system namespace
-# Create with: kubectl create secret generic proxmox-credentials -n crossplane-system \
-#   --from-literal=api_token='root@pam!provision-manage-vms=YOUR_TOKEN' \
-#   --from-literal=endpoint='https://pumped-piglet.maas:8006'
-#
-# Or use scripts/crossplane/create-proxmox-secret.sh
+# Secret created by: scripts/crossplane/create-proxmox-secret-sops.sh
 ---
-apiVersion: proxmox.crossplane.io/v1beta1
+apiVersion: proxmoxbpg.crossplane.io/v1beta1
 kind: ProviderConfig
 metadata:
   name: default
@@ -16,12 +11,4 @@ spec:
     secretRef:
       name: proxmox-credentials
       namespace: crossplane-system
-      key: api_token
-  # Proxmox API endpoint (any node in cluster)
-  endpoint:
-    secretRef:
-      name: proxmox-credentials
-      namespace: crossplane-system
-      key: endpoint
-  # Skip TLS verification for self-signed certs (common in homelab)
-  insecure: true
+      key: credentials
