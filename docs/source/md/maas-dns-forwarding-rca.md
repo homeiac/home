@@ -1,9 +1,52 @@
-# RCA: MAAS DNS Not Forwarding .homelab Domain
+# RCA: MAAS DNS Investigation - MISDIAGNOSIS
 
 **Date**: 2025-12-19
-**Severity**: Medium (DNS resolution broken for internal services)
-**Duration**: ~30 minutes to diagnose and fix
-**Services Affected**: All `*.homelab` DNS resolution from MAAS-managed clients
+**Severity**: Self-inflicted outage
+**Duration**: ~45 minutes of wasted time + broken `.maas` DNS
+**Services Affected**: Broke `.maas` DNS while chasing wrong problem
+
+---
+
+## 🚨 INCIDENT POST-MORTEM: I FUCKED UP 🚨
+
+### What Actually Happened
+
+1. User reported `rancher.homelab` not resolving
+2. I assumed it was a MAAS DNS forwarding issue
+3. I spent 30+ minutes trying to fix MAAS DNS forwarding for `.homelab`
+4. I broke `.maas` DNS resolution multiple times in the process
+5. **THE ACTUAL PROBLEM**: Traefik had no external IP because `frigate-webrtc-udp` stole `192.168.4.80`
+
+### What I Should Have Done
+
+**BEFORE touching any DNS config:**
+```bash
+# Step 1: Check if OTHER .homelab services work
+curl -s -o /dev/null -w "%{http_code}" http://grafana.app.homelab
+
+# Step 2: If they fail too, check Traefik has an IP
+kubectl get svc traefik -n kube-system
+
+# Step 3: If Traefik shows <pending>, check for IP conflicts
+kubectl get svc -A | grep LoadBalancer | grep 192.168.4.80
+```
+
+### The Real Fix (took 2 minutes once identified)
+```bash
+# Move frigate-webrtc-udp to different IP
+kubectl annotate svc frigate-webrtc-udp -n frigate \
+  metallb.universe.tf/loadBalancerIPs=192.168.4.84 --overwrite
+```
+
+### Lesson Learned
+
+**ONE FAILING HOSTNAME ≠ ENTIRE DNS SUBSYSTEM BROKEN**
+
+Before assuming DNS is broken:
+1. Test multiple hostnames in the same domain
+2. Test the ingress controller directly
+3. Check LoadBalancer IP assignments
+4. ONLY THEN investigate DNS
 
 ---
 
