@@ -10,46 +10,57 @@ spec:
   groups:
     - name: flux-gitops
       rules:
-        # Alert when HelmRelease reconciliation fails
-        - alert: FluxHelmReleaseFailed
-          expr: gotk_reconcile_condition{type="Ready",status="False",kind="HelmRelease"} == 1
+        # Alert when HelmRelease reconciliation has errors
+        - alert: FluxHelmReleaseErrors
+          expr: increase(controller_runtime_reconcile_errors_total{controller="helmrelease"}[5m]) > 0
           for: 5m
           labels:
             severity: critical
             service: flux-gitops
           annotations:
-            summary: "Flux HelmRelease {{ $labels.name }} failed"
-            description: "HelmRelease {{ $labels.name }} in namespace {{ $labels.namespace }} has been in a failed state for more than 5 minutes."
+            summary: "Flux HelmRelease reconciliation errors detected"
+            description: "The helm-controller has encountered {{ $value }} reconciliation errors in the last 5 minutes. Check HelmRelease status with: kubectl get helmrelease -A"
 
-        # Alert when Kustomization reconciliation fails
-        - alert: FluxKustomizationFailed
-          expr: gotk_reconcile_condition{type="Ready",status="False",kind="Kustomization"} == 1
+        # Alert when Kustomization reconciliation has errors
+        - alert: FluxKustomizationErrors
+          expr: increase(controller_runtime_reconcile_errors_total{controller="kustomization"}[5m]) > 0
           for: 5m
           labels:
             severity: critical
             service: flux-gitops
           annotations:
-            summary: "Flux Kustomization {{ $labels.name }} failed"
-            description: "Kustomization {{ $labels.name }} in namespace {{ $labels.namespace }} has been in a failed state for more than 5 minutes."
+            summary: "Flux Kustomization reconciliation errors detected"
+            description: "The kustomize-controller has encountered {{ $value }} reconciliation errors in the last 5 minutes. Check Kustomization status with: kubectl get kustomization -A"
 
-        # Alert when GitRepository sync fails
-        - alert: FluxGitRepositoryFailed
-          expr: gotk_reconcile_condition{type="Ready",status="False",kind="GitRepository"} == 1
+        # Alert when GitRepository sync has errors
+        - alert: FluxGitRepositoryErrors
+          expr: increase(controller_runtime_reconcile_errors_total{controller="gitrepository"}[5m]) > 0
           for: 5m
           labels:
             severity: critical
             service: flux-gitops
           annotations:
-            summary: "Flux GitRepository {{ $labels.name }} failed"
-            description: "GitRepository {{ $labels.name }} in namespace {{ $labels.namespace }} has been in a failed state for more than 5 minutes."
+            summary: "Flux GitRepository sync errors detected"
+            description: "The source-controller has encountered {{ $value }} GitRepository reconciliation errors in the last 5 minutes. Check GitRepository status with: kubectl get gitrepository -A"
 
-        # Alert when reconciliation is stalled (not progressing)
-        - alert: FluxReconciliationStalled
-          expr: gotk_reconcile_condition{type="Stalled",status="True"} == 1
-          for: 15m
+        # Alert when reconciliation queue is backing up
+        - alert: FluxReconciliationQueueBacklog
+          expr: workqueue_depth{name=~"helmrelease|kustomization|gitrepository"} > 10
+          for: 10m
           labels:
             severity: warning
             service: flux-gitops
           annotations:
-            summary: "Flux {{ $labels.kind }} {{ $labels.name }} is stalled"
-            description: "{{ $labels.kind }} {{ $labels.name }} in namespace {{ $labels.namespace }} has been stalled for more than 15 minutes."
+            summary: "Flux {{ $labels.name }} queue has backlog"
+            description: "The {{ $labels.name }} work queue has {{ $value }} items pending for more than 10 minutes."
+
+        # Alert when controller is not running
+        - alert: FluxControllerDown
+          expr: up{job=~"flux-.*-metrics"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: flux-gitops
+          annotations:
+            summary: "Flux controller {{ $labels.job }} is down"
+            description: "The Flux controller {{ $labels.job }} has been unreachable for more than 5 minutes."
