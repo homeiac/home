@@ -1,0 +1,10 @@
+{
+  "node-label": [
+    "cattle.io/os=windows",
+    "rke.cattle.io/machine=ccc0ac00-4143-446d-a3cc-44c6c02a84fc"
+  ],
+  "private-registry": "/etc/rancher/rke2/registries.yaml",
+  "protect-kernel-defaults": false,
+  "server": "https://[2600:1700:7270:933e::1ac2]:9345",
+  "token": "zvmd8cfv4dgp2ghg6skvx7d5vrczgzv7kt9tf42xtt596r28hrgkq2"
+}

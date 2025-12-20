@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: windows-test
+  namespace: default
+spec:
+  nodeSelector:
+    kubernetes.io/os: windows
+  containers:
+  - name: windows-test
+    image: mcr.microsoft.com/windows/servercore:ltsc2022
+    command: ["powershell", "-Command", "Write-Host 'Hello from Windows!'; Start-Sleep -Seconds 300"]
+  tolerations:
+  - key: "os"
+    operator: "Equal"
+    value: "windows"
+    effect: "NoSchedule"

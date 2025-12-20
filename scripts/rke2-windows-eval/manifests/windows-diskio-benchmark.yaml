@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: windows-diskio-benchmark
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/os: windows
+      restartPolicy: Never
+      containers:
+      - name: diskio-benchmark
+        image: mcr.microsoft.com/windows/servercore:ltsc2022
+        command: ["powershell", "-Command"]
+        args:
+        - |
+          Write-Host "=== Windows Disk I/O Benchmark ==="
+          Write-Host ""
+
+          $testDir = "C:\benchmark"
+          New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+
+          # Test 1: Sequential write (1GB file)
+          Write-Host "--- Test 1: Sequential Write (1GB) ---"
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          $data = New-Object byte[] (1024*1024)  # 1MB buffer
+          $fs = [System.IO.File]::Create("$testDir\seqwrite.bin")
+          for ($i = 0; $i -lt 1024; $i++) {
+              $fs.Write($data, 0, $data.Length)
+          }
+          $fs.Close()
+          $sw.Stop()
+          $seqWriteMBps = [math]::Round(1024 / $sw.Elapsed.TotalSeconds, 2)
+          Write-Host "Sequential Write: $seqWriteMBps MB/s"
+          Write-Host ""
+
+          # Test 2: Sequential read
+          Write-Host "--- Test 2: Sequential Read (1GB) ---"
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          $fs = [System.IO.File]::OpenRead("$testDir\seqwrite.bin")
+          $buffer = New-Object byte[] (1024*1024)
+          while ($fs.Read($buffer, 0, $buffer.Length) -gt 0) {}
+          $fs.Close()
+          $sw.Stop()
+          $seqReadMBps = [math]::Round(1024 / $sw.Elapsed.TotalSeconds, 2)
+          Write-Host "Sequential Read: $seqReadMBps MB/s"
+          Write-Host ""
+
+          # Test 3: Small file creation (simulates npm/nuget cache)
+          Write-Host "--- Test 3: Small File Creation (1000 x 4KB files) ---"
+          $smallDir = "$testDir\smallfiles"
+          New-Item -ItemType Directory -Force -Path $smallDir | Out-Null
+          $smallData = New-Object byte[] 4096
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          for ($i = 0; $i -lt 1000; $i++) {
+              [System.IO.File]::WriteAllBytes("$smallDir\file$i.dat", $smallData)
+          }
+          $sw.Stop()
+          $filesPerSec = [math]::Round(1000 / $sw.Elapsed.TotalSeconds, 2)
+          Write-Host "Small File Creation: $filesPerSec files/sec"
+          Write-Host ""
+
+          # Test 4: Random I/O (simulates database-like workload)
+          Write-Host "--- Test 4: Random 4KB Reads (1000 ops) ---"
+          $fs = [System.IO.File]::OpenRead("$testDir\seqwrite.bin")
+          $rand = New-Object System.Random
+          $buffer = New-Object byte[] 4096
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          for ($i = 0; $i -lt 1000; $i++) {
+              $pos = $rand.Next(0, 1024*1024*1024 - 4096)
+              $fs.Seek($pos, [System.IO.SeekOrigin]::Begin) | Out-Null
+              $fs.Read($buffer, 0, 4096) | Out-Null
+          }
+          $fs.Close()
+          $sw.Stop()
+          $iops = [math]::Round(1000 / $sw.Elapsed.TotalSeconds, 2)
+          Write-Host "Random 4KB Read IOPS: $iops"
+          Write-Host ""
+
+          # Cleanup
+          Remove-Item -Recurse -Force $testDir
+
+          Write-Host "=== Benchmark Complete ==="
+          Write-Host ""
+          Write-Host "Summary:"
+          Write-Host "  Sequential Write: $seqWriteMBps MB/s"
+          Write-Host "  Sequential Read:  $seqReadMBps MB/s"
+          Write-Host "  Small File Ops:   $filesPerSec files/sec"
+          Write-Host "  Random 4KB IOPS:  $iops"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+      tolerations:
+      - key: "os"
+        operator: "Equal"
+        value: "windows"
+        effect: "NoSchedule"
