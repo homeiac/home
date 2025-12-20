@@ -50,7 +50,7 @@ stringData:
     {
       "endpoint": "${PROXMOX_ENDPOINT}",
       "api_token": "${TOKEN_USER}!${TOKEN_ID}=${TOKEN_SECRET}",
-      "insecure": true
+      "insecure": "true"
     }
 EOF
 
