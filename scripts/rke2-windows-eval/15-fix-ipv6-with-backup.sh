@@ -4,7 +4,8 @@
 set -e
 
 WINDOWS_VM_IP="192.168.4.201"
-WINDOWS_PASSWORD="REDACTED"
+source "${SCRIPT_DIR}/.env" 2>/dev/null || true
+WINDOWS_PASSWORD="${WINDOWS_PASSWORD:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${SCRIPT_DIR}/configs"
 BACKUP_DIR="${SCRIPT_DIR}/backups"

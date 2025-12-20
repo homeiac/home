@@ -3,7 +3,8 @@
 set -e
 
 WINDOWS_VM_IP="192.168.4.201"
-WINDOWS_PASSWORD="REDACTED"
+source "${SCRIPT_DIR}/.env" 2>/dev/null || true
+WINDOWS_PASSWORD="${WINDOWS_PASSWORD:-}"
 CONTROL_PLANE_IP="192.168.4.202"
 
 win_ssh() {
