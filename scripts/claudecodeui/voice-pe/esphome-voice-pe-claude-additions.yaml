@@ -1,0 +1,258 @@
+# ESPHome Voice PE - Claude Code Integration Additions
+#
+# IMPORTANT: This is a REFERENCE file for manual copy into ESPHome dashboard
+# DO NOT flash this file directly - merge sections into existing Voice PE config
+#
+# Hardware: ESP32-S3 with LED ring, rotary encoder (dial), center button
+# - Dial GPIO: GPIO16 (A), GPIO18 (B), resolution 2
+# - Button GPIO: GPIO17 with INPUT_PULLUP
+# - LED Ring: Internal to Voice PE board
+#
+# ⚠️ VERIFY VARIABLE NAMES BEFORE USE:
+#   - Check existing config for: voice_assistant_phase, control_leds
+#   - These may differ in your Voice PE firmware version
+#
+# ⚠️ OTA UPDATE RISKS:
+#   - Always backup current config before flashing
+#   - Test in ESPHome dashboard "Validate" before Upload
+#   - Have physical access to device in case of boot loop
+#
+
+################################################################################
+# SECTION 1: API Services (LED Effect Control)
+# ACTION: MERGE into existing "api:" section
+################################################################################
+
+api:
+  # ... keep existing encryption, reboot_timeout, etc ...
+
+  services:
+    # Service: Set LED effect by name
+    # Usage: esphome.voice_pe_set_led_effect effect_name="thinking"
+    - service: set_led_effect
+      variables:
+        effect_name: string
+      then:
+        - lambda: |-
+            // Map effect_name to internal voice_assistant_phase values
+            // NOTE: Verify these phase values match your firmware
+            // Common values: idle=1, listening=3, thinking=4
+
+            if (effect_name == "thinking") {
+              id(voice_assistant_phase) = 4;  // Thinking animation
+            } else if (effect_name == "listening") {
+              id(voice_assistant_phase) = 3;  // Listening animation
+            } else if (effect_name == "idle") {
+              id(voice_assistant_phase) = 1;  // Idle/ready animation
+            } else if (effect_name == "error") {
+              id(voice_assistant_phase) = 10; // Error state (verify value)
+            } else {
+              ESP_LOGW("api", "Unknown effect: %s", effect_name.c_str());
+              id(voice_assistant_phase) = 1;  // Default to idle
+            }
+
+            // Trigger LED update (if control_leds is a script)
+            // id(control_leds)->execute();
+
+    # Service: Trigger thinking effect (shortcut)
+    # Usage: esphome.voice_pe_trigger_thinking_effect
+    - service: trigger_thinking_effect
+      then:
+        - lambda: |-
+            ESP_LOGI("api", "Triggering thinking effect");
+            id(voice_assistant_phase) = 4;  // Thinking phase
+            // id(control_leds)->execute();  // Uncomment if needed
+
+    # Service: Stop all effects (return to idle)
+    # Usage: esphome.voice_pe_stop_effects
+    - service: stop_effects
+      then:
+        - lambda: |-
+            ESP_LOGI("api", "Stopping effects, returning to idle");
+            id(voice_assistant_phase) = 1;  // Idle phase
+            // id(control_leds)->execute();  // Uncomment if needed
+
+
+################################################################################
+# SECTION 2: Rotary Encoder Dial Events
+# ACTION: MERGE into existing "sensor:" section with rotary_encoder
+################################################################################
+
+sensor:
+  # ... keep existing sensors ...
+
+  # Find your existing rotary_encoder config and ADD these handlers:
+  - platform: rotary_encoder
+    name: "Voice PE Dial"
+    id: voice_pe_dial_sensor
+    pin_a: GPIO16
+    pin_b: GPIO18
+    resolution: 2
+    # ... keep existing min_value, max_value, etc ...
+
+    # NEW: Clockwise rotation event
+    on_clockwise:
+      - homeassistant.event:
+          event: esphome.voice_pe_dial
+          data:
+            device: "voice_pe"
+            direction: "clockwise"
+            # Optional: include current dial value
+            # value: !lambda 'return id(voice_pe_dial_sensor).state;'
+
+    # NEW: Counter-clockwise rotation event
+    on_anticlockwise:
+      - homeassistant.event:
+          event: esphome.voice_pe_dial
+          data:
+            device: "voice_pe"
+            direction: "anticlockwise"
+            # Optional: include current dial value
+            # value: !lambda 'return id(voice_pe_dial_sensor).state;'
+
+
+################################################################################
+# SECTION 3: Center Button Events
+# ACTION: MERGE into existing "binary_sensor:" section with button
+################################################################################
+
+binary_sensor:
+  # ... keep existing binary sensors ...
+
+  # Find your existing button config and ADD these handlers:
+  - platform: gpio
+    name: "Voice PE Button"
+    id: voice_pe_button
+    pin:
+      number: GPIO17
+      mode: INPUT_PULLUP
+      inverted: true
+    # ... keep existing filters ...
+
+    # NEW: Simple press event
+    on_press:
+      - homeassistant.event:
+          event: esphome.voice_pe_button
+          data:
+            device: "voice_pe"
+            action: "press"
+
+    # NEW: Release event (optional, for timing)
+    on_release:
+      - homeassistant.event:
+          event: esphome.voice_pe_button
+          data:
+            device: "voice_pe"
+            action: "release"
+
+    # NEW: Multi-click detection for long press
+    on_multi_click:
+      # Long press: hold for at least 1 second
+      - timing:
+          - ON for at least 1s
+        then:
+          - homeassistant.event:
+              event: esphome.voice_pe_button
+              data:
+                device: "voice_pe"
+                action: "long_press"
+
+      # Double press: two quick presses (optional)
+      - timing:
+          - ON for at most 0.5s
+          - OFF for at most 0.5s
+          - ON for at most 0.5s
+        then:
+          - homeassistant.event:
+              event: esphome.voice_pe_button
+              data:
+                device: "voice_pe"
+                action: "double_press"
+
+
+################################################################################
+# SECTION 4: Testing and Debugging (Optional)
+# ACTION: ADD as new section for development/testing
+################################################################################
+
+# Optional: Add debug logging to verify events
+logger:
+  level: DEBUG  # Change to INFO in production
+  logs:
+    api: DEBUG
+    sensor: DEBUG
+    binary_sensor: DEBUG
+
+
+################################################################################
+# INTEGRATION NOTES
+################################################################################
+
+# Home Assistant Side (to receive events):
+# 1. Create automation triggered by esphome.voice_pe_dial
+# 2. Create automation triggered by esphome.voice_pe_button
+# 3. Use service calls to control LEDs:
+#    - esphome.voice_pe_set_led_effect
+#    - esphome.voice_pe_trigger_thinking_effect
+#    - esphome.voice_pe_stop_effects
+
+# Example Home Assistant Automation:
+# automation:
+#   - alias: "Voice PE Dial Clockwise"
+#     trigger:
+#       - platform: event
+#         event_type: esphome.voice_pe_dial
+#         event_data:
+#           direction: "clockwise"
+#     action:
+#       - service: esphome.voice_pe_set_led_effect
+#         data:
+#           effect_name: "thinking"
+
+# Example Home Assistant Script:
+# script:
+#   voice_pe_thinking_on:
+#     sequence:
+#       - service: esphome.voice_pe_trigger_thinking_effect
+#
+#   voice_pe_idle:
+#     sequence:
+#       - service: esphome.voice_pe_stop_effects
+
+
+################################################################################
+# TROUBLESHOOTING
+################################################################################
+
+# If LED effects don't work:
+# 1. Verify voice_assistant_phase variable exists in your config
+# 2. Check if control_leds script exists and needs to be called
+# 3. Enable DEBUG logging and check ESPHome logs in HA
+# 4. Use ESPHome dashboard "Logs" to see live output
+
+# If dial/button events don't fire:
+# 1. Check GPIO pin numbers match your hardware
+# 2. Verify Home Assistant has event listener active
+# 3. Enable Developer Tools → Events → Listen to "esphome.voice_pe_*"
+# 4. Check ESPHome logs for "homeassistant.event" messages
+
+# If OTA update fails:
+# 1. Try USB cable flash as fallback
+# 2. Check power supply (USB must provide enough current)
+# 3. Disable WiFi power save if update times out
+# 4. Factory reset: hold button during power-up (check Voice PE docs)
+
+
+################################################################################
+# VERSION COMPATIBILITY
+################################################################################
+
+# Tested with:
+# - ESPHome: 2024.11.x (verify your version)
+# - Voice PE: Factory firmware (check for updates)
+# - Home Assistant: 2024.12.x
+
+# Known Issues:
+# - Some Voice PE versions use different phase values
+# - LED control may require script execution (uncomment lines if needed)
+# - Rotary encoder resolution may need tuning for your use case

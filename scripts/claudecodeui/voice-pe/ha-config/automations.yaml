@@ -1,0 +1,988 @@
+- id: '1754062161728'
+  alias: LLM Vision
+  description: ''
+  use_blueprint:
+    path: valentinfrlch/event_summary.yaml
+    input:
+      camera_entities:
+      - camera.reolink_video_doorbell_wifi_fluent
+      - camera.trendnet_ip_572w
+      - camera.old_ip_camera
+      motion_sensors:
+      - binary_sensor.reolink_doorbell_motion
+      - binary_sensor.trendnet_ip_572w_motion
+      - binary_sensor.old_ip_camera_motion
+      trigger_state: recording
+      provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
+      model: gemma3:4b
+      max_tokens: 211
+      notify: false
+      message: 'Analyze the images from this camera and describe any activity detected.
+        Focus on people, vehicles, and movement. If no clear activity is visible,
+        describe why - such as "No activity detected: image too dark/blurry", "No
+        activity detected: camera shows empty hallway", or "No movement visible in
+        outdoor scene". Be specific about what you can see in the image and camera
+        location context.'
+      cooldown:
+        hours: 0
+        minutes: 10
+        seconds: 30
+- id: '1754093263512'
+  alias: AI Event Summary (v1.5.0)
+  description: ''
+  use_blueprint:
+    path: valentinfrlch/event_summary.yaml
+    input:
+      provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
+      model: gemma3:4b
+      camera_entities:
+      - camera.reolink_video_doorbell_wifi_fluent
+      - camera.trendnet_ip_572w
+      - camera.old_ip_camera
+      motion_sensors:
+      - binary_sensor.reolink_doorbell_motion
+      - binary_sensor.trendnet_ip_572w_motion
+      - binary_sensor.old_ip_camera_motion
+      trigger_state: recording
+      message: 'Analyze the images from this camera and describe any activity detected.
+        Focus on people, vehicles, and movement. If no clear activity is visible,
+        describe why - such as "No activity detected: image too dark/blurry", "No
+        activity detected: camera shows empty hallway", or "No movement visible in
+        outdoor scene". Be specific about what you can see in the image and camera
+        location context.'
+- id: '1764983079691'
+  alias: Reminders via voice assist
+  description: ''
+  use_blueprint:
+    path: badnetmask/voice_reminders.yaml
+    input:
+      ollama_config_entry: 01KBRFZ604AF46VXEGCE86NYNF
+      todo_list: todo.reminders
+- id: voice_pe_reminder_announcer
+  alias: Voice PE Reminder Announcer
+  description: Announces reminders via Voice PE when they are due
+  triggers:
+  - platform: time_pattern
+    minutes: /1
+  conditions:
+  - condition: template
+    value_template: '{{ states("todo.reminders") | int(0) > 0 }}'
+  actions:
+  - target:
+      entity_id: todo.reminders
+    data:
+      status: needs_action
+    response_variable: items
+    action: todo.get_items
+  - repeat:
+      for_each: '{{ items["todo.reminders"]["items"] }}'
+      sequence:
+      - condition: template
+        value_template: '{% set reminder_ts = as_timestamp(as_datetime(repeat.item.due))
+          %}{% set now_ts = as_timestamp(now()) %}{{ (reminder_ts >= now_ts - 30)
+          and (reminder_ts <= now_ts + 30) and repeat.item.status == "needs_action"
+          }}'
+      - target:
+          entity_id: assist_satellite.home_assistant_voice_09f5a3_assist_satellite
+        data:
+          message: 'Reminder: {{ repeat.item.summary }}'
+        action: assist_satellite.announce
+      - target:
+          entity_id: todo.reminders
+        data:
+          item: '{{ repeat.item.summary }}'
+          status: completed
+        action: todo.update_item
+  mode: single
+- id: reminder_relative_time
+  alias: Reminder Relative Time
+  description: Handle remind me in X minutes/hours patterns
+  triggers:
+  - platform: conversation
+    command:
+    - set a reminder to {reminderDescription} in {reminderTime}
+    - set reminder to {reminderDescription} in {reminderTime}
+    - create a reminder to {reminderDescription} in {reminderTime}
+    - reminder to {reminderDescription} in {reminderTime}
+  actions:
+  - data:
+      agent_id: conversation.ollama_conversation
+      text: The current time is {{ now().strftime("%Y-%m-%d %H:%M:%S") }}. Calculate
+        the datetime that is {{ trigger.slots.reminderTime }} from now. Return ONLY
+        the result in format YYYY-MM-DD HH:MM:SS with exactly 19 characters. No other
+        text.
+    response_variable: response_from_ai
+    action: conversation.process
+  - target:
+      entity_id: todo.reminders
+    data:
+      item: '{{ trigger.slots.reminderDescription }}'
+      due_datetime: '{{ response_from_ai.response.speech.plain.speech | trim }}'
+    action: todo.add_item
+  - set_conversation_response: 'Reminder set: {{ trigger.slots.reminderDescription
+      }} in {{ trigger.slots.reminderTime }}'
+  mode: single
+- id: package_delivery_detection
+  alias: Package Delivery Detection
+  description: 'Detects package deliveries using Reolink + LLM Vision. v4.2: Fixed
+    notification overwrite bug - no longer stores ''No'' responses.'
+  triggers:
+  - platform: state
+    entity_id: binary_sensor.reolink_video_doorbell_wifi_person
+    from: 'off'
+    to: 'on'
+    id: person_arrived
+  - platform: state
+    entity_id: binary_sensor.reolink_video_doorbell_wifi_person
+    from: 'on'
+    to: 'off'
+    for:
+      seconds: 3
+    id: person_left
+  conditions:
+  - condition: time
+    after: 08:00:00
+    before: '21:00:00'
+  actions:
+  - variables:
+      trace_id: '{{ now().strftime(''%H%M%S'') }}-{{ range(1000,9999) | random }}'
+      trigger_name: '{{ trigger.id }}'
+      start_time: '{{ now().isoformat() }}'
+  - action: logbook.log
+    data:
+      name: Package Detection
+      message: '[PKG-{{ trace_id }}] TRACE_START | trigger={{ trigger_name }} | time={{
+        start_time }}'
+      entity_id: automation.package_delivery_detection
+  - choose:
+    - alias: PERSON ARRIVED - Analyze visitor, alert if delivery with package
+      conditions:
+      - condition: trigger
+        id: person_arrived
+      sequence:
+      - action: logbook.log
+        data:
+          name: Package Detection
+          message: '[PKG-{{ trace_id }}] SPAN_START:visitor_analysis | Waiting 2s
+            for person to settle'
+          entity_id: automation.package_delivery_detection
+      - delay:
+          seconds: 2
+      - action: logbook.log
+        data:
+          name: Package Detection
+          message: '[PKG-{{ trace_id }}] EVENT:snapshot | file=doorbell_visitor.jpg'
+          entity_id: camera.reolink_video_doorbell_wifi_fluent
+      - action: camera.snapshot
+        target:
+          entity_id: camera.reolink_video_doorbell_wifi_fluent
+        data:
+          filename: /config/www/tmp/doorbell_visitor.jpg
+      - action: logbook.log
+        data:
+          name: Package Detection
+          message: '[PKG-{{ trace_id }}] EVENT:llm_call | model=llava:7b | prompt=describe_visitor'
+          entity_id: automation.package_delivery_detection
+      - action: llmvision.image_analyzer
+        data:
+          provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
+          model: llava:7b
+          image_file: /config/www/tmp/doorbell_visitor.jpg
+          message: 'Is this a delivery person WITH a package? Answer format: ''DELIVERY:
+            [yes/no] - [brief description]''. Say yes ONLY if you see a delivery uniform
+            (UPS/FedEx/Amazon/USPS) AND they are holding or delivering a package.
+            Otherwise say no.'
+          max_tokens: 50
+          target_width: 1280
+        response_variable: visitor_analysis
+      - variables:
+          visitor_text: '{{ visitor_analysis.response_text | default('''') | lower
+            }}'
+          is_delivery_with_package: '{{ ''delivery: yes'' in visitor_text or visitor_text.startswith(''yes'')
+            }}'
+      - action: logbook.log
+        data:
+          name: Package Detection
+          message: '[PKG-{{ trace_id }}] EVENT:llm_response | result={{ visitor_analysis.response_text
+            }} | is_delivery={{ is_delivery_with_package }}'
+          entity_id: automation.package_delivery_detection
+      - if:
+        - condition: template
+          value_template: '{{ is_delivery_with_package }}'
+        then:
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] EVENT:delivery_detected | Delivery person
+              with package - alerting immediately!'
+            entity_id: automation.package_delivery_detection
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.pending_notification_message
+          data:
+            value: 'Package arriving at {{ now().strftime(''%I:%M %p'') }}: {{ visitor_analysis.response_text
+              }}'
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.pending_notification_type
+          data:
+            value: package
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.has_pending_notification
+        - parallel:
+          - action: notify.mobile_app_pixel_10_pro
+            data:
+              title: "\U0001F4E6 Package Delivery!"
+              message: '{{ visitor_analysis.response_text }}'
+              data:
+                image: /api/camera_proxy/camera.reolink_video_doorbell_wifi_fluent
+                tag: package_delivery
+                channel: Package Alerts
+                importance: high
+          - sequence:
+            - action: logbook.log
+              data:
+                name: Package Detection
+                message: '[PKG-{{ trace_id }}] EVENT:led_on | entity=voice_pe_led
+                  | color=blue'
+                entity_id: light.home_assistant_voice_09f5a3_led_ring
+            - action: light.turn_on
+              target:
+                entity_id: light.home_assistant_voice_09f5a3_led_ring
+              data:
+                rgb_color:
+                - 0
+                - 100
+                - 255
+                brightness: 200
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] SPAN_END:visitor_analysis | status=DELIVERY_WITH_PACKAGE
+              | alerted=YES'
+            entity_id: automation.package_delivery_detection
+        else:
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.pending_notification_type
+          data:
+            value: visitor_pending
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] SPAN_END:visitor_analysis | status=regular_visitor
+              | alerted=NO'
+            entity_id: automation.package_delivery_detection
+    - alias: PERSON LEFT - Backup package check (for cases where delivery wasn't detected
+        on arrival)
+      conditions:
+      - condition: trigger
+        id: person_left
+      sequence:
+      - action: logbook.log
+        data:
+          name: Package Detection
+          message: '[PKG-{{ trace_id }}] SPAN_START:package_check | Person left, backup
+            package check'
+          entity_id: automation.package_delivery_detection
+      - if:
+        - condition: state
+          entity_id: input_text.pending_notification_type
+          state: package
+        then:
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] SPAN_END:package_check | status=SKIPPED
+              (already alerted on arrival)'
+            entity_id: automation.package_delivery_detection
+        else:
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] EVENT:snapshot | file=doorbell_after.jpg'
+            entity_id: camera.reolink_video_doorbell_wifi_fluent
+        - action: camera.snapshot
+          target:
+            entity_id: camera.reolink_video_doorbell_wifi_fluent
+          data:
+            filename: /config/www/tmp/doorbell_after.jpg
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] EVENT:llm_call | model=llava:7b | prompt=package_check'
+            entity_id: automation.package_delivery_detection
+        - action: llmvision.image_analyzer
+          data:
+            provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
+            model: llava:7b
+            image_file: /config/www/tmp/doorbell_after.jpg
+            message: 'Answer ONLY YES or NO: Is there a package, box, or delivery
+              item visible on this porch/doorstep?'
+            max_tokens: 10
+            target_width: 1280
+          response_variable: package_check
+        - variables:
+            package_detected: '{{ ''yes'' in (package_check.response_text | default('''')
+              | lower) }}'
+        - action: logbook.log
+          data:
+            name: Package Detection
+            message: '[PKG-{{ trace_id }}] EVENT:llm_response | result={{ package_check.response_text
+              }} | package_detected={{ package_detected }}'
+            entity_id: automation.package_delivery_detection
+        - if:
+          - condition: template
+            value_template: '{{ package_detected }}'
+          then:
+          - action: logbook.log
+            data:
+              name: Package Detection
+              message: '[PKG-{{ trace_id }}] EVENT:package_confirmed | Backup check
+                found package!'
+              entity_id: automation.package_delivery_detection
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.pending_notification_message
+            data:
+              value: Package delivered at {{ now().strftime('%I:%M %p') }}
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.pending_notification_type
+            data:
+              value: package
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.has_pending_notification
+          - parallel:
+            - action: notify.mobile_app_pixel_10_pro
+              data:
+                title: "\U0001F4E6 Package Delivered!"
+                message: '{{ states(''input_text.pending_notification_message'') }}'
+                data:
+                  image: /api/camera_proxy/camera.reolink_video_doorbell_wifi_fluent
+                  tag: package_delivery
+                  channel: Package Alerts
+                  importance: high
+            - sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: light.home_assistant_voice_09f5a3_led_ring
+                data:
+                  rgb_color:
+                  - 0
+                  - 100
+                  - 255
+                  brightness: 200
+          - action: logbook.log
+            data:
+              name: Package Detection
+              message: '[PKG-{{ trace_id }}] SPAN_END:package_check | status=PACKAGE_DETECTED
+                (backup)'
+              entity_id: automation.package_delivery_detection
+          else:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.pending_notification_type
+            data:
+              value: none
+          - action: logbook.log
+            data:
+              name: Package Detection
+              message: '[PKG-{{ trace_id }}] SPAN_END:package_check | status=NO_PACKAGE'
+              entity_id: automation.package_delivery_detection
+  - action: logbook.log
+    data:
+      name: Package Detection
+      message: '[PKG-{{ trace_id }}] TRACE_END | trigger={{ trigger_name }} | duration={{
+        (now() - as_datetime(start_time)).total_seconds() | round(1) }}s'
+      entity_id: automation.package_delivery_detection
+  mode: queued
+- id: clear_doorbell_notification
+  alias: Clear Doorbell Notification
+  description: Clears pending notification and turns off LED when user acknowledges
+    via voice or manually
+  triggers:
+  - platform: state
+    entity_id: input_boolean.has_pending_notification
+    to: 'off'
+  actions:
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    action: light.turn_off
+  - target:
+      entity_id: input_text.pending_notification_message
+    data:
+      value: ''
+    action: input_text.set_value
+  - target:
+      entity_id: input_text.pending_notification_type
+    data:
+      value: ''
+    action: input_text.set_value
+  mode: single
+- id: voice_check_notifications
+  alias: Voice - Check Notifications
+  description: Natural voice command to check notifications
+  triggers:
+  - platform: conversation
+    command:
+    - what's my notification
+    - whats my notification
+    - what is my notification
+    - any notifications
+    - do I have notifications
+    - do I have any notifications
+    - check notifications
+    - check my notifications
+    - read notifications
+    - read my notification
+  actions:
+  - target:
+      entity_id: script.get_pending_notification
+    action: script.turn_on
+  mode: single
+- id: claude_code_led_feedback
+  alias: Claude Code LED Feedback
+  description: Controls Voice PE LED ring based on Claude Code MQTT events
+  triggers:
+  - platform: mqtt
+    topic: claude/command
+    id: command_received
+  - platform: mqtt
+    topic: claude/home/response
+    id: response_message
+  - platform: mqtt
+    topic: claude/approval-request
+    id: approval_request
+  - platform: mqtt
+    topic: claude/approval-response
+    id: approval_response
+  conditions: []
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: command_received
+      sequence:
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        data:
+          rgb_color:
+          - 24
+          - 187
+          - 242
+          brightness: 170
+        action: light.turn_on
+      - delay:
+          seconds: 30
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        action: light.turn_off
+    - conditions:
+      - condition: trigger
+        id: response_message
+      sequence:
+      - if:
+        - condition: template
+          value_template: '{% set payload = trigger.payload | from_json %} {{ payload.type
+            == ''complete'' }}'
+        then:
+        - target:
+            entity_id: light.home_assistant_voice_09f5a3_led_ring
+          action: light.turn_off
+    - conditions:
+      - condition: trigger
+        id: approval_request
+      sequence:
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        data:
+          rgb_color:
+          - 255
+          - 165
+          - 0
+          brightness: 200
+        action: light.turn_on
+    - conditions:
+      - condition: trigger
+        id: approval_response
+      sequence:
+      - if:
+        - condition: template
+          value_template: '{% set payload = trigger.payload | from_json %} {{ payload.approved
+            == true }}'
+        then:
+        - target:
+            entity_id: light.home_assistant_voice_09f5a3_led_ring
+          data:
+            rgb_color:
+            - 0
+            - 255
+            - 0
+            brightness: 200
+          action: light.turn_on
+        else:
+        - target:
+            entity_id: light.home_assistant_voice_09f5a3_led_ring
+          data:
+            rgb_color:
+            - 255
+            - 0
+            - 0
+            brightness: 200
+          action: light.turn_on
+      - delay:
+          seconds: 2
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        action: light.turn_off
+  mode: restart
+- id: claude_code_led_feedback_v2
+  alias: Claude Code LED Feedback V2
+  description: Voice PE LED feedback for Claude Code integration with ESPHome effects
+    and approval controls
+  triggers:
+  - platform: mqtt
+    topic: claude/command
+    id: command_received
+  - platform: mqtt
+    topic: claude/home/response
+    id: response_complete
+  - platform: mqtt
+    topic: claude/approval-request
+    id: approval_request
+  - platform: mqtt
+    topic: claude/approval-response
+    id: approval_response
+  - platform: event
+    event_type: esphome.voice_pe_dial
+    id: dial_event
+  - platform: event
+    event_type: esphome.voice_pe_button
+    id: button_event
+  conditions: []
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: command_received
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ has_value('light.home_assistant_voice_09f5a3_led_ring')
+              and\n   state_attr('light.home_assistant_voice_09f5a3_led_ring', 'effect_list')
+              is not none and\n   'Thinking' in state_attr('light.home_assistant_voice_09f5a3_led_ring',
+              'effect_list') }}\n"
+          sequence:
+          - target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              effect: Thinking
+            action: light.turn_on
+        default:
+        - target:
+            entity_id: light.home_assistant_voice_09f5a3_led_ring
+          data:
+            rgb_color:
+            - 0
+            - 255
+            - 255
+            brightness: 128
+          action: light.turn_on
+    - conditions:
+      - condition: trigger
+        id: response_complete
+      - condition: template
+        value_template: '{{ trigger.payload_json.type == ''complete'' }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ has_value('light.home_assistant_voice_09f5a3_led_ring')
+              and\n   state_attr('light.home_assistant_voice_09f5a3_led_ring', 'effect_list')
+              is not none }}\n"
+          sequence:
+          - target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              effect: None
+            action: light.turn_on
+          - delay:
+              milliseconds: 100
+        default: []
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        action: light.turn_off
+    - conditions:
+      - condition: trigger
+        id: approval_request
+      sequence:
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        data:
+          rgb_color:
+          - 255
+          - 191
+          - 0
+          brightness: 255
+          effect: None
+        action: light.turn_on
+      - target:
+          entity_id: input_text.claude_approval_request_id
+        data:
+          value: '{{ trigger.payload_json.requestId }}'
+        action: input_text.set_value
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_boolean.claude_awaiting_approval'') !=
+            ''unavailable'' }}'
+        then:
+        - target:
+            entity_id: input_boolean.claude_awaiting_approval
+          action: input_boolean.turn_on
+      - target:
+          entity_id: tts.piper
+        data:
+          media_player_entity_id: media_player.home_assistant_voice_09f5a3_media_player
+          message: Run {{ trigger.payload_json.input.command | default('this command')
+            | truncate(50) }}?
+        action: tts.speak
+    - conditions:
+      - condition: trigger
+        id: dial_event
+      - condition: template
+        value_template: '{{ trigger.event.data.direction == ''clockwise'' }}'
+      - condition: template
+        value_template: "{{ states('input_boolean.claude_awaiting_approval') == 'unavailable'
+          or\n   is_state('input_boolean.claude_awaiting_approval', 'on') }}\n"
+      sequence:
+      - data:
+          topic: claude/approval-response
+          payload: '{{ {"requestId": states("input_text.claude_approval_request_id"),
+            "approved": true, "source": "voice_pe_dial"} | to_json }}
+
+            '
+        action: mqtt.publish
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_boolean.claude_awaiting_approval'') !=
+            ''unavailable'' }}'
+        then:
+        - target:
+            entity_id: input_boolean.claude_awaiting_approval
+          action: input_boolean.turn_off
+    - conditions:
+      - condition: trigger
+        id: dial_event
+      - condition: template
+        value_template: '{{ trigger.event.data.direction == ''anticlockwise'' }}'
+      - condition: template
+        value_template: "{{ states('input_boolean.claude_awaiting_approval') == 'unavailable'
+          or\n   is_state('input_boolean.claude_awaiting_approval', 'on') }}\n"
+      sequence:
+      - data:
+          topic: claude/approval-response
+          payload: '{{ {"requestId": states("input_text.claude_approval_request_id"),
+            "approved": false, "source": "voice_pe_dial"} | to_json }}
+
+            '
+        action: mqtt.publish
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_boolean.claude_awaiting_approval'') !=
+            ''unavailable'' }}'
+        then:
+        - target:
+            entity_id: input_boolean.claude_awaiting_approval
+          action: input_boolean.turn_off
+    - conditions:
+      - condition: trigger
+        id: button_event
+      - condition: template
+        value_template: "{{ states('input_boolean.claude_awaiting_approval') == 'unavailable'
+          or\n   is_state('input_boolean.claude_awaiting_approval', 'on') }}\n"
+      sequence:
+      - data:
+          topic: claude/approval-response
+          payload: '{{ {"requestId": states("input_text.claude_approval_request_id"),
+            "approved": true, "source": "voice_pe_button"} | to_json }}
+
+            '
+        action: mqtt.publish
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_boolean.claude_awaiting_approval'') !=
+            ''unavailable'' }}'
+        then:
+        - target:
+            entity_id: input_boolean.claude_awaiting_approval
+          action: input_boolean.turn_off
+    - conditions:
+      - condition: trigger
+        id: approval_response
+      - condition: template
+        value_template: '{{ trigger.payload_json.approved == true }}'
+      sequence:
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        data:
+          rgb_color:
+          - 0
+          - 255
+          - 0
+          brightness: 255
+          effect: None
+        action: light.turn_on
+      - delay:
+          seconds: 2
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        action: light.turn_off
+    - conditions:
+      - condition: trigger
+        id: approval_response
+      - condition: template
+        value_template: '{{ trigger.payload_json.approved == false }}'
+      sequence:
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        data:
+          rgb_color:
+          - 255
+          - 0
+          - 0
+          brightness: 255
+          effect: None
+        action: light.turn_on
+      - delay:
+          seconds: 2
+      - target:
+          entity_id: light.home_assistant_voice_09f5a3_led_ring
+        action: light.turn_off
+    default: []
+  mode: restart
+- id: claude_speak_response
+  alias: Claude Speak Response
+  description: Announces Claude Code responses via Voice PE
+  triggers:
+  - platform: mqtt
+    topic: claude/home/response
+    id: response_received
+  conditions:
+  - condition: template
+    value_template: '{{ ''"type":"answer"'' in trigger.payload or ''"type":"result"''
+      in trigger.payload }}'
+  actions:
+  - variables:
+      result_text: "{% set p = trigger.payload | from_json %} {% if p.type == 'answer'
+        and p.text is defined %}\n  {{ p.text | truncate(400) }}\n{% elif p.content
+        is defined and p.content is iterable %}\n  {% for item in p.content %}\n    {%
+        if item.type == 'claude-response' and item.data is defined and item.data.type
+        == 'result' %}\n      {{ item.data.result | truncate(400) }}\n    {% endif
+        %}\n  {% endfor %}\n{% else %}\n  Request completed\n{% endif %}"
+  - target:
+      entity_id: assist_satellite.home_assistant_voice_09f5a3_assist_satellite
+    data:
+      message: '{{ result_text }}'
+    action: assist_satellite.announce
+  mode: queued
+  max: 10
+- id: ask_claude_voice_intent
+  alias: Ask Claude Voice Intent
+  description: Route Ask Claude voice commands to Claude Code
+  triggers:
+  - platform: conversation
+    command:
+    - ask claude {query}
+    - ask cloud {query}
+    - hey claude {query}
+    - claude {query}
+  actions:
+  - data:
+      topic: claude/command
+      payload: '{"source":"voice_pe","server":"home","type":"chat","message":"{{ trigger.slots.query
+        }}"}'
+    action: mqtt.publish
+  - set_conversation_response: Asking Claude
+  mode: single
+- id: claude_approval_dial_cw
+  alias: Claude Approval - Dial CW (Approve)
+  triggers:
+  - platform: event
+    event_type: esphome.voice_pe_dial
+    event_data:
+      direction: clockwise
+  conditions:
+  - condition: state
+    entity_id: input_boolean.claude_awaiting_approval
+    state: 'on'
+  actions:
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    data:
+      rgb_color:
+      - 0
+      - 255
+      - 0
+      brightness: 255
+    action: light.turn_on
+  - target:
+      entity_id: tts.piper
+    data:
+      media_player_entity_id: media_player.home_assistant_voice_09f5a3_media_player
+      message: Approved
+    action: tts.speak
+  - data:
+      topic: claude/approval-response
+      payload: '{{ {"requestId": states("input_text.claude_approval_request_id"),
+        "approved": true} | to_json }}'
+    action: mqtt.publish
+  - target:
+      entity_id: input_boolean.claude_awaiting_approval
+    action: input_boolean.turn_off
+  - delay:
+      seconds: 2
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    action: light.turn_off
+- id: claude_approval_dial_ccw
+  alias: Claude Approval - Dial CCW (Reject)
+  triggers:
+  - platform: event
+    event_type: esphome.voice_pe_dial
+    event_data:
+      direction: anticlockwise
+  conditions:
+  - condition: state
+    entity_id: input_boolean.claude_awaiting_approval
+    state: 'on'
+  actions:
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    data:
+      rgb_color:
+      - 255
+      - 0
+      - 0
+      brightness: 255
+    action: light.turn_on
+  - target:
+      entity_id: tts.piper
+    data:
+      media_player_entity_id: media_player.home_assistant_voice_09f5a3_media_player
+      message: Rejected
+    action: tts.speak
+  - data:
+      topic: claude/approval-response
+      payload: '{{ {"requestId": states("input_text.claude_approval_request_id"),
+        "approved": false} | to_json }}'
+    action: mqtt.publish
+  - target:
+      entity_id: input_boolean.claude_awaiting_approval
+    action: input_boolean.turn_off
+  - delay:
+      seconds: 2
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    action: light.turn_off
+- id: claude_approval_start_timer
+  alias: Claude Approval - Start Timer
+  triggers:
+  - platform: state
+    entity_id: input_boolean.claude_awaiting_approval
+    to: 'on'
+  actions:
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    data:
+      rgb_color:
+      - 255
+      - 165
+      - 0
+      brightness: 200
+    action: light.turn_on
+  - target:
+      entity_id: tts.piper
+    data:
+      media_player_entity_id: media_player.home_assistant_voice_09f5a3_media_player
+      message: Approve or reject within 30 seconds
+    action: tts.speak
+  - target:
+      entity_id: timer.claude_approval_timeout
+    action: timer.start
+- id: claude_approval_timeout
+  alias: Claude Approval - Timeout
+  triggers:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.claude_approval_timeout
+  conditions:
+  - condition: state
+    entity_id: input_boolean.claude_awaiting_approval
+    state: 'on'
+  actions:
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    data:
+      rgb_color:
+      - 255
+      - 0
+      - 0
+      brightness: 255
+    action: light.turn_on
+  - target:
+      entity_id: tts.piper
+    data:
+      media_player_entity_id: media_player.home_assistant_voice_09f5a3_media_player
+      message: Request timed out
+    action: tts.speak
+  - data:
+      topic: claude/approval-response
+      payload: '{{ {"requestId": states("input_text.claude_approval_request_id"),
+        "approved": false, "reason": "timeout"} | to_json }}'
+    action: mqtt.publish
+  - target:
+      entity_id: input_boolean.claude_awaiting_approval
+    action: input_boolean.turn_off
+  - delay:
+      seconds: 2
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    action: light.turn_off
+- id: claude_approval_cancel_timer
+  alias: Claude Approval - Cancel Timer
+  triggers:
+  - platform: state
+    entity_id: input_boolean.claude_awaiting_approval
+    to: 'off'
+  actions:
+  - target:
+      entity_id: timer.claude_approval_timeout
+    action: timer.cancel
+- id: claude_approval_capture_request
+  alias: Claude Approval - Capture Request
+  triggers:
+  - topic: claude/approval-request
+    trigger: mqtt
+  actions:
+  - target:
+      entity_id: input_text.claude_approval_request_id
+    data:
+      value: '{{ trigger.payload_json.requestId }}'
+    action: input_text.set_value
+  - target:
+      entity_id: input_boolean.claude_awaiting_approval
+    action: input_boolean.turn_on
+  - action: assist_satellite.start_conversation
+    metadata: {}
+    data:
+      start_message: '{{ trigger.payload_json.message }}. Say yes or no.'
+      preannounce: true
+      extra_system_prompt: The user is responding to an approval request. They will
+        say yes/approve or no/reject. Match their response to ApproveClaudeAction
+        or RejectClaudeAction intents.
+

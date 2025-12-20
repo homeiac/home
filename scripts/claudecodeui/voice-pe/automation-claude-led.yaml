@@ -1,0 +1,110 @@
+# Claude Code Voice PE LED Automation
+# Triggers Voice PE LED ring based on Claude Code MQTT events
+#
+# P0 Use Cases:
+# 1. claude/command → cyan (thinking)
+# 2. claude/home/response type:complete → off
+# 3. claude/approval-request → amber (waiting)
+# 4. claude/approval-response approved:true → green, then off
+# 5. claude/approval-response approved:false → red, then off
+
+alias: Claude Code LED Feedback
+description: Controls Voice PE LED ring based on Claude Code MQTT events
+mode: restart
+trigger:
+  # P0-1: Command received - start thinking
+  - platform: mqtt
+    topic: claude/command
+    id: command_received
+  # P0-2: Response complete - done thinking
+  - platform: mqtt
+    topic: claude/home/response
+    id: response_message
+  # P0-3: Approval request - waiting for user
+  - platform: mqtt
+    topic: claude/approval-request
+    id: approval_request
+  # P0-4/5: Approval response - approved or rejected
+  - platform: mqtt
+    topic: claude/approval-response
+    id: approval_response
+
+condition: []
+
+action:
+  - choose:
+      # P0-1: Command received → Thinking (cyan)
+      - conditions:
+          - condition: trigger
+            id: command_received
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              rgb_color: [24, 187, 242]
+              brightness: 170
+          - delay:
+              seconds: 30
+          - service: light.turn_off
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+
+      # P0-2: Response message - check if complete
+      - conditions:
+          - condition: trigger
+            id: response_message
+        sequence:
+          - if:
+              - condition: template
+                value_template: >-
+                  {% set payload = trigger.payload | from_json %}
+                  {{ payload.type == 'complete' }}
+            then:
+              - service: light.turn_off
+                target:
+                  entity_id: light.home_assistant_voice_09f5a3_led_ring
+
+      # P0-3: Approval request → Waiting (amber)
+      - conditions:
+          - condition: trigger
+            id: approval_request
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
+            data:
+              rgb_color: [255, 165, 0]
+              brightness: 200
+
+      # P0-4/5: Approval response → Green (approved) or Red (rejected), then off
+      - conditions:
+          - condition: trigger
+            id: approval_response
+        sequence:
+          - if:
+              - condition: template
+                value_template: >-
+                  {% set payload = trigger.payload | from_json %}
+                  {{ payload.approved == true }}
+            then:
+              # Approved → Green
+              - service: light.turn_on
+                target:
+                  entity_id: light.home_assistant_voice_09f5a3_led_ring
+                data:
+                  rgb_color: [0, 255, 0]
+                  brightness: 200
+            else:
+              # Rejected → Red
+              - service: light.turn_on
+                target:
+                  entity_id: light.home_assistant_voice_09f5a3_led_ring
+                data:
+                  rgb_color: [255, 0, 0]
+                  brightness: 200
+          - delay:
+              seconds: 2
+          - service: light.turn_off
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring

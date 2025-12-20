@@ -1,0 +1,18 @@
+# Custom sentences for "Ask Claude" voice intent
+# Deploy to: /config/custom_sentences/en/ask_claude.yaml on HAOS
+
+language: en
+intents:
+  AskClaude:
+    data:
+      - sentences:
+          - "ask claude {query}"
+          - "ask cloud {query}"
+          - "hey claude {query}"
+          - "claude {query}"
+          - "ask claude to {query}"
+          - "tell claude {query}"
+          - "tell claude to {query}"
+        slots:
+          query:
+            type: text

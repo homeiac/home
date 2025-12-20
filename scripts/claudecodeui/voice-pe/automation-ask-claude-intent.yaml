@@ -1,0 +1,32 @@
+# Voice intent: "Ask Claude [query]"
+# Triggers when user says "Ask Claude..." to Voice PE
+# Routes query to claudecodeui via MQTT
+
+alias: Ask Claude Voice Intent
+description: Route "Ask Claude [query]" voice commands to Claude Code
+mode: single
+
+trigger:
+  # Trigger on conversation agent text that starts with "ask claude"
+  - platform: conversation
+    command:
+      - "ask claude {query}"
+      - "ask cloud {query}"
+      - "hey claude {query}"
+      - "claude {query}"
+
+action:
+  # Publish to Claude MQTT topic
+  - service: mqtt.publish
+    data:
+      topic: claude/command
+      payload: >-
+        {
+          "source": "voice_pe",
+          "server": "home",
+          "type": "chat",
+          "message": "{{ trigger.slots.query }}"
+        }
+
+  # Respond to user that request was sent
+  - set_conversation_response: "Asking Claude: {{ trigger.slots.query }}"

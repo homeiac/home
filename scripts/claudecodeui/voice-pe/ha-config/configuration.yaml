@@ -1,0 +1,16 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# Enable input helpers (entities created via UI)
+input_boolean:
+input_text:
+intent_script: !include intent_script.yaml
+

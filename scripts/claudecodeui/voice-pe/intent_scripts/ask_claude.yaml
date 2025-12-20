@@ -1,0 +1,15 @@
+# Intent script for AskClaude
+# Deploy to: /config/intent_script.yaml (or include in configuration.yaml)
+
+AskClaude:
+  description: "Route voice query to Claude Code"
+  action:
+    - service: mqtt.publish
+      data:
+        topic: claude/command
+        payload: >-
+          {"source":"voice_pe","server":"home","type":"chat","message":"{{ query }}"}
+    - stop: ""
+      response_variable: response
+  speech:
+    text: "Asking Claude"
