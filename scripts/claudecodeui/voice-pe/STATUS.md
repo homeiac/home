@@ -1,86 +1,111 @@
 # Voice PE Implementation Status
 
 **Last Updated:** 2025-12-20
-**Device:** Home Assistant Voice PE (home-assistant-voice-09f5a3)
+**Source:** APPROVAL-UX-SCENARIOS.md
 
 ---
 
-## Scenarios
+## MVP Scenarios
 
-### 1. Claude Approval via Dial
-**Status:** ✅ COMPLETE
-
-User rotates dial to approve/reject Claude Code tool requests.
-
-| Step | Status | Notes |
-|------|--------|-------|
-| Firmware fires `esphome.voice_pe_dial` event | ✅ | CW/CCW with device_id |
-| HA automation listens to event | ✅ | Via HA UI |
-| LED shows amber while waiting | ✅ | "Waiting" effect |
-| LED shows green on approve | ✅ | "Approved" effect |
-| LED shows red on reject | ✅ | "Rejected" effect |
-| MQTT response to `claude/approval-response` | ✅ | `{"approved": true/false, "source": "dial"}` |
-
----
-
-### 2. Claude Approval via Voice
-**Status:** ✅ COMPLETE (with quirk)
-
-User says "yes"/"no" after TTS prompt - no wake word needed.
-
-| Step | Status | Notes |
-|------|--------|-------|
-| TTS asks "Do X? Say yes or no" | ✅ | Uses `assist_satellite.start_conversation` |
-| Voice PE listens after TTS | ✅ | No wake word required |
-| "yes"/"approve" triggers approval | ✅ | Custom sentence in HA |
-| "no"/"reject" triggers rejection | ✅ | Custom sentence in HA |
-| MQTT response to `claude/approval-response` | ✅ | `{"approved": true/false, "source": "voice"}` |
-
-**Known Quirk:** Voice PE says "nothing pending" before actual response comes through. Cosmetic issue.
-
----
-
-### 3. Ask Claude via Voice
+### Scenario 1: Simple Question
 **Status:** ❌ NOT STARTED
 
-User says "Hey Jarvis, ask Claude [question]" to send query to Claude Code.
+User asks Claude a question, gets voice response.
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Custom sentence for "ask Claude..." | ❌ | File exists: `custom_sentences/en/ask_claude.yaml` |
-| Intent script to publish to MQTT | ❌ | File exists: `intent_scripts/ask_claude.yaml` |
-| Deploy to HA | ❌ | Script: `deploy-ask-claude-intent.sh` |
-| ClaudeCodeUI subscribes to query topic | ❌ | Needs ClaudeCodeUI changes |
-| Response spoken via TTS | ❌ | |
+| Voice input triggers "Asking Claude" | ❌ | |
+| LED: Blue (thinking) | ❌ | |
+| Voice response | ❌ | |
+| Long press cancels | ❌ | |
 
 ---
 
-### 4. Package Detection Notification
+### Scenario 2: Binary Approval (Yes/No)
 **Status:** 🚧 PARTIAL
 
-Frigate detects package at door, Voice PE announces and shows LED.
-
 | Step | Status | Notes |
 |------|--------|-------|
-| Frigate detects person at door | ✅ | Working in K8s |
-| HA automation triggers on detection | 🚧 | Automation exists, needs testing |
-| LLM Vision analyzes snapshot | ❌ | Ollama integration issues |
-| Voice PE LED pulses | ❌ | |
-| User asks "What's my notification?" | ❌ | Custom sentence needed |
-| TTS describes who's at door | ❌ | |
+| LED: Orange (waiting) | ✅ | "Waiting" effect |
+| PATH A: Dial CW → preview (light green) | ❌ | Currently immediate, no preview |
+| PATH A: Button confirms → bright green → blue | ❌ | |
+| PATH B: Dial CCW → preview (light red) | ❌ | Currently immediate, no preview |
+| PATH B: Button confirms → reject | ❌ | |
+| PATH C: Voice "yes"/"no" → immediate | ✅ | Working |
+| PATH D: Timeout warning at 10s | ❌ | |
+| PATH D: Auto-reject at 15s | ❌ | |
+| PATH E: Change mind during preview | ❌ | |
 
 ---
 
-### 5. Basic Voice Control
-**Status:** ✅ COMPLETE
+### Scenario 3: Multiple Approvals in Sequence
+**Status:** ❌ NOT STARTED
 
-Standard Home Assistant voice commands via Voice PE.
+Progress LEDs show completed vs pending approvals.
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Wake word detection ("Hey Jarvis") | ✅ | Using 25.11.0 firmware |
-| Voice commands to HA | ✅ | Lights, etc. |
-| TTS responses | ✅ | Via Piper |
+| Progress LED per approval | ❌ | |
+| Current approval blinks orange | ❌ | |
+| Done approvals solid green | ❌ | |
+| Reject any → cancel entire task | ❌ | |
+
+---
+
+### Scenario 4: Follow-Up Questions
+**Status:** ❌ NOT STARTED
+
+Context timer and conversation aging.
+
+| Step | Status | Notes |
+|------|--------|-------|
+| Context ring drains over 60s | ❌ | |
+| Color ages with conversation turns | ❌ | |
+| Within timeout: Claude remembers | ❌ | |
+| After timeout: fresh conversation | ❌ | |
+
+---
+
+### Scenario 5: System/Automation Failures
+**Status:** ❌ NOT STARTED
+
+Technical error messages for debugging.
+
+| Step | Status | Notes |
+|------|--------|-------|
+| MQTT timeout → voice message | ❌ | |
+| No response → voice message | ❌ | |
+| MQTT disconnect → voice message | ❌ | |
+| Automation error → voice message | ❌ | |
+| Parse error → voice message | ❌ | |
+| HTTP error → voice message | ❌ | |
+
+---
+
+### Scenario 6: Multiple Choice (up to 5)
+**Status:** ❌ NOT STARTED
+
+Dial selects from options, voice announces.
+
+| Step | Status | Notes |
+|------|--------|-------|
+| LED: colored segments for options | ❌ | |
+| Dial CW/CCW navigates + voice announces | ❌ | |
+| Button confirms selection | ❌ | |
+| Voice selects directly | ❌ | |
+| Button tap pattern (1-5) selects | ❌ | |
+
+---
+
+## V2 Scenarios
+
+### Scenario 7: Resume Previous Conversation
+**Status:** ❌ V2 - NOT PLANNED
+
+---
+
+### Scenario 8: Cancel During Execution
+**Status:** ❌ V2 - NOT PLANNED
 
 ---
 
@@ -89,28 +114,30 @@ Standard Home Assistant voice commands via Voice PE.
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Voice PE firmware | ✅ | 25.11.0 with dial events |
-| TTS (Piper) | ✅ | Working after router restart |
-| Network path (Voice PE → HA) | ✅ | Via socat proxy 192.168.1.122 |
+| TTS (Piper) | ✅ | Working |
+| Network path | ✅ | Via socat 192.168.1.122 |
 | MQTT broker | ✅ | On HA |
-| Custom LED effects | ✅ | Waiting/Approved/Rejected/Progress |
+| LED effects (basic) | ✅ | Waiting/Approved/Rejected |
 
 ---
 
-## Files Reference
+## Summary
 
-| Purpose | Location |
-|---------|----------|
-| Firmware config | `scripts/voice-pe/voice-pe-config.yaml` |
-| Approval automation | HA UI (not file-managed) |
-| Custom sentences | `scripts/claudecodeui/voice-pe/custom_sentences/` |
-| Intent scripts | `scripts/claudecodeui/voice-pe/intent_scripts/` |
-| Test scripts | `scripts/claudecodeui/voice-pe/*.sh` |
-| TTS troubleshooting | `docs/source/md/runbook-voice-pe-tts-troubleshooting.md` |
+| Scenario | Priority | Status |
+|----------|----------|--------|
+| 1. Simple Question | MVP | ❌ |
+| 2. Binary Approval | MVP | 🚧 (voice only) |
+| 3. Multiple Approvals | MVP | ❌ |
+| 4. Follow-Up Questions | MVP | ❌ |
+| 5. System Failures | MVP | ❌ |
+| 6. Multiple Choice | MVP | ❌ |
+| 7. Resume Conversation | V2 | ❌ |
+| 8. Cancel Execution | V2 | ❌ |
 
 ---
 
 ## Next Priority
 
-1. **Ask Claude via Voice** - Deploy intent, test E2E
-2. **Package Detection** - Fix LLM Vision integration
-3. **"Nothing pending" quirk** - Investigate timing issue
+1. **Scenario 2 completion** - Add dial preview (light green/red) before confirm
+2. **Scenario 1** - Simple question flow
+3. **Scenario 5** - Error feedback
