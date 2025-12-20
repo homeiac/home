@@ -1,11 +1,13 @@
 # Rancher Server VM - RKE2 control plane + Rancher UI
-# This is a TEST VM for validating Crossplane - safe to create/destroy
-# VMID 200 on pumped-piglet
+# VMID 200 on pumped-piglet - ADOPTING EXISTING VM
 ---
-apiVersion: virtualenvironment.proxmox.crossplane.io/v1alpha1
+apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
 kind: EnvironmentVM
 metadata:
   name: rancher-server
+  annotations:
+    # Adopt existing VM instead of creating new one
+    crossplane.io/external-name: "200"
   labels:
     app: rancher
     environment: eval
@@ -13,49 +15,50 @@ metadata:
 spec:
   forProvider:
     nodeName: pumped-piglet
-    vmid: 200
+    vmId: 200
     name: rancher-server
     description: "RKE2 control plane + Rancher UI (Crossplane-managed)"
 
     # CPU configuration
     cpu:
-      cores: 4
-      type: host
+      - cores: 4
+        type: host
 
     # Memory (8GB)
     memory:
-      dedicated: 8192
+      - dedicated: 8192
 
     # Boot disk - 100GB on local ZFS
     disk:
       - interface: scsi0
-        storage: local-2TB-zfs
+        datastoreId: local-2TB-zfs
         size: 100
-        discard: true
+        discard: "on"
         iothread: true
         cache: writeback
 
     # Network on vmbr0 (192.168.4.x)
-    network:
-      - interface: virtio
-        bridge: vmbr0
+    networkDevice:
+      - bridge: vmbr0
+        model: virtio
 
     # Cloud-init configuration
-    cloudInit:
-      user: ubuntu
-      # Password from external secret - NOT stored in Git
-      # Use scripts/crossplane/set-vm-password.sh to configure
-      ipConfig:
-        - ipv4:
-            address: "192.168.4.200/24"
-            gateway: "192.168.4.1"
-      dns:
-        servers:
-          - "192.168.4.1"
+    initialization:
+      - datastoreId: local-2TB-zfs
+        userAccount:
+          - username: ubuntu
+            # SSH keys from Proxmox host
+        ipConfig:
+          - ipv4:
+              - address: "192.168.4.200/24"
+                gateway: "192.168.4.1"
+        dns:
+          - servers:
+              - "192.168.4.1"
 
     # Enable QEMU guest agent
     agent:
-      enabled: true
+      - enabled: true
 
     # VM behavior
     onBoot: true
