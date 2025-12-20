@@ -10,7 +10,30 @@ esphome:
   friendly_name: ${friendly_name}
 api:
   encryption:
-    key: REDACTED_API_KEY
+    key: !secret api_encryption_key
+  actions:
+    - action: set_led_segment
+      variables:
+        start_led: int
+        end_led: int
+        red: int
+        green: int
+        blue: int
+      then:
+        - light.addressable_set:
+            id: led_ring
+            range_from: !lambda 'return start_led;'
+            range_to: !lambda 'return end_led;'
+            red: !lambda 'return red / 255.0;'
+            green: !lambda 'return green / 255.0;'
+            blue: !lambda 'return blue / 255.0;'
+    - action: clear_leds
+      then:
+        - light.addressable_set:
+            id: led_ring
+            red: 0%
+            green: 0%
+            blue: 0%
 
 # Per-LED control via named effects
 # (number/select entities cause boot crash - ESPHome bug)
