@@ -1,0 +1,31 @@
+# Custom sentences for voice approval/rejection
+# Deploy to: /config/custom_sentences/en/voice_approval.yaml on HAOS
+
+language: en
+intents:
+  ApproveClaudeAction:
+    data:
+      - sentences:
+          - "yes"
+          - "approve"
+          - "do it"
+          - "go ahead"
+          - "confirmed"
+          - "yep"
+          - "yeah"
+          - "approve it"
+          - "yes do it"
+          - "go for it"
+  RejectClaudeAction:
+    data:
+      - sentences:
+          - "no"
+          - "reject"
+          - "cancel"
+          - "stop"
+          - "don't do that"
+          - "nope"
+          - "negative"
+          - "cancel it"
+          - "reject it"
+          - "no don't"

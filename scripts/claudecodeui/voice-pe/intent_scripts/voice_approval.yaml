@@ -1,0 +1,60 @@
+# Intent scripts for voice approval/rejection
+# Deploy to: /config/intent_script.yaml (merge with existing)
+#
+# Uses same MQTT topic/payload as dial approval:
+#   Topic: claude/approval-response
+#   Payload: {"requestId": "...", "approved": true/false, "source": "voice"}
+
+ApproveClaudeAction:
+  description: "Approve pending Claude action via voice"
+  action:
+    - if:
+        - condition: state
+          entity_id: input_boolean.claude_awaiting_approval
+          state: "on"
+      then:
+        - service: mqtt.publish
+          data:
+            topic: claude/approval-response
+            payload: >-
+              {{ {"requestId": states("input_text.claude_approval_request_id"), "approved": true, "source": "voice"} | to_json }}
+        - service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.claude_awaiting_approval
+      else:
+        - stop: ""
+          response_variable: not_waiting
+  speech:
+    text: >-
+      {% if is_state('input_boolean.claude_awaiting_approval', 'on') %}
+      Approved
+      {% else %}
+      Nothing pending
+      {% endif %}
+
+RejectClaudeAction:
+  description: "Reject pending Claude action via voice"
+  action:
+    - if:
+        - condition: state
+          entity_id: input_boolean.claude_awaiting_approval
+          state: "on"
+      then:
+        - service: mqtt.publish
+          data:
+            topic: claude/approval-response
+            payload: >-
+              {{ {"requestId": states("input_text.claude_approval_request_id"), "approved": false, "source": "voice"} | to_json }}
+        - service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.claude_awaiting_approval
+      else:
+        - stop: ""
+          response_variable: not_waiting
+  speech:
+    text: >-
+      {% if is_state('input_boolean.claude_awaiting_approval', 'on') %}
+      Rejected
+      {% else %}
+      Nothing pending
+      {% endif %}

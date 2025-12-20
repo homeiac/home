@@ -36,21 +36,33 @@
 
 ## Hands-Free
 
-**Gap**: Voice yes/no NOT implemented
+**Status**: DESIGNED - Ready for implementation
 
-**Spikes**:
-- [ ] Can HA intent be guarded by input_boolean state?
-- [ ] What phrases does Whisper reliably recognize? ("yes" vs "yeah" vs "yep")
-- [ ] Does intent fire when Voice PE is in "waiting for command" vs idle?
+**Key Discovery**: `assist_satellite.start_conversation` enables voice approval WITHOUT wake word!
+- Plays TTS message
+- Automatically starts listening after TTS
+- User just says "yes" or "no"
+
+**Design Doc**: `VOICE-APPROVAL-DESIGN.md`
+
+**Spikes** (answered):
+- [x] Can HA intent be guarded by input_boolean state? → YES, use condition in intent script
+- [x] What phrases does Whisper reliably recognize? → "yes", "yeah", "yep", "no", "nope", etc.
+- [x] Does intent fire when Voice PE is in "waiting for command" vs idle? → YES, after start_conversation
+
+**Failed Approach**: ESPHome `voice_assistant.start:` action caused boot loop. Don't use.
 
 **Needed**:
-- HA intent for "yes" / "approve" / "do it"
-- HA intent for "no" / "reject" / "cancel"
-- Guard: only active when awaiting approval
+- [x] HA intent for "yes" / "approve" / "do it" → `ApproveClaudeAction`
+- [x] HA intent for "no" / "reject" / "cancel" → `RejectClaudeAction`
+- [x] Guard: only active when awaiting approval → `input_boolean.claude_awaiting_approval`
+- [ ] Update approval-request automation to use `assist_satellite.start_conversation`
+- [ ] Deploy custom_sentences and intent_scripts to HA
 
 **Acceptance**:
-- [ ] "Hey Nabu, yes" approves pending request
-- [ ] "Hey Nabu, no" rejects pending request
+- [ ] After approval TTS, user says "yes" (NO wake word) → approves
+- [ ] After approval TTS, user says "no" (NO wake word) → rejects
+- [ ] Dial still works as fallback
 - [ ] Voice ignored when not awaiting approval
 
 ---
