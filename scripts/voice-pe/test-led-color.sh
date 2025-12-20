@@ -19,9 +19,9 @@ case "$COLOR" in
     *)     echo "Usage: $0 [red|blue|green|white|off]"; exit 1 ;;
 esac
 
-echo "=== Setting LEDs 0-5 to $COLOR ==="
+echo "=== Setting LEDs 0-11 to $COLOR ==="
 curl -s -X POST -H "Authorization: Bearer $HA_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"start_led\": 0, \"end_led\": 5, \"red\": $R, \"green\": $G, \"blue\": $B}" \
+  -d "{\"start_led\": 0, \"end_led\": 11, \"red\": $R, \"green\": $G, \"blue\": $B}" \
   "$HA_URL/api/services/esphome/home_assistant_voice_09f5a3_set_led_segment"
 echo ""

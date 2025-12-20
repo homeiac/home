@@ -1,0 +1,65 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: flux-system
+  namespace: monitoring
+  labels:
+    app: flux
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - flux-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: flux
+  endpoints:
+    - port: http-prom
+      interval: 30s
+      scrapeTimeout: 10s
+---
+# Service to expose Flux controller metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: flux
+spec:
+  selector:
+    app: helm-controller
+  ports:
+    - name: http-prom
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-source-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: flux
+spec:
+  selector:
+    app: source-controller
+  ports:
+    - name: http-prom
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-kustomize-metrics
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: flux
+spec:
+  selector:
+    app: kustomize-controller
+  ports:
+    - name: http-prom
+      port: 8080
+      targetPort: 8080

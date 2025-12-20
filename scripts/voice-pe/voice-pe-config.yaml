@@ -98,6 +98,9 @@ wifi:
   power_save_mode: none
   fast_connect: true
 
+# HTTP connectivity check removed - was causing auth warnings in HA logs
+# Network issue was flaky Google WiFi routing - fixed by router restart
+
 # Extend dial sensor: ADD HA event + KEEP existing volume/hue logic
 # !extend REPLACES on_clockwise, so we must include ALL original behavior
 sensor:

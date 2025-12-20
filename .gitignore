@@ -116,3 +116,4 @@ raspberrypi-master/display-driver/.venv/bin/pip3
 raspberrypi-master/display-driver/.venv/bin/pip3.7
 raspberrypi-master/display-driver/.venv/bin/python
 raspberrypi-master/display-driver/.venv/bin/python3
+scripts/voice-pe/secrets.yaml

@@ -6,6 +6,8 @@ resources:
   - helmrelease.yaml
   - prometheus-storage-class.yaml
   - cpu-alerting-rules.yaml
+  - flux-alerting-rules.yaml
+  - flux-servicemonitor.yaml
   - grafana-ingress.yaml
 
 configMapGenerator:

@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flux-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: flux-gitops
+      rules:
+        # Alert when HelmRelease reconciliation fails
+        - alert: FluxHelmReleaseFailed
+          expr: gotk_reconcile_condition{type="Ready",status="False",kind="HelmRelease"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            service: flux-gitops
+          annotations:
+            summary: "Flux HelmRelease {{ $labels.name }} failed"
+            description: "HelmRelease {{ $labels.name }} in namespace {{ $labels.namespace }} has been in a failed state for more than 5 minutes."
+
+        # Alert when Kustomization reconciliation fails
+        - alert: FluxKustomizationFailed
+          expr: gotk_reconcile_condition{type="Ready",status="False",kind="Kustomization"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            service: flux-gitops
+          annotations:
+            summary: "Flux Kustomization {{ $labels.name }} failed"
+            description: "Kustomization {{ $labels.name }} in namespace {{ $labels.namespace }} has been in a failed state for more than 5 minutes."
+
+        # Alert when GitRepository sync fails
+        - alert: FluxGitRepositoryFailed
+          expr: gotk_reconcile_condition{type="Ready",status="False",kind="GitRepository"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            service: flux-gitops
+          annotations:
+            summary: "Flux GitRepository {{ $labels.name }} failed"
+            description: "GitRepository {{ $labels.name }} in namespace {{ $labels.namespace }} has been in a failed state for more than 5 minutes."
+
+        # Alert when reconciliation is stalled (not progressing)
+        - alert: FluxReconciliationStalled
+          expr: gotk_reconcile_condition{type="Stalled",status="True"} == 1
+          for: 15m
+          labels:
+            severity: warning
+            service: flux-gitops
+          annotations:
+            summary: "Flux {{ $labels.kind }} {{ $labels.name }} is stalled"
+            description: "{{ $labels.kind }} {{ $labels.name }} in namespace {{ $labels.namespace }} has been stalled for more than 15 minutes."
