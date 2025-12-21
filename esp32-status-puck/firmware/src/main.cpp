@@ -1232,8 +1232,15 @@ void status_deinit() {
 }
 
 void status_update() {
-    // Could add periodic refresh here
-    // For now, LEDs are updated on view change
+    // Check for ambient mode timeout (after boot grace period)
+    if (millis() > 5000) {
+        checkAmbientMode();
+    }
+
+    // Update LEDs when not in ambient mode
+    if (!ambientMode) {
+        status_updateLeds();
+    }
 }
 
 void status_handleEncoder(int direction) {
@@ -1582,20 +1589,20 @@ void framework_updateAlertOverlay() {
 void checkAmbientMode() {
     unsigned long now = millis();
 
-    if (currentState == SETTING && !ambientMode) {
+    if (!ambientMode) {
         if (now - lastInteractionTime >= AMBIENT_TIMEOUT_MS) {
             ambientMode = true;
-            setDisplayBrightness(20);
+            setDisplayBrightness(5);  // Very dim, not off
             leds.clear();
             leds.show();
             Serial.println("Ambient mode");
         }
     }
 
-    if (ambientMode && now - lastInteractionTime < 100) {
+    if (ambientMode && now - lastInteractionTime < 1000) {
         ambientMode = false;
         setDisplayBrightness(50);
-        Serial.println("Woke up");
+        Serial.println("Woke up - brightness set to 50");
     }
 }
 
