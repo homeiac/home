@@ -41,8 +41,8 @@ graph TB
     end
 
     subgraph Proxmox_Cluster[Proxmox VE Cluster - homelab]
-        PVE[pve.maas<br>192.168.4.122<br>Intel Xeon]
-        CH[chief-horse.maas<br>192.168.4.19<br>Intel Xeon]
+        PVE[pve.maas<br>192.168.4.122<br>Intel N100]
+        CH[chief-horse.maas<br>192.168.4.19<br>Intel i3-4010U NUC]
         PP[pumped-piglet.maas<br>192.168.4.175<br>Ryzen 5600G + RTX 3070]
         FB[fun-bedbug.maas<br>192.168.4.172<br>AMD A9-9400]
     end
@@ -395,14 +395,14 @@ gitops/clusters/homelab/
 ### Proxmox Hosts
 
 **pve.maas (192.168.4.122)**
-- CPU: Intel Xeon (details via `lshw`)
-- RAM: Unknown (check via `lshw`)
-- Storage: 1TB ZFS
+- CPU: Intel N100 (4 E-cores, Alder Lake-N mini-PC)
+- RAM: 16GB
+- Storage: 500GB ZFS (rpool)
 - Network: 2.5GbE vmbr25gbe + 1GbE vmbr0
 
 **chief-horse.maas (192.168.4.19)**
-- CPU: Intel Xeon (details via `lshw`)
-- RAM: Unknown (check via `lshw`)
+- CPU: Intel Core i3-4010U @ 1.70GHz (4 cores, Haswell NUC)
+- RAM: 8GB (check via `lshw`)
 - Storage: 256GB ZFS
 - Network: 2.5GbE vmbr0 (USB adapter enx803f5df8d628)
 
