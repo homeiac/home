@@ -37,15 +37,40 @@ pio run -t upload
 - 5-second grace period after boot before ambient mode can activate
 
 ### Gotcha: PWM Brightness 0 Breaks Recovery
-Setting `setDisplayBrightness(0)` breaks the PWM channel - the display won't come back when you try to restore brightness. Use 5% minimum instead.
+Setting `ledcWrite(PWM_CHANNEL, 0)` breaks the PWM channel - the display won't come back. Current workaround uses 5% minimum.
 
 ```cpp
 // BAD - won't recover
 setDisplayBrightness(0);
 
-// GOOD - recovers fine
+// CURRENT WORKAROUND - recovers fine
 setDisplayBrightness(5);
 ```
+
+### Proper Fix (TODO)
+The correct approach is to use the GC9A01's native sleep commands via LovyanGFX:
+
+```cpp
+// Sleep - sends SLPIN (0x10) to display controller
+gfx.getPanel()->setSleep(true);
+
+// Wake - sends SLPOUT (0x11), needs 120ms delay
+gfx.getPanel()->setSleep(false);
+delay(120);
+```
+
+This puts the display controller itself to sleep (µA range) instead of just dimming the backlight.
+
+**Power consumption comparison:**
+| Mode | Current |
+|------|---------|
+| Display awake | 10-20mA |
+| Display sleep | µA |
+| Backlight on | +30-40mA |
+
+**References:**
+- [GC9A01 Datasheet](https://www.buydisplay.com/download/ic/GC9A01A.pdf)
+- [LovyanGFX Issue #138](https://github.com/lovyan03/LovyanGFX/issues/138)
 
 ## Hardware
 
