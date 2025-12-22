@@ -7,10 +7,11 @@ This document describes the network architecture for Home Assistant Voice PE com
 ## Known Infrastructure (Verified)
 
 ### Voice PE Device
-- **IP**: 192.168.86.245
+- **IP**: 192.168.86.10 (static, was .245 via DHCP)
 - **Network**: Google WiFi (192.168.86.0/24)
 - **Protocol**: ESPHome API (port 6053)
 - **Hardware**: ESP32-based
+- **Note**: Static IP required - Google WiFi has no DHCP reservations
 
 ### Home Assistant VM (VMID 116)
 - **Host**: chief-horse.maas
@@ -38,7 +39,7 @@ This document describes the network architecture for Home Assistant Voice PE com
 │  │                                                                                   │    │
 │  │    ┌──────────────┐           ┌──────────────┐           ┌──────────────┐        │    │
 │  │    │   Voice PE   │           │  Google WiFi │           │     Mac      │        │    │
-│  │    │ 192.168.86.245           │   Router     │           │ 192.168.86.x │        │    │
+│  │    │ 192.168.86.10            │   Router     │           │ 192.168.86.x │        │    │
 │  │    │   (ESP32)    │◄─────────►│ 192.168.86.1 │◄─────────►│              │        │    │
 │  │    └──────────────┘   WiFi    └──────────────┘   WiFi    └──────────────┘        │    │
 │  │                                      │                                            │    │
@@ -83,7 +84,7 @@ This document describes the network architecture for Home Assistant Voice PE com
 **Used for**: TTS audio file fetching, API calls from Voice PE
 
 ```
-Voice PE (192.168.86.245)
+Voice PE (192.168.86.10)
     │
     │ WiFi
     ▼
@@ -125,13 +126,13 @@ Google WiFi Network (192.168.86.0/24)
     │
     │ WiFi
     ▼
-Voice PE (192.168.86.245:6053)
+Voice PE (192.168.86.10:6053)
 ```
 
 **Evidence**:
 - `qm config 116` shows net2 on vmbr2
 - `brctl show vmbr2` shows enx008b20105b82 bridged
-- `ip neigh show dev vmbr2` shows 192.168.86.245 reachable
+- `ip neigh show dev vmbr2` shows 192.168.86.10 reachable
 
 ## TTS Latency Issue
 
@@ -297,4 +298,5 @@ voice-pe, voicepe, home-assistant, homeassistant, network, socat, proxy, tts, la
 ---
 
 *Document created: 2025-12-15*
-*Status: INVESTIGATION IN PROGRESS - latency root cause not yet identified*
+*Updated: 2025-12-22 - Voice PE now on static IP 192.168.86.10*
+*Status: RESOLVED - WiFi power save was latency cause, static IP prevents DHCP issues*
