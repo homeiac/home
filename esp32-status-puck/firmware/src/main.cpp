@@ -271,6 +271,8 @@ uint32_t lerpColor(uint32_t c1, uint32_t c2, float t);
 float getPulseFactor(unsigned long remainingMs, unsigned long totalDuration);
 void checkAmbientMode();
 void setDisplayBrightness(uint8_t percent);
+void displayWake();
+void displaySleep();
 
 // Pomodoro App wrappers (for framework)
 void pomodoro_init();
@@ -336,7 +338,10 @@ void my_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
         data->point.x = touchX;
         data->point.y = touchY;
         lastInteractionTime = millis();
-        ambientMode = false;
+        if (ambientMode) {
+            ambientMode = false;
+            displayWake();
+        }
     } else {
         data->state = LV_INDEV_STATE_REL;
     }
@@ -700,7 +705,10 @@ void handleEncoder() {
         encoderDelta = dir;
 
         lastInteractionTime = millis();
-        ambientMode = false;
+        if (ambientMode) {
+            ambientMode = false;
+            displayWake();
+        }
     }
     lastEncoderCLK = clk;
 }
@@ -1404,6 +1412,14 @@ void framework_handleMenuButton(ButtonEvent event) {
 }
 
 void framework_updateMenu() {
+    // Check for sleep/wake
+    checkAmbientMode();
+
+    // Don't animate LEDs if in ambient/sleep mode
+    if (ambientMode) {
+        return;
+    }
+
     // Rainbow LED effect while menu is open
     static uint16_t hueOffset = 0;
     hueOffset += 256;
@@ -1584,30 +1600,48 @@ void framework_updateAlertOverlay() {
 }
 
 // ============================================
+// Display Sleep/Wake Functions
+// SIMPLE APPROACH: Just use minimum PWM brightness, don't touch display controller
+// The GC9A01 sleep/wakeup via LovyanGFX is unreliable
+// ============================================
+void displaySleep() {
+    // Dim to ~1% - lowest visible
+    ledcWrite(PWM_CHANNEL, 3);
+    Serial.println("Display dimmed to 1%");
+}
+
+void displayWake() {
+    // Restore to 100%
+    ledcWrite(PWM_CHANNEL, 255);
+    Serial.println("Display restored to 100%");
+}
+
+// ============================================
 // Check Ambient Mode
 // ============================================
 void checkAmbientMode() {
     unsigned long now = millis();
 
+    // Don't enter ambient mode in first 35 seconds after boot
+    if (now < 35000) return;
+
     if (!ambientMode) {
         if (now - lastInteractionTime >= AMBIENT_TIMEOUT_MS) {
             ambientMode = true;
-            setDisplayBrightness(5);  // Very dim, not off
+            displaySleep();
             leds.clear();
             leds.show();
-            Serial.println("Ambient mode");
         }
     }
 
     if (ambientMode && now - lastInteractionTime < 1000) {
         ambientMode = false;
-        setDisplayBrightness(50);
-        Serial.println("Woke up - brightness set to 50");
+        displayWake();
     }
 }
 
 // ============================================
-// Set Display Brightness
+// Set Display Brightness (0-100%)
 // ============================================
 void setDisplayBrightness(uint8_t percent) {
     int pwm = (percent * 255) / 100;
@@ -1684,10 +1718,12 @@ void setup() {
     indev_drv.read_cb = my_touchpad_read;
     lv_indev_drv_register(&indev_drv);
 
-    // Setup backlight
+    // Setup backlight manually (LovyanGFX Light_PWM doesn't work reliably)
+    pinMode(TFT_BL, OUTPUT);
     ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RES);
     ledcAttachPin(TFT_BL, PWM_CHANNEL);
-    setDisplayBrightness(50);
+    ledcWrite(PWM_CHANNEL, 255);  // 100%
+    Serial.println("Backlight initialized at 100%");
 
     // Initialize LED ring
     leds.begin();
