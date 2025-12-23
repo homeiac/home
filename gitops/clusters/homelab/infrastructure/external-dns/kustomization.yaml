@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: external-dns
 resources:
   - namespace.yaml
+  - dnsendpoint-crd.yaml
   - helmrepository.yaml
   - helmrelease.yaml
   - cloudflare-secret.yaml
