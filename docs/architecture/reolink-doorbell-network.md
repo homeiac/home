@@ -64,9 +64,13 @@ This document describes the network connectivity for the Reolink Video Doorbell 
 - **Subnet Mask**: 255.255.255.0
 - **DNS**: 192.168.1.254 (or 8.8.8.8)
 
-### DNS Name
-- **Hostname**: `reolink-vdb.homelab`
-- **Resolves to**: 192.168.1.10
+### DNS Names
+| Name | Purpose | Status |
+|------|---------|--------|
+| `reolink-vdb.homelab` | OPNsense Unbound override | Works from homelab, NOT from K8s |
+| `reolink-vdb.home.panderosystems.com` | Cloudflare via external-dns | Works everywhere, but go2rtc auth fails |
+
+**Current**: Using IP `192.168.1.10` directly (DNS hostnames cause go2rtc auth issues)
 
 ## Migration Steps
 
@@ -98,15 +102,25 @@ Via Reolink app or web UI:
 4. Set gateway: 192.168.1.254
 5. Save and reboot
 
-### Step 4: Update Frigate Configmap
+### Step 4: Update Frigate Config
 
-File: `gitops/clusters/homelab/apps/frigate/configmap.yaml`
+Use the safe edit script:
 
-```yaml
-go2rtc:
-  streams:
-    reolink_doorbell: "rtsp://{FRIGATE_CAM_REOLINK_USER}:{FRIGATE_CAM_REOLINK_PASS}@reolink-vdb.homelab:554/h264Preview_01_sub"
+```bash
+# Change doorbell hostname (safe - only changes doorbell, not other cameras)
+scripts/frigate/edit-config.sh --set-doorbell-host reolink-vdb.home.panderosystems.com --apply
+
+# Or revert to IP
+scripts/frigate/edit-config.sh --set-doorbell-host 192.168.1.10 --apply
+
+# List backups with doorbell URL shown
+scripts/frigate/restore-config.sh --list
+
+# Restore from backup
+scripts/frigate/restore-config.sh config-backup-YYYYMMDD-HHMMSS.yml
 ```
+
+**WARNING**: Do NOT use `--sed` with IP patterns - it will match other cameras (e.g., 192.168.1.107)
 
 ### Step 5: Reconfigure HA Reolink Integration
 
@@ -129,7 +143,19 @@ KUBECONFIG=~/kubeconfig kubectl exec -n frigate deployment/frigate -- getent hos
 ssh root@chief-horse.maas "qm guest exec 116 -- nslookup reolink-vdb.homelab"
 ```
 
+## Known Issues
+
+### go2rtc DNS Authentication Failure
+
+**Symptom**: go2rtc logs show `error="streams: wrong user/pass"` when using DNS hostname, but works with IP.
+
+**Affected**: Cloudflare DNS (`reolink-vdb.home.panderosystems.com`) and `.homelab` DNS
+**Works**: Direct IP (`192.168.1.10`)
+
+**Investigation needed**: Possibly go2rtc or Reolink firmware issue with DNS hostnames in RTSP URLs.
+
 ## Related Documents
 
 - Voice PE static IP: `scripts/voice-pe/configs/home-assistant-voice-09f5a3.yaml`
-- Frigate config: `gitops/clusters/homelab/apps/frigate/configmap.yaml`
+- Frigate config scripts: `scripts/frigate/edit-config.sh`, `scripts/frigate/restore-config.sh`
+- external-dns setup: `gitops/clusters/homelab/infrastructure/external-dns/`

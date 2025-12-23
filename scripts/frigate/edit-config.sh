@@ -22,11 +22,13 @@ TEMP_EDITED=$(mktemp)
 SED_CMD=""
 AUTO_APPLY=false
 NO_RESTART=false
+DOORBELL_HOST=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --sed) SED_CMD="$2"; shift 2 ;;
         --apply) AUTO_APPLY=true; shift ;;
         --no-restart) NO_RESTART=true; shift ;;
+        --set-doorbell-host) DOORBELL_HOST="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -68,10 +70,16 @@ mkdir -p "$BACKUP_DIR"
 cp "$TEMP_ORIGINAL" "$BACKUP_FILE"
 echo "Backup saved: $BACKUP_FILE"
 
-# Step 3: Edit (interactive or sed)
+# Step 3: Edit (interactive, sed, or targeted change)
 echo ""
-if [[ -n "$SED_CMD" ]]; then
+if [[ -n "$DOORBELL_HOST" ]]; then
+    echo "Step 3: Updating doorbell host to: $DOORBELL_HOST"
+    # Use python for precise YAML manipulation - only change go2rtc reolink_doorbell stream
+    # Use helper script for precise doorbell host replacement
+    python3 "$SCRIPT_DIR/helpers/replace_doorbell_host.py" "$TEMP_EDITED" "$DOORBELL_HOST"
+elif [[ -n "$SED_CMD" ]]; then
     echo "Step 3: Applying sed command: $SED_CMD"
+    echo "WARNING: sed is dangerous - consider using --set-doorbell-host instead"
     sed -i '' "$SED_CMD" "$TEMP_EDITED"
 else
     echo "Step 3: Opening editor..."
