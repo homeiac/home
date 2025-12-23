@@ -1,0 +1,43 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: homelab-services
+  namespace: external-dns
+spec:
+  endpoints:
+    # Traefik ingress controller (all *.app services)
+    - dnsName: traefik.home.panderosystems.com
+      recordType: A
+      targets:
+        - 192.168.4.80
+      recordTTL: 300
+    # Wildcard for app.homelab services via Traefik
+    - dnsName: "*.app.home.panderosystems.com"
+      recordType: A
+      targets:
+        - 192.168.4.80
+      recordTTL: 300
+    # OPNsense router
+    - dnsName: opnsense.home.panderosystems.com
+      recordType: A
+      targets:
+        - 192.168.4.1
+      recordTTL: 300
+    # Samba file server
+    - dnsName: samba.home.panderosystems.com
+      recordType: A
+      targets:
+        - 192.168.4.120
+      recordTTL: 300
+    # Rancher
+    - dnsName: rancher.home.panderosystems.com
+      recordType: A
+      targets:
+        - 192.168.4.200
+      recordTTL: 300
+    # Reolink doorbell (on different subnet)
+    - dnsName: reolink-vdb.home.panderosystems.com
+      recordType: A
+      targets:
+        - 192.168.1.10
+      recordTTL: 300
