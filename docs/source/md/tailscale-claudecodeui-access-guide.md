@@ -89,8 +89,13 @@ curl -H "Host: claude.app.homelab" http://192.168.4.80/
    - iOS: Settings → Enable "Use subnet routes"
    - Android: Menu → Settings → Enable "Use subnet routes"
 
-4. **Access Claude Code UI**
+4. **Re-authenticate (if needed)**
+   - If connection doesn't work initially, go to Tailscale Settings → Log in again
+   - This refreshes your session and subnet route permissions
+
+5. **Access Claude Code UI**
    - Open browser: `http://claude.app.homelab`
+   - If page doesn't load, refresh the browser after Tailscale reconnects
    - Or direct: `http://192.168.4.80` (Traefik will serve default)
 
 ### Why This Works
@@ -210,4 +215,5 @@ nslookup claude.app.homelab 100.100.100.100
 
 1. Ensure Tailscale app is running (not just installed)
 2. Check "Use subnet routes" is enabled in app settings
-3. Try direct IP: `http://192.168.4.80` in browser
+3. **Re-login via Settings** - go to Tailscale Settings → Log in again, then refresh browser
+4. Try direct IP: `http://192.168.4.80` in browser
