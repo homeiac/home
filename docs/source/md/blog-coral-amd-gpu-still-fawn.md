@@ -160,7 +160,59 @@ The RX 580 (Polaris/gfx803) was dropped from ROCm 6.x. ROCm 5.7.1 was the last v
 | Face recognition CPU | 62% (CPU fallback) |
 | Face recognition | Works but expensive |
 
+## The Missing GPU Driver (2025-12-27 Incident)
+
+**UPDATE**: After a VM reboot, Frigate stopped reading all cameras with:
+```
+No VA display found for device /dev/dri/renderD128
+Device creation failed: -22
+```
+
+Root cause: `/dev/dri/` was empty. The `amdgpu` kernel module wasn't loaded.
+
+```bash
+# Check inside VM
+lspci -nnk -s 01:00.0
+# Shows: No "Kernel driver in use" line!
+
+modprobe amdgpu
+# modprobe: FATAL: Module amdgpu not found in directory /lib/modules/6.8.0-90-generic
+```
+
+**The problem**: Ubuntu cloud images don't include GPU drivers by default. The `amdgpu` module lives in `linux-modules-extra`.
+
+**The fix**:
+```bash
+# Install GPU driver package
+apt install -y linux-modules-extra-$(uname -r)
+
+# Load driver
+modprobe amdgpu
+
+# Ensure loads on boot
+echo "amdgpu" >> /etc/modules-load.d/gpu.conf
+
+# Verify
+ls -la /dev/dri/
+# Should show: card0, renderD128
+```
+
+**Why this was missed originally**: The module may have been auto-loaded from a previous kernel or installation state. After a kernel update or clean reboot, the module was gone.
+
+**CRITICAL**: After ANY K3s VM reprovisioning or kernel update, verify `/dev/dri/renderD128` exists before assuming GPU passthrough works.
+
+---
+
 ## Lessons Learned
+
+### 0. Install GPU Drivers in Cloud Images (NEW)
+Ubuntu cloud images are minimal and don't include GPU drivers:
+```bash
+apt install -y linux-modules-extra-$(uname -r)
+echo "amdgpu" >> /etc/modules-load.d/gpu.conf  # For AMD
+# or
+apt install -y nvidia-driver-535  # For NVIDIA
+```
 
 ### 1. Always Check BIOS First for Passthrough Issues
 ```bash
