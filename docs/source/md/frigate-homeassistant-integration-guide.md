@@ -1,18 +1,54 @@
 # Home Assistant + Frigate Integration Guide
 
 ## Overview
-This guide documents integrating a Frigate NVR VM with Home Assistant VM running on the same Proxmox cluster.
+This guide documents integrating Frigate NVR (running on K8s) with Home Assistant VM running on Proxmox.
 
 ## Environment
 - **Proxmox Cluster**: 192.168.4.x network
-- **Home Assistant VM**: 192.168.4.253:8123 (Home Assistant OS)
-- **Frigate LXC Container**: 192.168.4.240:5000 (Installed via Proxmox VE Helper Scripts)
-- **Cameras**: 4 devices (Reolink Doorbell, Old IP Camera, Trendnet IP 572W, Frigate system)
+- **Home Assistant VM**: VMID 116 on chief-horse.maas (Home Assistant OS)
+- **Frigate**: K8s deployment on k3s-vm-still-fawn
+  - **LoadBalancer IP**: 192.168.4.81:5000 (API/Web)
+  - **RTSP**: 192.168.4.81:8554
+  - **WebRTC**: 192.168.4.81:8555
+  - **Traefik Ingress**: frigate.app.homelab (port 80 only)
+- **Cameras**: 3 devices (Reolink Doorbell, Old IP Camera, Trendnet IP 572W)
+
+## CRITICAL: Use IP Address, Not Hostname
+
+**The HA Frigate integration MUST use the direct IP address:**
+```
+http://192.168.4.81:5000
+```
+
+**Do NOT use:** `http://frigate.app.homelab:5000`
+
+### Why DNS Doesn't Work
+
+The `*.app.homelab` wildcard DNS points to Traefik (192.168.4.80). While we've configured Traefik to route ports 5000, 8554, and 8555 to Frigate, the HA Frigate integration fails to connect via hostname.
+
+**Investigation (2025-12-27):**
+- `curl` from inside HA VM works: `curl http://frigate.app.homelab:5000/api/version` → OK
+- HA Frigate integration with same URL → "Failed to connect"
+- Direct IP works: `http://192.168.4.81:5000` → OK
+
+**Root cause:** The HA Frigate integration (Python aiohttp) uses a different DNS resolution path than system curl. The integration cannot resolve `frigate.app.homelab` correctly, even though system-level DNS works.
+
+**Workaround:** Use direct LoadBalancer IP until this is debugged.
+
+### Traefik Configuration (for browser access)
+
+Traefik is configured to route Frigate ports for browser access via hostname:
+- Port 80 → Frigate 5000 (HTTP Ingress)
+- Port 5000 → Frigate 5000 (TCP passthrough)
+- Port 8554 → Frigate 8554 (RTSP)
+- Port 8555 → Frigate 8555 (WebRTC TCP/UDP)
+
+Config: `gitops/clusters/homelab/infrastructure/traefik/helmchartconfig.yaml`
 
 ## Prerequisites
 - Home Assistant OS VM running
-- Frigate NVR running in LXC container (via Proxmox VE Helper Scripts)
-- Both containers on same network with connectivity
+- Frigate running on K8s cluster
+- Network connectivity between HA and K8s cluster
 - GitHub account for HACS authentication
 
 ## Step-by-Step Integration
@@ -70,9 +106,9 @@ Restart Frigate LXC container after configuration change.
 
 ### 5. Add Frigate Integration to Home Assistant
 1. Go to Settings > Devices & Services
-2. Click "Add Integration" 
+2. Click "Add Integration"
 3. Search for "frigate"
-4. Configure with Frigate URL: `http://192.168.4.240:5000`
+4. Configure with Frigate URL: `http://192.168.4.81:5000` **(use IP, not hostname!)**
 5. Complete integration setup
 
 ### 6. Verify Integration
@@ -96,15 +132,24 @@ Check that integration shows:
 
 ## Network Architecture
 ```
-Proxmox Host (192.168.4.x)
-├── Home Assistant VM (192.168.4.253:8123)
-│   ├── MQTT Broker (Mosquitto)
-│   ├── HACS
-│   └── Frigate Integration
-└── Frigate LXC Container (192.168.4.240:5000)
-    ├── Camera Processing
-    ├── MQTT Client
-    └── RTSP Streams (port 8554)
+Proxmox Cluster (192.168.4.x)
+├── chief-horse.maas
+│   └── Home Assistant VM (VMID 116)
+│       ├── MQTT Broker (Mosquitto)
+│       ├── HACS
+│       └── Frigate Integration → http://192.168.4.81:5000
+│
+├── still-fawn.maas
+│   └── K3s VM (VMID 108)
+│       └── Frigate Pod (192.168.4.81)
+│           ├── API/Web: port 5000
+│           ├── RTSP: port 8554
+│           ├── WebRTC: port 8555
+│           ├── Coral USB TPU
+│           └── AMD RX 580 GPU (VAAPI)
+│
+└── Traefik (192.168.4.80) - for browser access only
+    └── frigate.app.homelab → Frigate
 ```
 
 ## Data Flow
