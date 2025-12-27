@@ -15,6 +15,12 @@ spec:
           default: true
         exposedPort: 5432
         protocol: TCP
+      frigate-api:
+        port: 5000
+        expose:
+          default: true
+        exposedPort: 5000
+        protocol: TCP
       frigate-rtsp:
         port: 8554
         expose:
@@ -35,6 +41,7 @@ spec:
         protocol: UDP
     additionalArguments:
       - "--entrypoints.postgres.address=:5432/tcp"
+      - "--entrypoints.frigate-api.address=:5000/tcp"
       - "--entrypoints.frigate-rtsp.address=:8554/tcp"
       - "--entrypoints.frigate-webrtc-tcp.address=:8555/tcp"
       - "--entrypoints.frigate-webrtc-udp.address=:8555/udp"
