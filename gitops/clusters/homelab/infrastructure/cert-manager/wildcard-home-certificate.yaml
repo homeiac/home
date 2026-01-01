@@ -1,0 +1,33 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-home
+  namespace: cert-manager
+spec:
+  # Secret where the cert will be stored
+  secretName: wildcard-home-tls
+
+  # Certificate duration (90 days is LetsEncrypt default)
+  duration: 2160h  # 90 days
+
+  # Renew 30 days before expiry
+  renewBefore: 720h  # 30 days
+
+  # Use the LetsEncrypt ClusterIssuer
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+  # Common name
+  commonName: "*.home.panderosystems.com"
+
+  # Subject Alternative Names (SANs)
+  # Covers: ha.home.panderosystems.com, pve.home.panderosystems.com, etc.
+  dnsNames:
+    - "*.home.panderosystems.com"
+    - "home.panderosystems.com"
+
+  # Private key settings
+  privateKey:
+    algorithm: ECDSA
+    size: 256

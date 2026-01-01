@@ -1,0 +1,28 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # LetsEncrypt production server
+    server: https://acme-v02.api.letsencrypt.org/directory
+
+    # Email for certificate notifications
+    email: nikhil@panderosystems.com
+
+    # Secret to store ACME account private key
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+
+    # DNS-01 challenge solver using Cloudflare
+    solvers:
+      - dns01:
+          cloudflare:
+            # Cloudflare API token with Zone:DNS:Edit permission
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+        # Only use this solver for panderosystems.com
+        selector:
+          dnsZones:
+            - "panderosystems.com"
