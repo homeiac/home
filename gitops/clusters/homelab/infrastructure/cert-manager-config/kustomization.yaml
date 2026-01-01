@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Flux Kustomization with dependsOn for ordering
+  - flux-kustomization.yaml
+  # These are applied by the Flux Kustomization above, not directly
+  # - clusterissuer.yaml
+  # - wildcard-certificate.yaml
+  # - wildcard-home-certificate.yaml

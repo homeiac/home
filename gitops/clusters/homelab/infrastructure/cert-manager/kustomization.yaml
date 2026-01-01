@@ -5,6 +5,5 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - cloudflare-secret.yaml
-  - clusterissuer.yaml
-  - wildcard-certificate.yaml
-  - wildcard-home-certificate.yaml
+# NOTE: CRD-dependent resources (ClusterIssuer, Certificate) are in
+# infrastructure/cert-manager-config/ with dependsOn ordering
