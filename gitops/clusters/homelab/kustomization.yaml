@@ -9,6 +9,7 @@ resources:
   - infrastructure/tailscale             #(subnet router + exit node)
   - infrastructure/crossplane            #(Proxmox VM/LXC provisioning)
   - infrastructure/external-dns          #(Cloudflare DNS sync)
+  - infrastructure/cert-manager          #(LetsEncrypt DNS-01 certs)
   - infrastructure-config/metallb-config        #(address-pool)
   # Crossplane-managed Proxmox instances (VMs/LXCs)
   # NOTE: Requires crossplane-system secret first - see scripts/crossplane/create-proxmox-secret.sh
