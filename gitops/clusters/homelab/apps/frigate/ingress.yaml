@@ -18,3 +18,13 @@ spec:
             name: frigate
             port:
               number: 5000
+  - host: frigate.app.home.panderosystems.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frigate
+            port:
+              number: 5000
