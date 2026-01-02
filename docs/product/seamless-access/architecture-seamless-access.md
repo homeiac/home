@@ -363,18 +363,27 @@ allowed_domains = gmail.com panderosystems.com
 
 ---
 
-## Implementation Order
+## Implementation Status (as of 2026-01-01)
 
-| Step | Component | Depends On | Estimated Effort |
-|------|-----------|------------|------------------|
-| 1 | cert-manager deployment | - | Small |
-| 2 | ClusterIssuer (Cloudflare) | Step 1 | Small |
-| 3 | Wildcard Certificate | Step 2 | Small |
-| 4 | Traefik TLS config | Step 3 | Small |
-| 5 | HA IngressRoute | Step 4 | Small |
-| 6 | Update HA app URL | Step 5 | Trivial |
-| 7 | Test from Tailscale | Step 5 | Testing |
-| 8 | Grafana OAuth (optional) | Step 4 | Medium |
+| Step | Component | Status | Notes |
+|------|-----------|--------|-------|
+| 1 | cert-manager deployment | DONE | HelmRelease in `infrastructure/cert-manager/` |
+| 2 | ClusterIssuer (Cloudflare) | DONE | `letsencrypt-prod` with DNS-01 |
+| 3 | Wildcard Certificates | DONE | Both `*.app.home.*` and `*.home.*` |
+| 4 | Traefik TLS config | DONE | TLSStore `default` in kube-system |
+| 5 | Frigate Ingress | DONE | `https://frigate.app.home.panderosystems.com` |
+| 6 | Grafana Ingress | DONE | `https://grafana.app.home.panderosystems.com` |
+| 7 | HA IngressRoute | PARTIAL | TLS works, HA needs `trusted_proxies` config |
+| 8 | Test from Tailscale | TODO | |
+| 9 | Grafana OAuth | TODO | Optional |
+
+### Working URLs
+
+| Service | URL | Status |
+|---------|-----|--------|
+| Frigate | `https://frigate.app.home.panderosystems.com` | WORKING |
+| Grafana | `https://grafana.app.home.panderosystems.com` | WORKING |
+| Home Assistant | `https://ha.home.panderosystems.com` | Needs HA config |
 
 ---
 
@@ -395,28 +404,71 @@ allowed_domains = gmail.com panderosystems.com
 ```
 gitops/clusters/homelab/
 ├── infrastructure/
-│   ├── cert-manager/              # HelmRelease only (Step 1)
+│   ├── cert-manager/                    # HelmRelease only (Part 1)
 │   │   ├── namespace.yaml
-│   │   ├── helmrepository.yaml    # jetstack
-│   │   ├── helmrelease.yaml       # cert-manager v1.16.x
-│   │   ├── cloudflare-secret.yaml # SOPS encrypted
+│   │   ├── helmrepository.yaml          # jetstack
+│   │   ├── helmrelease.yaml             # cert-manager v1.16.x
+│   │   ├── cloudflare-secret.yaml       # SOPS encrypted
 │   │   └── kustomization.yaml
 │   │
-│   ├── cert-manager-config/       # CRD resources (Step 2)
-│   │   ├── flux-kustomization.yaml  # <-- KEY: dependsOn for ordering
+│   ├── cert-manager-config/             # CRD resources (Part 1)
+│   │   ├── flux-kustomization.yaml      # <-- KEY: dependsOn for CRD ordering
 │   │   ├── kustomization.yaml
 │   │   └── resources/
 │   │       ├── kustomization.yaml
-│   │       ├── clusterissuer.yaml
-│   │       ├── wildcard-certificate.yaml
-│   │       └── wildcard-home-certificate.yaml
+│   │       ├── clusterissuer.yaml       # letsencrypt-prod
+│   │       ├── wildcard-certificate.yaml      # *.app.home.panderosystems.com
+│   │       └── wildcard-home-certificate.yaml # *.home.panderosystems.com
 │   │
-│   ├── traefik/                   # TODO: Add TLS config
-│   └── external-dns/
-│       └── ...
+│   ├── traefik/                         # Part 2: ExternalName enabled
+│   │   ├── helmchartconfig.yaml         # allowExternalNameServices: true
+│   │   └── kustomization.yaml
+│   │
+│   ├── traefik-config/                  # Part 2: TLS + HA routing
+│   │   ├── flux-kustomization.yaml      # dependsOn: cert-manager-config
+│   │   ├── kustomization.yaml
+│   │   └── resources/
+│   │       ├── wildcard-cert-kube-system.yaml  # Certs in kube-system for Traefik
+│   │       ├── tlsstore-default.yaml           # Default TLS for all ingresses
+│   │       └── homeassistant-ingress.yaml      # ExternalName + IngressRoute
+│   │
+│   ├── external-dns/                    # DNS records
+│   │   └── dnsendpoints.yaml            # *.app.home.*, ha.home.* → 192.168.4.80
+│   │
+│   └── monitoring/
+│       └── grafana-ingress.yaml         # Part 2: Added .panderosystems.com host
+│
 ├── apps/
-│   └── external-services/         # TODO: HA IngressRoute
-└── kustomization.yaml             # References both cert-manager dirs
+│   └── frigate/
+│       └── ingress.yaml                 # Part 2: Added .panderosystems.com host
+│
+└── kustomization.yaml                   # References all infrastructure dirs
+```
+
+### Flux Dependency Chain
+
+```
+flux-system (main kustomization)
+       │
+       ├─────────────────────────────────────────────────────┐
+       │                                                     │
+       ▼                                                     ▼
+cert-manager (HelmRelease)                          other apps...
+       │
+       │ CRDs installed
+       ▼
+cert-manager-config (Flux Kustomization)
+       │ dependsOn: flux-system
+       │ healthChecks: cert-manager HelmRelease
+       │
+       │ ClusterIssuer + Certificates created
+       ▼
+traefik-config (Flux Kustomization)
+       │ dependsOn: cert-manager-config
+       │
+       │ TLSStore + HA IngressRoute created
+       ▼
+   DONE - All TLS working
 ```
 
 ### Key Pattern: Flux dependsOn for CRD Ordering
