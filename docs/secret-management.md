@@ -340,12 +340,29 @@ git rm secret.yaml.example
 
 The age private key should be backed up to multiple locations:
 
-- [x] Proxmox host: `chief-horse.maas:/root/.sops-age-backup/`
-- [x] Proxmox host: `still-fawn.maas:/root/.sops-age-backup/`
+- [x] **K8s cluster** (authoritative): `kubectl get secret sops-age -n flux-system`
+- [x] Proxmox host: `chief-horse.maas:/root/.sops-backup/age-keys.txt` (older key, may be stale)
 - [ ] Google Drive (encrypted)
 - [ ] Password manager
 
 **Current Public Key:** `age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna`
+
+## Quick Setup for Local SOPS Access
+
+If you need to encrypt/decrypt secrets locally (e.g., from Mac):
+
+```bash
+# One-liner: Get the key from K8s and save locally
+./scripts/sops/setup-local-sops.sh
+
+# Or manually:
+mkdir -p ~/.config/sops/age
+KUBECONFIG=~/kubeconfig kubectl get secret sops-age -n flux-system \
+  -o jsonpath='{.data.age\.agekey}' | base64 -d > ~/.config/sops/age/keys.txt
+chmod 600 ~/.config/sops/age/keys.txt
+```
+
+Then you can use `sops --encrypt` and `sops --decrypt` normally.
 
 ## References
 
