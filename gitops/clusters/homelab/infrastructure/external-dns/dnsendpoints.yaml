@@ -35,6 +35,12 @@ spec:
       targets:
         - 192.168.4.200
       recordTTL: 300
+    # Home Assistant (routed through Traefik for TLS)
+    - dnsName: ha.home.panderosystems.com
+      recordType: A
+      targets:
+        - 192.168.4.80
+      recordTTL: 300
     # Reolink doorbell (on different subnet)
     - dnsName: reolink-vdb.home.panderosystems.com
       recordType: A

@@ -1,0 +1,31 @@
+---
+# ExternalName Service to route to Home Assistant VM
+apiVersion: v1
+kind: Service
+metadata:
+  name: homeassistant-external
+  namespace: kube-system
+spec:
+  type: ExternalName
+  externalName: homeassistant.maas
+  ports:
+    - port: 8123
+      protocol: TCP
+---
+# IngressRoute for Home Assistant through Traefik
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: homeassistant
+  namespace: kube-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`ha.home.panderosystems.com`)
+      kind: Rule
+      services:
+        - name: homeassistant-external
+          port: 8123
+  tls:
+    secretName: wildcard-home-tls

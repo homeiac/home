@@ -1,0 +1,10 @@
+---
+# Default TLSStore to use wildcard cert for all IngressRoutes
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default
+  namespace: kube-system
+spec:
+  defaultCertificate:
+    secretName: wildcard-app-home-tls

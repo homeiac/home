@@ -1,0 +1,37 @@
+---
+# Wildcard certificate for Traefik in kube-system namespace
+# This is a copy of the cert-manager cert, placed where Traefik can access it
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-app-home-traefik
+  namespace: kube-system
+spec:
+  secretName: wildcard-app-home-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: "*.app.home.panderosystems.com"
+  dnsNames:
+    - "*.app.home.panderosystems.com"
+    - "app.home.panderosystems.com"
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # 30 days before expiry
+---
+# Wildcard cert for *.home.panderosystems.com (for HA, etc.)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-home-traefik
+  namespace: kube-system
+spec:
+  secretName: wildcard-home-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: "*.home.panderosystems.com"
+  dnsNames:
+    - "*.home.panderosystems.com"
+    - "home.panderosystems.com"
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # 30 days before expiry
