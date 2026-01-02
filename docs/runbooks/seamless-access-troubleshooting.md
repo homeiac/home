@@ -87,7 +87,24 @@ dig @8.8.8.8 frigate.app.home.panderosystems.com +short
 
 Should return `192.168.4.80`.
 
-### Check 3: Local DNS cache
+### Check 3: OPNsense Unbound Rebind Protection (COMMON!)
+
+If Google DNS works but your router doesn't:
+```bash
+dig @8.8.8.8 frigate.app.home.panderosystems.com +short   # Works: 192.168.4.80
+dig @192.168.4.1 frigate.app.home.panderosystems.com +short  # Empty!
+```
+
+**Cause**: Unbound blocks public DNS responses containing private IPs (rebind protection).
+
+**Fix**:
+1. OPNsense Web UI → **Services → Unbound DNS → Advanced**
+2. Add to **Private Domains**: `panderosystems.com`
+3. Click **Apply** to restart Unbound
+
+This tells Unbound "it's OK if Cloudflare returns private IPs for this domain."
+
+### Check 4: Local DNS cache
 
 Browser/OS may cache old DNS. Clear:
 - **Firefox**: `about:networking#dns` → Clear DNS Cache
