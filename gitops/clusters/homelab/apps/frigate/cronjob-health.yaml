@@ -1,0 +1,246 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: frigate-health-checker
+  namespace: frigate
+  labels:
+    app: frigate-health-checker
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600  # Clean up completed jobs after 1 hour
+      template:
+        metadata:
+          labels:
+            app: frigate-health-checker
+        spec:
+          serviceAccountName: frigate-health-checker
+          restartPolicy: OnFailure
+          containers:
+            - name: health-check
+              image: bitnami/kubectl:1.28
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -e
+
+                  echo "=== Frigate Health Check: $(date -u +"%Y-%m-%d %H:%M:%S UTC") ==="
+
+                  # Thresholds
+                  INFERENCE_THRESHOLD=100  # ms
+                  STUCK_THRESHOLD=2        # occurrences in 5 min
+                  BACKLOG_THRESHOLD=5      # occurrences in 5 min
+                  CONSECUTIVE_FAILURES_REQUIRED=2
+                  MAX_RESTARTS_PER_HOUR=2
+
+                  # Read current state from ConfigMap
+                  FAILURES=$(kubectl get cm frigate-health-state -n frigate -o jsonpath='{.data.consecutive_failures}' 2>/dev/null || echo "0")
+                  RESTART_TIMES=$(kubectl get cm frigate-health-state -n frigate -o jsonpath='{.data.last_restart_times}' 2>/dev/null || echo "")
+
+                  echo "Current state: failures=$FAILURES, restart_times=$RESTART_TIMES"
+
+                  # Initialize health status
+                  UNHEALTHY=false
+                  REASON=""
+                  INF_SPEED="N/A"
+                  STUCK_CT=0
+                  BACKLOG_CT=0
+
+                  #=== Health Check 1: API Responsiveness ===#
+                  echo "Checking Frigate API..."
+                  FRIGATE_POD=$(kubectl get pods -n frigate -l app=frigate -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+
+                  if [[ -z "$FRIGATE_POD" ]]; then
+                    echo "ERROR: No Frigate pod found"
+                    UNHEALTHY=true
+                    REASON="No Frigate pod running"
+                  else
+                    STATS=$(kubectl exec -n frigate "$FRIGATE_POD" -- curl -s --max-time 10 http://localhost:5000/api/stats 2>/dev/null || echo "")
+
+                    if [[ -z "$STATS" || "$STATS" == "{}" ]]; then
+                      echo "ERROR: Frigate API unresponsive"
+                      UNHEALTHY=true
+                      REASON="API unresponsive"
+                    else
+                      echo "API responded OK"
+
+                      #=== Health Check 2: Coral Inference Speed ===#
+                      INF_SPEED=$(echo "$STATS" | jq -r '.detectors.coral.inference_speed // 999' 2>/dev/null || echo "999")
+                      echo "Coral inference speed: ${INF_SPEED}ms (threshold: ${INFERENCE_THRESHOLD}ms)"
+
+                      if (( $(echo "$INF_SPEED > $INFERENCE_THRESHOLD" | bc -l 2>/dev/null || echo 0) )); then
+                        echo "WARNING: Coral inference too slow"
+                        UNHEALTHY=true
+                        REASON="Coral inference ${INF_SPEED}ms > ${INFERENCE_THRESHOLD}ms"
+                      fi
+                    fi
+
+                    #=== Health Check 3: Log Analysis ===#
+                    echo "Checking recent logs..."
+                    LOGS=$(kubectl logs "$FRIGATE_POD" -n frigate --since=5m 2>/dev/null || echo "")
+
+                    STUCK_CT=$(echo "$LOGS" | grep -c "Detection appears to be stuck" 2>/dev/null || echo 0)
+                    echo "Detection stuck events: $STUCK_CT (threshold: $STUCK_THRESHOLD)"
+                    if [[ "$STUCK_CT" -gt "$STUCK_THRESHOLD" ]]; then
+                      UNHEALTHY=true
+                      REASON="Detection stuck ${STUCK_CT}x in 5 min"
+                    fi
+
+                    BACKLOG_CT=$(echo "$LOGS" | grep -c "Too many unprocessed recording segments" 2>/dev/null || echo 0)
+                    echo "Recording backlog events: $BACKLOG_CT (threshold: $BACKLOG_THRESHOLD)"
+                    if [[ "$BACKLOG_CT" -gt "$BACKLOG_THRESHOLD" ]]; then
+                      UNHEALTHY=true
+                      REASON="Recording backlog ${BACKLOG_CT}x in 5 min"
+                    fi
+                  fi
+
+                  #=== Handle Health Result ===#
+                  if [[ "$UNHEALTHY" == "false" ]]; then
+                    echo "Frigate is HEALTHY"
+                    # Reset failure count
+                    kubectl patch cm frigate-health-state -n frigate --type merge \
+                      -p '{"data":{"consecutive_failures":"0"}}'
+                    exit 0
+                  fi
+
+                  # Increment failure count
+                  NEW_FAILURES=$((FAILURES + 1))
+                  echo "UNHEALTHY: $REASON (failure $NEW_FAILURES/$CONSECUTIVE_FAILURES_REQUIRED)"
+                  kubectl patch cm frigate-health-state -n frigate --type merge \
+                    -p "{\"data\":{\"consecutive_failures\":\"$NEW_FAILURES\"}}"
+
+                  if [[ $NEW_FAILURES -lt $CONSECUTIVE_FAILURES_REQUIRED ]]; then
+                    echo "Waiting for confirmation (need $CONSECUTIVE_FAILURES_REQUIRED consecutive failures)"
+                    exit 0
+                  fi
+
+                  #=== Check Restart Rate Limit ===#
+                  NOW=$(date +%s)
+                  HOUR_AGO=$((NOW - 3600))
+                  RECENT_RESTARTS=0
+
+                  if [[ -n "$RESTART_TIMES" ]]; then
+                    for ts in $(echo "$RESTART_TIMES" | tr ',' ' '); do
+                      if [[ -n "$ts" && "$ts" =~ ^[0-9]+$ && $ts -gt $HOUR_AGO ]]; then
+                        RECENT_RESTARTS=$((RECENT_RESTARTS + 1))
+                      fi
+                    done
+                  fi
+
+                  echo "Restarts in last hour: $RECENT_RESTARTS (max: $MAX_RESTARTS_PER_HOUR)"
+
+                  if [[ $RECENT_RESTARTS -ge $MAX_RESTARTS_PER_HOUR ]]; then
+                    echo "CIRCUIT BREAKER: Already restarted ${RECENT_RESTARTS}x in last hour - skipping restart"
+                    echo "Manual intervention required. Check: scripts/k3s/frigate-cpu-stats.sh --status"
+                    exit 0
+                  fi
+
+                  #=== Trigger Restart ===#
+                  echo "Restarting Frigate deployment..."
+                  kubectl rollout restart deployment/frigate -n frigate
+
+                  # Update state: reset failures, add restart timestamp
+                  # Keep only timestamps from last 2 hours to prevent unbounded growth
+                  TWO_HOURS_AGO=$((NOW - 7200))
+                  NEW_TIMES=""
+                  if [[ -n "$RESTART_TIMES" ]]; then
+                    for ts in $(echo "$RESTART_TIMES" | tr ',' ' '); do
+                      if [[ -n "$ts" && "$ts" =~ ^[0-9]+$ && $ts -gt $TWO_HOURS_AGO ]]; then
+                        NEW_TIMES="${NEW_TIMES:+$NEW_TIMES,}$ts"
+                      fi
+                    done
+                  fi
+                  NEW_TIMES="${NEW_TIMES:+$NEW_TIMES,}$NOW"
+
+                  kubectl patch cm frigate-health-state -n frigate --type merge \
+                    -p "{\"data\":{\"consecutive_failures\":\"0\",\"last_restart_times\":\"$NEW_TIMES\"}}"
+
+                  #=== Send Email Notification ===#
+                  echo "Sending email notification..."
+
+                  if [[ -f /smtp-creds/user && -f /smtp-creds/pass ]]; then
+                    SMTP_USER=$(cat /smtp-creds/user)
+                    SMTP_PASS=$(cat /smtp-creds/pass)
+                    TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+                    RESTARTS_TODAY=$((RECENT_RESTARTS + 1))
+
+                    # Determine next steps based on reason
+                    case "$REASON" in
+                      *"inference"*)
+                        NEXT_STEPS="1. Check Coral TPU: kubectl exec -n frigate deploy/frigate -- ls /dev/bus/usb
+                  2. Check USB errors: ssh root@still-fawn.maas 'dmesg | grep -i usb | tail -20'
+                  3. If recurring, physical Coral unplug/replug may be needed"
+                        ;;
+                      *"stuck"*)
+                        NEXT_STEPS="1. Check cameras: kubectl exec -n frigate deploy/frigate -- curl -s localhost:5000/api/stats | jq '.cameras'
+                  2. Check go2rtc: kubectl exec -n frigate deploy/frigate -- curl -s localhost:1984/api/streams
+                  3. Camera may be offline or network issue"
+                        ;;
+                      *"backlog"*)
+                        NEXT_STEPS="1. Check disk: kubectl exec -n frigate deploy/frigate -- df -h /media/frigate
+                  2. Check recordings: kubectl logs deploy/frigate -n frigate | grep record
+                  3. May need to clear old recordings"
+                        ;;
+                      *)
+                        NEXT_STEPS="1. Check logs: kubectl logs deploy/frigate -n frigate --tail=100
+                  2. Check pod: kubectl get pods -n frigate
+                  3. Full diagnostics: scripts/k3s/frigate-cpu-stats.sh --status"
+                        ;;
+                    esac
+
+                    # Create email body
+                    EMAIL_BODY="From: Frigate Health Checker <${SMTP_USER}>
+                  To: ${SMTP_USER}
+                  Subject: [Homelab] Frigate Restarted - ${REASON}
+
+                  === WHAT HAPPENED ===
+                  Frigate was automatically restarted by the health checker.
+
+                  Time: ${TIMESTAMP}
+                  Restarts in last hour: ${RESTARTS_TODAY}
+
+                  === WHY ===
+                  Primary reason: ${REASON}
+
+                  Metrics at restart:
+                  - Coral inference speed: ${INF_SPEED}ms (threshold: ${INFERENCE_THRESHOLD}ms)
+                  - Detection stuck in 5 min: ${STUCK_CT} (threshold: ${STUCK_THRESHOLD})
+                  - Recording backlog in 5 min: ${BACKLOG_CT} (threshold: ${BACKLOG_THRESHOLD})
+
+                  === NEXT STEPS ===
+                  ${NEXT_STEPS}
+
+                  === MONITOR ===
+                  - Grafana: https://grafana.app.home.panderosystems.com
+                  - Frigate: https://frigate.app.home.panderosystems.com
+                  - Diagnostics: scripts/k3s/frigate-cpu-stats.sh --status
+
+                  If this keeps happening (>${MAX_RESTARTS_PER_HOUR}x/hour), circuit breaker will pause restarts.
+                  Check CronJob logs: kubectl logs -n frigate -l app=frigate-health-checker --tail=50
+                  "
+
+                    # Send via curl (Yahoo SMTP)
+                    echo "$EMAIL_BODY" | curl --ssl-reqd \
+                      --url 'smtps://smtp.mail.yahoo.com:465' \
+                      --user "${SMTP_USER}:${SMTP_PASS}" \
+                      --mail-from "${SMTP_USER}" \
+                      --mail-rcpt "${SMTP_USER}" \
+                      --upload-file - 2>/dev/null && echo "Email sent successfully" || echo "Email failed (non-critical)"
+                  else
+                    echo "SMTP credentials not mounted - skipping email notification"
+                  fi
+
+                  echo "Restart complete. Frigate should be back up shortly."
+              volumeMounts:
+                - name: smtp-creds
+                  mountPath: /smtp-creds
+                  readOnly: true
+          volumes:
+            - name: smtp-creds
+              secret:
+                secretName: smtp-credentials
+                optional: true  # Don't fail if secret doesn't exist

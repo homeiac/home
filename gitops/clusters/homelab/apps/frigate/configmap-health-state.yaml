@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frigate-health-state
+  namespace: frigate
+  labels:
+    app: frigate-health-checker
+data:
+  # Tracks consecutive health check failures (reset to 0 on healthy)
+  consecutive_failures: "0"
+  # Comma-separated epoch timestamps of recent restarts (for rate limiting)
+  last_restart_times: ""
