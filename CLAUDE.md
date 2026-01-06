@@ -91,6 +91,55 @@ ENV_FILE="$SCRIPT_DIR/../../proxmox/homelab/.env"
 
 ---
 
+## GitOps: Flux Controls Everything
+
+**Manual `kubectl apply` is TEMPORARY. Flux reverts changes within ~1 minute.**
+
+```bash
+# ❌ WRONG - Will be reverted by Flux
+kubectl apply -f manifest.yaml
+
+# ✅ RIGHT - Commit to git, then reconcile
+git add manifest.yaml
+git commit -m "fix: update config"
+git push
+flux reconcile kustomization flux-system --with-source
+```
+
+**How to recognize Flux-managed resources:**
+```yaml
+labels:
+  kustomize.toolkit.fluxcd.io/name: flux-system  # <- Flux owns this!
+```
+
+---
+
+## Container Image Hygiene
+
+**Before using ANY container image in K8s manifests:**
+
+1. **Verify tag exists:**
+   ```bash
+   curl -s "https://hub.docker.com/v2/repositories/ORG/REPO/tags?page_size=20" | jq -r '.results[].name'
+   ```
+
+2. **Never use `latest` in production** - use specific version tags
+
+3. **If script needs bash, verify the image has it:**
+   ```bash
+   # Alpine images often only have /bin/sh
+   docker run --rm IMAGE which bash
+   ```
+
+**Known good kubectl images with bash:**
+- `dtzar/helm-kubectl:3.19` - Has bash, kubectl, jq, curl
+
+**Images WITHOUT bash (don't use for bash scripts):**
+- `lachlanevenson/k8s-kubectl:*` - Alpine, only /bin/sh
+- `bitnami/kubectl:*` - No semver tags, only `latest`
+
+---
+
 ## Project Overview
 
 Homelab infrastructure management repository following Infrastructure as Code principles. Designed to be **entirely managed by AI tools**.
@@ -136,11 +185,54 @@ Proxmox VE, K3s, Flux GitOps, MetalLB, kube-prometheus-stack, Ollama GPU server
 
 ## Development Workflow
 
-### DNS Configuration
-- **Domain**: `homelab` (e.g., `service.homelab`)
-- **HTTP Services**: Traefik at `192.168.4.50`
+### Service Exposure - THE WAY
+
+**All services (K3s, VMs, LXCs) are exposed through Traefik with valid TLS certs.**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  THE WAY: Exposing Services                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. NO INTERNET EXPOSURE - EVER                                 │
+│     • No port forwarding, no Cloudflare Tunnel                  │
+│     • Access: LAN (home) or Tailscale (away)                    │
+│                                                                 │
+│  2. ONE WILDCARD DNS                                            │
+│     • *.app.home.panderosystems.com → 192.168.4.80             │
+│     • Never create DNS records for new services                 │
+│                                                                 │
+│  3. ONE WILDCARD CERT                                           │
+│     • *.app.home.panderosystems.com (LetsEncrypt DNS-01)       │
+│     • Never request new certs for new services                  │
+│                                                                 │
+│  4. TRAEFIK IS THE GATEWAY                                      │
+│     • ALL services go through Traefik                           │
+│     • Traefik terminates TLS                                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Adding a K3s service:
+  → Create Ingress with host: myservice.app.home.panderosystems.com
+  → Done (Traefik auto-discovers)
+
+Adding a VM/LXC service:
+  → Create ExternalName Service + IngressRoute
+  → Done (no DNS change, no cert change)
+
+NEVER DO:
+  ❌ Port forward on router
+  ❌ Bypass Traefik for HTTPS
+  ❌ Use IP addresses in configs (use FQDNs)
+  ❌ Install certs on VMs/LXCs directly
+
+Full docs: docs/product/seamless-access/architecture-seamless-access.md
+```
+
+### DNS Configuration (Legacy - being replaced)
+- **Domain**: `homelab` (e.g., `service.homelab`) - DEPRECATED, use `*.app.home.panderosystems.com`
+- **HTTP Services**: Traefik at `192.168.4.80`
 - **Non-HTTP**: MetalLB IPs (`192.168.4.50-70`)
-- **Add DNS Override** in OPNsense: Services → Unbound DNS → Overrides
 
 ### Commit Standards
 - Reference GitHub issue in every commit
