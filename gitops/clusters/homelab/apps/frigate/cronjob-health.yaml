@@ -83,14 +83,16 @@ spec:
                     echo "Checking recent logs..."
                     LOGS=$(kubectl logs "$FRIGATE_POD" -n frigate --since=5m 2>/dev/null || echo "")
 
-                    STUCK_CT=$(echo "$LOGS" | grep -c "Detection appears to be stuck" 2>/dev/null || echo 0)
+                    STUCK_CT=$(echo "$LOGS" | grep -c "Detection appears to be stuck" 2>/dev/null | head -1 || echo 0)
+                    STUCK_CT=${STUCK_CT:-0}
                     echo "Detection stuck events: $STUCK_CT (threshold: $STUCK_THRESHOLD)"
                     if [[ "$STUCK_CT" -gt "$STUCK_THRESHOLD" ]]; then
                       UNHEALTHY=true
                       REASON="Detection stuck ${STUCK_CT}x in 5 min"
                     fi
 
-                    BACKLOG_CT=$(echo "$LOGS" | grep -c "Too many unprocessed recording segments" 2>/dev/null || echo 0)
+                    BACKLOG_CT=$(echo "$LOGS" | grep -c "Too many unprocessed recording segments" 2>/dev/null | head -1 || echo 0)
+                    BACKLOG_CT=${BACKLOG_CT:-0}
                     echo "Recording backlog events: $BACKLOG_CT (threshold: $BACKLOG_THRESHOLD)"
                     if [[ "$BACKLOG_CT" -gt "$BACKLOG_THRESHOLD" ]]; then
                       UNHEALTHY=true
