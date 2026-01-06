@@ -22,7 +22,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: health-check
-              image: bitnami/kubectl:1.28
+              image: dtzar/helm-kubectl:3.19
               command: ["/bin/bash", "-c"]
               args:
                 - |

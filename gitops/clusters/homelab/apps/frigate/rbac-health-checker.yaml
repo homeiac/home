@@ -24,15 +24,23 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
+  # Execute commands in pods (for curl to Frigate API)
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
   # Read pod logs for health check
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
-  # Restart deployment
+  # Restart deployment (rollout restart = patch on deployment)
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames: ["frigate"]
     verbs: ["get", "patch"]
+  # Also need replicasets for rollout status check
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
