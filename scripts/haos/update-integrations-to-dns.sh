@@ -1,7 +1,5 @@
 #!/bin/bash
-#
-# update-integrations-to-dns.sh
-#
+# Update HA integrations from IP addresses to DNS hostnames
 # Update Home Assistant integrations from IP addresses to DNS hostnames
 # Prevents issues when MetalLB IP assignments change
 #
