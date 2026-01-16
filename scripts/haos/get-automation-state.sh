@@ -1,13 +1,6 @@
 #!/bin/bash
 # Get automation state and last_triggered
-set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/../../proxmox/homelab/.env"
-
-[[ -f "$ENV_FILE" ]] && HA_TOKEN=$(grep "^HA_TOKEN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"')
-[[ -z "$HA_TOKEN" ]] && { echo "ERROR: HA_TOKEN not found"; exit 1; }
+source "$(dirname "$0")/../lib-sh/ha-api.sh"
 
 AUTOMATION="${1:?Usage: $0 <automation_entity_id>}"
-HA_HOST="${HA_HOST:-homeassistant.maas:8123}"
-
-curl -s -H "Authorization: Bearer $HA_TOKEN" "http://$HA_HOST/api/states/$AUTOMATION" | jq '{state, last_triggered: .attributes.last_triggered, current_state: .attributes.current}'
+ha_get_state "$AUTOMATION" | jq '{state, last_triggered: .attributes.last_triggered, current_state: .attributes.current}'
