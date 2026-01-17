@@ -10,3 +10,5 @@ data:
   consecutive_failures: "0"
   # Comma-separated epoch timestamps of recent restarts (for rate limiting)
   last_restart_times: ""
+  # Set to "true" when alert sent for current incident, reset on healthy
+  alert_sent_for_incident: "false"

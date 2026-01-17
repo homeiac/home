@@ -40,8 +40,9 @@ spec:
                   # Read current state from ConfigMap
                   FAILURES=$(kubectl get cm frigate-health-state -n frigate -o jsonpath='{.data.consecutive_failures}' 2>/dev/null || echo "0")
                   RESTART_TIMES=$(kubectl get cm frigate-health-state -n frigate -o jsonpath='{.data.last_restart_times}' 2>/dev/null || echo "")
+                  ALERT_SENT=$(kubectl get cm frigate-health-state -n frigate -o jsonpath='{.data.alert_sent_for_incident}' 2>/dev/null || echo "false")
 
-                  echo "Current state: failures=$FAILURES, restart_times=$RESTART_TIMES"
+                  echo "Current state: failures=$FAILURES, restart_times=$RESTART_TIMES, alert_sent=$ALERT_SENT"
 
                   # Initialize health status
                   UNHEALTHY=false
@@ -103,9 +104,9 @@ spec:
                   #=== Handle Health Result ===#
                   if [[ "$UNHEALTHY" == "false" ]]; then
                     echo "Frigate is HEALTHY"
-                    # Reset failure count
+                    # Reset failure count and alert flag (incident resolved)
                     kubectl patch cm frigate-health-state -n frigate --type merge \
-                      -p '{"data":{"consecutive_failures":"0"}}'
+                      -p '{"data":{"consecutive_failures":"0","alert_sent_for_incident":"false"}}'
                     exit 0
                   fi
 
@@ -161,10 +162,11 @@ spec:
                   kubectl patch cm frigate-health-state -n frigate --type merge \
                     -p "{\"data\":{\"consecutive_failures\":\"0\",\"last_restart_times\":\"$NEW_TIMES\"}}"
 
-                  #=== Send Email Notification ===#
-                  echo "Sending email notification..."
-
-                  if [[ -f /smtp-creds/user && -f /smtp-creds/pass ]]; then
+                  #=== Send Email Notification (once per incident) ===#
+                  if [[ "$ALERT_SENT" == "true" ]]; then
+                    echo "Alert already sent for this incident - skipping email"
+                  elif [[ -f /smtp-creds/user && -f /smtp-creds/pass ]]; then
+                    echo "Sending email notification..."
                     SMTP_USER=$(cat /smtp-creds/user)
                     SMTP_PASS=$(cat /smtp-creds/pass)
                     TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
@@ -226,12 +228,19 @@ spec:
                   "
 
                     # Send via curl (Yahoo SMTP)
-                    echo "$EMAIL_BODY" | curl --ssl-reqd \
+                    if echo "$EMAIL_BODY" | curl --ssl-reqd \
                       --url 'smtps://smtp.mail.yahoo.com:465' \
                       --user "${SMTP_USER}:${SMTP_PASS}" \
                       --mail-from "${SMTP_USER}" \
                       --mail-rcpt "${SMTP_USER}" \
-                      --upload-file - 2>/dev/null && echo "Email sent successfully" || echo "Email failed (non-critical)"
+                      --upload-file - 2>/dev/null; then
+                      echo "Email sent successfully"
+                      # Mark alert as sent for this incident
+                      kubectl patch cm frigate-health-state -n frigate --type merge \
+                        -p '{"data":{"alert_sent_for_incident":"true"}}'
+                    else
+                      echo "Email failed (non-critical)"
+                    fi
                   else
                     echo "SMTP credentials not mounted - skipping email notification"
                   fi
