@@ -48,7 +48,7 @@ spec:
         size: 50
         fileFormat: raw
         discard: "on"
-        importFrom: local:iso/noble-server-cloudimg-amd64.img
+        importFrom: local:images/noble-server-cloudimg-amd64.img
 
     # Network - single NIC on main bridge
     networkDevice:
