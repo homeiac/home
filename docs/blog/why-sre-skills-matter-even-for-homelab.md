@@ -1,12 +1,12 @@
 # Why SRE Skills Matter Even for Homelab (And Why "It Just Works" Doesn't)
 
-*Or: The Two Lines of Code That Took 15 Years of Experience to Know Were Missing*
+*Or: The Two Lines of Code That Even an AI Missed*
 
 ## The Setup
 
-I have a homelab. Kubernetes cluster, Frigate NVR for cameras, the works. I wrote a health checker that monitors Frigate and restarts it if something goes wrong. Simple CronJob, runs every 5 minutes, sends me an email if it has to restart things.
+I have a homelab. Kubernetes cluster, Frigate NVR for cameras, the works. I had Claude (yes, the AI) write a health checker that monitors Frigate and restarts it if something goes wrong. Simple CronJob, runs every 5 minutes, sends me an email if it has to restart things.
 
-The code worked. Tests passed. Deployed to prod.
+The code worked. Tests passed. Deployed to prod. The AI was very pleased with itself.
 
 Then my node went down for maintenance.
 
@@ -52,15 +52,20 @@ fi
 
 ## The Point
 
-These fixes are maybe 15 lines of code combined. A junior developer could write them in 10 minutes once told what to write.
+These fixes are maybe 15 lines of code combined. A junior developer could write them in 10 minutes once told what to write. An AI could generate them in seconds - once told they were needed.
 
-But knowing they were needed? That took years of:
+But knowing they were needed? That's the hard part.
 
-- Being woken up at 3 AM by alert storms
-- Watching dashboards turn red because automation tried to fix things that couldn't be fixed
-- Reading postmortems about cascading failures
-- Learning that every action needs a precondition check
-- Understanding that stateless systems and alerting don't mix
+Claude wrote a perfectly functional health checker. It had rate limiting, circuit breakers, consecutive failure thresholds. It looked professional. It would pass a code review.
+
+And it completely missed these two basic failure modes because:
+
+- It had never been woken up at 3 AM by alert storms
+- It had never watched dashboards turn red because automation tried to fix things that couldn't be fixed
+- It had never lived through the pain that teaches you these patterns
+- It optimized for the happy path because that's what the requirements described
+
+The human looked at it and said "what happens when still-fawn is down?" The AI hadn't thought to ask.
 
 ## Why "Managed Services" Don't Teach This
 
@@ -92,13 +97,15 @@ These are the questions that separate "I deployed a Kubernetes cluster" from "I 
 
 ## The Uncomfortable Truth
 
-Cloud providers have made infrastructure so easy that we've created a generation of engineers who've never had to think about why things are built the way they are.
+Cloud providers have made infrastructure so easy that we've created a generation of engineers who've never had to think about why things are built the way they are. And now AI can generate the code for you too.
 
-Auto-scaling? Click a checkbox.
-High availability? Select multiple zones.
-Alerting? Enable the default dashboard.
+Auto-scaling? Click a checkbox. Or ask Claude.
+High availability? Select multiple zones. Or ask Claude.
+Alerting? Enable the default dashboard. Or ask Claude to write a health checker.
 
-And it works! Until you need to build something custom. Until you need to debug why your automation is making things worse. Until you need to understand the principles, not just the products.
+And it works! Until your node goes down. Until your automation makes things worse. Until you need someone who's felt the pain to look at the code and ask "but what happens when..."
+
+The AI gave me working code. The human asked the right question.
 
 ## What To Do About It
 
@@ -108,7 +115,7 @@ Not because managed services are bad - they're great, use them in production. Bu
 
 The cloud abstracts away the hard problems. That's the product. But if you want to be an SRE, you need to have solved those problems at least once yourself.
 
-Otherwise, you're just a very expensive button clicker.
+Otherwise, you're just a very expensive button clicker. Or worse - someone who blindly trusts AI-generated code because it "looks right."
 
 ## The Fixes
 
@@ -141,8 +148,8 @@ if [[ "$NODE_READY" != "True" ]]; then
 fi
 ```
 
-15 lines. 15 years of context.
+15 lines. And a human who knew to ask for them.
 
 ---
 
-*Tags: sre, homelab, kubernetes, alerting, cloud, aks, learning, career*
+*Tags: sre, homelab, kubernetes, alerting, cloud, aks, ai, claude, learning, career*
