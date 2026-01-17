@@ -4,6 +4,9 @@
 #
 # IMPORTANT: fun-bedbug only has 'local' directory storage active
 # ZFS pools are DISABLED on this host - do not use local-zfs
+#
+# DEPENDENCY: Requires EnvironmentDownloadFile 'ubuntu-noble-cloud-image'
+# to be synced first (see ubuntu-noble-cloud-image.yaml)
 ---
 apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
 kind: EnvironmentVM
@@ -41,14 +44,15 @@ spec:
     scsiHardware: virtio-scsi-pci
 
     # Boot disk - import cloud image directly into disk
-    # Uses importFrom instead of cdrom for proper cloud-init VM creation
+    # IMPORTANT: importFrom must reference a file in 'import' content type
+    # The EnvironmentDownloadFile creates: local:import/noble-server-cloudimg-amd64.qcow2
     disk:
       - interface: scsi0
         datastoreId: local
         size: 50
         fileFormat: raw
         discard: "on"
-        importFrom: local:images/noble-server-cloudimg-amd64.img
+        importFrom: local:import/noble-server-cloudimg-amd64.qcow2
 
     # Network - single NIC on main bridge
     networkDevice:

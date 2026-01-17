@@ -5,6 +5,9 @@ kind: Kustomization
 # These are Proxmox VMs/containers declared in Git, reconciled by Crossplane
 
 resources:
+  # Cloud Images - must be downloaded before VMs can use them
+  - ubuntu-noble-cloud-image.yaml  # Ubuntu 24.04 cloud image for import
+
   # K3s Control Plane Nodes
   - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
 
