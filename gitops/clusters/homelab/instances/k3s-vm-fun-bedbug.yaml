@@ -50,10 +50,10 @@ spec:
         discard: "on"
 
     # Cloud-init disk - references the Ubuntu Noble cloud image
+    # NOTE: cdrom schema only has enabled, fileId, interface - no datastoreId
     cdrom:
       - enabled: true
         interface: ide2
-        datastoreId: local
         fileId: local:iso/noble-server-cloudimg-amd64.img
 
     # Network - single NIC on main bridge
@@ -64,13 +64,12 @@ spec:
 
     # Cloud-init configuration
     initialization:
-      - type: nocloud
-        datastoreId: local
+      - datastoreId: local
         userAccount:
           - username: ubuntu
         ipConfig:
           - ipv4:
-              address: dhcp
+              - address: dhcp
         # Custom cloud-init with K3s prerequisites and qemu-guest-agent
         userDataFileId: local:snippets/install-k3sup-qemu-agent.yaml
 
