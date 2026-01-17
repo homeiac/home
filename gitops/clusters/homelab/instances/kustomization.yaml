@@ -4,9 +4,9 @@ kind: Kustomization
 # VM and LXC instances managed by Crossplane
 # These are Proxmox VMs/containers declared in Git, reconciled by Crossplane
 
-resources:
+resources: []
   # TEST VMs - non-essential, safe to experiment with
-  - rancher-server.yaml          # VMID 200 - RKE2 eval
+  # - rancher-server.yaml          # VMID 200 - RKE2 eval (removed - orphaned ZFS datasets)
 
   # PRODUCTION - adopted existing infrastructure (deletionPolicy: Orphan)
   # Uncomment after validating Crossplane adoption works
