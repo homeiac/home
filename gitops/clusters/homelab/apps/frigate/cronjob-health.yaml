@@ -142,6 +142,18 @@ spec:
                     exit 0
                   fi
 
+                  #=== Check Node Availability ===#
+                  # Frigate runs on still-fawn (has Coral TPU) - no point restarting if node is down
+                  FRIGATE_NODE=$(kubectl get pods -n frigate -l app=frigate -o jsonpath='{.items[0].spec.nodeName}' 2>/dev/null || echo "")
+                  if [[ -n "$FRIGATE_NODE" ]]; then
+                    NODE_READY=$(kubectl get node "$FRIGATE_NODE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+                    echo "Frigate node ($FRIGATE_NODE) Ready status: $NODE_READY"
+                    if [[ "$NODE_READY" != "True" ]]; then
+                      echo "NODE DOWN: $FRIGATE_NODE is not Ready - skipping restart (would fail anyway)"
+                      exit 0
+                    fi
+                  fi
+
                   #=== Trigger Restart ===#
                   echo "Restarting Frigate deployment..."
                   kubectl rollout restart deployment/frigate -n frigate
