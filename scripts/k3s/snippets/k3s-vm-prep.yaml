@@ -1,0 +1,71 @@
+#cloud-config
+# K3s VM Preparation - Base cloud-init for K3s-ready VMs
+#
+# This snippet prepares a VM for K3s installation:
+# - Sets up ubuntu user with SSH keys
+# - Installs qemu-guest-agent
+# - Configures kernel modules and sysctl for Kubernetes
+# - Disables swap
+#
+# K3s is NOT installed here. Run scripts/k3s/join-server.sh after VM boots.
+# This keeps the K3s token out of cloud-init (security best practice).
+
+preserve_hostname: false
+
+# SSH & User Setup
+ssh_pwauth: true
+users:
+  - name: ubuntu
+    gecos: Ubuntu User
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCrf+FIETUTHBKDMe5OioHgzCaGBrI7B0TmL7i6Zz5UO7FK/wkVCLDNS4ol7De2QkI0HLFFTdvq9LNTDPamIEqjhMzwEeDIhgoxCrymyk2dy7TLNXNWQBkTGDBxId4EhB26Tfa6STlj4Iwr170vocWuTZ9Km2u8EaBPGv2u+Au1qXb9Fl0N9uu47phiHHWvP0aXK3nf9K6XSQQaru7UlVDOdUBhGWvXNcPAGp/xBdgc4fInkCdCr3z2Y40Jq3Cxs6vpQCW3DuJyEPupo8EOUArClaJOPht8wftnkxny/6WD70tcai/teObWLyQEidv4Ed++IlnevbhTx2hTbv/IdlSAzBtW1jZNlUlbalrEx0nDUtOAgFmsMFwtssrJpWbbpaRtfuaUn8KHHm2GS8kHrbypTcGKkRU+5GTlfs16AY8K6ypIfOskSulOpJCelji10h1ykck9o1wivqqoRoUP6MZQC+d1Uu1KwFklM7UZpBnGT0lpnimnKROCbGZfPwgJryBvCb55+3kLrC3iUmZJWzVVmtzGfH/cZhOGLe6rcGgReuJAxokgOIreP2pgVgrla7wMwo2frFQYmb1ajCSO4ChrozXe6DEyFCAkITqO/z5Dj6GGOaR00hXw2MFYUefdj+dK7od7CzDv1bzhLqmWDBKDv6h2skQFl/I4sDSmv5TpxQ== root@pve
+
+# Install packages
+package_update: true
+package_upgrade: false
+packages:
+  - qemu-guest-agent
+  - curl
+
+# Grow root partition to fill disk
+growpart:
+  mode: auto
+  devices:
+    - /
+  ignore_growroot_disabled: false
+resize_rootfs: true
+
+# Kubernetes prerequisites
+runcmd:
+  # Disable swap (required for kubelet)
+  - swapoff -a
+  - sed -i '/\sswap\s/s/^/#/' /etc/fstab
+
+  # Load required kernel modules
+  - modprobe overlay
+  - modprobe br_netfilter
+
+  # Persist modules across reboots
+  - |
+    cat << 'EOF' > /etc/modules-load.d/k8s.conf
+    overlay
+    br_netfilter
+    EOF
+
+  # Configure sysctl for Kubernetes networking
+  - |
+    cat << 'EOF' > /etc/sysctl.d/99-kubernetes.conf
+    net.bridge.bridge-nf-call-iptables  = 1
+    net.bridge.bridge-nf-call-ip6tables = 1
+    net.ipv4.ip_forward                 = 1
+    EOF
+  - sysctl --system
+
+  # Enable QEMU guest agent (for Proxmox integration)
+  - systemctl enable --now qemu-guest-agent
+
+  # Signal that VM is ready for K3s installation
+  - touch /var/run/k3s-ready

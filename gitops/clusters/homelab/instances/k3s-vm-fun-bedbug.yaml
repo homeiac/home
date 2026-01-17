@@ -69,7 +69,9 @@ spec:
           - ipv4:
               - address: dhcp
         # Custom cloud-init with K3s prerequisites and qemu-guest-agent
-        userDataFileId: local:snippets/install-k3sup-qemu-agent.yaml
+        # NOTE: This snippet prepares the VM but does NOT install K3s
+        # Run scripts/k3s/join-server.sh <VM_IP> after VM boots to join cluster
+        userDataFileId: local:snippets/k3s-vm-prep.yaml
 
     # QEMU Guest Agent - required for proper shutdown/status
     agent:

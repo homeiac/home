@@ -8,6 +8,9 @@ resources:
   # Cloud Images - must be downloaded before VMs can use them
   - ubuntu-noble-cloud-image.yaml  # Ubuntu 24.04 cloud image for import
 
+  # Secrets - SOPS encrypted, decrypted by Flux
+  - k3s-join-token-secret.yaml    # K3s cluster join token (read by scripts/k3s/join-server.sh)
+
   # K3s Control Plane Nodes
   - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
 
