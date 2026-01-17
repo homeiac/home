@@ -69,8 +69,8 @@ spec:
           - ipv4:
               - address: dhcp
         # Full K3s cloud-init - prepares VM AND joins cluster automatically
-        # Snippet created by EnvironmentFile k3s-cloud-init-fun-bedbug
-        userDataFileId: local:snippets/k3s-join-fun-bedbug.yaml
+        # Snippet deployed via: scripts/k3s/deploy-snippets.sh fun-bedbug.maas
+        userDataFileId: local:snippets/k3s-server-join.yaml
 
     # QEMU Guest Agent - required for proper shutdown/status
     agent:

@@ -8,11 +8,8 @@ resources:
   # Cloud Images - must be downloaded before VMs can use them
   - ubuntu-noble-cloud-image.yaml  # Ubuntu 24.04 cloud image for import
 
-  # Cloud-Init Snippets - SOPS encrypted (contain K3s tokens)
-  # These create snippets on Proxmox via Crossplane EnvironmentFile
-  - k3s-cloud-init-fun-bedbug.yaml  # K3s join snippet for fun-bedbug
-
   # K3s Control Plane Nodes
+  # NOTE: Cloud-init snippets deployed via scripts/k3s/deploy-snippets.sh (one-time per host)
   - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
 
   # TEST VMs - non-essential, safe to experiment with

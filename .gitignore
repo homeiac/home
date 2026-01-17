@@ -117,3 +117,6 @@ raspberrypi-master/display-driver/.venv/bin/pip3.7
 raspberrypi-master/display-driver/.venv/bin/python
 raspberrypi-master/display-driver/.venv/bin/python3
 scripts/voice-pe/secrets.yaml
+
+# K3s snippets contain tokens - deploy manually, don't commit
+scripts/k3s/snippets/*.yaml
