@@ -1,0 +1,40 @@
+# K3s Cloud-Init Snippet for fun-bedbug
+# This EnvironmentFile creates a cloud-init snippet on Proxmox that:
+# 1. Prepares VM (user, packages, kernel modules)
+# 2. Installs K3s and joins the existing cluster
+#
+# IMPORTANT: This file contains the K3s join token and MUST be SOPS encrypted
+# Run: sops -e -i gitops/clusters/homelab/instances/k3s-cloud-init-fun-bedbug.yaml
+apiVersion: virtualenvironmentfile.crossplane.io/v1alpha1
+kind: EnvironmentFile
+metadata:
+    name: k3s-cloud-init-fun-bedbug
+    labels:
+        role: k3s-control-plane
+        node: fun-bedbug
+spec:
+    forProvider:
+        nodeName: fun-bedbug
+        datastoreId: local
+        contentType: snippets
+        overwrite: true
+        sourceRaw:
+            - fileName: k3s-join-fun-bedbug.yaml
+              data: ENC[AES256_GCM,data:8R44Wb/6bqJ+ZBUcS9e6KalfHLqCGwH7AmvSuc8D6phLRot799+Tjnaqe5xRVgEk2fzH1AjO3qGT+VfJzeMMJQjTbQAOmcWqndUwxZcbQOnS4S849W3tP5+UgD1uLT5e1vNAuehrM6I+Q4+RVK9Bh2UY/FAPd1opgIQPE/aOIvmeVfRKa4M+CXcjLUIf2F0W1M5B/p9y3h50csCM8tKaEQahxYcCklV8h/kEBflWtGU57n5yrnPmu7IRQhDh/9P8IRmR/74q4JIlXWX1dsNkn+sozg9h8b9OBVSKASPil7kYfNxpE20B3CeUjCvdD2p7GzozUPPfwk14sLmTimgXetBqtHLEeo2/1RbE4GcBE0OBcZ84xaHljcVrlKFjShN0J5TJRXFO4W3p0PlOBWU8kC6BagM4sTznTQJ72pTrKsAsbhM9q6fKDABOGQNr8aBpDXNdBlJS2BCkqqFO7FKMht+tFwKMRGm8fyAhzsjXHcA9q5Es/vqHDc3CrPzYWAuDtmo8btOs22YwQbxqudMhPIe+Bc4pzxwDSsUnOJn6f2ZwLZsx8cP7YgAWKojAeIsL+68punPLmhYAd9wTH2M0iVRa2n14y3z5jeKGX6kC/Gi2eXkpH8o41YsVk9k5yeHTiD8JBFquCTjxIa16gwVyuaV5EyYo7ZoXJhO4DZP2GG6sGWKTYbnTWfbyr9cdxdfRVlR3pPwBZ2S8mrKaPbit6he/gc78yie1oxgmNxAiMhVVNQ8FUwJkKbY/DK6yJM/ZSBSGodSBLqWrCEOx1Y7fzYlVK7N/dT16rUHH0+digacAk7mstY6n6Ogw8EV61dLu/2z3241UnxYbxLqXbsFPjA6pTgXlZ6N7M/6YTjtmTAL72WSTX1R+LBYx2rVgCCObFhpSCOA5zf+vShPlSM5DLKh06285oQ7FZ544GYCxXjmO/xeFz8utZSu8/kUp/BfwF9C4rTyjpX79My1+UqWqb3K0410WQeRPz3ui5a340KTJFRCGZrkpJym57FMNi2+fgNL5T8m+rDveUgqratdQb1JfICGwKluZx2mu4NrUN/JZVt57mbrwOawS9cMDbnxZMNMgGIbVNhHnIomEhp7J3tR0sbutgXuckg3DgKMQU9ZBu71c15qiuflwWzKPejlh6aD6kT5a7M1TAWP3cfz/16PuTf6TiM+XXQSeEpLpVQArXgCFeO/bwmjjRt8FVkNDtpN27eazQKinY+UpTXnpzw48SYEFQGUFxb+Z2AGWigoltDqCyVzs1cZ8v8qZQgKrtI8gq5dc9QFgXRyZ7ncB+YGI8cvZnBT9AYlzowi2cr851AnRiIZdTfQhBT5i+oA7pdnnkAD8RKg6RgQnlYmg53kZx6Sq2s587wFO4KlgrJycVNg2P7k1DNNckxjFQss9RZ6FEhH3Y+Xl2AkRm4+ZYdc/cgNHKUcMa01OGbYp9M9zMghkzGmIzUB/EgtWgdWizwcSvI7Wgx4uWkGmbyGB6vwagfTlbnHsIDIpIc7LrAU7tm1lH+uPd1w52TmZ71JQIK5mlLa2Vp/MuP5tVu2yLTFuudR/guiLnzdAgY9AJzIJ9GJe09TwV3N2SPb5FMQcHVjlxKxNeLCmGdnbbnWH/wS/W3b5xFbevWjmVjndRrHRG9kirt1ryGTa8lyKJf/Acjs+Fq9VEl6y28DkBc6hyR21wGWwKnrrk8O8SXo3aLTb9wDTbpXkxGC5ienwdyooyLbodgmDn2jKzjS6sms3CNkuGBjvx3lGOJcAk+4XUanN5k5iiIcM2/RZZXJSzhZGZoTMmXX8hFE+9T7dHZbBLIY9yKuKpnLCPW04Eqpbqhj9URxPsOOsJnh3VZN5+H3XwuJuqdsfqYf9EMzv3gwzzqShbbM59VUUX4nvuNap2zuaJPpxLn7CfHVLHnOlb/1AffXBcWysji/UCd5yTwGLTCPoBVZ4yzki+uAX7yVf3gSGWdhUpqrx0c3UP5oLCx1ndeB/rZKAKmj99hLwvHiHdxHH/6PV76t3BjSyuTEjM+bz9Y51AsmLJCJmv5wzS7/uZawypbA67RrIEfPklFzowNfHcFE5dZdvZ/3YNHCnfyH1BSKKyw1f8+M7RTt+7ZhfLAhYTXyPAk3VFx9xO3hJu2f/j6FBKEV3HcCuc5r/fyYQEjPMdGWRgEES3FLfluTVo8keoogrj5VBaQ1VeRF7F0pIapz0Qnh5MDLhCafu52jtxiOx84dnH7jD3MLzr7WWneq6zebtbQQANtldwTy/hejjY4v0rL5pE53OgT03PKAZihbr3Z9Hsrw468z9z4PqJoBCqcjmJQjQwJ46YW97Bp1PK0+WbOfvaweyvM3odQVfwIGxBzUXP7icy46+DNbsMn8uQO4FcT3/oGzlqHcT9kEt+H/IR9tzom2Gl2gTM84N1ZMY3w+D02T/P2pcMfRnh8QM/YeifIuWm+I9jJHyfjPNRd4KiecimaUG16mQri4fivh0CdujqV76bWW5DepaHHSv/KrJpb9EXo206DomOSJtostnpSk5xroQW9dWRkex0WC0NwsA3Dtr1bq8sp0OzS3+Zc4GNUeAhAF6boeKIRLsCmWB1875p7XiZ0pt/cQlUUlChsUgYZjhHBBv6a5fl4nzearI3tznfvgYpQwB17ZjHFL8pp9Fp5We68rH4HuJPg30dqydfmxRuQCtYvWYWXRhzuuLgwNC4t3NUxaMgikzCQNQxz/CtGn1Z9JWRBJNcxwm0jScsF9XbUkHXHt4SmD/LwCbnyxENh99QR1tjyaRrnyYVlD1FuvPyOiBjAQaaImLA1BXl5SL2mKK4bOrg4RnzOFcJ1BMWznfGbirhBMslBArG0rtJxqamJNRDtxlSRXbNwYCfsl45HkxK1pPxad8IRbAzMJpu37jP+pUl0+xfIzFPdrspLfy4I3WxPD2208uQUXDAoPAKOVhR6uHhc/rICAS5VRzuS2QJYMiI2+npNLQZFM/wEmyhRegGuRWr8O5KNGYo4tYFOehQnjZIUeTIzuvLFV33Xm/6HLztHPjlY7n4EUZKXbxo5b4aUvnncz0Cs0D2ym5fswLPpIA7XiRsE6BorjVEsXky1CofdGfkuFQ4cX9BgJI9cu51KrnQNZPQkCCAmn+GnxQ7eQJqWVKUDpcuFJ0ObYsZbA463yBoU/62N8GvpurKlgPgOs8GTw3uvlvOGDcrgyn99fQjkLNefn4lx5PSijk6FlrHqR/610XUbvE8n+6AsAw4r9iHR7dND6j+UQViKsBidpoSWw9MCU6KyUK1lxJxtvBpGWE4z2NcI4dUT8QoA44XDGQUA6O64aQOWnFDOp/S/Jm22k8NoQTJKpK/zoP,iv:9toFoRmgKgXQPBxAtyNDL05H0rvphwtc0cbw/Z0Chv8=,tag:Bm7q5WqpNaQeFedM9xhUiQ==,type:str]
+    providerConfigRef:
+        name: default
+sops:
+    age:
+        - recipient: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBZQStRQTdaS3R5U1FxdVFZ
+            dFFSL0hjRjVWbjdSRUdWUXoySU5lNUgxcGc4CjNxWVRna2R3Y1BLMjNyNjZkKzJB
+            MmU5SVZ6a2NkVE1YNm9kWGlmRmd1ZVEKLS0tIGxPV3BjTmczeVpsOVBYaEhKTmEx
+            cEt1M2hmaGI1M3hQZ2lMWTZhQVl5WUUKdR0wPuIVosuoCRkn7kMyVQEyXPULU4B+
+            TXYehff/xf1btig9Ha93y/GVZ6oIV/Os2HeESoILmjzECDflkEUnRA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-17T19:57:00Z"
+    mac: ENC[AES256_GCM,data:Iqk6srFmyEg0RdNXHSwtf5s350TmPyYEEcYlHCHr2Z18Qd4TBh7KnGCt4bvmT0c4CP+PQ4KgHzjyjZTra76p3Q2MynszhabGq2TTri/seUzdISZhRUeVP7ToIZto/1q787A6CjnNG+gZipQzlqh6uUkTiTV6n6JLdFyLCRICi3w=,iv:jDFGDNa6SfXXGXJBLGfrejuo4E/1/eGsLY5qf73u/k0=,tag:twp6jrjrB9l/qU/7EP2FgQ==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.11.0

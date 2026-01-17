@@ -68,10 +68,9 @@ spec:
         ipConfig:
           - ipv4:
               - address: dhcp
-        # Custom cloud-init with K3s prerequisites and qemu-guest-agent
-        # NOTE: This snippet prepares the VM but does NOT install K3s
-        # Run scripts/k3s/join-server.sh <VM_IP> after VM boots to join cluster
-        userDataFileId: local:snippets/k3s-vm-prep.yaml
+        # Full K3s cloud-init - prepares VM AND joins cluster automatically
+        # Snippet created by EnvironmentFile k3s-cloud-init-fun-bedbug
+        userDataFileId: local:snippets/k3s-join-fun-bedbug.yaml
 
     # QEMU Guest Agent - required for proper shutdown/status
     agent:
