@@ -15,7 +15,7 @@ resources:
   - infrastructure-config/metallb-config        #(address-pool)
   # Crossplane-managed Proxmox instances (VMs/LXCs)
   # NOTE: Requires crossplane-system secret first - see scripts/crossplane/create-proxmox-secret.sh
-  # - instances                          # Uncomment after Crossplane is healthy
+  - instances                            # K3s VMs, LXC containers managed by Crossplane
   - apps/ollama
   - apps/stable-diffusion
   - apps/samba
