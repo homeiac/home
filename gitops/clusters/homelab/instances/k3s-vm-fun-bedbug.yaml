@@ -1,0 +1,89 @@
+# K3s control-plane node on fun-bedbug
+# Purpose: Restore 3-node etcd quorum after still-fawn removal
+# Created: 2026-01-16
+#
+# IMPORTANT: fun-bedbug only has 'local' directory storage active
+# ZFS pools are DISABLED on this host - do not use local-zfs
+---
+apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
+kind: EnvironmentVM
+metadata:
+  name: k3s-vm-fun-bedbug
+  labels:
+    role: k3s-control-plane
+    node: fun-bedbug
+    managed-by: crossplane
+spec:
+  forProvider:
+    nodeName: fun-bedbug
+    name: k3s-vm-fun-bedbug
+    vmId: 114
+    description: "K3s control-plane node - Crossplane managed"
+
+    # CRITICAL: Must be true for VM to start after creation
+    started: true
+    onBoot: true
+
+    # Machine configuration - i440fx for simplicity (no GPU passthrough needed)
+    machine: pc-i440fx-8.1
+    bios: seabios
+
+    # CPU: Conservative for AMD A9-9400 (2-core low-power APU)
+    cpu:
+      - cores: 2
+        type: host
+
+    # Memory: 4GB matches other control-plane nodes
+    memory:
+      - dedicated: 4096
+
+    # SCSI Controller
+    scsiHardware: virtio-scsi-pci
+
+    # Boot disk - 50GB on local directory storage (not ZFS)
+    disk:
+      - interface: scsi0
+        datastoreId: local
+        size: 50
+        fileFormat: raw
+        iothread: true
+        discard: "on"
+
+    # Cloud-init disk - references the Ubuntu Noble cloud image
+    cdrom:
+      - enabled: true
+        interface: ide2
+        datastoreId: local
+        fileId: local:iso/noble-server-cloudimg-amd64.img
+
+    # Network - single NIC on main bridge
+    networkDevice:
+      - bridge: vmbr0
+        model: virtio
+        enabled: true
+
+    # Cloud-init configuration
+    initialization:
+      - type: nocloud
+        datastoreId: local
+        userAccount:
+          - username: ubuntu
+        ipConfig:
+          - ipv4:
+              address: dhcp
+        # Custom cloud-init with K3s prerequisites and qemu-guest-agent
+        userDataFileId: local:snippets/install-k3sup-qemu-agent.yaml
+
+    # QEMU Guest Agent - required for proper shutdown/status
+    agent:
+      - enabled: true
+        trim: true
+        type: virtio
+
+  # Provider configuration reference
+  providerConfigRef:
+    name: default
+
+  # IMPORTANT: Orphan policy means deleting CR won't delete VM
+  # Use Orphan during initial deployment for safety
+  deletionPolicy: Orphan

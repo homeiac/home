@@ -4,10 +4,13 @@ kind: Kustomization
 # VM and LXC instances managed by Crossplane
 # These are Proxmox VMs/containers declared in Git, reconciled by Crossplane
 
-resources: []
+resources:
+  # K3s Control Plane Nodes
+  - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
+
   # TEST VMs - non-essential, safe to experiment with
   # - rancher-server.yaml          # VMID 200 - RKE2 eval (removed - orphaned ZFS datasets)
 
   # PRODUCTION - adopted existing infrastructure (deletionPolicy: Orphan)
   # Uncomment after validating Crossplane adoption works
-  # - frigate-nvr.yaml           # LXC 113 - Frigate NVR (adopted)
+  # - frigate-nvr.yaml           # LXC 113 - Frigate NVR (removed from fun-bedbug)
