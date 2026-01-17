@@ -40,21 +40,15 @@ spec:
     # SCSI Controller
     scsiHardware: virtio-scsi-pci
 
-    # Boot disk - 50GB on local directory storage (not ZFS)
+    # Boot disk - import cloud image directly into disk
+    # Uses importFrom instead of cdrom for proper cloud-init VM creation
     disk:
       - interface: scsi0
         datastoreId: local
         size: 50
         fileFormat: raw
-        iothread: true
         discard: "on"
-
-    # Cloud-init disk - references the Ubuntu Noble cloud image
-    # NOTE: cdrom schema only has enabled, fileId, interface - no datastoreId
-    cdrom:
-      - enabled: true
-        interface: ide2
-        fileId: local:iso/noble-server-cloudimg-amd64.img
+        importFrom: local:iso/noble-server-cloudimg-amd64.img
 
     # Network - single NIC on main bridge
     networkDevice:
