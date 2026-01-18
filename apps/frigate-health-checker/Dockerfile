@@ -8,19 +8,19 @@ WORKDIR /app
 # Install poetry
 RUN pip install --no-cache-dir poetry==1.8.5
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock* ./
+# Copy dependency files and README (needed for package installation)
+COPY pyproject.toml poetry.lock* README.md ./
 
 # Configure poetry to not create virtual env (we're in container)
 RUN poetry config virtualenvs.create false
 
-# Install dependencies (no dev deps for production)
-RUN poetry install --only=main --no-interaction --no-ansi
+# Install dependencies only first (better layer caching)
+RUN poetry install --only=main --no-interaction --no-ansi --no-root
 
 # Copy application code
 COPY src/ ./src/
 
-# Install the package itself
+# Install the package itself (creates CLI entrypoint)
 RUN poetry install --only=main --no-interaction --no-ansi
 
 
