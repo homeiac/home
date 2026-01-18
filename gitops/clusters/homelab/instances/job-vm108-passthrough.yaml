@@ -1,0 +1,117 @@
+# One-time Job to add USB and PCI passthrough to VM 108 (k3s-vm-still-fawn)
+#
+# WHY: Crossplane API token lacks Mapping.Use permission for USB/PCI devices.
+#      This job SSHes as root to Proxmox host and adds the devices directly.
+#
+# PREREQUISITES:
+# 1. VM 108 must exist (created by Crossplane) but be STOPPED
+# 2. SSH key secret must exist:
+#    kubectl create secret generic proxmox-ssh-key -n crossplane-system \
+#      --from-file=id_rsa=$HOME/.ssh/id_rsa
+#
+# USAGE:
+# 1. Wait for Crossplane to create VM 108 (SYNCED=True, READY=True)
+# 2. kubectl apply -f job-vm108-passthrough.yaml
+# 3. After job completes, VM will have USB/PCI and be started
+#
+# DELETE after successful run:
+#   kubectl delete -f job-vm108-passthrough.yaml
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vm108-add-passthrough
+  namespace: crossplane-system
+  labels:
+    app: vm-passthrough
+    target-vm: "108"
+    target-host: still-fawn
+spec:
+  ttlSecondsAfterFinished: 3600  # Auto-delete 1 hour after completion
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: add-passthrough
+          image: dtzar/helm-kubectl:3.19
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              echo "=== VM 108 Passthrough Configuration ==="
+              echo "Target: still-fawn.maas VMID 108"
+              echo ""
+
+              # Setup SSH
+              mkdir -p ~/.ssh
+              cp /ssh-key/id_rsa ~/.ssh/id_rsa
+              chmod 600 ~/.ssh/id_rsa
+
+              # Disable host key checking for automation
+              cat > ~/.ssh/config << 'EOF'
+              Host still-fawn.maas
+                StrictHostKeyChecking no
+                UserKnownHostsFile /dev/null
+                LogLevel ERROR
+              EOF
+
+              echo "1. Checking VM 108 status..."
+              VM_STATUS=$(ssh root@still-fawn.maas "qm status 108 --verbose" 2>/dev/null | grep "^status:" | awk '{print $2}')
+              echo "   VM Status: $VM_STATUS"
+
+              if [ "$VM_STATUS" = "running" ]; then
+                echo "   ERROR: VM is running. Stop it first for passthrough changes."
+                echo "   Run: ssh root@still-fawn.maas 'qm stop 108'"
+                exit 1
+              fi
+
+              echo ""
+              echo "2. Adding USB passthrough (Coral TPU)..."
+              # Coral TPU has two device IDs depending on mode
+              ssh root@still-fawn.maas "qm set 108 --usb0 host=1a6e:089a,usb3=1"
+              ssh root@still-fawn.maas "qm set 108 --usb1 host=18d1:9302,usb3=1"
+              echo "   USB devices added"
+
+              echo ""
+              echo "3. Adding PCI passthrough (AMD GPU)..."
+              # AMD Radeon RX 570/580 at PCI 01:00
+              ssh root@still-fawn.maas "qm set 108 --hostpci0 0000:01:00,pcie=1"
+              echo "   PCI device added"
+
+              echo ""
+              echo "4. Verifying configuration..."
+              ssh root@still-fawn.maas "qm config 108 | grep -E '(usb|hostpci)'"
+
+              echo ""
+              echo "5. Starting VM 108..."
+              ssh root@still-fawn.maas "qm start 108"
+
+              echo ""
+              echo "6. Waiting for VM to boot (60s)..."
+              sleep 60
+
+              echo ""
+              echo "7. Checking VM status..."
+              ssh root@still-fawn.maas "qm status 108"
+
+              echo ""
+              echo "=== Passthrough configuration complete ==="
+              echo "VM 108 should now have:"
+              echo "  - USB0: Coral TPU (1a6e:089a)"
+              echo "  - USB1: Coral TPU alternate (18d1:9302)"
+              echo "  - hostpci0: AMD GPU (0000:01:00)"
+              echo ""
+              echo "Cloud-init will auto-join K3s cluster."
+              echo "Monitor with: kubectl get nodes -w"
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /ssh-key
+              readOnly: true
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: proxmox-ssh-key
+            defaultMode: 0400

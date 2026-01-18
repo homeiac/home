@@ -6,7 +6,8 @@ kind: Kustomization
 
 resources:
   # Cloud Images - must be downloaded before VMs can use them
-  - ubuntu-noble-cloud-image.yaml  # Ubuntu 24.04 cloud image for import
+  - ubuntu-noble-cloud-image.yaml             # Ubuntu 24.04 for fun-bedbug
+  - ubuntu-noble-cloud-image-still-fawn.yaml  # Ubuntu 24.04 for still-fawn
 
   # K3s Control Plane Nodes
   # NOTE: Cloud-init snippets deployed via scripts/k3s/deploy-snippets.sh (one-time per host)

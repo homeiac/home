@@ -2,12 +2,15 @@
 # Purpose: GPU-accelerated K3s node for Frigate (VAAPI) and Coral TPU
 # Created: 2026-01-17
 #
-# Hardware passthrough:
+# Hardware passthrough (added via post-create Job - API token lacks perms):
 # - AMD Radeon RX 570/580 (PCI 01:00) - VAAPI encoding for Frigate
 # - Google Coral USB TPU (1a6e:089a, 18d1:9302) - Object detection
 #
-# DEPENDENCY: Requires cloud-init snippet deployed first:
-#   scp scripts/k3s/snippets/k3s-server-join.yaml root@still-fawn.maas:/var/lib/vz/snippets/
+# DEPENDENCIES:
+# 1. Cloud image: EnvironmentDownloadFile 'ubuntu-noble-cloud-image-still-fawn'
+# 2. Cloud-init snippet: scripts/k3s/snippets/k3s-server-still-fawn.yaml
+#    Deploy with: ./scripts/k3s/deploy-snippets.sh still-fawn
+# 3. Passthrough Job: After VM created, run job-vm108-passthrough.yaml
 ---
 apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
 kind: EnvironmentVM
@@ -26,11 +29,11 @@ spec:
     vmId: 108
     description: "K3s node with AMD GPU (VAAPI) + Coral TPU - Crossplane managed"
 
-    # CRITICAL: Must be true for VM to start after creation
-    started: true
+    # CRITICAL: Start as false - passthrough job will start after adding devices
+    started: false
     onBoot: true
 
-    # Machine configuration - q35 + SeaBIOS for PCI passthrough
+    # Machine configuration - q35 required for PCI passthrough
     machine: q35
     bios: seabios
 
@@ -46,7 +49,7 @@ spec:
     # SCSI Controller
     scsiHardware: virtio-scsi-pci
 
-    # Boot disk - 700GB on rpool/data (local-zfs)
+    # Boot disk - import cloud image, 700GB on local-zfs
     disk:
       - interface: scsi0
         datastoreId: local-zfs
@@ -55,6 +58,7 @@ spec:
         cache: writeback
         iothread: true
         discard: "on"
+        importFrom: local:import/noble-server-cloudimg-amd64.qcow2
 
     # Network - single NIC on main bridge (preserve MAC for DHCP lease)
     networkDevice:
@@ -63,18 +67,8 @@ spec:
         macAddress: "BC:24:11:90:21:DF"
         enabled: true
 
-    # USB Passthrough - Google Coral TPU (both device IDs for different modes)
-    usb:
-      - host: "1a6e:089a"
-        usb3: true
-      - host: "18d1:9302"
-        usb3: true
-
-    # PCI Passthrough - AMD Radeon RX 570/580 for VAAPI
-    hostpci:
-      - device: "hostpci0"
-        id: "0000:01:00"
-        pcie: true
+    # NOTE: USB and PCI passthrough added via post-create Job
+    # Crossplane API token lacks Mapping.Use permission for real devices
 
     # Serial console for cloud-init and debugging
     serialDevice:
@@ -88,8 +82,8 @@ spec:
         ipConfig:
           - ipv4:
               - address: dhcp
-        # K3s cloud-init - auto-joins cluster as server node
-        userDataFileId: local:snippets/k3s-server-join.yaml
+        # Host-specific cloud-init with correct hostname
+        userDataFileId: local:snippets/k3s-server-still-fawn.yaml
 
     # QEMU Guest Agent - required for proper shutdown/status
     agent:
@@ -102,5 +96,4 @@ spec:
     name: default
 
   # IMPORTANT: Orphan policy means deleting CR won't delete VM
-  # Protects against accidental deletion
   deletionPolicy: Orphan
