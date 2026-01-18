@@ -21,6 +21,8 @@ spec:
         spec:
           serviceAccountName: frigate-health-checker
           restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: ghcr-creds
           containers:
             - name: health-check
               image: ghcr.io/homeiac/frigate-health-checker:latest
