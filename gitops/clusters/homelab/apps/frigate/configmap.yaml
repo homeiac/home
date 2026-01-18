@@ -25,7 +25,7 @@ data:
       streams:
         # Re-encode MJPEG to H264 for old camera
         mjpeg_cam: "ffmpeg:http://{FRIGATE_CAM_MJPEG_USER}:{FRIGATE_CAM_MJPEG_PASS}@192.168.1.220/videostream.cgi#video=h264#hardware"
-        reolink_doorbell: "rtsp://{FRIGATE_CAM_REOLINK_USER}:{FRIGATE_CAM_REOLINK_PASS}@reolink-vdb.homelab:554/h264Preview_01_sub"
+        reolink_doorbell: "rtsp://{FRIGATE_CAM_REOLINK_USER}:{FRIGATE_CAM_REOLINK_PASS}@reolink-vdb.home.panderosystems.com:554/h264Preview_01_sub"
 
     cameras:
       old_ip_camera:
