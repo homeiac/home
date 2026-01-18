@@ -31,9 +31,11 @@ spec:
     machine: pc-i440fx-8.1
     bios: seabios
 
-    # CPU: Conservative for AMD A9-9400 (2-core low-power APU)
+    # CPU: Minimal for AMD A9-9400 (2-core low-power APU)
+    # Reduced to 1 core - this VM is quorum-only (no workloads)
+    # 2 cores caused thermal throttling (92°C+ on 70°C high threshold)
     cpu:
-      - cores: 2
+      - cores: 1
         type: host
 
     # Memory: 4GB matches other control-plane nodes
