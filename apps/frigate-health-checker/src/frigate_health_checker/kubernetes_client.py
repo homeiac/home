@@ -66,7 +66,8 @@ class KubernetesClient:
     def exec_in_pod(self, pod_name: str, command: list[str], timeout: int = 10) -> tuple[str, bool]:
         """Execute a command in a pod and return output."""
         try:
-            result = stream(
+            # Use _preload_content=False to get WSClient for better control
+            ws_client = stream(
                 self.core_v1.connect_get_namespaced_pod_exec,
                 pod_name,
                 self.settings.namespace,
@@ -75,16 +76,24 @@ class KubernetesClient:
                 stdin=False,
                 stdout=True,
                 tty=False,
+                _preload_content=False,
                 _request_timeout=timeout,
             )
-            # stream() returns a WSClient that reads all output as a string
-            # Ensure we have a proper string
-            if result is None:
-                return "", False
-            output = str(result) if not isinstance(result, str) else result
-            return output, True
+            # Read stdout only (not stderr which might contain noise)
+            ws_client.run_forever(timeout=timeout)
+            stdout = ws_client.read_stdout() or ""
+            stderr = ws_client.read_stderr() or ""
+
+            if stderr:
+                logger.debug("Exec stderr", stderr=stderr[:200])
+
+            ws_client.close()
+            return stdout, True
         except ApiException as e:
             logger.error("Failed to exec in pod", pod=pod_name, error=str(e))
+            return str(e), False
+        except Exception as e:
+            logger.error("Unexpected error in exec", pod=pod_name, error=str(e))
             return str(e), False
 
     def get_pod_logs(self, pod_name: str, since_seconds: int) -> str:
