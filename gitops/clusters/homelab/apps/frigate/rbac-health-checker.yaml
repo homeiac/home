@@ -27,7 +27,7 @@ rules:
   # Execute commands in pods (for curl to Frigate API)
   - apiGroups: [""]
     resources: ["pods/exec"]
-    verbs: ["create"]
+    verbs: ["create", "get"]
   # Read pod logs for health check
   - apiGroups: [""]
     resources: ["pods/log"]
