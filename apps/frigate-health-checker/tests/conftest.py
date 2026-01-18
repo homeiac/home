@@ -77,6 +77,7 @@ def state_with_one_failure() -> HealthState:
 def state_at_circuit_breaker(settings: Settings) -> HealthState:
     """Create state at circuit breaker limit."""
     import time
+
     now = int(time.time())
     return HealthState(
         consecutive_failures=2,

@@ -53,11 +53,11 @@ Restarts in last hour: {restarts_in_hour}
 Primary reason: {health_result.message}
 
 Metrics at restart:
-- Coral inference speed: {metrics.inference_speed_ms or 'N/A'}ms (threshold: {self.settings.inference_threshold_ms}ms)
+- Coral inference speed: {metrics.inference_speed_ms or "N/A"}ms (threshold: {self.settings.inference_threshold_ms}ms)
 - Detection stuck count: {metrics.stuck_detection_count} (threshold: {self.settings.stuck_detection_threshold})
 - Recording backlog count: {metrics.recording_backlog_count} (threshold: {self.settings.backlog_threshold})
-- Pod: {metrics.pod_name or 'N/A'}
-- Node: {metrics.node_name or 'N/A'}
+- Pod: {metrics.pod_name or "N/A"}
+- Node: {metrics.node_name or "N/A"}
 
 === NEXT STEPS ===
 {next_steps}

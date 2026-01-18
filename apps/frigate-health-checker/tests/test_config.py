@@ -46,10 +46,13 @@ class TestSettings:
 
     def test_env_prefix(self) -> None:
         """Test that environment variables use correct prefix."""
-        with patch.dict(os.environ, {
-            "FRIGATE_HC_NAMESPACE": "custom-ns",
-            "FRIGATE_HC_INFERENCE_THRESHOLD_MS": "200",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "FRIGATE_HC_NAMESPACE": "custom-ns",
+                "FRIGATE_HC_INFERENCE_THRESHOLD_MS": "200",
+            },
+        ):
             settings = Settings()
 
             assert settings.namespace == "custom-ns"

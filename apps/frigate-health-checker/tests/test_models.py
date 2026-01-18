@@ -62,13 +62,13 @@ class TestHealthState:
             last_restart_times=[
                 now - 7200,  # 2 hours ago (outside window)
                 now - 1800,  # 30 min ago (inside window)
-                now - 300,   # 5 min ago (inside window)
+                now - 300,  # 5 min ago (inside window)
             ],
             alert_sent_for_incident=False,
         )
         assert state.restarts_in_window(3600) == 2  # last hour
-        assert state.restarts_in_window(600) == 1   # last 10 min
-        assert state.restarts_in_window(60) == 0    # last minute
+        assert state.restarts_in_window(600) == 1  # last 10 min
+        assert state.restarts_in_window(60) == 0  # last minute
 
     def test_add_restart_timestamp(self) -> None:
         """Test adding restart timestamp with retention."""

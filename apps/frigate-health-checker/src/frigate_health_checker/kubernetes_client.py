@@ -63,9 +63,7 @@ class KubernetesClient:
             logger.error("Failed to get node status", node=node_name, error=str(e))
             return False
 
-    def exec_in_pod(
-        self, pod_name: str, command: list[str], timeout: int = 10
-    ) -> tuple[str, bool]:
+    def exec_in_pod(self, pod_name: str, command: list[str], timeout: int = 10) -> tuple[str, bool]:
         """Execute a command in a pod and return output."""
         try:
             result = stream(
@@ -136,9 +134,7 @@ class KubernetesClient:
             body: dict[str, Any] = {
                 "spec": {
                     "template": {
-                        "metadata": {
-                            "annotations": {"kubectl.kubernetes.io/restartedAt": now}
-                        }
+                        "metadata": {"annotations": {"kubectl.kubernetes.io/restartedAt": now}}
                     }
                 }
             }

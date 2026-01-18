@@ -48,9 +48,7 @@ class Settings(BaseSettings):
     alert_email: str | None = Field(default=None, description="Email for alerts")
 
     # Restart history retention
-    restart_history_hours: int = Field(
-        default=2, description="Hours to retain restart timestamps"
-    )
+    restart_history_hours: int = Field(default=2, description="Hours to retain restart timestamps")
 
     @property
     def smtp_enabled(self) -> bool:
