@@ -119,4 +119,6 @@ raspberrypi-master/display-driver/.venv/bin/python3
 scripts/voice-pe/secrets.yaml
 
 # K3s snippets contain tokens - deploy manually, don't commit
+# Exception: EXAMPLE template is safe to commit
 scripts/k3s/snippets/*.yaml
+!scripts/k3s/snippets/k3s-server-EXAMPLE.yaml

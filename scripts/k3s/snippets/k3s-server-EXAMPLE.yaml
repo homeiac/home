@@ -1,0 +1,81 @@
+#cloud-config
+# K3s Server Node - EXAMPLE TEMPLATE
+#
+# Copy this file and replace:
+#   - HOSTNAME: Your VM hostname (e.g., k3s-vm-fun-bedbug)
+#   - K3S_SERVER_URL: Your existing K3s server URL
+#   - K3S_TOKEN: Your cluster join token (from /var/lib/rancher/k3s/server/node-token)
+#   - K3S_VERSION: Match your cluster version
+#   - SSH_PUBLIC_KEY: Your SSH public key
+#
+# Deploy with:
+#   scp k3s-server-<host>.yaml root@<host>.maas:/var/lib/vz/snippets/
+
+hostname: HOSTNAME
+preserve_hostname: true
+fqdn: HOSTNAME
+
+ssh_pwauth: true
+users:
+  - name: ubuntu
+    gecos: Ubuntu User
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - SSH_PUBLIC_KEY
+
+package_update: true
+package_upgrade: false
+packages:
+  - qemu-guest-agent
+  - curl
+
+growpart:
+  mode: auto
+  devices:
+    - /
+  ignore_growroot_disabled: false
+resize_rootfs: true
+
+runcmd:
+  # Ensure hostname is set before K3s install
+  - hostnamectl set-hostname HOSTNAME
+
+  # Disable swap (required for kubelet)
+  - swapoff -a
+  - sed -i '/\sswap\s/s/^/#/' /etc/fstab
+
+  # Load required kernel modules
+  - modprobe overlay
+  - modprobe br_netfilter
+
+  # Persist modules across reboots
+  - |
+    cat << 'EOF' > /etc/modules-load.d/k8s.conf
+    overlay
+    br_netfilter
+    EOF
+
+  # Configure sysctl for Kubernetes networking
+  - |
+    cat << 'EOF' > /etc/sysctl.d/99-kubernetes.conf
+    net.bridge.bridge-nf-call-iptables  = 1
+    net.bridge.bridge-nf-call-ip6tables = 1
+    net.ipv4.ip_forward                 = 1
+    EOF
+  - sysctl --system
+
+  # Enable QEMU guest agent (for Proxmox integration)
+  - systemctl enable --now qemu-guest-agent
+
+  # Install K3s and join cluster as server (control-plane) node
+  - |
+    curl -sfL https://get.k3s.io | \
+      K3S_URL='K3S_SERVER_URL' \
+      K3S_TOKEN='K3S_TOKEN' \
+      INSTALL_K3S_VERSION='K3S_VERSION' \
+      sh -s - server --disable servicelb
+
+  # Signal completion
+  - touch /var/run/k3s-joined
