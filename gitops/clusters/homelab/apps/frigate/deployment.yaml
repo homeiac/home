@@ -20,6 +20,26 @@ spec:
       # Schedule on still-fawn (AMD VAAPI + Coral TPU)
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-still-fawn
+      # Init container to copy ConfigMap to PVC (only if config.yml doesn't exist)
+      initContainers:
+        - name: init-config
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ ! -f /config/config.yml ]; then
+                echo "Copying initial config from ConfigMap..."
+                cp /config-template/config.yml /config/config.yml
+                echo "Config copied successfully"
+              else
+                echo "Config already exists, skipping copy"
+              fi
+          volumeMounts:
+            - name: config-pvc
+              mountPath: /config
+            - name: config-template
+              mountPath: /config-template
       containers:
         - name: frigate
           # Frigate 0.16.0 with Coral TPU + AMD VAAPI hwaccel
@@ -114,3 +134,7 @@ spec:
           hostPath:
             path: /sys
             type: Directory
+        # ConfigMap with initial config template
+        - name: config-template
+          configMap:
+            name: frigate-config
