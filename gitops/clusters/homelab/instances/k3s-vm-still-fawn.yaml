@@ -29,8 +29,8 @@ spec:
     vmId: 108
     description: "K3s node with AMD GPU (VAAPI) + Coral TPU - Crossplane managed"
 
-    # CRITICAL: Start as false - passthrough job will start after adding devices
-    started: false
+    # VM should stay running - passthrough devices already added
+    started: true
     onBoot: true
 
     # Machine configuration - q35 required for PCI passthrough
