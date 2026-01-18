@@ -47,10 +47,19 @@ ssh root@chief-horse.maas "qm guest exec 116 -- <command>"
 **Proxmox hosts: SSH WORKS**
 ```bash
 # ✅ These work fine
+ssh root@pve.maas
 ssh root@still-fawn.maas
 ssh root@pumped-piglet.maas
 ssh root@chief-horse.maas
 ssh root@fun-bedbug.maas
+ssh root@rapid-civet.maas
+```
+
+**STOP GUESSING. CHECK THE INVENTORY.**
+```bash
+# ❌ NEVER guess or iterate through hosts from memory
+# ✅ ALWAYS check the source of truth FIRST
+cat proxmox/inventory.txt
 ```
 
 ---
