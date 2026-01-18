@@ -1,0 +1,272 @@
+"""Core health checking logic for Frigate."""
+
+import json
+import re
+import time
+
+import structlog
+
+from .config import Settings
+from .kubernetes_client import KubernetesClient
+from .models import (
+    HealthCheckResult,
+    HealthMetrics,
+    HealthState,
+    HealthStatus,
+    RestartDecision,
+    UnhealthyReason,
+)
+
+logger = structlog.get_logger()
+
+
+class HealthChecker:
+    """Performs health checks on Frigate NVR."""
+
+    def __init__(self, settings: Settings, k8s_client: KubernetesClient) -> None:
+        """Initialize health checker."""
+        self.settings = settings
+        self.k8s = k8s_client
+
+    def check_health(self) -> HealthCheckResult:
+        """Perform comprehensive health check on Frigate."""
+        metrics = HealthMetrics()
+
+        # Check 1: Pod exists
+        pod = self.k8s.get_frigate_pod()
+        if not pod:
+            logger.warning("No Frigate pod found")
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.NO_POD,
+                metrics=metrics,
+                message="No Frigate pod running",
+            )
+
+        pod_name = pod.metadata.name if pod.metadata else "unknown"
+        metrics.pod_name = pod_name
+        metrics.node_name = self.k8s.get_pod_node_name(pod)
+
+        # Check 2: API responsiveness
+        stats = self._get_frigate_stats(pod_name)
+        if stats is None:
+            logger.warning("Frigate API unresponsive", pod=pod_name)
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.API_UNRESPONSIVE,
+                metrics=metrics,
+                message="Frigate API unresponsive",
+            )
+
+        metrics.api_responsive = True
+
+        # Check 3: Coral inference speed
+        inference_speed = self._extract_inference_speed(stats)
+        metrics.inference_speed_ms = inference_speed
+
+        if inference_speed is not None and inference_speed > self.settings.inference_threshold_ms:
+            logger.warning(
+                "Coral inference too slow",
+                speed_ms=inference_speed,
+                threshold_ms=self.settings.inference_threshold_ms,
+            )
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.INFERENCE_SLOW,
+                metrics=metrics,
+                message=f"Coral inference {inference_speed}ms > {self.settings.inference_threshold_ms}ms",
+            )
+
+        # Check 4: Log analysis
+        logs = self.k8s.get_pod_logs(pod_name, self.settings.log_window_minutes * 60)
+
+        stuck_count = self._count_pattern(logs, r"Detection appears to be stuck")
+        metrics.stuck_detection_count = stuck_count
+        if stuck_count > self.settings.stuck_detection_threshold:
+            logger.warning("Detection stuck events exceed threshold", count=stuck_count)
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.DETECTION_STUCK,
+                metrics=metrics,
+                message=f"Detection stuck {stuck_count}x in {self.settings.log_window_minutes} min",
+            )
+
+        backlog_count = self._count_pattern(logs, r"Too many unprocessed recording segments")
+        metrics.recording_backlog_count = backlog_count
+        if backlog_count > self.settings.backlog_threshold:
+            logger.warning("Recording backlog events exceed threshold", count=backlog_count)
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.RECORDING_BACKLOG,
+                metrics=metrics,
+                message=f"Recording backlog {backlog_count}x in {self.settings.log_window_minutes} min",
+            )
+
+        logger.info(
+            "Frigate is healthy",
+            inference_ms=inference_speed,
+            stuck_count=stuck_count,
+            backlog_count=backlog_count,
+        )
+        return HealthCheckResult(
+            status=HealthStatus.HEALTHY,
+            metrics=metrics,
+            message="All health checks passed",
+        )
+
+    def _get_frigate_stats(self, pod_name: str) -> dict[str, object] | None:
+        """Get Frigate stats from API."""
+        command = [
+            "curl",
+            "-s",
+            "--max-time",
+            str(self.settings.api_timeout_seconds),
+            f"http://localhost:{self.settings.frigate_api_port}/api/stats",
+        ]
+        output, success = self.k8s.exec_in_pod(
+            pod_name, command, timeout=self.settings.api_timeout_seconds + 5
+        )
+
+        if not success or not output:
+            return None
+
+        try:
+            stats: dict[str, object] = json.loads(output)
+            if not stats or stats == {}:
+                return None
+            return stats
+        except json.JSONDecodeError:
+            logger.error("Failed to parse Frigate stats JSON", output=output[:100])
+            return None
+
+    def _extract_inference_speed(self, stats: dict[str, object]) -> float | None:
+        """Extract Coral inference speed from stats."""
+        try:
+            detectors = stats.get("detectors")
+            if not isinstance(detectors, dict):
+                return None
+            coral = detectors.get("coral")
+            if not isinstance(coral, dict):
+                return None
+            speed = coral.get("inference_speed")
+            if speed is not None:
+                return float(speed)
+            return None
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def _count_pattern(self, text: str, pattern: str) -> int:
+        """Count occurrences of a regex pattern in text."""
+        return len(re.findall(pattern, text))
+
+
+class RestartManager:
+    """Manages restart decisions and execution."""
+
+    def __init__(self, settings: Settings, k8s_client: KubernetesClient) -> None:
+        """Initialize restart manager."""
+        self.settings = settings
+        self.k8s = k8s_client
+
+    def load_state(self) -> HealthState:
+        """Load health state from ConfigMap."""
+        data = self.k8s.get_configmap_data(self.settings.configmap_name)
+        return HealthState.from_configmap_data(data)
+
+    def save_state(self, state: HealthState) -> bool:
+        """Save health state to ConfigMap."""
+        return self.k8s.patch_configmap(
+            self.settings.configmap_name,
+            state.to_configmap_data(),
+        )
+
+    def evaluate_restart(
+        self,
+        health_result: HealthCheckResult,
+        state: HealthState,
+    ) -> RestartDecision:
+        """Evaluate whether a restart should be triggered."""
+        # If healthy, no restart needed
+        if health_result.is_healthy:
+            return RestartDecision(
+                should_restart=False,
+                reason="Frigate is healthy",
+            )
+
+        # Increment failure count
+        new_failures = state.consecutive_failures + 1
+
+        # Check if we have enough consecutive failures
+        if new_failures < self.settings.consecutive_failures_required:
+            return RestartDecision(
+                should_restart=False,
+                reason=f"Waiting for confirmation ({new_failures}/{self.settings.consecutive_failures_required} failures)",
+            )
+
+        # Check circuit breaker (max restarts per hour)
+        recent_restarts = state.restarts_in_window(3600)
+        if recent_restarts >= self.settings.max_restarts_per_hour:
+            return RestartDecision(
+                should_restart=False,
+                reason=f"Circuit breaker: {recent_restarts} restarts in last hour",
+                circuit_breaker_triggered=True,
+            )
+
+        # Check node availability
+        node_name = health_result.metrics.node_name
+        if node_name and not self.k8s.is_node_ready(node_name):
+            logger.warning("Node not ready, skipping restart", node=node_name)
+            return RestartDecision(
+                should_restart=False,
+                reason=f"Node {node_name} is not Ready",
+                node_unavailable=True,
+            )
+
+        # All checks passed, should restart
+        return RestartDecision(
+            should_restart=True,
+            reason=health_result.message,
+            should_alert=not state.alert_sent_for_incident,
+        )
+
+    def execute_restart(self, state: HealthState) -> bool:
+        """Execute the restart and update state."""
+        success = self.k8s.restart_deployment(self.settings.deployment_name)
+
+        if success:
+            now = int(time.time())
+            state.add_restart_timestamp(now, self.settings.restart_history_hours * 3600)
+            state.consecutive_failures = 0
+            logger.info("Restart executed successfully")
+
+        return success
+
+    def handle_healthy(self, state: HealthState) -> None:
+        """Handle transition to healthy state."""
+        if state.consecutive_failures > 0 or state.alert_sent_for_incident:
+            state.consecutive_failures = 0
+            state.alert_sent_for_incident = False
+            self.save_state(state)
+            logger.info("Reset health state after recovery")
+
+    def handle_unhealthy(
+        self,
+        health_result: HealthCheckResult,
+        state: HealthState,
+        decision: RestartDecision,
+    ) -> None:
+        """Handle unhealthy state based on restart decision."""
+        if decision.should_restart:
+            success = self.execute_restart(state)
+            if success and decision.should_alert:
+                state.alert_sent_for_incident = True
+            self.save_state(state)
+        else:
+            # Just update failure count
+            state.consecutive_failures += 1
+            self.save_state(state)
+            logger.info(
+                "Updated failure count",
+                failures=state.consecutive_failures,
+                reason=decision.reason,
+            )

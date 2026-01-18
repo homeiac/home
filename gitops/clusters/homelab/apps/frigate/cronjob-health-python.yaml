@@ -1,0 +1,93 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: frigate-health-checker
+  namespace: frigate
+  labels:
+    app: frigate-health-checker
+    version: python
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600  # Clean up completed jobs after 1 hour
+      template:
+        metadata:
+          labels:
+            app: frigate-health-checker
+        spec:
+          serviceAccountName: frigate-health-checker
+          restartPolicy: OnFailure
+          containers:
+            - name: health-check
+              image: ghcr.io/homeiac/frigate-health-checker:latest
+              imagePullPolicy: Always
+              env:
+                # Kubernetes settings
+                - name: FRIGATE_HC_NAMESPACE
+                  value: "frigate"
+                - name: FRIGATE_HC_DEPLOYMENT_NAME
+                  value: "frigate"
+                - name: FRIGATE_HC_CONFIGMAP_NAME
+                  value: "frigate-health-state"
+                - name: FRIGATE_HC_POD_LABEL_SELECTOR
+                  value: "app=frigate"
+                # Health check thresholds
+                - name: FRIGATE_HC_INFERENCE_THRESHOLD_MS
+                  value: "100"
+                - name: FRIGATE_HC_STUCK_DETECTION_THRESHOLD
+                  value: "2"
+                - name: FRIGATE_HC_BACKLOG_THRESHOLD
+                  value: "5"
+                - name: FRIGATE_HC_CONSECUTIVE_FAILURES_REQUIRED
+                  value: "2"
+                - name: FRIGATE_HC_MAX_RESTARTS_PER_HOUR
+                  value: "2"
+                # API settings
+                - name: FRIGATE_HC_FRIGATE_API_PORT
+                  value: "5000"
+                - name: FRIGATE_HC_API_TIMEOUT_SECONDS
+                  value: "10"
+                - name: FRIGATE_HC_LOG_WINDOW_MINUTES
+                  value: "5"
+                # SMTP settings (from secret)
+                - name: FRIGATE_HC_SMTP_HOST
+                  value: "smtp.mail.yahoo.com"
+                - name: FRIGATE_HC_SMTP_PORT
+                  value: "465"
+                - name: FRIGATE_HC_SMTP_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: smtp-credentials
+                      key: user
+                      optional: true
+                - name: FRIGATE_HC_SMTP_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: smtp-credentials
+                      key: pass
+                      optional: true
+                - name: FRIGATE_HC_ALERT_EMAIL
+                  valueFrom:
+                    secretKeyRef:
+                      name: smtp-credentials
+                      key: user
+                      optional: true
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "50m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "200m"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 1000
+                capabilities:
+                  drop:
+                    - ALL
