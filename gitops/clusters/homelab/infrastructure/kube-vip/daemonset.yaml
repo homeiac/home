@@ -62,6 +62,8 @@ spec:
               value: "eth0"
             - name: vip_address
               value: "192.168.4.79"
+            - name: vip_cidr
+              value: "24"
             # Control plane mode (not services - MetalLB handles that)
             - name: cp_enable
               value: "true"
