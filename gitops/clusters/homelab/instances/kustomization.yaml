@@ -11,6 +11,7 @@ resources:
   # K3s Control Plane Nodes
   # NOTE: Cloud-init snippets deployed via scripts/k3s/deploy-snippets.sh (one-time per host)
   - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
+  - k3s-vm-still-fawn.yaml    # VMID 108 - K3s with AMD GPU (VAAPI) + Coral TPU
 
   # TEST VMs - non-essential, safe to experiment with
   # - rancher-server.yaml          # VMID 200 - RKE2 eval (removed - orphaned ZFS datasets)

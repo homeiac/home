@@ -1,0 +1,119 @@
+# Proxmox Cluster Configuration
+# Defines cluster membership and node properties
+#
+# This config drives cluster operations that cannot be managed by Crossplane:
+# - Node join/leave operations
+# - Certificate updates
+# - GPU passthrough configuration
+#
+# Apply with: poetry run homelab cluster apply
+
+metadata:
+  name: homelab-cluster
+  version: "1.0"
+  description: "Proxmox cluster membership and host configuration"
+
+# Cluster definition
+cluster:
+  name: homelab
+  # Node used for cluster operations when others are unavailable
+  primary_node: pumped-piglet
+
+# Proxmox host nodes (not VMs - the actual hypervisors)
+nodes:
+  - name: still-fawn
+    ip: 192.168.4.17
+    fqdn: still-fawn.maas
+    role: compute
+    enabled: true
+    # AMD GPU passthrough for Frigate VAAPI hardware encoding
+    gpu_passthrough:
+      enabled: true
+      gpu_type: amd
+      gpu_ids: "1002:67df,1002:aaf0"  # Radeon RX 570/580 + HDMI Audio
+      kernel_modules:
+        - vfio
+        - vfio_iommu_type1
+        - vfio_pci
+        - vfio_virqfd
+      grub_cmdline: "intel_iommu=on iommu=pt"
+      blacklist_drivers:
+        - radeon
+        - amdgpu
+    # Storage configuration
+    storage:
+      - name: local-zfs
+        type: zfspool
+        pool: rpool/data
+        content: [images, rootdir]
+
+  - name: pumped-piglet
+    ip: 192.168.4.175
+    fqdn: pumped-piglet.maas
+    role: compute
+    enabled: true
+    # GPU passthrough for RTX 3070 to K3s VM for Ollama/AI workloads
+    gpu_passthrough:
+      enabled: true
+      gpu_type: nvidia
+      gpu_ids: "10de:2484,10de:228b"  # RTX 3070 + HDMI Audio
+      kernel_modules:
+        - vfio
+        - vfio_iommu_type1
+        - vfio_pci
+        - vfio_virqfd
+      grub_cmdline: "intel_iommu=on iommu=pt"
+      blacklist_drivers:
+        - nouveau
+        - nvidia
+    storage:
+      - name: local-zfs
+        type: zfspool
+        pool: rpool/data
+        content: [images, rootdir]
+
+  - name: chief-horse
+    ip: 192.168.4.174
+    fqdn: chief-horse.maas
+    role: compute
+    enabled: true
+    gpu_passthrough:
+      enabled: false
+    storage:
+      - name: local-zfs
+        type: zfspool
+        pool: rpool/data
+        content: [images, rootdir]
+
+  - name: fun-bedbug
+    ip: 192.168.4.172
+    fqdn: fun-bedbug.maas
+    role: compute
+    enabled: true
+    gpu_passthrough:
+      enabled: false
+    # fun-bedbug uses local directory, not ZFS
+    storage:
+      - name: local
+        type: dir
+        path: /var/lib/vz
+        content: [iso, vztmpl, backup, images, rootdir]
+
+# PBS backup configuration for nodes
+backup:
+  pbs_storage: homelab-backup
+  schedule: "0 2 * * *"  # 2 AM daily
+  # VMs to backup per node
+  backup_jobs:
+    - node: still-fawn
+      vmids: [108]  # K3s VM
+      enabled: true
+    - node: pumped-piglet
+      vmids: [105]  # K3s VM
+      enabled: true
+    - node: chief-horse
+      vmids: [116]  # HAOS
+      enabled: true
+    - node: fun-bedbug
+      vmids: [114]  # K3s VM
+      enabled: true

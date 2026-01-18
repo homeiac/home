@@ -1,0 +1,106 @@
+# K3s control-plane node on still-fawn
+# Purpose: GPU-accelerated K3s node for Frigate (VAAPI) and Coral TPU
+# Created: 2026-01-17
+#
+# Hardware passthrough:
+# - AMD Radeon RX 570/580 (PCI 01:00) - VAAPI encoding for Frigate
+# - Google Coral USB TPU (1a6e:089a, 18d1:9302) - Object detection
+#
+# DEPENDENCY: Requires cloud-init snippet deployed first:
+#   scp scripts/k3s/snippets/k3s-server-join.yaml root@still-fawn.maas:/var/lib/vz/snippets/
+---
+apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
+kind: EnvironmentVM
+metadata:
+  name: k3s-vm-still-fawn
+  labels:
+    role: k3s-control-plane
+    node: still-fawn
+    managed-by: crossplane
+    gpu: amd-vaapi
+    tpu: coral-usb
+spec:
+  forProvider:
+    nodeName: still-fawn
+    name: k3s-vm-still-fawn
+    vmId: 108
+    description: "K3s node with AMD GPU (VAAPI) + Coral TPU - Crossplane managed"
+
+    # CRITICAL: Must be true for VM to start after creation
+    started: true
+    onBoot: true
+
+    # Machine configuration - q35 + SeaBIOS for PCI passthrough
+    machine: q35
+    bios: seabios
+
+    # CPU: All 4 cores of i5-4460 (no hyperthreading)
+    cpu:
+      - cores: 4
+        type: host
+
+    # Memory: 25GB for K3s workloads (Frigate, monitoring, etc.)
+    memory:
+      - dedicated: 25600
+
+    # SCSI Controller
+    scsiHardware: virtio-scsi-pci
+
+    # Boot disk - 700GB on rpool/data (local-zfs)
+    disk:
+      - interface: scsi0
+        datastoreId: local-zfs
+        size: 700
+        fileFormat: raw
+        cache: writeback
+        iothread: true
+        discard: "on"
+
+    # Network - single NIC on main bridge (preserve MAC for DHCP lease)
+    networkDevice:
+      - bridge: vmbr0
+        model: virtio
+        macAddress: "BC:24:11:90:21:DF"
+        enabled: true
+
+    # USB Passthrough - Google Coral TPU (both device IDs for different modes)
+    usb:
+      - host: "1a6e:089a"
+        usb3: true
+      - host: "18d1:9302"
+        usb3: true
+
+    # PCI Passthrough - AMD Radeon RX 570/580 for VAAPI
+    hostpci:
+      - device: "hostpci0"
+        id: "0000:01:00"
+        pcie: true
+
+    # Serial console for cloud-init and debugging
+    serialDevice:
+      - device: socket
+
+    # Cloud-init configuration
+    initialization:
+      - datastoreId: local-zfs
+        userAccount:
+          - username: ubuntu
+        ipConfig:
+          - ipv4:
+              - address: dhcp
+        # K3s cloud-init - auto-joins cluster as server node
+        userDataFileId: local:snippets/k3s-server-join.yaml
+
+    # QEMU Guest Agent - required for proper shutdown/status
+    agent:
+      - enabled: true
+        trim: true
+        type: virtio
+
+  # Provider configuration reference
+  providerConfigRef:
+    name: default
+
+  # IMPORTANT: Orphan policy means deleting CR won't delete VM
+  # Protects against accidental deletion
+  deletionPolicy: Orphan
