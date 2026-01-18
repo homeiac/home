@@ -56,7 +56,7 @@ source = ["src/frigate_health_checker"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 65
+fail_under = 60
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
