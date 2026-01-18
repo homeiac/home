@@ -1,0 +1,88 @@
+# K3s Cluster Configuration
+# Defines K3s cluster settings including HA/VIP configuration
+#
+# This config drives K3s operations:
+# - Control plane VIP (kube-vip)
+# - TLS-SAN configuration for API server certificates
+# - Node membership and roles
+#
+# Apply with: poetry run homelab k3s apply
+
+metadata:
+  name: k3s-cluster
+  version: "1.0"
+  description: "K3s cluster configuration for homelab"
+
+# Cluster-wide settings
+cluster:
+  name: homelab-k3s
+  # Control plane VIP for HA API access
+  # This IP must be outside MetalLB range (192.168.4.80-120)
+  control_plane_vip: 192.168.4.79
+  # Network interface for kube-vip ARP announcements
+  vip_interface: eth0
+  # API server port
+  api_port: 6443
+
+# kube-vip configuration
+kube_vip:
+  enabled: true
+  # Image version - check https://github.com/kube-vip/kube-vip/releases
+  version: "v0.8.7"
+  # ARP mode for Layer 2 networks (vs BGP for routed networks)
+  mode: arp
+  # Leader election for VIP failover
+  leader_election: true
+
+# K3s control plane nodes (VMs running K3s server)
+# These run inside Proxmox VMs, not on bare metal
+control_plane_nodes:
+  - name: k3s-vm-pve
+    # VM runs on this Proxmox host
+    proxmox_host: pve
+    vmid: 107
+    ip: 192.168.4.238
+    # Primary node used for cluster operations
+    is_primary: true
+
+  - name: k3s-vm-pumped-piglet-gpu
+    proxmox_host: pumped-piglet
+    vmid: 105
+    ip: 192.168.4.210
+    is_primary: false
+    # GPU passthrough for Ollama/AI workloads
+    gpu_enabled: true
+
+  - name: k3s-vm-fun-bedbug
+    proxmox_host: fun-bedbug
+    vmid: 114
+    ip: 192.168.4.203
+    is_primary: false
+
+  - name: k3s-vm-still-fawn
+    proxmox_host: still-fawn
+    vmid: 108
+    ip: 192.168.4.212
+    is_primary: false
+
+# TLS-SAN entries for API server certificate
+# These are added to /etc/rancher/k3s/config.yaml on each control plane node
+tls_san:
+  # The VIP must be in SAN for kube-vip to work
+  - 192.168.4.79
+  # All control plane node IPs (auto-added by K3s, but explicit is safer)
+  - 192.168.4.238
+  - 192.168.4.210
+  - 192.168.4.203
+  - 192.168.4.212
+  # DNS names if using DNS-based access
+  - k3s.homelab
+  - k3s.app.home.panderosystems.com
+
+# K3s server configuration applied to all control plane nodes
+server_config:
+  # Disable built-in servicelb (using MetalLB instead)
+  disable:
+    - servicelb
+  # Write kubeconfig with world-readable permissions (for non-root access)
+  write_kubeconfig_mode: "0644"
