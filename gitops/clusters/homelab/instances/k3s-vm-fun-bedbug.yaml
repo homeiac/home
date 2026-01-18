@@ -1,6 +1,7 @@
 # K3s control-plane node on fun-bedbug
 # Purpose: Restore 3-node etcd quorum after still-fawn removal
 # Created: 2026-01-16
+# STOPPED: 2026-01-18 - Thermal issues on ATOPNUC MA90 (90°C+), running 2-node cluster
 #
 # IMPORTANT: fun-bedbug only has 'local' directory storage active
 # ZFS pools are DISABLED on this host - do not use local-zfs
@@ -21,11 +22,12 @@ spec:
     nodeName: fun-bedbug
     name: k3s-vm-fun-bedbug
     vmId: 114
-    description: "K3s control-plane node - Crossplane managed"
+    description: "K3s control-plane node - Crossplane managed - STOPPED for thermal"
 
-    # CRITICAL: Must be true for VM to start after creation
-    started: true
-    onBoot: true
+    # STOPPED: Thermal issues on fun-bedbug (ATOPNUC MA90)
+    # 2-node cluster still has quorum, just no fault tolerance
+    started: false
+    onBoot: false
 
     # Machine configuration - i440fx for simplicity (no GPU passthrough needed)
     machine: pc-i440fx-8.1
