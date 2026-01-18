@@ -77,7 +77,12 @@ class KubernetesClient:
                 tty=False,
                 _request_timeout=timeout,
             )
-            return result, True
+            # stream() returns a WSClient that reads all output as a string
+            # Ensure we have a proper string
+            if result is None:
+                return "", False
+            output = str(result) if not isinstance(result, str) else result
+            return output, True
         except ApiException as e:
             logger.error("Failed to exec in pod", pod=pod_name, error=str(e))
             return str(e), False

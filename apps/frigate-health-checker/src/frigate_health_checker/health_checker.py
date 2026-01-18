@@ -131,12 +131,36 @@ class HealthChecker:
             return None
 
         try:
+            # The stream() function returns a string, but we need to ensure
+            # it's properly decoded. Log the type and first chars for debugging.
+            logger.debug(
+                "Raw exec output",
+                output_type=type(output).__name__,
+                output_repr=repr(output[:200]) if len(output) > 200 else repr(output),
+            )
+
+            # Handle case where output might already be a dict (shouldn't happen but defensive)
+            if isinstance(output, dict):
+                return output
+
+            # Ensure output is a string
+            if not isinstance(output, str):
+                output = str(output)
+
+            # Strip any leading/trailing whitespace
+            output = output.strip()
+
             stats: dict[str, object] = json.loads(output)
             if not stats or stats == {}:
                 return None
             return stats
-        except json.JSONDecodeError:
-            logger.error("Failed to parse Frigate stats JSON", output=output[:100])
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Failed to parse Frigate stats JSON",
+                error=str(e),
+                output_type=type(output).__name__,
+                output_preview=repr(output[:200]) if len(output) > 200 else repr(output),
+            )
             return None
 
     def _extract_inference_speed(self, stats: dict[str, object]) -> float | None:
