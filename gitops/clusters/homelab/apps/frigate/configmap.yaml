@@ -28,6 +28,9 @@ data:
         # Reolink doorbell - HTTP-FLV streams (more reliable than RTSP per Frigate docs)
         reolink_doorbell_main: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy#audio=copy#audio=opus"
         reolink_doorbell_sub: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy"
+        # Reolink E1 Zoom (living room) - HTTP-FLV streams
+        living_room_main: "ffmpeg:http://192.168.1.140/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_CAM_LIVINGROOM_USER}&password={FRIGATE_CAM_LIVINGROOM_PASS}#video=copy#audio=copy"
+        living_room_sub: "ffmpeg:http://192.168.1.140/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_CAM_LIVINGROOM_USER}&password={FRIGATE_CAM_LIVINGROOM_PASS}#video=copy"
 
     cameras:
       old_ip_camera:
@@ -116,6 +119,44 @@ data:
           retain:
             days: 7
             mode: motion
+
+      # Reolink E1 Zoom (living room) - indoor camera
+      living_room:
+        enabled: true
+        ffmpeg:
+          inputs:
+            # Main stream for recording (high quality)
+            - path: rtsp://127.0.0.1:8554/living_room_main
+              input_args: preset-rtsp-restream
+              roles:
+                - record
+            # Substream for detection (lower resolution = faster processing)
+            - path: rtsp://127.0.0.1:8554/living_room_sub
+              input_args: preset-rtsp-restream
+              roles:
+                - detect
+        detect:
+          enabled: true
+          width: 640
+          height: 480
+          fps: 5
+        objects:
+          track:
+            - person
+        motion:
+          threshold: 25
+          contour_area: 50
+        record:
+          enabled: true
+          retain:
+            days: 7
+            mode: motion
+        # ONVIF for PTZ control
+        onvif:
+          host: 192.168.1.140
+          port: 8000
+          user: "{FRIGATE_CAM_LIVINGROOM_USER}"
+          password: "{FRIGATE_CAM_LIVINGROOM_PASS}"
 
     # Frigate+ model for better detection (includes package detection)
     # Using base edgetpu model - fine-tune later with your own images
