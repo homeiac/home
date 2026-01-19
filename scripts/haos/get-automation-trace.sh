@@ -1,5 +1,5 @@
 #!/bin/bash
-# Get detailed automation traces
+# Debug HA automation: shows logbook history, current state, and full event chain around last trigger
 # Usage: ./get-automation-trace.sh <automation_id> [count]
 # Example: ./get-automation-trace.sh automation.greet_g_on_face_recognition
 

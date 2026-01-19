@@ -33,8 +33,24 @@ EOF
     for f in "$dir"/*.sh; do
         [[ -f "$f" ]] || continue
         local name=$(basename "$f")
-        # Extract first comment line (line 2, after shebang)
-        local desc=$(sed -n '2s/^#[[:space:]]*//p' "$f" | head -1)
+        # Extract all comment lines after shebang until first non-comment/blank
+        # Joins them with <br> for markdown line breaks
+        local desc=$(awk '
+            NR==1 {next}  # skip shebang
+            /^#/ {
+                sub(/^#[[:space:]]*/, "")
+                if (NF > 0) lines[++n] = $0
+                next
+            }
+            /^[[:space:]]*$/ {next}  # skip blank lines
+            {exit}  # stop at first non-comment
+            END {
+                for (i=1; i<=n; i++) {
+                    printf "%s", lines[i]
+                    if (i < n) printf "<br>"
+                }
+            }
+        ' "$f")
         [[ -z "$desc" ]] && desc="*(no description)*"
         echo "| \`$name\` | $desc |" >> "$readme"
     done

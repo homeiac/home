@@ -7,33 +7,33 @@
 | Script | Description |
 |--------|-------------|
 | `backup-dashboard.sh` | Backup HAOS dashboard config |
-| `call-service.sh` | Generic HA service caller |
+| `call-service.sh` | Generic HA service caller<br>Usage: call-service.sh <domain> <service> [json_data]<br>Examples:<br>call-service.sh script reload<br>call-service.sh light turn_on '{"entity_id": "light.living_room"}'<br>call-service.sh input_boolean turn_off '{"entity_id": "input_boolean.test"}' |
 | `check-config-api.sh` | Check HA config API capabilities |
 | `check-config.sh` | Check HA config validity |
-| `check-ha-api.sh` | Check if Home Assistant API is responding |
-| `copy-to-ha.sh` | Copy a file to HAOS VM via Proxmox qm guest exec |
+| `check-ha-api.sh` | Check if Home Assistant API is responding<br>HAOS has NO SSH - use API or qm guest exec |
+| `copy-to-ha.sh` | Copy a file to HAOS VM via Proxmox qm guest exec<br>Usage: copy-to-ha.sh <local_file> <ha_dest_path><br>Example:<br>./copy-to-ha.sh ./voice_approval.yaml /mnt/data/supervisor/homeassistant/custom_sentences/en/voice_approval.yaml |
 | `enable-tts-debug.sh` | Enable TTS debug logging in HA |
 | `fix-frigate-dashboard.sh` | Fix Frigate dashboard card configuration - add frigate URL and camera_name |
 | `get-addon-info.sh` | Get HA addon info |
 | `get-automation-config.sh` | Get automation config by ID |
 | `get-automation-state.sh` | Get automation state and last_triggered |
-| `get-automation-trace.sh` | Get detailed automation traces |
-| `get-entity-state.sh` | Get entity state - generic tool for any entity |
+| `get-automation-trace.sh` | Debug HA automation: shows logbook history, current state, and full event chain around last trigger<br>Usage: ./get-automation-trace.sh <automation_id> [count]<br>Example: ./get-automation-trace.sh automation.greet_g_on_face_recognition |
+| `get-entity-state.sh` | Get entity state - generic tool for any entity<br>Usage: get-entity-state.sh <entity_id> |
 | `get-ha-config.sh` | Get HA full config including URLs |
 | `get-logs.sh` | Get HA logs |
 | `get-service-schema.sh` | Get schema for a specific HA service |
-| `guest-exec.sh` | Run command inside HAOS VM via qm guest exec |
+| `guest-exec.sh` | Run command inside HAOS VM via qm guest exec<br>Usage: ./guest-exec.sh "command to run"<br>HAOS VM: 116 on chief-horse.maas<br>NO SSH available - this is the only way to run commands inside |
 | `install-ssh-addon.sh` | Install SSH addon in HAOS |
-| `list-automations.sh` | List HA automations, optionally filtered by prefix |
-| `list-domain-services.sh` | List services for a specific domain |
+| `list-automations.sh` | List HA automations, optionally filtered by prefix<br>Usage: list-automations.sh [filter_prefix]<br>Examples: list-automations.sh          # all automations<br>list-automations.sh package  # automations starting with "package" |
+| `list-domain-services.sh` | List services for a specific domain<br>Usage: list-domain-services.sh <domain><br>Examples: list-domain-services.sh light<br>list-domain-services.sh esphome |
 | `list-esphome-services.sh` | List ESPHome services registered in Home Assistant |
 | `list-integrations.sh` | List all Home Assistant integrations via API |
-| `read-from-ha.sh` | Read a file from HAOS VM via Proxmox qm guest exec |
+| `read-from-ha.sh` | Read a file from HAOS VM via Proxmox qm guest exec<br>Usage: read-from-ha.sh <ha_path><br>Example:<br>./read-from-ha.sh /mnt/data/supervisor/homeassistant/automations.yaml |
 | `reload-esphome.sh` | Reload ESPHome integration to pick up new services |
-| `reload-integration.sh` | Reload a HA integration/domain |
+| `reload-integration.sh` | Reload a HA integration/domain<br>Usage: reload-integration.sh <domain><br>Examples: reload-integration.sh script<br>reload-integration.sh automation |
 | `restart-ha.sh` | Restart Home Assistant via API |
 | `test-tts-with-url.sh` | Test TTS and show the URL being generated |
-| `update-integrations-to-dns.sh` | Update HA integrations from IP addresses to DNS hostnames |
+| `update-integrations-to-dns.sh` | Update HA integrations from IP addresses to DNS hostnames<br>Update Home Assistant integrations from IP addresses to DNS hostnames<br>Prevents issues when MetalLB IP assignments change |
 
 ## Library
 
