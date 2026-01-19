@@ -407,7 +407,7 @@ ls /sys/kernel/iommu_groups/ | wc -l  # If 0 → VT-d disabled in BIOS
 ## Proxmox Host Inventory
 | Hostname | Role | Key Hardware |
 |----------|------|--------------|
-| still-fawn.maas | K3s VM host | RTX 3070 GPU |
-| pumped-piglet.maas | K3s VM host | - |
+| still-fawn.maas | K3s VM host | AMD Radeon GPU, Coral USB TPU, Frigate pod |
+| pumped-piglet.maas | K3s VM host | RTX 3070 GPU |
 | chief-horse.maas | HAOS host (VMID 116) | - |
-| fun-bedbug.maas | LXC host | Coral TPU, Frigate LXC 113 |
+| fun-bedbug.maas | LXC host | - |
