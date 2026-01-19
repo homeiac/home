@@ -29,8 +29,9 @@
 | `rollback-to-still-fawn.sh` | *(no description)* |
 | `shutdown-still-fawn-frigate.sh` | *(no description)* |
 | `switch-ha-to-k8s-frigate.sh` | switch-ha-to-k8s-frigate.sh<br>Switch Home Assistant Frigate integration from LXC to Kubernetes instance<br>This script provides manual instructions and optional API-based switching |
+| `sync-config-to-gitops.sh` | Apply Frigate config changes via GitOps<br>Source of Truth: gitops/clusters/homelab/apps/frigate/configmap.yaml<br>On every pod restart, init container copies configmap → PVC config<br>Workflow:<br>1. Edit configmap.yaml (or pull live config from pod)<br>2. Check for credentials (BLOCK if found)<br>3. Commit and push<br>4. Flux reconciles → pod restarts → new config applied<br>Usage:<br>./sync-config-to-gitops.sh                 # Pull live config → GitOps, commit, push, restart<br>./sync-config-to-gitops.sh --dry-run       # Show diff only<br>./sync-config-to-gitops.sh --push-only     # Just commit current configmap and push<br>./sync-config-to-gitops.sh --rollback      # Revert to previous commit and restart |
 | `unmount-3tb-still-fawn.sh` | Unmount 3TB ZFS pool from still-fawn<br>Pool: local-3TB-backup (currently SUSPENDED)<br>Active datasets: /, backup-tmpdir, subvol-113-disk-0 |
 | `update-ha-frigate-url.sh` | update-ha-frigate-url.sh<br>Update Home Assistant Frigate integration URL via QEMU guest agent<br>Uses the method documented in blog-frigate-server-migration.md |
 | `verify-frigate-k8s.sh` | verify-frigate-k8s.sh<br>Verify Frigate Kubernetes instance is healthy and ready<br>Checks: pod status, cameras, MQTT, face recognition<br>Exit codes: 0 = all healthy, 1 = issues found |
 
-*Generated: 2026-01-18*
+*Generated: 2026-01-19*

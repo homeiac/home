@@ -20,7 +20,8 @@ spec:
       # Schedule on still-fawn (AMD VAAPI + Coral TPU)
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-still-fawn
-      # Init container to copy ConfigMap to PVC (only if config.yml doesn't exist)
+      # Init container: ALWAYS copy ConfigMap to PVC (GitOps is source of truth)
+      # PVC preserves database/clips, but config comes from GitOps on every restart
       initContainers:
         - name: init-config
           image: busybox:1.36
@@ -28,13 +29,9 @@ spec:
             - /bin/sh
             - -c
             - |
-              if [ ! -f /config/config.yml ]; then
-                echo "Copying initial config from ConfigMap..."
-                cp /config-template/config.yml /config/config.yml
-                echo "Config copied successfully"
-              else
-                echo "Config already exists, skipping copy"
-              fi
+              echo "Copying config from ConfigMap (GitOps is source of truth)..."
+              cp /config-template/config.yml /config/config.yml
+              echo "Config applied from GitOps configmap"
           volumeMounts:
             - name: config-pvc
               mountPath: /config
