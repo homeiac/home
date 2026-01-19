@@ -118,6 +118,31 @@ What did I learn from this investigation?
 
 5. **The wise ask simple questions.** "Why is it busy?" "Still the same." "There was no manual one." Each question was a scalpel, cutting away my assumptions until only truth remained.
 
+## Epilogue: The Ghost Returns (January 2026)
+
+Months later, fun-bedbug would cause trouble again - this time from beyond the grave.
+
+The node had been intentionally taken offline. Thermal issues on the tiny ATOPNUC MA90 made it unsuitable for real workloads, so it was demoted to "quorum-only" status for the K3s cluster. Eventually, it was shut down entirely.
+
+But Kubernetes remembered. The node sat in `NotReady` state, a ghost in the cluster. And kube-vip - the control plane VIP manager - kept trying to elect a leader. The pod on the NotReady node held the lease, but couldn't advertise the VIP properly. The pods on healthy nodes kept crashing in `CrashLoopBackOff`, unable to renew their leases:
+
+```
+Failed to update lock: Put "https://10.43.0.1:443/..." context deadline exceeded
+lost leadership, restarting kube-vip
+```
+
+The VIP was unreachable. kubectl stopped working. The entire cluster appeared down.
+
+The fix was simple: **remove the ghost node entirely**.
+
+```bash
+kubectl delete node k3s-vm-fun-bedbug
+```
+
+Within seconds, kube-vip pods on the healthy nodes stabilized. The VIP came back. kubectl worked again.
+
+**The lesson:** A NotReady node isn't just "not working" - it's actively holding resources, leases, and positions in the cluster. If a node is intentionally offline, remove it. Don't let ghosts hold your cluster hostage.
+
 ---
 
 *The homelab runs quietly now. fun-bedbug hums along at load average 0.8, its phantom exorcised, its configurations cleansed. Somewhere, a 3TB USB drive sits contentedly in still-fawn, unaware of the chaos its migration caused.*
