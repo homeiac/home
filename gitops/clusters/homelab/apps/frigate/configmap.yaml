@@ -107,7 +107,6 @@ data:
           track:
             - person
             - car
-            - package
         motion:
           threshold: 25
           contour_area: 50
