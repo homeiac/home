@@ -6,10 +6,10 @@
 
 | Script | Description |
 |--------|-------------|
-| `01-configure-proxmox-oidc.sh` | Configure Proxmox OIDC realm for Entra ID |
+| `01-configure-proxmox-oidc.sh` | Configure Proxmox OIDC realm for Entra ID<br>Run this ON the Proxmox host or via SSH |
 | `02-install-rancher-vm.sh` | Create and install Rancher on a VM (adapts to office environment) |
-| `03-install-rke2-agent-native.sh` | Install RKE2 agent directly on Proxmox host (native, no VM) |
+| `03-install-rke2-agent-native.sh` | Install RKE2 agent directly on Proxmox host (native, no VM)<br>Run this ON the Proxmox host |
 | `04-create-windows-vm.sh` | Create Windows Server 2022 VM for RKE2 worker |
 | `05-register-windows-node.sh` | Register Windows worker node to RKE2 cluster via Rancher |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*

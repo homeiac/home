@@ -6,8 +6,8 @@
 
 | Script | Description |
 |--------|-------------|
-| `copy-secret-to-namespace.sh` | Copy an encrypted secret to a new namespace |
-| `encrypt-secret.sh` | Encrypt a Kubernetes secret YAML file with SOPS |
-| `setup-local-sops.sh` | Setup local SOPS access by fetching the age key from K8s |
+| `copy-secret-to-namespace.sh` | Copy an encrypted secret to a new namespace<br>This is useful when you need the same secret (e.g., Cloudflare API token)<br>in multiple namespaces. It decrypts the source, changes the namespace,<br>and re-encrypts.<br>Usage:<br>./scripts/sops/copy-secret-to-namespace.sh <source-secret.yaml> <new-namespace> <dest-secret.yaml><br>Example:<br>./scripts/sops/copy-secret-to-namespace.sh \<br>gitops/clusters/homelab/infrastructure/external-dns/cloudflare-secret.yaml \<br>cert-manager \<br>gitops/clusters/homelab/infrastructure/cert-manager/cloudflare-secret.yaml<br>Prerequisites:<br>- Run ./scripts/sops/setup-local-sops.sh first<br>- sops and yq installed |
+| `encrypt-secret.sh` | Encrypt a Kubernetes secret YAML file with SOPS<br>This script encrypts the stringData/data fields of a K8s secret YAML file<br>using the age key from ~/.config/sops/age/keys.txt<br>Usage:<br>./scripts/sops/encrypt-secret.sh <secret-file.yaml><br>Example:<br>./scripts/sops/encrypt-secret.sh gitops/clusters/homelab/apps/myapp/secret.yaml<br>Prerequisites:<br>- Run ./scripts/sops/setup-local-sops.sh first (to get the age key)<br>- sops installed (brew install sops)<br>What it does:<br>1. Checks the age key exists locally<br>2. Encrypts only stringData and data fields (per .sops.yaml config)<br>3. Modifies the file in-place<br>After encrypting:<br>- Safe to commit to git<br>- Flux will auto-decrypt when deploying |
+| `setup-local-sops.sh` | Setup local SOPS access by fetching the age key from K8s<br>The authoritative age key is stored in K8s secret: flux-system/sops-age<br>This script fetches it and saves it locally for sops encrypt/decrypt operations.<br>Usage:<br>./scripts/sops/setup-local-sops.sh<br>Prerequisites:<br>- kubectl access to the K8s cluster<br>- KUBECONFIG set or ~/kubeconfig exists |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*

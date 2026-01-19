@@ -6,36 +6,36 @@
 
 | Script | Description |
 |--------|-------------|
-| `00-download-isos.sh` | Download Windows Server 2022 Evaluation ISO and VirtIO drivers |
+| `00-download-isos.sh` | Download Windows Server 2022 Evaluation ISO and VirtIO drivers<br>These need to be uploaded to Proxmox storage manually or via API |
 | `01-create-rancher-vm.sh` | Create Ubuntu 24.04 VM for Rancher server on pumped-piglet |
 | `02-install-rke2-rancher.sh` | Install RKE2 and Rancher on the rancher-server VM |
 | `03-create-windows-vm.sh` | Create Windows Server 2022 VM for RKE2 worker on pumped-piglet |
 | `05-check-rancher-status.sh` | Check Rancher status and diagnose issues |
 | `06-check-rancher-health.sh` | Check Rancher health and diagnose 503 errors |
 | `07-create-linux-control.sh` | Create Ubuntu 24.04 VM for RKE2 control plane on pumped-piglet |
-| `08-register-linux-node.sh` | Register Linux control plane node to RKE2 cluster via Rancher |
+| `08-register-linux-node.sh` | Register Linux control plane node to RKE2 cluster via Rancher<br>IMPORTANT: This script sets node-ip to force IPv4 registration |
 | `09-register-windows-node.sh` | Register Windows worker node to RKE2 cluster via Rancher |
 | `10-check-cluster-status.sh` | Check windows-eval cluster provisioning status |
 | `11-check-windows-logs.sh` | Check Windows node RKE2/rancher-wins logs for troubleshooting |
 | `12-get-kubelet-status.sh` | Get kubelet and RKE2 status from Windows node |
 | `13-fix-ipv6-issue.sh` | Fix RKE2 IPv6 issue - force IPv4 for control plane connection |
 | `14-fix-ipv6-in-config.sh` | Fix IPv6 address in RKE2 config - replace with IPv4 |
-| `15-fix-ipv6-with-backup.sh` | Fix IPv6 in RKE2 config with proper backup |
+| `15-fix-ipv6-with-backup.sh` | Fix IPv6 in RKE2 config with proper backup<br>Copies config locally, makes backup, applies fix |
 | `16-disable-ipv6-linux.sh` | Disable IPv6 on Linux control plane and update Rancher |
 | `17-cleanup-windows-node.sh` | Clean up Windows node for fresh RKE2 registration |
 | `18-check-windows-status.sh` | Check Windows node registration status |
 | `19-fix-machine-plan-ipv4.sh` | Fix IPv6 to IPv4 in Windows machine plan secret |
-| `20-recreate-cluster-machines.sh` | Recreate cluster machines with IPv4 only |
+| `20-recreate-cluster-machines.sh` | Recreate cluster machines with IPv4 only<br>This deletes both machines and re-registers them |
 | `20-wait-for-ingress.sh` | Wait for RKE2 ingress controller to be ready |
 | `21-install-rancher.sh` | Install Rancher on RKE2 cluster (run after ingress is ready) |
 | `21-recreate-linux-machine.sh` | Recreate Linux control plane machine with IPv4 only |
 | `22-check-rancher-status.sh` | Check status of Rancher installation |
-| `22-recreate-cluster.sh` | Recreate the windows-eval cluster completely |
+| `22-recreate-cluster.sh` | Recreate the windows-eval cluster completely<br>This is the nuclear option after IPv6 issues corrupted the cluster state |
 | `23-destroy-linux-vms.sh` | Destroy only the Linux VMs (preserve Windows VM 201) |
 | `24-wait-for-linux-vm.sh` | Wait for Linux control plane VM to be SSH-accessible |
 | `25-run-windows-test.sh` | Run Windows test workloads on the RKE2 cluster |
 | `26-cleanup-windows-tests.sh` | Clean up Windows test workloads |
-| `30-create-golden-image.sh` | Create a golden Windows disk image from VM 201 |
+| `30-create-golden-image.sh` | Create a golden Windows disk image from VM 201<br>This creates a compressed copy without affecting the running VM |
 | `31-setup-tmpfs.sh` | Setup tmpfs mount for RAM-backed VM disk |
 | `32-create-tmpfs-vm.sh` | Create VM 203 with tmpfs-backed disk from golden image |
 | `33-benchmark-tmpfs.sh` | Run disk I/O benchmark on tmpfs-backed VM 203 |
@@ -44,6 +44,6 @@
 | `36-start-cluster.sh` | Start RKE2 cluster VMs |
 | `37-benchmark-host-tmpfs.sh` | Benchmark tmpfs directly on Proxmox host (no VM overhead) |
 | `99-cleanup.sh` | Cleanup script to remove all RKE2 Windows eval VMs |
-| `99-destroy-all.sh` | Destroy all RKE2 Windows eval resources |
+| `99-destroy-all.sh` | Destroy all RKE2 Windows eval resources<br>This is the nuclear reset - deletes VMs, cluster, everything |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*

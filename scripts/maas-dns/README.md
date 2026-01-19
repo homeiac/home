@@ -6,14 +6,14 @@
 
 | Script | Description |
 |--------|-------------|
-| `00-check-dns-chain.sh` | Check full DNS resolution chain: Mac -> MAAS -> OPNsense |
-| `01-check-maas-forwarders.sh` | Check MAAS DNS forwarder configuration |
-| `02-add-forward-zone.sh` | Add a forward zone to MAAS DNS for fake TLDs (e.g., .homelab) |
-| `03-list-forward-zones.sh` | List all forward zones configured in MAAS DNS |
-| `04-restart-maas-bind.sh` | Restart MAAS bind DNS server |
-| `05-remove-forward-zone.sh` | Remove a forward zone from MAAS DNS |
-| `06-flush-mac-dns-cache.sh` | Flush macOS DNS cache |
-| `07-emergency-restore-maas-dns.sh` | EMERGENCY: Restore MAAS DNS when .maas resolution is broken |
-| `08-diagnose-homelab-forwarding.sh` | MAAS DNS Forwarding Diagnostic for .homelab |
+| `00-check-dns-chain.sh` | Check full DNS resolution chain: Mac -> MAAS -> OPNsense<br>Usage: ./00-check-dns-chain.sh [hostname] [domain] |
+| `01-check-maas-forwarders.sh` | Check MAAS DNS forwarder configuration<br>Usage: ./01-check-maas-forwarders.sh |
+| `02-add-forward-zone.sh` | Add a forward zone to MAAS DNS for fake TLDs (e.g., .homelab)<br>Usage: ./02-add-forward-zone.sh <domain> [forwarder_ip] |
+| `03-list-forward-zones.sh` | List all forward zones configured in MAAS DNS<br>Usage: ./03-list-forward-zones.sh |
+| `04-restart-maas-bind.sh` | Restart MAAS bind DNS server<br>Usage: ./04-restart-maas-bind.sh |
+| `05-remove-forward-zone.sh` | Remove a forward zone from MAAS DNS<br>Usage: ./05-remove-forward-zone.sh <domain> |
+| `06-flush-mac-dns-cache.sh` | Flush macOS DNS cache<br>Usage: ./06-flush-mac-dns-cache.sh<br>NOTE: Requires sudo - will prompt for password |
+| `07-emergency-restore-maas-dns.sh` | EMERGENCY: Restore MAAS DNS when .maas resolution is broken<br>Usage: ./07-emergency-restore-maas-dns.sh<br>⚠️  USE THIS ONLY WHEN .maas DNS IS BROKEN ⚠️<br>This does a full MAAS restart which regenerates zone files |
+| `08-diagnose-homelab-forwarding.sh` | MAAS DNS Forwarding Diagnostic for .homelab<br>Tests whether MAAS forwards .homelab queries to OPNsense or queries root servers |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*

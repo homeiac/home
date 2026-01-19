@@ -6,34 +6,31 @@
 
 | Script | Description |
 |--------|-------------|
-| `19-switch-to-onnx-detector.sh` | *(no description)* |
-| `20-enable-import-rw.sh` | 20-enable-import-rw.sh - Enable read-write on /import mount for Frigate cleanup |
-| `21-remove-virtiofs-mount.sh` | 21-remove-virtiofs-mount.sh - Remove VirtioFS mount and reset Frigate database |
-| `22-exclude-scsi1-from-backup.sh` | 22-exclude-scsi1-from-backup.sh - Exclude unused 18TB disk from VM 105 backups |
-| `add-storage-mount.sh` | *(no description)* |
-| `build-onnx-k8s-job.sh` | *(no description)* |
+| `19-switch-to-onnx-detector.sh` | 19-switch-to-onnx-detector.sh<br>Switch Frigate from CPU detector to ONNX GPU detector.<br>Prerequisite: Run build-onnx-k8s-job.sh first to build the model. |
+| `20-enable-import-rw.sh` | 20-enable-import-rw.sh - Enable read-write on /import mount for Frigate cleanup<br>Problem: Frigate recording_cleanup thread crashes because /import is read-only<br>Solution: Change volumeMount readOnly from true to false<br>This allows Frigate to delete old recordings and manage storage properly |
+| `21-remove-virtiofs-mount.sh` | 21-remove-virtiofs-mount.sh - Remove VirtioFS mount and reset Frigate database<br>Problem: VirtioFS mount to USB drive causes 12MB/s constant I/O and 15+ load<br>Solution: Remove VirtioFS mount, start fresh with local VM storage<br>This script:<br>1. Backs up current database<br>2. Removes VirtioFS volumeMount and volume from deployment<br>3. Deletes database (fresh start)<br>4. Applies deployment and restarts Frigate<br>5. Verifies I/O dropped |
+| `22-exclude-scsi1-from-backup.sh` | 22-exclude-scsi1-from-backup.sh - Exclude unused 18TB disk from VM 105 backups<br>Problem: VM 105 has scsi1 (18TB USB disk) attached but not used<br>PBS backups scan the entire disk, taking hours<br>Solution: Set backup=0 on scsi1 to exclude from backups<br>Prerequisites:<br>- Must cancel running backup first (VM is locked during backup)<br>- Or wait for backup to complete |
+| `add-storage-mount.sh` | add-storage-mount.sh<br>Add hostPath mount for old Frigate recordings to K8s deployment<br>Mounts /local-3TB-backup/subvol-113-disk-0 as read-only for import |
+| `build-onnx-k8s-job.sh` | build-onnx-k8s-job.sh<br>Build YOLOv9 ONNX model using a K8s Job on the GPU node<br>No local Docker required - runs entirely on the cluster |
 | `build-yolov9-onnx.sh` | *(no description)* |
-| `check-ha-frigate-integration.sh` | *(no description)* |
+| `check-ha-frigate-integration.sh` | check-ha-frigate-integration.sh<br>Check current Frigate integration configuration in Home Assistant<br>Shows which Frigate URL is configured and integration status |
 | `check-pool-status.sh` | Check current status of 3TB pool on both hosts |
-| `cleanup-still-fawn-pool-cache.sh` | Clean up stale pool cache on still-fawn |
-| `edit-config.sh` | Safe Frigate config editor with backup/restore |
-| `fix-service-selector.sh` | *(no description)* |
-| `force-export-3tb-still-fawn.sh` | Force export 3TB ZFS pool from still-fawn |
-| `investigate-3tb-pumped-piglet.sh` | Investigation script for 3TB storage detection on pumped-piglet |
-| `investigate-3tb-still-fawn.sh` | Investigation script for 3TB storage on still-fawn |
+| `cleanup-still-fawn-pool-cache.sh` | Clean up stale pool cache on still-fawn<br>The pool has been imported on pumped-piglet, need to clear still-fawn's cache |
+| `edit-config.sh` | Safe Frigate config editor with backup/restore<br>Uses copy-edit-copy-back pattern to prevent data loss<br>Usage:<br>./edit-config.sh                           # Interactive editor<br>./edit-config.sh --sed 's/old/new/'        # Apply sed command<br>./edit-config.sh --sed 's/threshold: 20/threshold: 50/' --apply |
+| `force-export-3tb-still-fawn.sh` | Force export 3TB ZFS pool from still-fawn<br>Pool is in SUSPENDED state, so we'll skip unmount and go straight to export |
+| `investigate-3tb-pumped-piglet.sh` | Investigation script for 3TB storage detection on pumped-piglet<br>This gathers information needed for mount script |
+| `investigate-3tb-still-fawn.sh` | Investigation script for 3TB storage on still-fawn<br>This gathers information needed for unmount script |
 | `list-frigate-entities.sh` | List all Frigate entities in Home Assistant |
 | `migrate.sh` | *(no description)* |
-| `mount-3tb-pumped-piglet.sh` | *(no description)* |
-| `mount-9p-storage.sh` | *(no description)* |
-| `reboot-still-fawn.sh` | *(no description)* |
+| `mount-3tb-pumped-piglet.sh` | mount-3tb-pumped-piglet.sh<br>Mount the 3TB storage on pumped-piglet for K8s Frigate recordings |
+| `reboot-still-fawn.sh` | reboot-still-fawn.sh<br>Safely reboot still-fawn Proxmox host<br>Waits for host to come back up and verifies it's healthy |
 | `reload-frigate-integration.sh` | Reload Frigate integration in Home Assistant |
-| `restore-config.sh` | Restore Frigate config from backup |
+| `restore-config.sh` | Restore Frigate config from backup<br>Usage: ./restore-config.sh [backup-file]<br>./restore-config.sh --list   # list available backups |
 | `rollback-to-still-fawn.sh` | *(no description)* |
-| `setup-nfs-import.sh` | *(no description)* |
 | `shutdown-still-fawn-frigate.sh` | *(no description)* |
-| `switch-ha-to-k8s-frigate.sh` | *(no description)* |
-| `unmount-3tb-still-fawn.sh` | Unmount 3TB ZFS pool from still-fawn |
-| `update-ha-frigate-url.sh` | *(no description)* |
-| `verify-frigate-k8s.sh` | *(no description)* |
+| `switch-ha-to-k8s-frigate.sh` | switch-ha-to-k8s-frigate.sh<br>Switch Home Assistant Frigate integration from LXC to Kubernetes instance<br>This script provides manual instructions and optional API-based switching |
+| `unmount-3tb-still-fawn.sh` | Unmount 3TB ZFS pool from still-fawn<br>Pool: local-3TB-backup (currently SUSPENDED)<br>Active datasets: /, backup-tmpdir, subvol-113-disk-0 |
+| `update-ha-frigate-url.sh` | update-ha-frigate-url.sh<br>Update Home Assistant Frigate integration URL via QEMU guest agent<br>Uses the method documented in blog-frigate-server-migration.md |
+| `verify-frigate-k8s.sh` | verify-frigate-k8s.sh<br>Verify Frigate Kubernetes instance is healthy and ready<br>Checks: pod status, cameras, MQTT, face recognition<br>Exit codes: 0 = all healthy, 1 = issues found |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*

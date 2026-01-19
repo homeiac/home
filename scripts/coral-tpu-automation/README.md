@@ -6,14 +6,14 @@
 
 | Script | Description |
 |--------|-------------|
-| `comprehensive-check.sh` | Comprehensive Coral TPU System Check |
-| `coral-tpu-init.sh` | Production Coral TPU Initialization Script |
+| `comprehensive-check.sh` | Comprehensive Coral TPU System Check<br>This script performs a complete read-only analysis |
+| `coral-tpu-init.sh` | Production Coral TPU Initialization Script<br>This script handles Coral TPU initialization and Frigate LXC configuration<br>Source the mock script functions |
 | `debug-test.sh` | Debug the coral detection logic |
-| `deploy.sh` | Deployment script for Coral TPU automation |
-| `mock-coral-init.sh` | Mock Coral TPU Initialization Script |
+| `deploy.sh` | Deployment script for Coral TPU automation<br>This script safely deploys the automation to the target system |
+| `mock-coral-init.sh` | Mock Coral TPU Initialization Script<br>This script simulates the entire Coral TPU initialization process<br>Set DRY_RUN=false to execute real commands<br>Configuration Parameters |
 | `quick-test.sh` | Quick test of Coral TPU automation - fast and simple |
 | `safe-test.sh` | SAFE test script - only reads, never modifies anything |
-| `test-coral-automation.sh` | Test harness for Coral TPU automation |
+| `test-coral-automation.sh` | Test harness for Coral TPU automation<br>This script tests various scenarios without touching the real system |
 | `test-safety.sh` | Test the critical safety feature |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*

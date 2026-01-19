@@ -6,14 +6,14 @@
 
 | Script | Description |
 |--------|-------------|
-| `00-diagnose-dns-chain.sh` | 00-diagnose-dns-chain.sh |
-| `01-test-ha-can-reach-frigate.sh` | 01-test-ha-can-reach-frigate.sh |
-| `02-print-opnsense-dns-fix-steps.sh` | 02-print-opnsense-dns-fix-steps.sh |
-| `03-print-ha-nmcli-fix-commands.sh` | 03-print-ha-nmcli-fix-commands.sh |
-| `04-verify-frigate-app-homelab-works.sh` | 04-verify-frigate-app-homelab-works.sh |
-| `05-check-frigate-integration-url.sh` | 05-check-frigate-integration-url.sh |
-| `06-check-ha-vm-dns.sh` | 06-check-ha-vm-dns.sh |
-| `07-fix-ha-vm-dns.sh` | 07-fix-ha-vm-dns.sh |
-| `99-validate-deliverables.sh` | 99-validate-deliverables.sh |
+| `00-diagnose-dns-chain.sh` | 00-diagnose-dns-chain.sh<br>Diagnoses the full DNS chain for frigate.app.homelab<br>Run this from Mac to check if DNS is working at each layer |
+| `01-test-ha-can-reach-frigate.sh` | 01-test-ha-can-reach-frigate.sh<br>Tests if Home Assistant can reach Frigate via hostname and direct IP<br>Uses HA API to check Frigate integration status |
+| `02-print-opnsense-dns-fix-steps.sh` | 02-print-opnsense-dns-fix-steps.sh<br>Prints manual steps to fix DNS in OPNsense<br>No automated changes - user applies these manually |
+| `03-print-ha-nmcli-fix-commands.sh` | 03-print-ha-nmcli-fix-commands.sh<br>Prints nmcli commands to run on Home Assistant console<br>No automated changes - user runs these manually |
+| `04-verify-frigate-app-homelab-works.sh` | 04-verify-frigate-app-homelab-works.sh<br>End-to-end verification that frigate.app.homelab works<br>Run after applying fix to confirm success |
+| `05-check-frigate-integration-url.sh` | 05-check-frigate-integration-url.sh<br>Checks what URL the Frigate integration is configured with in Home Assistant<br>This reveals if HA is using IP or hostname for Frigate |
+| `06-check-ha-vm-dns.sh` | 06-check-ha-vm-dns.sh<br>Checks DNS configuration INSIDE the Home Assistant VM via Proxmox<br>This tests from HA's perspective, not from Mac |
+| `07-fix-ha-vm-dns.sh` | 07-fix-ha-vm-dns.sh<br>Fixes DNS configuration INSIDE the Home Assistant VM via Proxmox<br>Sets OPNsense (192.168.4.1) as the DNS server for HA |
+| `99-validate-deliverables.sh` | 99-validate-deliverables.sh<br>Validates all deliverables meet architectural and security constraints<br>Run this BEFORE committing to ensure compliance |
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*
