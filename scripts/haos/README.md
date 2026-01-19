@@ -13,12 +13,11 @@
 | `check-ha-api.sh` | Check if Home Assistant API is responding |
 | `copy-to-ha.sh` | Copy a file to HAOS VM via Proxmox qm guest exec |
 | `enable-tts-debug.sh` | Enable TTS debug logging in HA |
-| `export-automations.sh` | Export HA automations to git-tracked file |
 | `fix-frigate-dashboard.sh` | Fix Frigate dashboard card configuration - add frigate URL and camera_name |
 | `get-addon-info.sh` | Get HA addon info |
 | `get-automation-config.sh` | Get automation config by ID |
 | `get-automation-state.sh` | Get automation state and last_triggered |
-| `get-automation-trace.sh` | Get last automation trace |
+| `get-automation-trace.sh` | Get detailed automation traces |
 | `get-entity-state.sh` | Get entity state - generic tool for any entity |
 | `get-ha-config.sh` | Get HA full config including URLs |
 | `get-logs.sh` | Get HA logs |
@@ -53,4 +52,4 @@ source "$(dirname "$0")/../lib-sh/ha-api.sh"
 # ha_api_post "services/script/reload" "{}"
 ```
 
-*Generated: 2026-01-16*
+*Generated: 2026-01-18*
