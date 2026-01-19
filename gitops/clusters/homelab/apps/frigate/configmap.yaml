@@ -28,9 +28,9 @@ data:
         # Reolink doorbell - HTTP-FLV streams (more reliable than RTSP per Frigate docs)
         reolink_doorbell_main: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy#audio=copy#audio=opus"
         reolink_doorbell_sub: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy"
-        # Reolink E1 Zoom (living room) - HTTP-FLV streams
-        living_room_main: "ffmpeg:http://192.168.1.140/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_CAM_LIVINGROOM_USER}&password={FRIGATE_CAM_LIVINGROOM_PASS}#video=copy#audio=copy"
-        living_room_sub: "ffmpeg:http://192.168.1.140/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_CAM_LIVINGROOM_USER}&password={FRIGATE_CAM_LIVINGROOM_PASS}#video=copy"
+        # Reolink E1 Zoom (living room) - RTSP streams (no HTTP-FLV support)
+        living_room_main: "rtsp://{FRIGATE_CAM_LIVINGROOM_USER}:{FRIGATE_CAM_LIVINGROOM_PASS}@192.168.1.140:554/h264Preview_01_main"
+        living_room_sub: "rtsp://{FRIGATE_CAM_LIVINGROOM_USER}:{FRIGATE_CAM_LIVINGROOM_PASS}@192.168.1.140:554/h264Preview_01_sub"
 
     cameras:
       old_ip_camera:
