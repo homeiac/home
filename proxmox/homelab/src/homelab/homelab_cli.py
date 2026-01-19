@@ -22,6 +22,11 @@ from rich.table import Table
 from homelab.config import Config
 from homelab.proxmox_api import ProxmoxClient
 from homelab.unified_infrastructure_manager import UnifiedInfrastructureManager
+from homelab.node_exporter_manager import (
+    apply_from_config as apply_node_exporter,
+    get_status_from_config as get_node_exporter_status,
+    print_status_table,
+)
 
 # Initialize CLI app and console
 app = typer.Typer(
@@ -295,6 +300,99 @@ def show_status(
         raise typer.Exit(1)
 
 
+# === MONITORING COMMANDS ===
+
+monitoring_app = typer.Typer(help="Monitoring infrastructure management")
+app.add_typer(monitoring_app, name="monitoring")
+
+
+@monitoring_app.command("apply")
+def monitoring_apply(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    ),
+    host: Optional[str] = typer.Option(
+        None,
+        "--host", "-H",
+        help="Deploy to specific host only"
+    )
+) -> None:
+    """
+    Apply monitoring components to Proxmox hosts.
+
+    Deploys node-exporter to all enabled hosts in cluster.yaml.
+    Idempotent - safe to run multiple times.
+    """
+    console.print(f"🚀 Applying monitoring from: {config_file}")
+
+    if not config_file.exists():
+        console.print(f"❌ Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    try:
+        if host:
+            from homelab.node_exporter_manager import NodeExporterManager
+            console.print(f"Deploying to {host}...")
+            with NodeExporterManager(host, config_path=config_file) as manager:
+                result = manager.deploy()
+
+            status_icon = "✅" if result["status"] == "success" else "❌"
+            console.print(f"\n{status_icon} {host}: {result['status']}")
+            if result.get("hwmon_sensors"):
+                console.print(f"   Sensors: {', '.join(result['hwmon_sensors'])}")
+            if result.get("error"):
+                console.print(f"   Error: {result['error']}")
+        else:
+            results = apply_node_exporter(config_file)
+            print_status_table(results)
+
+            success = sum(1 for r in results if r.get("status") == "success")
+            failed = sum(1 for r in results if r.get("status") == "failed")
+            already = sum(1 for r in results if "already_installed" in r.get("actions", []))
+
+            console.print(f"\n✅ {success} deployed, {already} already installed, {failed} failed")
+
+    except Exception as e:
+        console.print(f"❌ Failed: {e}")
+        logger.exception("Monitoring apply error")
+        raise typer.Exit(1)
+
+
+@monitoring_app.command("status")
+def monitoring_status(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    )
+) -> None:
+    """
+    Show monitoring component status on all hosts.
+
+    Checks node-exporter installation and service status.
+    """
+    console.print(f"📊 Monitoring Status (from {config_file})")
+
+    if not config_file.exists():
+        console.print(f"❌ Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    try:
+        results = get_node_exporter_status(config_file)
+        print_status_table(results)
+
+        running = sum(1 for r in results if r.get("running"))
+        total = len(results)
+        console.print(f"\n{running}/{total} hosts have node-exporter running")
+
+    except Exception as e:
+        console.print(f"❌ Failed: {e}")
+        logger.exception("Monitoring status error")
+        raise typer.Exit(1)
+
+
 @app.callback()
 def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
@@ -307,6 +405,7 @@ def main(
     Like Terraform/Pulumi but designed specifically for homelabs.
 
     Configuration: config/homelab.yaml
+    Monitoring: config/cluster.yaml
     """
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)

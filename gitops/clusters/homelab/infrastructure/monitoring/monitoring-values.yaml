@@ -39,7 +39,7 @@ prometheus:
         static_configs:
           - targets:
               - 192.168.4.122:9100   # pve
-              - 192.168.4.17:9100    # still-fawn (offline)
+              - 192.168.4.17:9100    # still-fawn
               - 192.168.4.19:9100    # chief-horse
               - 192.168.4.172:9100   # fun-bedbug
               - 192.168.4.175:9100   # pumped-piglet

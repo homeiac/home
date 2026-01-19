@@ -117,3 +117,29 @@ backup:
     - node: fun-bedbug
       vmids: [114]  # K3s VM
       enabled: true
+
+# Monitoring components installed on bare-metal Proxmox hosts
+# Applied via: poetry run homelab apply (or homelab monitoring apply)
+monitoring:
+  # Prometheus node-exporter for host metrics
+  node_exporter:
+    enabled: true
+    package: prometheus-node-exporter
+    service: prometheus-node-exporter
+    port: 9100
+    # Extra collectors beyond defaults
+    collectors:
+      - hwmon          # Temperature, fan, voltage sensors
+      - thermal_zone   # CPU thermal zones
+    # Per-host expected sensors (for verification)
+    host_sensors:
+      still-fawn:
+        - amdgpu       # AMD Radeon GPU temperature
+      pumped-piglet:
+        - coretemp     # Intel CPU temperature
+      fun-bedbug:
+        - k10temp      # AMD APU temperature
+
+  # Prometheus scrape targets reference (update monitoring-values.yaml)
+  prometheus_job: proxmox-node-exporter
+  # Auto-generated from nodes list above
