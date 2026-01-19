@@ -107,6 +107,7 @@ data:
           track:
             - person
             - car
+            - package
         motion:
           threshold: 25
           contour_area: 50
@@ -115,6 +116,11 @@ data:
           retain:
             days: 7
             mode: motion
+
+    # Frigate+ model for better detection (includes package detection)
+    # Using base edgetpu model - fine-tune later with your own images
+    model:
+      path: plus://c7b38453956cda87076baba4aca213e6
 
     # Coral Edge TPU for object detection - ~10ms inference
     detectors:
