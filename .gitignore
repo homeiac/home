@@ -116,7 +116,7 @@ raspberrypi-master/display-driver/.venv/bin/pip3
 raspberrypi-master/display-driver/.venv/bin/pip3.7
 raspberrypi-master/display-driver/.venv/bin/python
 raspberrypi-master/display-driver/.venv/bin/python3
-scripts/voice-pe/secrets.yaml
+# scripts/voice-pe/secrets.yaml - NOW ENCRYPTED WITH SOPS, safe to commit
 
 # K3s snippets contain tokens - deploy manually, don't commit
 # Exception: EXAMPLE template is safe to commit

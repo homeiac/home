@@ -1,4 +1,8 @@
 creation_rules:
+  # ESPHome secrets - encrypt all values
+  - path_regex: scripts/voice-pe/secrets\.yaml$
+    age: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
+  # K8s secrets - only encrypt data/stringData
   - path_regex: .*.yaml
     encrypted_regex: ^(data|stringData)$
     age: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
