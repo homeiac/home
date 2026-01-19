@@ -1,6 +1,6 @@
-# DNS Is Still a Fucking Issue
+# DNS Is Still Broken
 
-**Date**: 2026-01-18  
+**Date**: 2026-01-18
 **Tags**: dns, homelab, rant, lessons-learned
 
 ## The Pattern
