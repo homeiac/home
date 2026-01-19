@@ -1,0 +1,53 @@
+# Greet G on Face Recognition
+# Voice PE greets G when face is recognized (once per time of day period)
+#
+# Copy this to HA: Settings → Automations → Greet G on Face Recognition
+# Automation ID: 1768790665405
+#
+# Bug fix 2026-01-19: Use as_local() to convert UTC last_triggered to local time
+# before comparing time periods. Without this, UTC hour was compared to local hour
+# causing duplicate greetings in the same period.
+
+id: '1768790665405'
+alias: Greet G on Face Recognition
+description: Voice PE greets G when face is recognized (once per time of day)
+triggers:
+  - entity_id:
+      - sensor.trendnet_ip_572w_last_recognized_face
+      - sensor.living_room_last_recognized_face
+    to: G
+    trigger: state
+conditions:
+  - condition: template
+    value_template: >
+      {% set hour = now().hour %}
+      {% set current_period = 'morning' if 5 <= hour < 12 else 'afternoon' if 12 <= hour < 17 else 'evening' if 17 <= hour < 21 else 'night' %}
+      {% set last = state_attr('automation.greet_g_on_face_recognition', 'last_triggered') %}
+      {% if last is none %}
+        true
+      {% else %}
+        {% set last_local = as_local(last) %}
+        {% set last_hour = last_local.hour %}
+        {% set last_period = 'morning' if 5 <= last_hour < 12 else 'afternoon' if 12 <= last_hour < 17 else 'evening' if 17 <= last_hour < 21 else 'night' %}
+        {% set same_day = last_local.date() == now().date() %}
+        {{ not same_day or current_period != last_period }}
+      {% endif %}
+actions:
+  - variables:
+      hour: '{{ now().hour }}'
+      greeting: >
+        {% if 5 <= hour < 12 %}
+          Good morning G
+        {% elif 12 <= hour < 17 %}
+          Good afternoon G
+        {% elif 17 <= hour < 21 %}
+          Good evening G
+        {% else %}
+          Hello G
+        {% endif %}
+  - target:
+      entity_id: assist_satellite.home_assistant_voice_09f5a3_assist_satellite
+    data:
+      message: '{{ greeting }}'
+    action: assist_satellite.announce
+mode: single
