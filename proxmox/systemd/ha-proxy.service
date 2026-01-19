@@ -1,0 +1,23 @@
+[Unit]
+Description=Home Assistant Proxy for Voice PE (192.168.1.x to 192.168.4.x)
+After=network.target
+
+[Service]
+Type=simple
+# socat proxy: Allows Voice PE (on Google WiFi 192.168.86.x) to reach HA (on homelab 192.168.4.x)
+# Voice PE cannot reach 192.168.4.x directly, but CAN reach 192.168.1.x (ISP network)
+# pve has interfaces on both networks, so it acts as a bridge
+#
+# Network path:
+#   Voice PE (192.168.86.245)
+#   → Google WiFi (192.168.86.1)
+#   → ISP Router (192.168.1.254)
+#   → pve (192.168.1.122:8123) [THIS PROXY]
+#   → HA (192.168.4.240:8123)
+#
+ExecStart=/usr/bin/socat TCP-LISTEN:8123,bind=192.168.1.122,reuseaddr,fork TCP:192.168.4.240:8123
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

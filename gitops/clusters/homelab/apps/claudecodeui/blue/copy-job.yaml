@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: copy-claude-data
+  namespace: claudecodeui
+  labels:
+    app: claudecodeui
+    component: data-migration
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: claudecodeui
+        component: data-migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: copy
+          image: alpine:3.21
+          command:
+            - sh
+            - -c
+            - |
+              echo "Copying claude-data..."
+              cp -av /src-data/. /dst-data/
+              echo "Copying claude-projects..."
+              cp -av /src-projects/. /dst-projects/
+              echo "Setting ownership..."
+              chown -R 1000:1000 /dst-data /dst-projects
+              echo "Done!"
+          volumeMounts:
+            - name: src-data
+              mountPath: /src-data
+              readOnly: true
+            - name: src-projects
+              mountPath: /src-projects
+              readOnly: true
+            - name: dst-data
+              mountPath: /dst-data
+            - name: dst-projects
+              mountPath: /dst-projects
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      volumes:
+        - name: src-data
+          persistentVolumeClaim:
+            claimName: claude-data
+        - name: src-projects
+          persistentVolumeClaim:
+            claimName: claude-projects
+        - name: dst-data
+          persistentVolumeClaim:
+            claimName: claude-data-blue
+        - name: dst-projects
+          persistentVolumeClaim:
+            claimName: claude-projects-blue

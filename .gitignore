@@ -122,3 +122,19 @@ scripts/voice-pe/secrets.yaml
 # Exception: EXAMPLE template is safe to commit
 scripts/k3s/snippets/*.yaml
 !scripts/k3s/snippets/k3s-server-EXAMPLE.yaml
+proxmox/homelab/.env
+
+# Archive folder for old/temporary files
+scripts/archive/
+
+# Frigate config backups (keep locally, don't commit)
+scripts/frigate/frigate-config-backup-*.yml
+
+# Large binary files
+*.img
+
+# Node modules
+node_modules/
+
+# Claude local settings
+.claude/settings.json
