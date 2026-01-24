@@ -5,6 +5,8 @@ metadata:
   namespace: frigate
   labels:
     app: frigate
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: "192.168.4.81"
 spec:
   type: LoadBalancer
   selector:
@@ -33,7 +35,7 @@ metadata:
   labels:
     app: frigate
   annotations:
-    metallb.io/loadBalancerIPs: "192.168.4.84"
+    metallb.universe.tf/loadBalancerIPs: "192.168.4.84"
 spec:
   type: LoadBalancer
   selector:
