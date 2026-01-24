@@ -26,19 +26,10 @@ spec:
     # Driver is pre-installed in the VM - skip driver container
     driver:
       enabled: false
-    # Toolkit configures containerd runtime
-    # K3s uses a different containerd socket path
+    # Toolkit disabled - K3s containerd config v3 not supported
+    # GPU workloads work via device-plugin without toolkit
     toolkit:
-      enabled: true
-      env:
-        - name: CONTAINERD_CONFIG
-          value: /var/lib/rancher/k3s/agent/etc/containerd/config.toml
-        - name: CONTAINERD_SOCKET
-          value: /run/k3s/containerd/containerd.sock
-        - name: CONTAINERD_RUNTIME_CLASS
-          value: nvidia
-        - name: CONTAINERD_SET_AS_DEFAULT
-          value: "true"
+      enabled: false
     # Device plugin exposes GPUs to k8s
     devicePlugin:
       enabled: true
