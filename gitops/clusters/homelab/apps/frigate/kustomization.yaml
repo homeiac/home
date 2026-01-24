@@ -5,6 +5,7 @@ namespace: frigate
 
 resources:
   - namespace.yaml
+  - secrets/frigate-credentials.sops.yaml
   - pvc.yaml
   - configmap.yaml
   - deployment.yaml
@@ -16,9 +17,7 @@ resources:
   - rbac-health-checker.yaml
   - cronjob-health-python.yaml
 
-# Note: frigate-credentials Secret is created manually (not in git)
-# See frigate-secrets.yaml.example for template
-#
+# Note: frigate-credentials Secret is now SOPS-encrypted in secrets/
 # Note: smtp-credentials Secret for health checker email notifications
 # Copy from monitoring namespace:
 #   kubectl get secret smtp-credentials -n monitoring -o yaml | \
