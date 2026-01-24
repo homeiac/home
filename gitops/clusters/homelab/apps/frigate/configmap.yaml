@@ -63,21 +63,9 @@ data:
         ffmpeg:
           inputs:
             - path: "rtsp://{FRIGATE_CAM_TRENDNET_USER}:{FRIGATE_CAM_TRENDNET_PASS}@192.168.1.107/play1.sdp"
-              # This old camera has bad timestamps - use genpts to regenerate them
-              input_args:
-                - -avoid_negative_ts
-                - make_zero
-                - -fflags
-                - +genpts+discardcorrupt
-                - -rtsp_transport
-                - tcp
-                - -use_wallclock_as_timestamps
-                - "1"
               roles:
                 - detect
                 - record
-          # Disable hwaccel for this old camera with timestamp/corruption issues
-          hwaccel_args: []
         detect:
           enabled: true
           width: 1280
