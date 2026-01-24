@@ -3,20 +3,22 @@ kind: Kustomization
 
 # VM and LXC instances managed by Crossplane
 # These are Proxmox VMs/containers declared in Git, reconciled by Crossplane
+# NOTE: All resources commented out until Crossplane Provider is ready
+# TODO: Create separate Flux Kustomization with dependency on Crossplane Provider
 
-resources:
-  # Cloud Images - must be downloaded before VMs can use them
-  - ubuntu-noble-cloud-image.yaml             # Ubuntu 24.04 for fun-bedbug
-  - ubuntu-noble-cloud-image-still-fawn.yaml  # Ubuntu 24.04 for still-fawn
+resources: []
+  # # Cloud Images - must be downloaded before VMs can use them
+  # - ubuntu-noble-cloud-image.yaml             # Ubuntu 24.04 for fun-bedbug
+  # - ubuntu-noble-cloud-image-still-fawn.yaml  # Ubuntu 24.04 for still-fawn
 
-  # K3s Control Plane Nodes
-  # NOTE: Cloud-init snippets deployed via scripts/k3s/deploy-snippets.sh (one-time per host)
-  - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
-  - k3s-vm-still-fawn.yaml    # VMID 108 - K3s with AMD GPU (VAAPI) + Coral TPU
+  # # K3s Control Plane Nodes
+  # # NOTE: Cloud-init snippets deployed via scripts/k3s/deploy-snippets.sh (one-time per host)
+  # - k3s-vm-fun-bedbug.yaml    # VMID 114 - K3s control-plane on fun-bedbug
+  # - k3s-vm-still-fawn.yaml    # VMID 108 - K3s with AMD GPU (VAAPI) + Coral TPU
 
-  # TEST VMs - non-essential, safe to experiment with
-  # - rancher-server.yaml          # VMID 200 - RKE2 eval (removed - orphaned ZFS datasets)
+  # # TEST VMs - non-essential, safe to experiment with
+  # # - rancher-server.yaml          # VMID 200 - RKE2 eval (removed - orphaned ZFS datasets)
 
-  # PRODUCTION - adopted existing infrastructure (deletionPolicy: Orphan)
-  # Uncomment after validating Crossplane adoption works
-  # - frigate-nvr.yaml           # LXC 113 - Frigate NVR (removed from fun-bedbug)
+  # # PRODUCTION - adopted existing infrastructure (deletionPolicy: Orphan)
+  # # Uncomment after validating Crossplane adoption works
+  # # - frigate-nvr.yaml           # LXC 113 - Frigate NVR (removed from fun-bedbug)
