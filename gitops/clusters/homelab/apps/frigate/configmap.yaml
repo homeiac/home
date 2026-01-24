@@ -63,9 +63,12 @@ data:
         ffmpeg:
           inputs:
             - path: "rtsp://{FRIGATE_CAM_TRENDNET_USER}:{FRIGATE_CAM_TRENDNET_PASS}@192.168.1.107/play1.sdp"
+              input_args: preset-rtsp-generic
               roles:
                 - detect
                 - record
+          # Disable hwaccel for this old camera with timestamp issues
+          hwaccel_args: []
         detect:
           enabled: true
           width: 1280
