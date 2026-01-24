@@ -209,5 +209,12 @@ data:
     face_recognition:
       enabled: true
       model_size: large
+      min_area: 500  # Lower threshold to capture smaller faces
+
+    # Debug logging for face detection
+    logger:
+      default: info
+      logs:
+        frigate.embeddings: debug
 
     version: "0.16"
