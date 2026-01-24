@@ -9,6 +9,7 @@ resources:
   - infrastructure/traefik               #(static IP config)
   - infrastructure/tailscale             #(subnet router + exit node)
   - infrastructure/crossplane            #(Proxmox VM/LXC provisioning)
+  - infrastructure/gpu-operator          #(NVIDIA GPU Operator for K8s)
   - infrastructure/external-dns          #(Cloudflare DNS sync)
   - infrastructure/cert-manager          #(LetsEncrypt DNS-01 certs - HelmRelease)
   - infrastructure/cert-manager-config  #(ClusterIssuer, Certs - depends on CRDs)
