@@ -5,9 +5,11 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - prometheus-storage-class.yaml
-  - cpu-alerting-rules.yaml
-  - flux-alerting-rules.yaml
-  - flux-servicemonitor.yaml
+  # TODO: Move to separate Flux Kustomization with dependency on kube-prometheus-stack HelmRelease
+  # These require PrometheusRule CRD which is installed by kube-prometheus-stack
+  # - cpu-alerting-rules.yaml
+  # - flux-alerting-rules.yaml
+  # - flux-servicemonitor.yaml
   - grafana-ingress.yaml
 
 configMapGenerator:
