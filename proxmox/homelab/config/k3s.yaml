@@ -36,47 +36,30 @@ kube_vip:
 
 # K3s control plane nodes (VMs running K3s server)
 # These run inside Proxmox VMs, not on bare metal
+# Current cluster: 2 nodes (pumped-piglet, still-fawn) after Jan 2026 recovery
 control_plane_nodes:
-  - name: k3s-vm-pve
-    # VM runs on this Proxmox host
-    proxmox_host: pve
-    vmid: 107
-    ip: 192.168.4.238
-    # Primary node used for cluster operations
-    is_primary: true
-
   - name: k3s-vm-pumped-piglet-gpu
     proxmox_host: pumped-piglet
     vmid: 105
     ip: 192.168.4.210
-    is_primary: false
+    is_primary: true
     # GPU passthrough for Ollama/AI workloads
     gpu_enabled: true
-
-  - name: k3s-vm-fun-bedbug
-    proxmox_host: fun-bedbug
-    vmid: 114
-    ip: 192.168.4.203
-    is_primary: false
-    # Quorum-only node - minimal resources (1 vCPU, 4GB RAM)
-    # AMD A9-9400 thermal limited - reduced from 2 cores due to 92°C temps
-    role: quorum
 
   - name: k3s-vm-still-fawn
     proxmox_host: still-fawn
     vmid: 108
     ip: 192.168.4.212
     is_primary: false
+    # AMD GPU + Coral TPU for Frigate
 
 # TLS-SAN entries for API server certificate
 # These are added to /etc/rancher/k3s/config.yaml on each control plane node
 tls_san:
   # The VIP must be in SAN for kube-vip to work
   - 192.168.4.79
-  # All control plane node IPs (auto-added by K3s, but explicit is safer)
-  - 192.168.4.238
+  # All control plane node IPs
   - 192.168.4.210
-  - 192.168.4.203
   - 192.168.4.212
   # DNS names if using DNS-based access
   - k3s.homelab

@@ -26,6 +26,19 @@ nodes:
     fqdn: still-fawn.maas
     role: compute
     enabled: true
+    # Network configuration
+    network:
+      primary:
+        interface: enp3s0
+        bridge: vmbr0
+        ip: 192.168.4.17/24
+        gateway: 192.168.4.1
+        speed: 1000  # 1 Gbps onboard NIC
+      secondary:
+        interface: enx803f5df89165
+        ip: 192.168.4.18/24
+        speed: 2500  # 2.5 Gbps USB adapter (Realtek RTL8156B)
+        # Use for PBS restores and bulk transfers
     # AMD GPU passthrough for Frigate VAAPI hardware encoding
     gpu_passthrough:
       enabled: true
@@ -52,6 +65,18 @@ nodes:
     fqdn: pumped-piglet.maas
     role: compute
     enabled: true
+    # Network configuration
+    network:
+      primary:
+        interface: enx803f5df8d628
+        bridge: vmbr0
+        ip: 192.168.4.175/24
+        gateway: 192.168.4.1
+        speed: 2500  # 2.5 Gbps USB adapter (Realtek RTL8156B)
+      secondary:
+        interface: eno1
+        # Onboard NIC - currently unused/down
+        enabled: false
     # GPU passthrough for RTX 3070 to K3s VM for Ollama/AI workloads
     gpu_passthrough:
       enabled: true

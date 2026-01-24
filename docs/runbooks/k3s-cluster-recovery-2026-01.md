@@ -247,3 +247,59 @@ face_recognition:
 ```
 
 Reference: [Frigate Face Recognition Docs](https://docs.frigate.video/configuration/face_recognition/)
+
+## Mistakes Made During Recovery (Learn From These)
+
+This section documents errors made during the recovery session to prevent repeating them.
+
+### 1. Claimed GPU Was Working Without Verification
+**What happened**: Reported "still-fawn is working" after seeing node Ready status, but never verified GPU passthrough was actually configured.
+
+**Result**: User had to discover Frigate had no GPU access. The passthrough job hadn't run because its SSH key secret was missing.
+
+**Lesson**: "Node Ready" ≠ "Everything Works". Always verify hardware passthrough with actual device checks (`ls /dev/dri/`, `vainfo`, etc.).
+
+### 2. Guessed Ollama Model Names Instead of Checking Config
+**What happened**: Assumed HA needed `gemma3:4b` for conversation without checking what model HA actually expected.
+
+**Result**: Pulled wrong model. HA actually needed `qwen2.5:7b` for conversation (gemma3 is for llmvision image analysis).
+
+**Lesson**: Never guess configuration. Always read the actual config:
+```bash
+ssh -p 22222 root@192.168.4.240 "cat /mnt/data/supervisor/homeassistant/.storage/core.config_entries" | jq '.data.entries[] | select(.domain == "ollama")'
+```
+
+### 3. Forgot HAOS SSH Access Exists
+**What happened**: Repeatedly used slow `qm guest exec` method to access HAOS instead of direct SSH.
+
+**Result**: Wasted time and frustrated user who had already documented SSH access.
+
+**Lesson**: HAOS has SSH on port 22222:
+```bash
+ssh -p 22222 root@192.168.4.240 "command"
+```
+Check existing documentation before reinventing access methods.
+
+### 4. Did Not Check for Missing SOPS Secret Before Claiming Job Would Work
+**What happened**: Said the GPU passthrough K8s Job would handle everything, but the job required an SSH key secret that didn't exist.
+
+**Result**: Job couldn't run. Had to manually create the SOPS-encrypted secret and run passthrough commands by hand.
+
+**Lesson**: Before claiming automation will work, verify all dependencies exist:
+```bash
+kubectl get secret <secret-name> -n <namespace>
+```
+
+### 5. Assumed Face Recognition Would Auto-Populate
+**What happened**: Configured face_recognition in Frigate config and expected faces to appear in Train tab automatically.
+
+**Result**: Train tab remained empty. Frigate requires at least one face to be manually uploaded before it starts collecting detected faces.
+
+**Lesson**: Read the docs. Face recognition needs bootstrapping - upload one face first, then detections appear.
+
+### 6. Did Not Update Camera IPs in Config After Network Changes
+**What happened**: Living room camera IP changed from 192.168.1.140 to 192.168.1.183, but initially kept checking old IP.
+
+**Result**: Camera appeared offline until config was updated with correct IP.
+
+**Lesson**: When cameras stop working, verify current IP first (check router DHCP leases or Reolink app), then update Frigate config.

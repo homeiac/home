@@ -3,8 +3,19 @@
 source "$(dirname "$0")/../lib-sh/ha-api.sh"
 
 echo "=== Checking HA Config ==="
-ha_call_service "homeassistant" "check_config" "{}"
 
-# Check for errors in persistent notification
-sleep 2
-ha_get_state "persistent_notification.homeassistant_check_config" | jq -r '.attributes.message // "No errors"'
+# Use the correct config check endpoint
+RESULT=$(ha_api_post "config/core/check_config")
+
+# Parse result
+VALID=$(echo "$RESULT" | jq -r '.result // "unknown"')
+ERRORS=$(echo "$RESULT" | jq -r '.errors // "none"')
+
+if [[ "$VALID" == "valid" ]]; then
+    echo "Config is valid"
+    exit 0
+else
+    echo "Config check result: $VALID"
+    echo "Errors: $ERRORS"
+    exit 1
+fi
