@@ -4,7 +4,8 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  - connector.yaml  # CRDs installed by operator
+  # TODO: Move to separate Flux Kustomization with dependency on tailscale-operator HelmRelease
+  # - connector.yaml  # CRDs installed by operator
   # NOTE: oauth-secret must be created manually:
   # kubectl create secret generic operator-oauth -n tailscale \
   #   --from-literal=client_id=YOUR_CLIENT_ID \
