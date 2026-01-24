@@ -1,0 +1,25 @@
+# Add to configuration.yaml under binary_sensor:
+binary_sensor:
+  - platform: ping
+    host: 192.168.4.17
+    name: still_fawn_ping
+    count: 2
+    scan_interval: 60
+
+  - platform: ping
+    host: 192.168.4.175
+    name: pumped_piglet_ping
+    count: 2
+    scan_interval: 60
+
+  - platform: ping
+    host: 192.168.4.19
+    name: chief_horse_ping
+    count: 2
+    scan_interval: 60
+
+  - platform: ping
+    host: 192.168.4.172
+    name: fun_bedbug_ping
+    count: 2
+    scan_interval: 60

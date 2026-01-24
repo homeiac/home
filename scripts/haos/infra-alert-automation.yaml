@@ -1,0 +1,82 @@
+- id: infra_down_voice_pe_alert
+  alias: Infrastructure Down - Voice PE Red Alert
+  description: Light up Voice PE red and set notification when Proxmox host unreachable (once per incident)
+  triggers:
+  - platform: state
+    entity_id: binary_sensor.still_fawn_ping
+    to: "off"
+    for:
+      minutes: 3
+    id: still_fawn
+  - platform: state
+    entity_id: binary_sensor.pumped_piglet_ping
+    to: "off"
+    for:
+      minutes: 3
+    id: pumped_piglet
+  - platform: state
+    entity_id: binary_sensor.chief_horse_ping
+    to: "off"
+    for:
+      minutes: 3
+    id: chief_horse
+  conditions:
+  - condition: state
+    entity_id: input_boolean.infra_alert_active
+    state: "off"
+  actions:
+  - target:
+      entity_id: input_boolean.infra_alert_active
+    action: input_boolean.turn_on
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    data:
+      effect: Rejected
+    action: light.turn_on
+  - target:
+      entity_id: input_text.pending_notification_message
+    data:
+      value: "Infrastructure alert: {{ trigger.to_state.attributes.friendly_name | default(trigger.id) }} is down since {{ now().strftime('%I:%M %p') }}"
+    action: input_text.set_value
+  - data:
+      title: "\U0001F534 Infrastructure Down"
+      message: "{{ trigger.to_state.attributes.friendly_name | default(trigger.id) }} unreachable"
+    action: notify.mobile_app_iphone
+  mode: single
+
+- id: infra_recovered_voice_pe_clear
+  alias: Infrastructure Recovered - Voice PE Clear
+  description: Clear Voice PE alert when all hosts back online
+  triggers:
+  - platform: state
+    entity_id:
+    - binary_sensor.still_fawn_ping
+    - binary_sensor.pumped_piglet_ping
+    - binary_sensor.chief_horse_ping
+    to: "on"
+  conditions:
+  - condition: state
+    entity_id: input_boolean.infra_alert_active
+    state: "on"
+  - condition: state
+    entity_id: binary_sensor.still_fawn_ping
+    state: "on"
+  - condition: state
+    entity_id: binary_sensor.pumped_piglet_ping
+    state: "on"
+  - condition: state
+    entity_id: binary_sensor.chief_horse_ping
+    state: "on"
+  actions:
+  - target:
+      entity_id: input_boolean.infra_alert_active
+    action: input_boolean.turn_off
+  - target:
+      entity_id: light.home_assistant_voice_09f5a3_led_ring
+    action: light.turn_off
+  - target:
+      entity_id: input_text.pending_notification_message
+    data:
+      value: ""
+    action: input_text.set_value
+  mode: single
