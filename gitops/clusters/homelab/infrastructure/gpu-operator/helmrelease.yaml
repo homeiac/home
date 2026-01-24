@@ -31,8 +31,12 @@ spec:
     toolkit:
       enabled: false
     # Device plugin exposes GPUs to k8s
+    # Time-slicing config referenced from ConfigMap
     devicePlugin:
       enabled: true
+      config:
+        name: time-slicing-config
+        default: any
     # DCGM exporter for metrics
     dcgmExporter:
       enabled: true
