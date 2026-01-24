@@ -13,7 +13,7 @@ resources:
   - infrastructure/cert-manager          #(LetsEncrypt DNS-01 certs - HelmRelease)
   - infrastructure/cert-manager-config  #(ClusterIssuer, Certs - depends on CRDs)
   - infrastructure/traefik-config       #(TLSStore, HA IngressRoute - depends on certs)
-  - infrastructure-config/metallb-config        #(address-pool)
+  - infrastructure-config/metallb-config  #(Flux Kustomization that applies IPAddressPool after MetalLB CRDs ready)
   # Crossplane-managed Proxmox instances (VMs/LXCs)
   # NOTE: Requires crossplane-system secret first - see scripts/crossplane/create-proxmox-secret.sh
   - instances                            # K3s VMs, LXC containers managed by Crossplane

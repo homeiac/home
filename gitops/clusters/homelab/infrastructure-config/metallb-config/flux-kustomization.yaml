@@ -1,0 +1,24 @@
+---
+# Flux Kustomization for MetalLB CRD-dependent resources (IPAddressPool, L2Advertisement)
+# This waits for MetalLB HelmRelease to be ready before applying
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: metallb-config
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./gitops/clusters/homelab/infrastructure-config/metallb-config/resources
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # Wait for MetalLB HelmRelease to be ready (CRDs installed)
+  dependsOn:
+    - name: flux-system  # Main kustomization deploys MetalLB HelmRelease
+  # Health checks to ensure MetalLB is actually ready
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: metallb
+      namespace: metallb-system
