@@ -199,7 +199,111 @@ k3s-vm-pumped-piglet-gpu   Ready    control-plane,etcd,master
 k3s-vm-still-fawn          Ready    control-plane,etcd,master
 ```
 
-### Phase 8: Verify Workloads
+### Phase 8: Bootstrap Flux GitOps
+
+After K3s cluster is healthy, Flux needs to be reinstalled with secrets.
+
+#### Step 1: Get fresh kubeconfig
+
+```bash
+# Get kubeconfig from pumped-piglet VM
+ssh root@pumped-piglet.maas 'qm guest exec 105 -- cat /etc/rancher/k3s/k3s.yaml' 2>&1 | \
+  grep -v "^Warning" | jq -r '.["out-data"]' > /tmp/kubeconfig.new
+
+# Replace localhost with actual IP
+sed -i '' 's/127.0.0.1/192.168.4.210/g' /tmp/kubeconfig.new
+cp /tmp/kubeconfig.new ~/kubeconfig
+
+# Verify access
+KUBECONFIG=~/kubeconfig kubectl get nodes
+```
+
+#### Step 2: Install Flux components
+
+```bash
+KUBECONFIG=~/kubeconfig flux install
+```
+
+#### Step 3: Create SOPS age secret (for decrypting secrets)
+
+**CRITICAL**: Without this secret, Flux cannot decrypt SOPS-encrypted secrets in git.
+
+The age private key is stored at `~/.config/sops/age/keys.txt` on Mac.
+
+```bash
+KUBECONFIG=~/kubeconfig kubectl create secret generic sops-age \
+  --namespace=flux-system \
+  --from-file=age.agekey=/Users/10381054/.config/sops/age/keys.txt
+```
+
+**What this enables**:
+- Flux's kustomize-controller uses this key to decrypt secrets at apply time
+- Encrypted secrets in git (e.g., `infrastructure/cert-manager/cloudflare-secret.yaml`) are decrypted on-the-fly
+- The age PUBLIC key is in `.sops.yaml` for encrypting; the PRIVATE key here is for decrypting
+
+**If you lose the age key**:
+1. Generate new key: `age-keygen -o ~/.config/sops/age/keys.txt`
+2. Update `.sops.yaml` with new public key
+3. Re-encrypt ALL secrets: `find gitops -name "*.yaml" -exec grep -l "sops:" {} \; | xargs -I {} sops updatekeys {}`
+4. Commit and push
+5. Recreate the `sops-age` secret
+
+**SOPS-encrypted secrets in this repo**:
+- `gitops/clusters/homelab/infrastructure/cert-manager/cloudflare-secret.yaml`
+- `gitops/clusters/homelab/infrastructure/external-dns/cloudflare-secret.yaml`
+- `gitops/clusters/homelab/infrastructure/crossplane/proxmox-secret.yaml`
+- `gitops/clusters/homelab/apps/postgres/secret.yaml`
+- `gitops/clusters/homelab/apps/postgres/rclone-secret.yaml`
+- `gitops/clusters/homelab/apps/claudecodeui/blue/mqtt-secret.yaml`
+
+#### Step 4: Generate new GitHub deploy key
+
+```bash
+# Generate new SSH key for Flux
+ssh-keygen -t ed25519 -f ~/.ssh/flux-homeiac-home -N "" -C "flux-homeiac-home"
+
+# Add to GitHub as deploy key
+gh repo deploy-key add ~/.ssh/flux-homeiac-home.pub \
+  --repo homeiac/home \
+  --title "flux-k3s-$(date +%Y-%m)"
+```
+
+#### Step 5: Create flux-system secret with deploy key
+
+```bash
+# Get GitHub's current SSH host keys
+KNOWN_HOSTS=$(ssh-keyscan github.com 2>/dev/null)
+
+# Create the secret
+KUBECONFIG=~/kubeconfig kubectl create secret generic flux-system \
+  --namespace=flux-system \
+  --from-file=identity=/Users/10381054/.ssh/flux-homeiac-home \
+  --from-file=identity.pub=/Users/10381054/.ssh/flux-homeiac-home.pub \
+  --from-literal=known_hosts="$KNOWN_HOSTS"
+```
+
+#### Step 6: Apply GitOps sync configuration
+
+```bash
+KUBECONFIG=~/kubeconfig kubectl apply -f ~/code/home/gitops/clusters/homelab/flux-system/gotk-sync.yaml
+```
+
+#### Step 7: Trigger reconciliation and verify
+
+```bash
+# Force reconcile
+KUBECONFIG=~/kubeconfig flux reconcile source git flux-system
+
+# Watch kustomizations
+KUBECONFIG=~/kubeconfig flux get kustomizations
+
+# Watch all resources sync
+watch 'KUBECONFIG=~/kubeconfig kubectl get pods -A'
+```
+
+**Note**: Initial sync may show errors for CRDs that don't exist yet (e.g., MetalLB IPAddressPool). Flux will retry and resolve these as dependencies are installed.
+
+### Phase 9: Verify Workloads
 
 ```bash
 export KUBECONFIG=~/kubeconfig
