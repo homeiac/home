@@ -226,3 +226,24 @@ HA_URL=http://192.168.4.240:8123 /Users/10381054/code/home/scripts/haos/list-int
 4. **MetalLB race conditions** - explicit IP annotations prevent IP stealing on cluster rebuild
 5. **SOPS for all secrets** - never create secrets manually with kubectl
 6. **Check HA config for models** - don't guess Ollama model names, read `.storage/core.config_entries`
+7. **Face recognition requires bootstrap** - must upload at least one face image in UI before faces appear in Train tab
+
+## Frigate Face Recognition Setup
+
+Face recognition won't show any faces in the Train tab until you bootstrap it:
+
+1. **Upload at least one face image first** - Go to Frigate UI → Faces → click "+" to add a person
+2. **Add a clear headshot** for that person (e.g., "G" for yourself)
+3. **After this**, detected faces will start appearing in the Train tab
+4. **Resolution matters** - detect stream should be at least 1280x720 for good face detection
+5. **Camera angle** - works best on doorbells/eye-level cameras, not ceiling-mounted
+
+Config requirements:
+```yaml
+face_recognition:
+  enabled: true
+  model_size: large
+  min_area: 500  # Lower if faces are small
+```
+
+Reference: [Frigate Face Recognition Docs](https://docs.frigate.video/configuration/face_recognition/)
