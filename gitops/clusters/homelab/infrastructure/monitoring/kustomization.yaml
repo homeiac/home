@@ -12,6 +12,7 @@ resources:
   # - flux-alerting-rules.yaml
   # - flux-servicemonitor.yaml
   - grafana-ingress.yaml
+  - dashboards/
 
 configMapGenerator:
   - name: monitoring-values

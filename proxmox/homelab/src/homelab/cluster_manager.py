@@ -656,6 +656,74 @@ class ClusterManager:
 
         return {"status": "success", "message": f"Node {node_name} joined cluster"}
 
+    def install_monitoring(self, node_name: str) -> Dict[str, Any]:
+        """
+        Install monitoring packages on a Proxmox node.
+
+        Installs:
+        - lm-sensors: Hardware monitoring (CPU temp, fan RPM)
+        - prometheus-node-exporter: Metrics endpoint for Prometheus
+
+        This is IDEMPOTENT - checks if already installed and skips if so.
+        """
+        node = self.config.get_node(node_name)
+        if not node:
+            raise ClusterOperationError(f"Node '{node_name}' not in config")
+
+        logger.info(f"Installing monitoring packages on {node.fqdn}")
+
+        # Check if already installed
+        check_cmd = "dpkg -l | grep -q prometheus-node-exporter && dpkg -l | grep -q lm-sensors && echo INSTALLED"
+        result = self._run_ssh(node.fqdn, check_cmd, check=False)
+        if "INSTALLED" in result.stdout:
+            logger.info(f"Monitoring packages already installed on {node.fqdn}")
+            return {"status": "skipped", "message": "Monitoring packages already installed"}
+
+        # Install packages
+        install_cmd = """
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq lm-sensors prometheus-node-exporter prometheus-node-exporter-collectors
+
+            # Auto-detect sensors
+            sensors-detect --auto >/dev/null 2>&1 || true
+
+            # Load common Super I/O modules for fan monitoring
+            modprobe nct6775 2>/dev/null || true
+            modprobe it87 2>/dev/null || true
+
+            # Ensure nct6775 loads at boot (common on ASUS boards)
+            grep -q nct6775 /etc/modules || echo nct6775 >> /etc/modules
+
+            # Enable and start node_exporter
+            systemctl enable prometheus-node-exporter
+            systemctl start prometheus-node-exporter
+
+            echo "MONITORING_INSTALLED"
+        """
+        result = self._run_ssh(node.fqdn, install_cmd, check=False)
+
+        if "MONITORING_INSTALLED" not in result.stdout:
+            logger.warning(f"Monitoring install may have failed on {node.fqdn}: {result.stderr}")
+            return {"status": "warning", "message": f"Install may have failed: {result.stderr[:200]}"}
+
+        # Verify node_exporter is running
+        verify_cmd = "curl -s http://localhost:9100/metrics | grep -q node_hwmon && echo OK"
+        verify_result = self._run_ssh(node.fqdn, verify_cmd, check=False)
+
+        if "OK" in verify_result.stdout:
+            return {
+                "status": "success",
+                "message": f"Monitoring installed on {node_name}",
+                "node_exporter_port": 9100,
+            }
+        else:
+            return {
+                "status": "success",
+                "message": f"Monitoring installed on {node_name} (hwmon metrics may need reboot)",
+                "node_exporter_port": 9100,
+            }
+
     def is_gpu_passthrough_configured(self, node_name: str) -> bool:
         """Check if GPU passthrough is already fully configured."""
         node = self.config.get_node(node_name)
@@ -920,16 +988,21 @@ echo "Secondary network configured"
         join_result = self.join_node(node_name)
         results.append(("join_cluster", join_result))
 
-        # Step 6: Configure secondary network (if configured)
+        # Step 6: Install monitoring (lm-sensors, node_exporter)
+        logger.info("Step 6: Installing monitoring packages...")
+        monitoring_result = self.install_monitoring(node_name)
+        results.append(("monitoring", monitoring_result))
+
+        # Step 7: Configure secondary network (if configured)
         node = self.config.get_node(node_name)
         if node and node.network and node.network.secondary:
-            logger.info("Step 6: Configuring secondary network...")
+            logger.info("Step 7: Configuring secondary network...")
             net_result = self.configure_network(node_name)
             results.append(("network", net_result))
 
-        # Step 7: Configure GPU (if enabled)
+        # Step 8: Configure GPU (if enabled)
         if node and node.gpu_passthrough.enabled:
-            logger.info("Step 7: Configuring GPU passthrough...")
+            logger.info("Step 8: Configuring GPU passthrough...")
             gpu_result = self.configure_gpu_passthrough(node_name)
             results.append(("gpu_passthrough", gpu_result))
 
@@ -1023,6 +1096,7 @@ def main() -> None:
         print("  ssh-setup <node_name>         - Set up SSH keys on virgin node")
         print("  rejoin <node_name> [--force]  - Rejoin reinstalled node (idempotent)")
         print("  gpu <node_name>               - Configure GPU passthrough")
+        print("  monitoring <node_name>        - Install lm-sensors + node_exporter")
         print("  apply [--dry-run]             - Apply cluster config")
         print("")
         print("Options:")
@@ -1078,6 +1152,13 @@ def main() -> None:
             print("Usage: cluster_manager.py gpu <node_name>")
             sys.exit(1)
         result = manager.configure_gpu_passthrough(sys.argv[2])
+        print(f"Result: {result}")
+
+    elif command == "monitoring":
+        if len(sys.argv) < 3:
+            print("Usage: cluster_manager.py monitoring <node_name>")
+            sys.exit(1)
+        result = manager.install_monitoring(sys.argv[2])
         print(f"Result: {result}")
 
     elif command == "apply":

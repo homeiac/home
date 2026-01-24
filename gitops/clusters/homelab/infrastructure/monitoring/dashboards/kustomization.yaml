@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - nvidia-dcgm-exporter.yaml
+  - node-exporter-full.yaml
+  - proxmox-ve.yaml
+  - kubernetes-pvcs.yaml

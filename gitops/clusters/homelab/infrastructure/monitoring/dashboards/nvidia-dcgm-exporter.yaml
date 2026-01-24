@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-nvidia-dcgm-exporter
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "Homelab"
+data:
+  nvidia-dcgm-exporter.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "description": "This dashboard is to display the metrics from DCGM Exporter on a Kubernetes (1.13+) cluster",
+      "editable": true,
+      "gnetId": 12239,
+      "graphTooltip": 0,
+      "iteration": 1588401887165,
+      "links": [],
+      "panels": [],
+      "refresh": false,
+      "schemaVersion": 22,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-15m",
+        "to": "now"
+      },
+      "timepicker": {
+        "refresh_intervals": [
+          "5s",
+          "10s",
+          "30s",
+          "1m",
+          "5m",
+          "15m",
+          "30m",
+          "1h",
+          "2h",
+          "1d"
+        ]
+      },
+      "timezone": "",
+      "title": "NVIDIA DCGM Exporter Dashboard",
+      "uid": "Oxed_c6Wz",
+      "variables": {
+        "list": []
+      },
+      "version": 1
+    }
