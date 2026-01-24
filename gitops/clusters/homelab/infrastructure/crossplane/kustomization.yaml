@@ -6,7 +6,8 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  # Provider + config (secret SOPS-encrypted)
-  - provider-proxmox.yaml
-  - proxmox-secret.yaml
-  - provider-config.yaml
+  # TODO: Move to separate Flux Kustomization with dependency on Crossplane HelmRelease
+  # These require Crossplane Provider CRD which is installed by crossplane HelmRelease
+  # - provider-proxmox.yaml
+  # - proxmox-secret.yaml
+  # - provider-config.yaml
