@@ -33,13 +33,13 @@ spec:
           default: true
         exposedPort: 8554
         protocol: TCP
-      frigate-webrtc-tcp:
+      frigate-rtc-tcp:
         port: 8555
         expose:
           default: true
         exposedPort: 8555
         protocol: TCP
-      frigate-webrtc-udp:
+      frigate-rtc-udp:
         port: 8555
         expose:
           default: true
@@ -49,5 +49,5 @@ spec:
       - "--entrypoints.postgres.address=:5432/tcp"
       - "--entrypoints.frigate-api.address=:5000/tcp"
       - "--entrypoints.frigate-rtsp.address=:8554/tcp"
-      - "--entrypoints.frigate-webrtc-tcp.address=:8555/tcp"
-      - "--entrypoints.frigate-webrtc-udp.address=:8555/udp"
+      - "--entrypoints.frigate-rtc-tcp.address=:8555/tcp"
+      - "--entrypoints.frigate-rtc-udp.address=:8555/udp"
