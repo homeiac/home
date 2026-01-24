@@ -6,6 +6,7 @@ namespace: frigate
 resources:
   - namespace.yaml
   - secrets/frigate-credentials.sops.yaml
+  - secrets/ghcr-creds.sops.yaml
   - pvc.yaml
   - configmap.yaml
   - deployment.yaml
