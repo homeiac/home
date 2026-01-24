@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - secrets/smtp-credentials.sops.yaml
+  - secrets/grafana-admin-credentials.sops.yaml
   - helmrepository.yaml
   - helmrelease.yaml
   - prometheus-storage-class.yaml
