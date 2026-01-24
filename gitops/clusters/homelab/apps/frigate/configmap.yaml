@@ -14,8 +14,6 @@ data:
       client_id: frigate-k8s
 
     # AMD VAAPI for hardware-accelerated decoding
-    # Note: Recordings use stream copy (-c copy), not re-encoding.
-    # For MJPEG cameras, go2rtc handles transcoding.
     ffmpeg:
       hwaccel_args: preset-vaapi
       output_args:
