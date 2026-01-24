@@ -150,6 +150,20 @@ Cameras are on ISP network (192.168.1.x), not homelab (192.168.4.x).
 
 **Routing**: K3s pods reach 192.168.1.x via OPNsense (192.168.4.1) which routes to ISP network.
 
+### Reolink Camera Setup - CRITICAL
+
+When adding a new Reolink camera or after camera reset, you MUST manually enable streaming protocols:
+
+1. Open Reolink App or Web UI
+2. Go to **Network → Advanced → Server Settings**
+3. Enable:
+   - HTTP
+   - HTTPS
+   - RTMP
+   - RTSP (if separate option)
+
+**Without this**: Camera will refuse RTSP connections on port 554 even though it's on the network. Symptom: `connection refused` on port 554.
+
 ## SSH Access to HAOS
 
 HAOS VM 116 on chief-horse.maas has SSH via dropbear on port 22222.
