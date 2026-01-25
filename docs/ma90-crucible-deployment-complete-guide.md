@@ -25,6 +25,12 @@ ssh root@still-fawn.maas "ls -la /tmp/crucible/target/release/crucible-downstair
 
 ## 🚨 CRITICAL LIMITATIONS
 
+### **Single-Sled Testing Not Supported**
+**CRUCIBLE REQUIRES MINIMUM 3 DOWNSTAIRS FOR TESTING** - Cannot test with single MA90 sled!
+- ❌ **1 downstairs**: Crucible upstairs/NBD fails to start
+- ✅ **3 downstairs**: Required for any Crucible testing (can be on same sled)
+- 📋 **Minimum deployment**: 3 MA90 sleds OR 3 downstairs processes on single sled
+
 ### **Performance Requirements**
 **NEVER USE 512-BYTE BLOCKS** - Performance is 10x worse than 4K blocks!
 - ❌ **512B blocks**: 6-11 MB/s  
@@ -410,15 +416,36 @@ ssh -i ~/.ssh/id_ed25519_pve ubuntu@proper-raptor.maas "ps aux | grep crucible"
 
 ## Next Steps
 
-### **After Deployment:**
-1. **Test NBD integration** with Proxmox VMs (see `docs/crucible-proxmox-nbd-integration-guide.md`)
-2. **Set up systemd services** for persistent operation
-3. **Monitor performance** and storage health
+### 💡 **BUDGET-FRIENDLY TESTING STRATEGY**
+With only 1 downstairs process, Crucible requires 3 total downstairs for functionality:
+- Crucible upstairs uses 3-way quorum for consensus-based operations
+- NBD server needs minimum 3 downstairs targets to start
+- **Solution**: Add 2 more downstairs processes (same sled = $30 testing vs 3 sleds = $90)
 
-### **Optional: Multi-Sled for Fault Tolerance**
-For production fault tolerance, deploy additional MA90 sleds:
-- Each sled runs 1 downstairs on port 3810
-- Benefits: Hardware fault tolerance, geographic distribution
+### **Required Next Steps for Testing:**
+
+**Option A: Deploy 2 Additional MA90 Sleds (Production Fault Tolerance)**
+1. **Deploy 2 more MA90 sleds** using this exact process
+2. **Configure each with 1 downstairs** on port 3810
+3. **Test true 3-way distributed replication** across 3 separate sleds
+4. **Benefits**: Hardware fault tolerance, geographic distribution, 3x performance scaling
+
+**Option B: Add 2 More Downstairs to Current Sled (Cost-Effective Testing)**  
+
+**💡 SMART BUDGET APPROACH - Test full Crucible functionality for $30**
+- **Perfect for Learning**: Understand all Crucible features without expensive hardware
+- **Complete Testing**: NBD integration, replication, upstairs/downstairs communication
+- **Development Platform**: Ideal for experimentation and proof-of-concept work
+- **Upgrade Ready**: Easy migration to 3-sled production setup when needed
+
+1. **Create 2 additional regions** on proper-raptor (see NBD guide)
+2. **Start downstairs on ports 3811, 3812**
+3. **Test complete 3-downstairs functionality** on single sled
+
+### **After 3 Downstairs Available:**
+4. **Test NBD integration** with Proxmox VMs (see `docs/crucible-proxmox-nbd-integration-guide.md`)
+5. **Set up systemd services** for persistent operation
+6. **Monitor performance** and storage health
 
 ---
 
