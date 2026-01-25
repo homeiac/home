@@ -138,7 +138,7 @@ class HealthChecker:
         for camera_stats in cameras.values():
             if isinstance(camera_stats, dict):
                 fps = camera_stats.get("camera_fps", 0)
-                if isinstance(fps, (int, float)) and fps >= 1:
+                if isinstance(fps, int | float) and fps >= 1:
                     count += 1
         return count
 
