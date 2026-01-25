@@ -2,10 +2,12 @@
 
 import json
 import logging
+import re
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -52,6 +54,7 @@ class K3sClusterConfig:
     tls_san: List[str]
     server_config: Dict[str, Any]
     version: str = "1.0"
+    k3s_version: str = ""  # Current K3s version (e.g., v1.33.6+k3s1)
 
     @classmethod
     def from_yaml(cls, config_path: Path) -> "K3sClusterConfig":
@@ -93,6 +96,7 @@ class K3sClusterConfig:
             tls_san=data.get("tls_san", []),
             server_config=data.get("server_config", {}),
             version=data.get("metadata", {}).get("version", "1.0"),
+            k3s_version=cluster_data.get("k3s_version", ""),
         )
 
     def get_node(self, name: str) -> Optional[ControlPlaneNode]:
@@ -614,6 +618,386 @@ class K3sManager:
 
         return workflow_results
 
+    # =========================================================================
+    # K3s Version Upgrade Methods
+    # =========================================================================
+
+    @staticmethod
+    def parse_k3s_version(version_str: str) -> Tuple[int, int, int]:
+        """
+        Parse K3s version string to (major, minor, patch) tuple.
+
+        Args:
+            version_str: Version like "v1.33.6+k3s1" or "1.33.6"
+
+        Returns:
+            Tuple of (major, minor, patch)
+        """
+        # Remove 'v' prefix and '+k3sX' suffix
+        clean = version_str.lstrip("v").split("+")[0]
+        parts = clean.split(".")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid version format: {version_str}")
+        return (int(parts[0]), int(parts[1]), int(parts[2]))
+
+    def validate_version_skew(self, current: str, target: str) -> bool:
+        """
+        Validate that upgrade doesn't skip minor versions (Kubernetes policy).
+
+        Args:
+            current: Current version (e.g., v1.33.6+k3s1)
+            target: Target version (e.g., v1.34.3+k3s1)
+
+        Returns:
+            True if upgrade path is valid
+
+        Raises:
+            ValueError: If upgrade would skip minor versions
+        """
+        cur = self.parse_k3s_version(current)
+        tgt = self.parse_k3s_version(target)
+
+        # Can't skip minor versions
+        if tgt[1] - cur[1] > 1:
+            raise ValueError(
+                f"Cannot skip minor versions: {current} → {target}. "
+                f"Upgrade to v{cur[0]}.{cur[1] + 1}.x first."
+            )
+
+        # Can't downgrade
+        if tgt < cur:
+            raise ValueError(f"Cannot downgrade: {current} → {target}")
+
+        return True
+
+    def get_node_k3s_version(self, node: ControlPlaneNode) -> str:
+        """
+        Get K3s version from a specific node.
+
+        Args:
+            node: Control plane node to query
+
+        Returns:
+            Version string (e.g., v1.33.6+k3s1) or empty string on error
+        """
+        try:
+            result = self._run_qm_exec(
+                node.proxmox_host,
+                node.vmid,
+                "k3s --version 2>/dev/null | head -1",
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return ""
+
+            # Parse "k3s version v1.33.6+k3s1 (b5847677)"
+            match = re.search(r"v(\d+\.\d+\.\d+\+k3s\d+)", result.stdout)
+            return match.group(0) if match else ""
+
+        except Exception as e:
+            logger.warning(f"Could not get K3s version from {node.name}: {e}")
+            return ""
+
+    def drain_node(self, node_name: str, timeout: int = 120) -> bool:
+        """
+        Drain a K3s node before upgrade.
+
+        Args:
+            node_name: K3s node name
+            timeout: Drain timeout in seconds
+
+        Returns:
+            True if drain succeeded
+        """
+        cmd = [
+            "kubectl",
+            "--kubeconfig", str(Path.home() / "kubeconfig"),
+            "drain", node_name,
+            "--ignore-daemonsets",
+            "--delete-emptydir-data",
+            f"--timeout={timeout}s",
+        ]
+
+        logger.info(f"Draining node {node_name}...")
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 30,
+            )
+            if result.returncode != 0:
+                logger.error(f"Drain failed: {result.stderr}")
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            logger.error(f"Drain timeout for {node_name}")
+            return False
+
+    def uncordon_node(self, node_name: str) -> bool:
+        """
+        Uncordon a K3s node after upgrade.
+
+        Args:
+            node_name: K3s node name
+
+        Returns:
+            True if uncordon succeeded
+        """
+        cmd = [
+            "kubectl",
+            "--kubeconfig", str(Path.home() / "kubeconfig"),
+            "uncordon", node_name,
+        ]
+
+        logger.info(f"Uncordoning node {node_name}...")
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                logger.error(f"Uncordon failed: {result.stderr}")
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            logger.error(f"Uncordon timeout for {node_name}")
+            return False
+
+    def wait_for_node_ready(
+        self, node_name: str, timeout: int = 120, interval: int = 10
+    ) -> bool:
+        """
+        Wait for a node to become Ready.
+
+        Args:
+            node_name: K3s node name
+            timeout: Maximum wait time in seconds
+            interval: Check interval in seconds
+
+        Returns:
+            True if node became Ready within timeout
+        """
+        logger.info(f"Waiting for {node_name} to become Ready...")
+        start = time.time()
+
+        while time.time() - start < timeout:
+            try:
+                result = subprocess.run(
+                    [
+                        "kubectl",
+                        "--kubeconfig", str(Path.home() / "kubeconfig"),
+                        "get", "node", node_name,
+                        "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.stdout.strip() == "True":
+                    logger.info(f"  {node_name} is Ready")
+                    return True
+            except subprocess.TimeoutExpired:
+                pass
+
+            logger.info(f"  Waiting... ({int(time.time() - start)}s)")
+            time.sleep(interval)
+
+        logger.error(f"Timeout waiting for {node_name} to become Ready")
+        return False
+
+    def upgrade_node(
+        self,
+        node: ControlPlaneNode,
+        target_version: str,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Upgrade a single K3s node to target version.
+
+        Args:
+            node: Control plane node to upgrade
+            target_version: Target K3s version (e.g., v1.34.3+k3s1)
+            dry_run: If True, only show what would be done
+
+        Returns:
+            Dict with upgrade result
+        """
+        result = {
+            "node": node.name,
+            "target": target_version,
+        }
+
+        # Get current version
+        current = self.get_node_k3s_version(node)
+        result["current"] = current
+
+        if not current:
+            result["action"] = "error"
+            result["error"] = "Could not determine current version"
+            return result
+
+        # Already at target?
+        if current == target_version:
+            result["action"] = "already_at_target"
+            logger.info(f"  {node.name}: Already at {target_version}")
+            return result
+
+        # Validate version skew
+        try:
+            self.validate_version_skew(current, target_version)
+        except ValueError as e:
+            result["action"] = "error"
+            result["error"] = str(e)
+            return result
+
+        if dry_run:
+            result["action"] = "would_upgrade"
+            logger.info(f"  {node.name}: Would upgrade {current} → {target_version}")
+            return result
+
+        # 1. Drain node
+        if not self.drain_node(node.name):
+            result["action"] = "drain_failed"
+            # Try to uncordon even on failure
+            self.uncordon_node(node.name)
+            return result
+
+        # 2. Run upgrade via install script (background with polling)
+        logger.info(f"  {node.name}: Upgrading {current} → {target_version}...")
+
+        # Use nohup to run in background, poll for completion via version check
+        upgrade_cmd = f"""
+            nohup bash -c 'curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={target_version} sh -s - server --disable servicelb' > /tmp/k3s-upgrade.log 2>&1 &
+            echo "Upgrade started in background"
+        """
+
+        try:
+            self._run_qm_exec(
+                node.proxmox_host,
+                node.vmid,
+                upgrade_cmd,
+                check=False,  # Don't fail on background command
+            )
+        except K3sOperationError as e:
+            result["action"] = "upgrade_failed"
+            result["error"] = str(e)
+            self.uncordon_node(node.name)
+            return result
+
+        # 2b. Poll for upgrade completion (check version every 10s for up to 2 minutes)
+        logger.info(f"  {node.name}: Waiting for upgrade to complete...")
+        upgrade_timeout = 120
+        poll_interval = 10
+        start_time = time.time()
+
+        while time.time() - start_time < upgrade_timeout:
+            time.sleep(poll_interval)
+            new_ver = self.get_node_k3s_version(node)
+            if new_ver == target_version:
+                logger.info(f"  {node.name}: Upgrade completed, version is {new_ver}")
+                break
+            logger.info(f"  {node.name}: Still upgrading... (current: {new_ver or 'unknown'})")
+        else:
+            # Check final version
+            final_ver = self.get_node_k3s_version(node)
+            if final_ver != target_version:
+                result["action"] = "upgrade_timeout"
+                result["error"] = f"Upgrade timed out after {upgrade_timeout}s. Current: {final_ver}"
+                self.uncordon_node(node.name)
+                return result
+
+        # 3. Wait for K3s to restart (service restarts automatically)
+        logger.info(f"  {node.name}: Waiting for K3s service to restart...")
+        time.sleep(20)
+
+        # 4. Wait for node to become Ready
+        if not self.wait_for_node_ready(node.name, timeout=120):
+            result["action"] = "not_ready"
+            result["error"] = "Node did not become Ready after upgrade"
+            return result
+
+        # 5. Uncordon node
+        if not self.uncordon_node(node.name):
+            result["action"] = "uncordon_failed"
+            return result
+
+        # 6. Verify new version
+        new_version = self.get_node_k3s_version(node)
+        result["new_version"] = new_version
+
+        if new_version == target_version:
+            result["action"] = "upgraded"
+            logger.info(f"  {node.name}: Successfully upgraded to {new_version}")
+        else:
+            result["action"] = "version_mismatch"
+            result["error"] = f"Expected {target_version}, got {new_version}"
+
+        return result
+
+    def upgrade_cluster(
+        self,
+        target_version: str,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Rolling upgrade of entire K3s cluster.
+
+        Upgrades nodes one at a time to maintain cluster availability.
+
+        Args:
+            target_version: Target K3s version (e.g., v1.34.3+k3s1)
+            dry_run: If True, only show what would be done
+
+        Returns:
+            Dict with upgrade results for each node
+        """
+        logger.info(f"=== K3s Cluster Upgrade to {target_version} ===")
+
+        results = {
+            "target": target_version,
+            "dry_run": dry_run,
+            "nodes": {},
+        }
+
+        # Get current cluster version for validation
+        if self.config.control_plane_nodes:
+            sample_version = self.get_node_k3s_version(self.config.control_plane_nodes[0])
+            try:
+                self.validate_version_skew(sample_version, target_version)
+            except ValueError as e:
+                results["status"] = "invalid_upgrade_path"
+                results["error"] = str(e)
+                logger.error(f"Invalid upgrade path: {e}")
+                return results
+
+        # Upgrade each node
+        for i, node in enumerate(self.config.control_plane_nodes):
+            logger.info(f"\n--- Node {i + 1}/{len(self.config.control_plane_nodes)}: {node.name} ---")
+
+            node_result = self.upgrade_node(node, target_version, dry_run)
+            results["nodes"][node.name] = node_result
+
+            # If upgrade failed, stop
+            if node_result.get("action") in ("error", "drain_failed", "upgrade_failed"):
+                results["status"] = "failed"
+                logger.error(f"Upgrade failed at {node.name}, stopping")
+                break
+
+            # Wait between nodes for cluster stability (unless dry run or already at target)
+            if not dry_run and node_result.get("action") == "upgraded":
+                if i < len(self.config.control_plane_nodes) - 1:
+                    logger.info("Waiting 30 seconds before next node...")
+                    time.sleep(30)
+
+        # Determine overall status
+        if "status" not in results:
+            actions = [r.get("action") for r in results["nodes"].values()]
+            if all(a in ("upgraded", "already_at_target", "would_upgrade") for a in actions):
+                results["status"] = "success" if not dry_run else "dry_run"
+            else:
+                results["status"] = "partial"
+
+        return results
+
     def status(self) -> Dict[str, Any]:
         """Get current K3s cluster and kube-vip readiness status."""
         status = {
@@ -655,10 +1039,12 @@ def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: k3s_manager.py <command> [args]")
         print("Commands:")
-        print("  status                      - Show K3s cluster and kube-vip readiness")
+        print("  status                        - Show K3s cluster and kube-vip readiness")
         print("  configure-tls-san [--dry-run] - Configure TLS-SAN on all nodes")
-        print("  rotate-certs [--dry-run]    - Rotate API certificates")
-        print("  prepare-kube-vip [--dry-run] - Full workflow to prepare for kube-vip")
+        print("  rotate-certs [--dry-run]      - Rotate API certificates")
+        print("  prepare-kube-vip [--dry-run]  - Full workflow to prepare for kube-vip")
+        print("  upgrade <version> [--dry-run] - Rolling upgrade cluster to version")
+        print("                                  Example: upgrade v1.34.3+k3s1 --dry-run")
         sys.exit(1)
 
     manager = K3sManager()
@@ -669,13 +1055,17 @@ def main() -> None:
         status = manager.status()
         print(f"\nControl Plane VIP: {status['config']['control_plane_vip']}")
         print(f"kube-vip Enabled: {status['config']['kube_vip_enabled']}")
+        print(f"Config K3s Version: {manager.config.k3s_version}")
         print("\nNodes:")
         for name, info in status["nodes"].items():
             vip_status = "YES" if info["vip_in_san"] else "NO"
+            # Get live version from node
+            node = manager.config.get_node(name)
+            live_version = manager.get_node_k3s_version(node) if node else "unknown"
             print(f"  {name}:")
             print(f"    IP: {info['ip']}")
+            print(f"    K3s Version: {live_version}")
             print(f"    VIP in cert: {vip_status}")
-            print(f"    Current TLS-SAN: {info['current_tls_san']}")
 
     elif command == "configure-tls-san":
         result = manager.configure_tls_san(dry_run=dry_run)
@@ -688,6 +1078,30 @@ def main() -> None:
     elif command == "prepare-kube-vip":
         result = manager.prepare_for_kube_vip(dry_run=dry_run)
         print(f"\nResult: {json.dumps(result, indent=2)}")
+
+    elif command == "upgrade":
+        # Get target version from args
+        version_args = [a for a in sys.argv[2:] if not a.startswith("--")]
+        if not version_args:
+            print("Error: upgrade requires target version")
+            print("Usage: upgrade <version> [--dry-run]")
+            print("Example: upgrade v1.34.3+k3s1 --dry-run")
+            sys.exit(1)
+
+        target_version = version_args[0]
+        result = manager.upgrade_cluster(target_version, dry_run=dry_run)
+        print(f"\n{'='*60}")
+        print(f"Upgrade Result: {result['status']}")
+        print(f"{'='*60}")
+        for node_name, node_result in result["nodes"].items():
+            action = node_result.get("action", "unknown")
+            current = node_result.get("current", "?")
+            new_ver = node_result.get("new_version", "")
+            print(f"  {node_name}: {current} → {action}")
+            if new_ver:
+                print(f"    New version: {new_ver}")
+            if node_result.get("error"):
+                print(f"    Error: {node_result['error']}")
 
     else:
         print(f"Unknown command: {command}")

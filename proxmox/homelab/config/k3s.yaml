@@ -10,12 +10,14 @@
 
 metadata:
   name: k3s-cluster
-  version: "1.0"
+  version: "1.1"
   description: "K3s cluster configuration for homelab"
 
 # Cluster-wide settings
 cluster:
   name: homelab-k3s
+  # Current K3s version - track for upgrade operations
+  k3s_version: v1.35.0+k3s1
   # Control plane VIP for HA API access
   # This IP must be outside MetalLB range (192.168.4.80-120)
   control_plane_vip: 192.168.4.79
@@ -53,6 +55,12 @@ control_plane_nodes:
     is_primary: false
     # AMD GPU + Coral TPU for Frigate
 
+  - name: k3s-vm-fun-bedbug
+    proxmox_host: fun-bedbug
+    vmid: 114
+    ip: 192.168.4.192
+    is_primary: false
+
 # TLS-SAN entries for API server certificate
 # These are added to /etc/rancher/k3s/config.yaml on each control plane node
 tls_san:
@@ -61,6 +69,7 @@ tls_san:
   # All control plane node IPs
   - 192.168.4.210
   - 192.168.4.212
+  - 192.168.4.192
   # DNS names if using DNS-based access
   - k3s.homelab
   - k3s.app.home.panderosystems.com
