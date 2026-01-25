@@ -54,9 +54,10 @@ spec:
         discard: "on"
         importFrom: local:import/noble-server-cloudimg-amd64.qcow2
 
-    # Network - single NIC on main bridge
+    # Network - use vmbr25gbe for 192.168.4.x subnet (where K3s cluster is)
+    # NOTE: pve has vmbr0 (192.168.1.x WAN) and vmbr25gbe (192.168.4.x homelab)
     networkDevice:
-      - bridge: vmbr0
+      - bridge: vmbr25gbe
         model: virtio
         enabled: true
 
