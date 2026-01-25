@@ -38,12 +38,8 @@ spec:
                 - name: FRIGATE_HC_POD_LABEL_SELECTOR
                   value: "app=frigate"
                 # Health check thresholds
-                - name: FRIGATE_HC_INFERENCE_THRESHOLD_MS
-                  value: "100"
-                - name: FRIGATE_HC_STUCK_DETECTION_THRESHOLD
-                  value: "2"
-                - name: FRIGATE_HC_BACKLOG_THRESHOLD
-                  value: "5"
+                - name: FRIGATE_HC_SKIP_CAMERAS
+                  value: '["reolink_doorbell"]'  # Cameras on flaky networks to skip
                 - name: FRIGATE_HC_CONSECUTIVE_FAILURES_REQUIRED
                   value: "2"
                 - name: FRIGATE_HC_MAX_RESTARTS_PER_HOUR

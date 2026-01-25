@@ -21,19 +21,25 @@ class Settings(BaseSettings):
     pod_label_selector: str = Field(default="app=frigate", description="Label selector for pods")
 
     # Health check thresholds
-    inference_threshold_ms: int = Field(
-        default=100, description="Max acceptable Coral inference speed in ms"
-    )
-    stuck_detection_threshold: int = Field(
-        default=2, description="Max stuck detection events in check window"
-    )
-    backlog_threshold: int = Field(
-        default=5, description="Max recording backlog events in check window"
+    skip_cameras: list[str] = Field(
+        default=["reolink_doorbell"],
+        description="Cameras to skip in FPS check (on flaky networks)",
     )
     consecutive_failures_required: int = Field(
         default=2, description="Consecutive failures before restart"
     )
     max_restarts_per_hour: int = Field(default=2, description="Circuit breaker: max restarts/hour")
+
+    # Legacy thresholds (no longer used for health decisions, kept for compatibility)
+    inference_threshold_ms: int = Field(
+        default=100, description="(Legacy) Max acceptable Coral inference speed in ms"
+    )
+    stuck_detection_threshold: int = Field(
+        default=2, description="(Legacy) Max stuck detection events in check window"
+    )
+    backlog_threshold: int = Field(
+        default=5, description="(Legacy) Max recording backlog events in check window"
+    )
 
     # API settings
     frigate_api_port: int = Field(default=5000, description="Frigate API port")

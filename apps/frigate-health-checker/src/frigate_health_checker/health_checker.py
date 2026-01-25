@@ -29,7 +29,15 @@ class HealthChecker:
         self.k8s = k8s_client
 
     def check_health(self) -> HealthCheckResult:
-        """Perform comprehensive health check on Frigate."""
+        """Perform health check on Frigate.
+
+        Simple checks:
+        1. Pod exists
+        2. API accessible
+        3. Cameras have frames (camera_fps > 0)
+
+        Skip cameras in SKIP_CAMERAS list (e.g., doorbell on flaky WiFi).
+        """
         metrics = HealthMetrics()
 
         # Check 1: Pod exists
@@ -60,59 +68,79 @@ class HealthChecker:
 
         metrics.api_responsive = True
 
-        # Check 3: Coral inference speed
+        # Check 3: Camera FPS - are frames actually coming in?
+        # This is the most important check - if no frames, nothing works
+        cameras_without_frames = self._check_camera_fps(stats)
+        if cameras_without_frames:
+            camera_list = ", ".join(cameras_without_frames)
+            logger.warning(
+                "Cameras have no frames",
+                cameras=cameras_without_frames,
+            )
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.NO_FRAMES,
+                metrics=metrics,
+                message=f"No frames from: {camera_list}",
+            )
+
+        # Extract inference speed for logging (but don't fail on it)
         inference_speed = self._extract_inference_speed(stats)
         metrics.inference_speed_ms = inference_speed
-
-        if inference_speed is not None and inference_speed > self.settings.inference_threshold_ms:
-            logger.warning(
-                "Coral inference too slow",
-                speed_ms=inference_speed,
-                threshold_ms=self.settings.inference_threshold_ms,
-            )
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                reason=UnhealthyReason.INFERENCE_SLOW,
-                metrics=metrics,
-                message=f"Coral inference {inference_speed}ms > {self.settings.inference_threshold_ms}ms",
-            )
-
-        # Check 4: Log analysis
-        logs = self.k8s.get_pod_logs(pod_name, self.settings.log_window_minutes * 60)
-
-        stuck_count = self._count_pattern(logs, r"Detection appears to be stuck")
-        metrics.stuck_detection_count = stuck_count
-        if stuck_count > self.settings.stuck_detection_threshold:
-            logger.warning("Detection stuck events exceed threshold", count=stuck_count)
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                reason=UnhealthyReason.DETECTION_STUCK,
-                metrics=metrics,
-                message=f"Detection stuck {stuck_count}x in {self.settings.log_window_minutes} min",
-            )
-
-        backlog_count = self._count_pattern(logs, r"Too many unprocessed recording segments")
-        metrics.recording_backlog_count = backlog_count
-        if backlog_count > self.settings.backlog_threshold:
-            logger.warning("Recording backlog events exceed threshold", count=backlog_count)
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                reason=UnhealthyReason.RECORDING_BACKLOG,
-                metrics=metrics,
-                message=f"Recording backlog {backlog_count}x in {self.settings.log_window_minutes} min",
-            )
 
         logger.info(
             "Frigate is healthy",
             inference_ms=inference_speed,
-            stuck_count=stuck_count,
-            backlog_count=backlog_count,
+            cameras_ok=self._get_camera_count(stats),
         )
         return HealthCheckResult(
             status=HealthStatus.HEALTHY,
             metrics=metrics,
             message="All health checks passed",
         )
+
+    def _check_camera_fps(self, stats: dict[str, object]) -> list[str]:
+        """Check which cameras have no frames (camera_fps < 1).
+
+        Returns list of camera names with no frames, excluding skipped cameras.
+        """
+        # Cameras to skip (on flaky networks, etc.)
+        skip_cameras = self.settings.skip_cameras if hasattr(self.settings, 'skip_cameras') else ["reolink_doorbell"]
+
+        cameras_without_frames = []
+        cameras = stats.get("cameras")
+        if not isinstance(cameras, dict):
+            return ["unknown"]  # Can't parse cameras = unhealthy
+
+        for camera_name, camera_stats in cameras.items():
+            if camera_name in skip_cameras:
+                continue
+            if not isinstance(camera_stats, dict):
+                continue
+
+            camera_fps = camera_stats.get("camera_fps", 0)
+            try:
+                fps = float(camera_fps)
+            except (TypeError, ValueError):
+                fps = 0
+
+            if fps < 1:
+                cameras_without_frames.append(f"{camera_name}(fps={fps})")
+
+        return cameras_without_frames
+
+    def _get_camera_count(self, stats: dict[str, object]) -> int:
+        """Get count of cameras with frames."""
+        cameras = stats.get("cameras")
+        if not isinstance(cameras, dict):
+            return 0
+        count = 0
+        for camera_stats in cameras.values():
+            if isinstance(camera_stats, dict):
+                fps = camera_stats.get("camera_fps", 0)
+                if isinstance(fps, (int, float)) and fps >= 1:
+                    count += 1
+        return count
 
     def _get_frigate_stats(self, pod_name: str) -> dict[str, object] | None:
         """Get Frigate stats from API."""

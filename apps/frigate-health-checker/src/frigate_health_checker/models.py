@@ -18,6 +18,8 @@ class UnhealthyReason(Enum):
 
     NO_POD = "no_pod_running"
     API_UNRESPONSIVE = "api_unresponsive"
+    NO_FRAMES = "no_frames"  # camera_fps < 1 for one or more cameras
+    # Legacy reasons (kept for backwards compatibility)
     INFERENCE_SLOW = "inference_slow"
     DETECTION_STUCK = "detection_stuck"
     RECORDING_BACKLOG = "recording_backlog"
