@@ -140,25 +140,95 @@ cat /sys/class/pwm/pwmchip0/npwm
 
 **Result:** 1 PWM channel exists (for fan or backlight), not RGB LED.
 
-### 9. CYX_RGB_LED_Tool Analysis
+### 9. CYX_RGB_LED_Tool Deep Reverse Engineering
 
-Downloaded and reverse-engineered the CYX_RGB_LED_Tool used by similar mini PCs (AM08 Pro).
+Downloaded and extensively reverse-engineered the CYX_RGB_LED_Tool used by similar mini PCs (AM08 Pro).
 
-**Key findings from disassembly:**
-- Uses `io.dll` (inpout32) for direct I/O port access
-- Functions: `Out32`, `Inp32`, `IsInpOutDriverOpen`
-- Reads ports 0x2000/0x2001 for chip detection, expects 0x55 and 0x70/0x71
-- Built for **IT5571** chip (different from IT5570E)
-- Uses ports 0xC400 or 0x400 for LED control
+**Key findings from radare2 disassembly:**
+
+#### LED Mode Values Discovered
+| Mode | Value | Icon Name | Effect |
+|------|-------|-----------|--------|
+| On/Static | 1 | 01_On | Solid LED |
+| Auto/Rainbow | 2 | 06_Auto | Rainbow breathing (BOSGAME default!) |
+| Breath | 3 | 03_Breath | Single color breathing |
+| ColorLoop | 4 | 04_ColorLoop | Color cycling |
+
+**Note:** Icon name 05_RainBow actually uses mode value 2 (same as Auto). There is no mode 5.
+
+#### LED Write Protocol (fcn.0040a360)
+The CYX tool writes to LED using this sequence:
+```
+Port = 0xC400 or 0x0400
+1. Write 0x2E to port, Write 0x11 to port+1  (select reg 0x11)
+2. Write 0x2F to port, Write high_byte to port+1  (color high byte)
+3. Write 0x2E to port, Write 0x10 to port+1  (select reg 0x10)
+4. Write 0x2F to port, Write low_byte to port+1  (color low byte)
+5. Write 0x2E to port, Write 0x12 to port+1  (select reg 0x12)
+6. Write 0x2F to port, Write mode to port+1  (mode value)
+```
+
+#### Key Code Locations
+- Mode 2 (Rainbow) set at: 0x004093db (`mov eax, 2`)
+- Mode 3 (Breath) set at: 0x00409025 (`mov eax, 3`)
+- Mode 4 (ColorLoop) set at: 0x004091fb (`mov eax, 4`)
+- Mode 1 (Static) set at: 0x00408e09 (direct write to [esi+0x1918])
+- LED write function: 0x0040a360
+- Port initialization: 0x0040a325 (`mov dword [esi], 0xc400`)
 
 **Testing on BOSGAME:**
 ```bash
-# Read detection ports
-python3 -c "import os; fd=os.open('/dev/port',os.O_RDONLY); os.lseek(fd,0x2000,0); print(hex(os.read(fd,1)[0]))"
-# Result: 0xff (not responding)
+# Port 0x0400 responds (but is iTCO_wdt - watchdog timer)
+# Port 0xC400 returns 0xFF (not mapped)
+# SuperIO 0x4E responds with chip ID 0x5570 (IT5570E)
 ```
 
-**Result:** CYX tool is incompatible - different chip, different protocol.
+**Result:** CYX tool is built for IT5571 using ports 0xC400/0x0400. BOSGAME IT5570E uses different registers.
+
+### 10. SuperIO Register Writes (IT5570E)
+
+Attempted to write to IT5570E SuperIO registers using the CYX protocol:
+
+```bash
+# Enter SuperIO config mode
+write 0x87 to port 0x4E (twice)
+
+# Write via 0x2E/0x2F protocol
+write 0x2E to 0x4E, write reg to 0x4F
+write 0x2F to 0x4E, write value to 0x4F
+```
+
+**Tested writes:**
+- Reg 0x10 = 0x00 (color low) - Write accepted, no LED change
+- Reg 0x11 = 0x00 (color high) - Write accepted, no LED change
+- Reg 0x12 = 0x01 (mode static) - Write accepted, no LED change
+
+**Result:** Registers accept writes but don't control LED.
+
+### 11. LDN Base Port Scan
+
+Found LDN 0x10 with base address 0x0912:
+```
+LDN 0x10: Base=0x0912, Active=0x01
+  Reg 0x60/0x61 = 0x0912 (first base)
+  Reg 0x62/0x63 = 0x0910 (second base)
+  Reg 0xF1 = 0x49 ('I')
+  Reg 0xF2 = 0x4A ('J')
+```
+
+**Port scan 0x0910-0x0921:** All return 0xFF (not responding)
+
+### 12. EC RAM Write Attempts
+
+Wrote to EC registers via `/sys/kernel/debug/ec/ec0/io`:
+
+| Register | Before | After | LED Effect |
+|----------|--------|-------|------------|
+| 0x80 | 0x02 | 0x01 | None |
+| 0x80 | 0x01 | 0x00 | None |
+| 0xA0 | 0x03 | 0x00 | None |
+
+**Result:** EC accepts writes but LED doesn't respond. LED likely controlled via extended EC RAM (0x100+) or internal firmware.
 
 ## EC Port Configuration
 
@@ -175,18 +245,41 @@ The BOSGAME uses standard EC ports (0x62/0x66), not the extended ports the CYX t
 
 1. **No Linux driver exists** for IT5570E LED control
 2. **No BOSGAME LED software** found online
-3. **EC registers 0x00-0xFF** don't control the LED
-4. **LED control is likely in:**
-   - Extended EC RAM (0x100+ range, not easily accessible)
-   - Separate microcontroller not exposed to OS
-   - EC firmware handling animation internally
+3. **EC registers 0x00-0xFF** accept writes but don't control the LED
+4. **SuperIO registers 0x10-0x12** accept writes but don't control the LED
+5. **CYX_RGB_LED_Tool** is for IT5571, uses different ports (0xC400/0x0400)
+6. **LED control is likely in:**
+   - Extended EC RAM (0x100+ range, not accessible via standard EC interface)
+   - EC firmware handling animation internally with no OS interface
+   - Possibly only controllable via BIOS settings
+
+## What We Learned
+
+### CYX Tool LED Protocol (for IT5571, NOT IT5570E)
+```
+Mode values: 1=static, 2=rainbow, 3=breath, 4=colorloop
+Ports: 0xC400 or 0x0400
+Protocol: 0x2E/0x2F indirect register access
+Registers: 0x10=color_low, 0x11=color_high, 0x12=mode
+```
+
+### IT5570E vs IT5571
+- IT5570E chip ID: 0x5570 (confirmed via SuperIO 0x20/0x21)
+- IT5571 uses ports 0xC400/0x0400 for LED
+- IT5570E does NOT respond on these ports
+- Different register layout or protocol
 
 ## Recommendations
 
-1. **Accept the rainbow** - it looks fine
-2. **Check BIOS** - some mini PCs have LED settings in UEFI
-3. **Email BOSGAME support** - ask for LED control software
-4. **Boot Windows once** - use PortMon/API Monitor to capture I/O if LED software exists
+1. **Check BIOS first** - Press DEL at boot to enter UEFI setup
+   - Look in Advanced → Chipset or Peripherals for LED/RGB options
+   - AMI Aptio BIOS may have hidden options (requires AMIBCP to unlock)
+2. **Email BOSGAME support** - support@bosgamepc.com
+   - Ask if LED control software exists for Linux
+   - Ask if BIOS has hidden LED settings
+3. **Check BOSGAME forum** - https://forum.bosgamepc.com/
+4. **Boot Windows once** - use PortMon/API Monitor to capture I/O if BOSGAME releases LED software
+5. **Accept the rainbow** - it looks fine, low power, no heat
 
 ## Files Downloaded
 
@@ -199,17 +292,24 @@ The BOSGAME uses standard EC ports (0x62/0x66), not the extended ports the CYX t
 
 **NEVER probe random I2C/EC registers without research** - can corrupt system state.
 
+## Scripts Created
+
+- `scripts/bosgame/led-control-test.py` - Python script for testing LED control (didn't work but useful for future attempts)
+
 ## References
 
 - [OpenRGB](https://openrgb.org/) - Open source RGB control (doesn't support this hardware)
-- [CYX_RGB_LED_Tool](https://drive.google.com/file/d/1Mg25zCwqapHI7qoxw_7rVSQVWh1gpQl9/view) - For AM08 Pro, not BOSGAME
+- [CYX_RGB_LED_Tool](https://drive.google.com/file/d/1Mg25zCwqapHI7qoxw_7rVSQVWh1gpQl9/view) - For AM08 Pro IT5571, not BOSGAME IT5570E
 - [T9Plus LED Control](https://www2.rigacci.org/wiki/doku.php/doc/appunti/hardware/t9plus_mini_pc_rgb_led_control) - Python script for different hardware
 - [Mini PC Union Forum](https://minipcunion.com/) - Community for mini PC modding
+- [BOSGAME BIOS Download](https://www.bosgamepc.com/pages/bios-download-center) - Official BIOS files
+- [BOSGAME Support](https://www.bosgamepc.com/pages/support) - Driver downloads
+- [BOSGAME Forum](https://forum.bosgamepc.com/) - Official community forum
 
 ## Tags
 
-bosgame, ecolite, dnb10m, led, rgb, ring-light, it5570e, ec, embedded-controller, reverse-engineering, failed
+bosgame, ecolite, dnb10m, led, rgb, ring-light, it5570e, it5571, ec, embedded-controller, reverse-engineering, superio, cyx, failed
 
-## Incident Date
+## Investigation Date
 
 2026-01-24
