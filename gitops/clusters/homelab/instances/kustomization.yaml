@@ -7,8 +7,9 @@ kind: Kustomization
 # TODO: Create separate Flux Kustomization with dependency on Crossplane Provider
 
 resources:
-  # Cloud Images - must be downloaded before VMs can use them
-  - ubuntu-noble-cloud-image.yaml             # Ubuntu 24.04 for fun-bedbug
+  # Cloud Images - downloaded manually, not managed by Crossplane
+  # (Crossplane fails if file already exists on host)
+  # - ubuntu-noble-cloud-image.yaml             # Ubuntu 24.04 for fun-bedbug
   # - ubuntu-noble-cloud-image-still-fawn.yaml  # Ubuntu 24.04 for still-fawn
 
   # K3s Control Plane Nodes
