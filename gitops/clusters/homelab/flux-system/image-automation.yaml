@@ -1,0 +1,31 @@
+---
+# ImageUpdateAutomation watches ImagePolicies and commits tag updates to git
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 30m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        email: flux@homelab
+        name: Flux
+      messageTemplate: |
+        chore(flux): update container images
+
+        {{range .Changed.Changes}}
+        - {{.OldValue}} -> {{.NewValue}}
+        {{end}}
+    push:
+      branch: master
+  update:
+    path: ./gitops/clusters/homelab
+    strategy: Setters

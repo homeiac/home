@@ -17,6 +17,8 @@ resources:
   - configmap-health-state.yaml
   - rbac-health-checker.yaml
   - cronjob-health-python.yaml
+  # Flux image automation for health checker
+  - image-automation.yaml
 
 # Note: frigate-credentials Secret is now SOPS-encrypted in secrets/
 # Note: smtp-credentials Secret for health checker email notifications

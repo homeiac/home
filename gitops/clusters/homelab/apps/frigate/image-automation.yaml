@@ -1,0 +1,25 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: frigate-health-checker
+  namespace: flux-system
+spec:
+  image: ghcr.io/homeiac/frigate-health-checker
+  interval: 5m
+  provider: generic
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: frigate-health-checker
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: frigate-health-checker
+  # Select tags that look like git SHAs (7+ hex chars)
+  filterTags:
+    pattern: '^[a-f0-9]{7,40}$'
+  policy:
+    alphabetical:
+      order: desc

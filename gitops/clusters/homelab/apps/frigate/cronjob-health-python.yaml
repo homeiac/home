@@ -25,8 +25,8 @@ spec:
             - name: ghcr-creds
           containers:
             - name: health-check
-              image: ghcr.io/homeiac/frigate-health-checker:latest
-              imagePullPolicy: Always
+              image: ghcr.io/homeiac/frigate-health-checker:9857b35 # {"$imagepolicy": "flux-system:frigate-health-checker"}
+              imagePullPolicy: IfNotPresent
               env:
                 # Kubernetes settings
                 - name: FRIGATE_HC_NAMESPACE
