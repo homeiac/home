@@ -24,9 +24,10 @@ spec:
     vmId: 114
     description: "K3s control-plane node - Crossplane managed"
 
-    # Re-enabled 2026-01-25 to restore 3-node etcd quorum
-    started: true
-    onBoot: true
+    # Disabled 2026-01-25 - thermal issues (91°C under load)
+    # Using 3-node cluster: pumped-piglet, still-fawn, pve (standby)
+    started: false
+    onBoot: false
 
     # Machine configuration - i440fx for simplicity (no GPU passthrough needed)
     machine: pc-i440fx-8.1
