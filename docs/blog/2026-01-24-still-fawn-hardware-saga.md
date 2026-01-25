@@ -56,7 +56,19 @@ KingSpec is one of those "you get what you pay for" brands. Apparently what I pa
 3. Rejoin the cluster
 4. Restore VMs from PBS
 
-**What actually happened:**
+**What actually happened with PBS restore:**
+
+I started restoring the 700GB K3s VM from PBS. The T-FORCE NVMe should eat that for breakfast, right?
+
+Wrong. 100% iowait. System crawling. Hours to restore.
+
+PBS doesn't do sequential writes. It uses chunked deduplication - great for saving space, terrible for restore performance. Restoring means reassembling millions of 4MB chunks from the backup, which creates random write patterns even on fast storage. The disk wasn't failing; PBS restore is just architecturally slow.
+
+After watching the progress bar crawl, I gave up and created a fresh VM instead. Faster to reinstall than to wait for PBS.
+
+**Lesson learned**: PBS restore is slow for large VMs due to chunk reassembly architecture. For a 700GB VM, fresh creation + GitOps reconciliation was faster than waiting for PBS restore to complete.
+
+**Then came the K3s cluster rejoin:**
 
 ## Act III: The AI Makes It Worse
 

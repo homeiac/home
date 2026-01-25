@@ -91,7 +91,15 @@ pvesm status
 
 ### Phase 5: Create Fresh VM 108 via Crossplane
 
-**DO NOT restore from PBS** - the cloud-init contains stale K3s tokens. Create fresh VM:
+**DO NOT restore from PBS** for these reasons:
+
+1. **Performance**: PBS restore of a 700GB VM causes 100% iowait even on NVMe. PBS uses chunked deduplication - restoring requires reassembling millions of 4MB chunks, creating random write patterns that saturate disk I/O. A restore that should take minutes takes hours. This is a fundamental PBS architecture issue, not a hardware problem.
+
+2. **Stale state**: Cloud-init in the backup contains old K3s tokens that cause TLS failures on cluster rejoin anyway. You'd restore for hours, then have to rebuild K3s state regardless.
+
+**Better approach**: Fresh VM creation (minutes) + GitOps reconciliation (minutes) is faster than waiting for PBS restore (hours).
+
+Create fresh VM:
 
 ```bash
 # Deploy cloud-init snippet with CURRENT token
