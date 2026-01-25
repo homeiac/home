@@ -105,7 +105,11 @@ class HealthChecker:
         Returns list of camera names with no frames, excluding skipped cameras.
         """
         # Cameras to skip (on flaky networks, etc.)
-        skip_cameras = self.settings.skip_cameras if hasattr(self.settings, 'skip_cameras') else ["reolink_doorbell"]
+        skip_cameras = (
+            self.settings.skip_cameras
+            if hasattr(self.settings, "skip_cameras")
+            else ["reolink_doorbell"]
+        )
 
         cameras_without_frames = []
         cameras = stats.get("cameras")
