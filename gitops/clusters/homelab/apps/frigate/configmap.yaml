@@ -144,6 +144,11 @@ data:
         objects:
           track:
             - person
+            - cat
+            - dog
+            - raccoon
+            - squirrel
+            - rabbit
         motion:
           threshold: 25
           contour_area: 50
@@ -180,6 +185,11 @@ data:
         objects:
           track:
             - person
+            - cat
+            - dog
+            - raccoon
+            - squirrel
+            - rabbit
         motion:
           threshold: 25
           contour_area: 50
