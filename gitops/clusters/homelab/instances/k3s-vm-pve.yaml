@@ -1,0 +1,87 @@
+# K3s control-plane node on pve host
+# Purpose: 4th control-plane node for etcd quorum redundancy
+# Created: 2026-01-25
+#
+# IMPORTANT: pve host uses local-zfs for VM disks, local for snippets/import
+# This node will be powered off after initial setup (standby/spare)
+#
+# DEPENDENCY: Requires EnvironmentDownloadFile 'ubuntu-noble-cloud-image-pve'
+# to be synced first (see ubuntu-noble-cloud-image-pve.yaml)
+---
+apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
+kind: EnvironmentVM
+metadata:
+  name: k3s-vm-pve
+  labels:
+    role: k3s-control-plane
+    node: pve
+    managed-by: crossplane
+spec:
+  forProvider:
+    nodeName: pve
+    name: k3s-vm-pve
+    vmId: 107
+    description: "K3s control-plane node (standby) - Crossplane managed"
+
+    # Start to join cluster, will be powered off after setup
+    started: true
+    onBoot: false
+
+    # Machine configuration - i440fx for simplicity (no GPU passthrough needed)
+    machine: pc-i440fx-8.1
+    bios: seabios
+
+    # CPU: 2 cores for control-plane duties
+    cpu:
+      - cores: 2
+        type: host
+
+    # Memory: 4GB matches other control-plane nodes
+    memory:
+      - dedicated: 4096
+
+    # SCSI Controller
+    scsiHardware: virtio-scsi-pci
+
+    # Boot disk - import cloud image directly into disk
+    # IMPORTANT: pve uses local-zfs for VM disks (has images content type)
+    # importFrom references local:import (has import content type)
+    disk:
+      - interface: scsi0
+        datastoreId: local-zfs
+        size: 50
+        fileFormat: raw
+        discard: "on"
+        importFrom: local:import/noble-server-cloudimg-amd64.qcow2
+
+    # Network - single NIC on main bridge
+    networkDevice:
+      - bridge: vmbr0
+        model: virtio
+        enabled: true
+
+    # Cloud-init configuration
+    initialization:
+      - datastoreId: local
+        userAccount:
+          - username: ubuntu
+        ipConfig:
+          - ipv4:
+              - address: dhcp
+        # Full K3s cloud-init - prepares VM AND joins cluster automatically
+        # Snippet deployed via: scp scripts/k3s/snippets/k3s-server-pve.yaml root@pve.maas:/var/lib/vz/snippets/
+        userDataFileId: local:snippets/k3s-server-pve.yaml
+
+    # QEMU Guest Agent - required for proper shutdown/status
+    agent:
+      - enabled: true
+        trim: true
+        type: virtio
+
+  # Provider configuration reference
+  providerConfigRef:
+    name: default
+
+  # IMPORTANT: Orphan policy means deleting CR won't delete VM
+  # Use Orphan during initial deployment for safety
+  deletionPolicy: Orphan
