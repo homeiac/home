@@ -61,6 +61,13 @@ control_plane_nodes:
     ip: 192.168.4.192
     is_primary: false
 
+  - name: k3s-vm-pve
+    proxmox_host: pve
+    vmid: 107
+    ip: 192.168.4.193
+    is_primary: false
+    # Standby node - powered off after initial join
+
 # TLS-SAN entries for API server certificate
 # These are added to /etc/rancher/k3s/config.yaml on each control plane node
 tls_san:
@@ -70,6 +77,7 @@ tls_san:
   - 192.168.4.210
   - 192.168.4.212
   - 192.168.4.192
+  - 192.168.4.193
   # DNS names if using DNS-based access
   - k3s.homelab
   - k3s.app.home.panderosystems.com

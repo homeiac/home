@@ -12,7 +12,7 @@ CMD="${2:-uptime}"
 
 if [[ -z "$NODE" ]]; then
     echo "Usage: $0 <node> <command>"
-    echo "Nodes: still-fawn, pumped-piglet, chief-horse"
+    echo "Nodes: still-fawn, pumped-piglet, chief-horse, pve, fun-bedbug"
     exit 1
 fi
 
@@ -29,9 +29,17 @@ case "$NODE" in
         VMID=109
         HOST="chief-horse.maas"
         ;;
+    pve)
+        VMID=107
+        HOST="pve.maas"
+        ;;
+    fun-bedbug)
+        VMID=114
+        HOST="fun-bedbug.maas"
+        ;;
     *)
         echo "Unknown node: $NODE"
-        echo "Valid nodes: still-fawn, pumped-piglet, chief-horse"
+        echo "Valid nodes: still-fawn, pumped-piglet, chief-horse, pve, fun-bedbug"
         exit 1
         ;;
 esac
