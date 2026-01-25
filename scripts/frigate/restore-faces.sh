@@ -8,6 +8,10 @@
 #   - KUBECONFIG set or ~/kubeconfig exists
 #   - SSH access to pumped-piglet.maas
 #   - Frigate pod running
+#
+# Backup location: pumped-piglet.maas:/local-3TB-backup/frigate-backups/
+# Backup schedule: Daily at 3am via cron on pumped-piglet
+# Backup script: /root/scripts/backup-frigate-faces.sh (uses Frigate API)
 
 set -e
 
@@ -72,20 +76,36 @@ fi
 echo "Downloading backup..."
 scp "root@pumped-piglet.maas:${BACKUP_DIR}/${BACKUP_FILE}" "/tmp/${BACKUP_FILE}"
 
-# Restore to pod
-echo "Restoring to frigate pod..."
-kubectl exec -n frigate "${POD}" -c frigate -- rm -rf /media/frigate/clips/faces
-kubectl cp "/tmp/${BACKUP_FILE}" "frigate/${POD}:/tmp/${BACKUP_FILE}" -c frigate
-kubectl exec -n frigate "${POD}" -c frigate -- tar xzf "/tmp/${BACKUP_FILE}" -C / --strip-components=0
-kubectl exec -n frigate "${POD}" -c frigate -- rm -f "/tmp/${BACKUP_FILE}"
+# Extract locally first to get correct structure
+echo "Extracting backup..."
+cd /tmp
+rm -rf faces-restore
+mkdir faces-restore
+tar xzf "${BACKUP_FILE}" -C faces-restore --strip-components=1
 
-# Cleanup local temp
-rm -f "/tmp/${BACKUP_FILE}"
+# Restore via Frigate API (POST /api/faces/{name})
+echo "Restoring faces via Frigate API..."
+FRIGATE_URL="https://frigate.app.home.panderosystems.com"
+
+for FACE_DIR in faces-restore/*/; do
+    FACE_NAME=$(basename "$FACE_DIR")
+    [ "$FACE_NAME" = "train" ] && continue
+
+    echo "  Restoring face: $FACE_NAME"
+    for IMG in "$FACE_DIR"/*.webp; do
+        [ -f "$IMG" ] || continue
+        curl -sk -X POST "${FRIGATE_URL}/api/faces/${FACE_NAME}" \
+            -F "file=@${IMG}" > /dev/null
+    done
+done
+
+# Cleanup
+rm -rf /tmp/faces-restore "/tmp/${BACKUP_FILE}"
 
 # Verify restore
 echo ""
 echo "Restored face data:"
-kubectl exec -n frigate "${POD}" -c frigate -- ls -la /media/frigate/clips/faces/
+curl -sk "${FRIGATE_URL}/api/faces" | jq 'to_entries | .[] | "\(.key): \(.value | length) images"'
 
 echo ""
 echo "=== Restore complete ==="
