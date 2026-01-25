@@ -22,12 +22,11 @@ spec:
     nodeName: fun-bedbug
     name: k3s-vm-fun-bedbug
     vmId: 114
-    description: "K3s control-plane node - Crossplane managed - STOPPED for thermal"
+    description: "K3s control-plane node - Crossplane managed"
 
-    # STOPPED: Thermal issues on fun-bedbug (ATOPNUC MA90)
-    # 2-node cluster still has quorum, just no fault tolerance
-    started: false
-    onBoot: false
+    # Re-enabled 2026-01-25 to restore 3-node etcd quorum
+    started: true
+    onBoot: true
 
     # Machine configuration - i440fx for simplicity (no GPU passthrough needed)
     machine: pc-i440fx-8.1

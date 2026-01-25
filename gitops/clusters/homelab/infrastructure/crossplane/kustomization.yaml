@@ -7,8 +7,6 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - proxmox-ssh-key.sops.yaml
-  # TODO: Move to separate Flux Kustomization with dependency on Crossplane HelmRelease
-  # These require Crossplane Provider CRD which is installed by crossplane HelmRelease
-  # - provider-proxmox.yaml
-  # - proxmox-secret.yaml
-  # - provider-config.yaml
+  - provider-proxmox.yaml
+  - proxmox-secret.yaml
+  - provider-config.yaml
