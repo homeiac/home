@@ -1,15 +1,23 @@
 # Ubuntu Noble (24.04) cloud image for VM import
 # Downloaded via Crossplane/Terraform bpg provider
 # Required: storage must have 'import' content type enabled
+#
+# NOTE: Using Observe policy to adopt existing file on host
+# The file was manually downloaded before Crossplane managed it
 ---
 apiVersion: virtualenvironmentdownloadfile.crossplane.io/v1alpha1
 kind: EnvironmentDownloadFile
 metadata:
   name: ubuntu-noble-cloud-image
+  annotations:
+    # Adopt existing file - format: datastore:content-type/filename
+    crossplane.io/external-name: "local:import/noble-server-cloudimg-amd64.qcow2"
   labels:
     managed-by: crossplane
     image-type: cloud-init
 spec:
+  # Observe-only: don't try to create/update, just track it
+  managementPolicies: ["Observe"]
   forProvider:
     nodeName: fun-bedbug
     datastoreId: local
