@@ -237,19 +237,20 @@ class TestFullWorkflow:
         assert decision2.should_restart is True
         assert decision2.should_alert is False
 
-    def test_slow_inference_triggers_correct_workflow(
+    def test_no_frames_triggers_restart(
         self,
         settings: Settings,
         mock_k8s: MagicMock,
     ) -> None:
-        """Test workflow with slow Coral inference detection."""
-        # Setup: Slow inference
-        slow_stats = {
-            "detectors": {"coral": {"inference_speed": 250.0}},
-            "cameras": {},
+        """Test workflow when camera has no frames."""
+        # Setup: Camera with 0 FPS
+        no_frames_stats = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {"camera_fps": 0.0, "detection_fps": 0.0},
+            },
         }
-        mock_k8s.exec_in_pod.return_value = (json.dumps(slow_stats), True)
-        mock_k8s.get_pod_logs.return_value = "Normal logs"
+        mock_k8s.exec_in_pod.return_value = (json.dumps(no_frames_stats), True)
         mock_k8s.get_configmap_data.return_value = {
             "consecutive_failures": "1",
             "alert_sent_for_incident": "false",
@@ -267,33 +268,29 @@ class TestFullWorkflow:
 
         # Verify
         assert result.is_healthy is False
-        assert "inference" in result.message.lower()
-        assert result.metrics.inference_speed_ms == 250.0
+        assert "front_door" in result.message
         assert decision.should_restart is True
 
-    def test_stuck_detection_triggers_restart(
+    def test_healthy_with_all_cameras_working(
         self,
         settings: Settings,
         mock_k8s: MagicMock,
     ) -> None:
-        """Test that stuck detection messages trigger restart."""
-        # Setup: Normal stats but stuck detection in logs
+        """Test healthy status when all cameras have frames."""
+        # Setup: All cameras working
         healthy_stats = {
-            "detectors": {"coral": {"inference_speed": 50.0}},
-            "cameras": {},
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {"camera_fps": 5.0, "detection_fps": 0.2},
+                "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1},
+            },
         }
         mock_k8s.exec_in_pod.return_value = (json.dumps(healthy_stats), True)
-        mock_k8s.get_pod_logs.return_value = """
-        Detection appears to be stuck
-        Detection appears to be stuck
-        Detection appears to be stuck
-        """
         mock_k8s.get_configmap_data.return_value = {
-            "consecutive_failures": "1",
+            "consecutive_failures": "0",
             "alert_sent_for_incident": "false",
             "last_restart_times": "",
         }
-        mock_k8s.is_node_ready.return_value = True
 
         # Execute
         checker = HealthChecker(settings, mock_k8s)
@@ -304,10 +301,8 @@ class TestFullWorkflow:
         decision = manager.evaluate_restart(result, state)
 
         # Verify
-        assert result.is_healthy is False
-        assert result.metrics.stuck_detection_count == 3
-        assert "stuck" in result.message.lower()
-        assert decision.should_restart is True
+        assert result.is_healthy is True
+        assert decision.should_restart is False
 
 
 class TestEmailIntegration:

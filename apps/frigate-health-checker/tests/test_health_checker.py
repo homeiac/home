@@ -48,18 +48,24 @@ class TestHealthChecker:
         assert result.status == HealthStatus.UNHEALTHY
         assert result.reason == UnhealthyReason.API_UNRESPONSIVE
 
-    def test_check_health_slow_inference(
+    def test_check_health_no_frames(
         self,
         settings: Settings,
         mock_k8s_client: MagicMock,
         mock_pod: MagicMock,
-        frigate_stats_slow_inference: dict,
     ) -> None:
-        """Test health check with slow Coral inference."""
+        """Test health check when camera has no frames (fps=0)."""
+        stats_no_frames = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {"camera_fps": 0.0, "detection_fps": 0.0},
+                "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1},
+            },
+        }
         mock_k8s_client.get_frigate_pod.return_value = mock_pod
         mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
         mock_k8s_client.exec_in_pod.return_value = (
-            json.dumps(frigate_stats_slow_inference),
+            json.dumps(stats_no_frames),
             True,
         )
         checker = HealthChecker(settings, mock_k8s_client)
@@ -67,77 +73,57 @@ class TestHealthChecker:
         result = checker.check_health()
 
         assert result.status == HealthStatus.UNHEALTHY
-        assert result.reason == UnhealthyReason.INFERENCE_SLOW
-        assert result.metrics.inference_speed_ms == 250.0
+        assert result.reason == UnhealthyReason.NO_FRAMES
+        assert "front_door" in result.message
 
-    def test_check_health_detection_stuck(
+    def test_check_health_skipped_camera_no_frames(
         self,
         settings: Settings,
         mock_k8s_client: MagicMock,
         mock_pod: MagicMock,
-        frigate_stats_healthy: dict,
     ) -> None:
-        """Test health check with stuck detection."""
+        """Test that skipped cameras (e.g., doorbell) don't fail health check."""
+        stats_doorbell_down = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "reolink_doorbell": {"camera_fps": 0.0, "detection_fps": 0.0},
+                "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1},
+            },
+        }
         mock_k8s_client.get_frigate_pod.return_value = mock_pod
         mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
         mock_k8s_client.exec_in_pod.return_value = (
-            json.dumps(frigate_stats_healthy),
+            json.dumps(stats_doorbell_down),
             True,
         )
-        # Simulate logs with stuck detection messages
-        mock_k8s_client.get_pod_logs.return_value = """
-2024-01-15 10:00:00 Detection appears to be stuck
-2024-01-15 10:01:00 Detection appears to be stuck
-2024-01-15 10:02:00 Detection appears to be stuck
-"""
         checker = HealthChecker(settings, mock_k8s_client)
 
         result = checker.check_health()
 
-        assert result.status == HealthStatus.UNHEALTHY
-        assert result.reason == UnhealthyReason.DETECTION_STUCK
-        assert result.metrics.stuck_detection_count == 3
-
-    def test_check_health_recording_backlog(
-        self,
-        settings: Settings,
-        mock_k8s_client: MagicMock,
-        mock_pod: MagicMock,
-        frigate_stats_healthy: dict,
-    ) -> None:
-        """Test health check with recording backlog."""
-        mock_k8s_client.get_frigate_pod.return_value = mock_pod
-        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
-        mock_k8s_client.exec_in_pod.return_value = (
-            json.dumps(frigate_stats_healthy),
-            True,
-        )
-        # Simulate logs with backlog messages (more than threshold)
-        backlog_msg = "Too many unprocessed recording segments\n"
-        mock_k8s_client.get_pod_logs.return_value = backlog_msg * 6
-        checker = HealthChecker(settings, mock_k8s_client)
-
-        result = checker.check_health()
-
-        assert result.status == HealthStatus.UNHEALTHY
-        assert result.reason == UnhealthyReason.RECORDING_BACKLOG
-        assert result.metrics.recording_backlog_count == 6
+        # Should be healthy because reolink_doorbell is in skip list
+        assert result.status == HealthStatus.HEALTHY
+        assert result.reason is None
 
     def test_check_health_all_healthy(
         self,
         settings: Settings,
         mock_k8s_client: MagicMock,
         mock_pod: MagicMock,
-        frigate_stats_healthy: dict,
     ) -> None:
         """Test health check when everything is healthy."""
+        stats_healthy = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {"camera_fps": 5.0, "detection_fps": 0.2},
+                "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1},
+            },
+        }
         mock_k8s_client.get_frigate_pod.return_value = mock_pod
         mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
         mock_k8s_client.exec_in_pod.return_value = (
-            json.dumps(frigate_stats_healthy),
+            json.dumps(stats_healthy),
             True,
         )
-        mock_k8s_client.get_pod_logs.return_value = "Normal log output"
         checker = HealthChecker(settings, mock_k8s_client)
 
         result = checker.check_health()
@@ -145,7 +131,7 @@ class TestHealthChecker:
         assert result.status == HealthStatus.HEALTHY
         assert result.reason is None
         assert result.metrics.api_responsive is True
-        assert result.metrics.inference_speed_ms == 45.5
+        assert result.metrics.inference_speed_ms == 15.0
 
 
 class TestRestartManager:

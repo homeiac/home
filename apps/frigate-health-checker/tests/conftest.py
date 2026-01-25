@@ -101,25 +101,28 @@ def frigate_stats_healthy() -> dict:
     return {
         "detectors": {
             "coral": {
-                "inference_speed": 45.5,
+                "inference_speed": 15.0,
                 "pid": 123,
             }
         },
         "cameras": {
-            "front_door": {"fps": 30, "detection_fps": 5},
+            "front_door": {"camera_fps": 5.0, "detection_fps": 0.2},
+            "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1},
         },
     }
 
 
 @pytest.fixture
-def frigate_stats_slow_inference() -> dict:
-    """Create Frigate stats with slow inference."""
+def frigate_stats_no_frames() -> dict:
+    """Create Frigate stats with camera having no frames."""
     return {
         "detectors": {
             "coral": {
-                "inference_speed": 250.0,
+                "inference_speed": 15.0,
                 "pid": 123,
             }
         },
-        "cameras": {},
+        "cameras": {
+            "front_door": {"camera_fps": 0.0, "detection_fps": 0.0},
+        },
     }
