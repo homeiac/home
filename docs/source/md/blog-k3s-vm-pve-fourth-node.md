@@ -214,13 +214,13 @@ A spare tire in the trunk. Not using resources, but ready.
 
 An hour after deployment, Grafana told a different story.
 
-fun-bedbug's temperature graph showed the AMD A9-9400 sitting at **91°C sustained** - just 9 degrees below the critical threshold. Before the K3s VM started, it idled at 45-55°C. The tiny ATOPNUC MA90 with its passive cooling simply couldn't handle the load.
+fun-bedbug's temperature graph showed the AMD A9-9400 sitting at **91°C sustained** - just 9 degrees below the critical threshold. Before the K3s VM started, it idled at 45-55°C. The tiny ATOPNUC MA90 with its limited cooling simply couldn't handle the load.
 
 The question became: which node should be the standby?
 
 | Node | Thermal Risk | Resource Risk | Isolation |
 |------|-------------|---------------|-----------|
-| fun-bedbug | **High** (91°C, passive cooling) | Low | Good - dedicated box |
+| fun-bedbug | **High** (91°C, limited cooling) | Low | Good - dedicated box |
 | pve | Low (57°C, proper cooling) | **Medium** (shares host with OPNsense/MAAS) | Poor - critical services |
 
 The concern with pve was valid: it runs OPNsense (the router) and MAAS (infrastructure provisioning). If the K3s VM misbehaved and starved resources, the entire network could go down.
@@ -292,7 +292,7 @@ Three nodes. Proper etcd quorum. One node can fail without losing the cluster. A
 
 ---
 
-*k3s-vm-pve hums along now at 57°C, sharing its host with OPNsense and MAAS. fun-bedbug sits powered off, its passive cooling finally getting a break. The cluster runs with three nodes - proper quorum, proper thermals, proper GitOps. And somewhere in a Grafana dashboard, a temperature graph tells the real story: 91°C was too close. 57°C is just right.*
+*k3s-vm-pve hums along now at 57°C, sharing its host with OPNsense and MAAS. fun-bedbug sits powered off, its limited cooling finally getting a break. The cluster runs with three nodes - proper quorum, proper thermals, proper GitOps. And somewhere in a Grafana dashboard, a temperature graph tells the real story: 91°C was too close. 57°C is just right.*
 
 ---
 
