@@ -210,6 +210,70 @@ ssh root@pve.maas "qm status 107"
 
 A spare tire in the trunk. Not using resources, but ready.
 
+## Update: The Thermal Reality Check
+
+An hour after deployment, Grafana told a different story.
+
+fun-bedbug's temperature graph showed the AMD A9-9400 sitting at **91°C sustained** - just 9 degrees below the critical threshold. Before the K3s VM started, it idled at 45-55°C. The tiny ATOPNUC MA90 with its passive cooling simply couldn't handle the load.
+
+The question became: which node should be the standby?
+
+| Node | Thermal Risk | Resource Risk | Isolation |
+|------|-------------|---------------|-----------|
+| fun-bedbug | **High** (91°C, passive cooling) | Low | Good - dedicated box |
+| pve | Low (57°C, proper cooling) | **Medium** (shares host with OPNsense/MAAS) | Poor - critical services |
+
+The concern with pve was valid: it runs OPNsense (the router) and MAAS (infrastructure provisioning). If the K3s VM misbehaved and starved resources, the entire network could go down.
+
+But the numbers told a clearer story:
+
+```
+=== pve host with k3s-vm-pve running ===
+CPU Temp:     56-57°C  (crit @ 105°C) - 48°C headroom
+Load Average: 0.85     (4-core CPU)   - barely noticeable
+Memory:       12.8/15.7GB used        - 3GB headroom
+
+VM allocation:
+- OPNsense:    4GB
+- MAAS:        5GB
+- k3s-vm-pve:  4GB
+- Host free:   ~3GB
+```
+
+Compare to fun-bedbug:
+
+```
+=== fun-bedbug with k3s-vm-fun-bedbug running ===
+CPU Temp:     91°C     (crit @ 100°C) - 9°C headroom
+Load Average: 1.5+     (2-core CPU)   - saturated
+```
+
+**Decision: Shut down fun-bedbug, keep pve running.**
+
+The thermal risk on fun-bedbug was immediate and hardware-threatening. The resource risk on pve was theoretical and manageable. A 3GB memory buffer with stable VMs is acceptable; running 9°C from thermal shutdown is not.
+
+```bash
+# Via Crossplane (the right way)
+# k3s-vm-fun-bedbug.yaml: started: false, onBoot: false
+git commit -m "fix(k3s): disable k3s-vm-fun-bedbug due to thermal issues"
+git push
+flux reconcile kustomization flux-system --with-source
+
+# Remove the NotReady ghost from cluster
+kubectl delete node k3s-vm-fun-bedbug
+```
+
+Final cluster state:
+
+```
+NAME                       STATUS   ROLES                       VERSION
+k3s-vm-pumped-piglet-gpu   Ready    control-plane,etcd,master   v1.35.0+k3s1
+k3s-vm-still-fawn          Ready    control-plane,etcd,master   v1.35.0+k3s1
+k3s-vm-pve                 Ready    control-plane,etcd          v1.35.0+k3s1
+```
+
+Three nodes. Proper etcd quorum. One node can fail without losing the cluster. And no hardware cooking itself to death.
+
 ## Lessons Learned
 
 1. **Homogeneity is a myth.** Even in your own infrastructure, hosts have quirks. Document them.
@@ -222,9 +286,13 @@ A spare tire in the trunk. Not using resources, but ready.
 
 5. **Fail-fast checks pay dividends.** A 5-second curl in cloud-init would have made the failure obvious immediately.
 
+6. **Thermals trump isolation.** Running a node 9°C from critical is worse than sharing a host with other VMs. Hardware damage is permanent; resource contention is manageable.
+
+7. **NotReady nodes are not inert.** They hold etcd membership, leases, and can cause leader election issues. If a node is intentionally offline, remove it from the cluster entirely.
+
 ---
 
-*k3s-vm-pve sleeps now, powered off, its brief moment of confusion forgotten. The cluster hums along with four nodes registered, three active. And somewhere in a Git commit, a one-line diff tells the whole story: `vmbr0` → `vmbr25gbe`. The infrastructure remembers what I almost forgot.*
+*k3s-vm-pve hums along now at 57°C, sharing its host with OPNsense and MAAS. fun-bedbug sits powered off, its passive cooling finally getting a break. The cluster runs with three nodes - proper quorum, proper thermals, proper GitOps. And somewhere in a Grafana dashboard, a temperature graph tells the real story: 91°C was too close. 57°C is just right.*
 
 ---
 
