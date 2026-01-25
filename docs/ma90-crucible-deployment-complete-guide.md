@@ -1,24 +1,32 @@
 # MA90 Crucible Deployment - Complete Working Guide
 
 **Date**: September 1, 2025
-**Status**: ON HOLD - proper-raptor offline, needs physical check
+**Status**: WAS WORKING - needs restoration (proper-raptor offline, still-fawn rebuilt)
 **Last Updated**: January 25, 2026
-**Performance**: 4K blocks = 60+ MB/s (vs 512B blocks = 6 MB/s)
+**Performance**: 4K blocks = 60+ MB/s, network saturated during tests
 
 ## ⚠️ PROJECT STATUS (January 2026)
 
-**Current State**: Project on hold due to:
-1. **proper-raptor.maas (192.168.4.189) is OFFLINE** - needs physical power-on/network check
-2. **3-downstairs requirement** - single sled deployment was blocked by Crucible's quorum requirement
-3. **Never fully operational** - downstairs deployed, but upstairs/NBD integration never completed
+**Current State**: Project on hold - was fully working, needs restoration.
+
+**What WAS Working (Aug 2025):**
+- ✅ 3 downstairs processes on proper-raptor (ports 3810, 3811, 3812)
+- ✅ NBD upstairs (crucible-nbd-server) on still-fawn
+- ✅ Network saturated during performance tests
+- ✅ End-to-end Crucible distributed storage functional
+
+**What Broke:**
+1. **still-fawn was rebuilt** - lost crucible-nbd-server setup and binaries
+2. **proper-raptor.maas (192.168.4.189) is OFFLINE** - needs physical power-on/network check (may be labeled as grand-python)
 
 **Note**: The `crucible-storage` directory on fun-bedbug (`/mnt/crucible-storage`) is NOT connected to Crucible - it's just a local directory with a misleading name.
 
-**To Resume**:
-1. Physically check proper-raptor (may be labeled as grand-python)
-2. Power on and verify network connectivity
-3. Either deploy 2 more MA90 sleds OR run 3 downstairs on single sled
-4. Complete upstairs/NBD integration
+**To Restore**:
+1. Physically power on proper-raptor and verify network connectivity
+2. Verify 3 downstairs processes still running (may auto-start, or need manual restart)
+3. Rebuild crucible binaries on still-fawn (or another compute host)
+4. Restart crucible-nbd-server on still-fawn pointing to proper-raptor:3810,3811,3812
+5. Reconnect NBD device and test
 
 ---
 
