@@ -1,8 +1,26 @@
 # MA90 Crucible Deployment - Complete Working Guide
 
-**Date**: September 1, 2025  
-**Status**: TESTED AND WORKING  
+**Date**: September 1, 2025
+**Status**: ON HOLD - proper-raptor offline, needs physical check
+**Last Updated**: January 25, 2026
 **Performance**: 4K blocks = 60+ MB/s (vs 512B blocks = 6 MB/s)
+
+## ⚠️ PROJECT STATUS (January 2026)
+
+**Current State**: Project on hold due to:
+1. **proper-raptor.maas (192.168.4.189) is OFFLINE** - needs physical power-on/network check
+2. **3-downstairs requirement** - single sled deployment was blocked by Crucible's quorum requirement
+3. **Never fully operational** - downstairs deployed, but upstairs/NBD integration never completed
+
+**Note**: The `crucible-storage` directory on fun-bedbug (`/mnt/crucible-storage`) is NOT connected to Crucible - it's just a local directory with a misleading name.
+
+**To Resume**:
+1. Physically check proper-raptor (may be labeled as grand-python)
+2. Power on and verify network connectivity
+3. Either deploy 2 more MA90 sleds OR run 3 downstairs on single sled
+4. Complete upstairs/NBD integration
+
+---
 
 ## 🚀 Quick Start Prerequisites
 
