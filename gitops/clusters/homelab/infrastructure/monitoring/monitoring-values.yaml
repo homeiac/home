@@ -21,6 +21,10 @@ prometheus:
               - 192.168.4.19:9100    # chief-horse
               - 192.168.4.172:9100   # fun-bedbug
               - 192.168.4.175:9100   # pumped-piglet
+      - job_name: "crucible-node-exporter"
+        static_configs:
+          - targets:
+              - 192.168.4.189:9100   # proper-raptor (Crucible storage)
       - job_name: "proxmox-pve-exporter"
         metrics_path: /pve
         static_configs:

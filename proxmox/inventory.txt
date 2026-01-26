@@ -1,4 +1,6 @@
 # inventory.txt
+# See also: docs/reference/ip-assignments.md (comprehensive IP table)
+
 [proxmox]
 192.168.4.122   # pve
 192.168.4.17    # still-fawn
@@ -13,8 +15,12 @@
 [k3s-vms]
 192.168.4.210   # k3s-vm-pumped-piglet-gpu (VMID 105 on pumped-piglet)
 192.168.4.212   # k3s-vm-still-fawn (VMID 108 on still-fawn) - GPU + Coral TPU
-192.168.4.203   # k3s-vm-fun-bedbug (VMID 114 on fun-bedbug)
-# 192.168.4.238 # k3s-vm-pve (VMID 107 on pve) - STOPPED, removed from cluster 2026-01-17
+192.168.4.192   # k3s-vm-fun-bedbug (VMID 114 on fun-bedbug) - DISABLED thermal
+192.168.4.193   # k3s-vm-pve (VMID 107 on pve) - STANDBY powered off
+
+[crucible]
+192.168.4.189   # proper-raptor (management - enp1s0 1GbE)
+192.168.4.190   # proper-raptor (storage - enx* USB 2.5GbE) - PLANNED
 
 [rke2-eval]
 # On pumped-piglet (VMID 200, 201, 202)
