@@ -19,8 +19,8 @@ CAMERAS = {
     "living_room": "14:EA:63:A9:04:08",
 }
 
-# Scan a smaller range for speed (cameras are usually in .130-.150)
-SCAN_RANGE = os.environ.get("SCAN_RANGE", "192.168.1.130-150")
+# AT&T router DHCP range: .64-.200
+SCAN_RANGE = os.environ.get("SCAN_RANGE", "192.168.1.64-200")
 OUTPUT_FILE = os.environ.get("OUTPUT_FILE", "/config/camera_ips.json")
 
 
