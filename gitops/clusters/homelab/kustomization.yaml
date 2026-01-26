@@ -23,6 +23,7 @@ resources:
   - apps/stable-diffusion
   - apps/samba
   - apps/frigate                        # Coral TPU + NVIDIA GPU (secret: frigate-credentials)
+  - apps/frigate-ip-webhook             # Auto-update Frigate IPs from HA sensor
   - apps/claudecodeui                    # Claude Code web UI (ghcr.io/homeiac/claudecodeui)
   - apps/postgres                        # PostgreSQL 16 with pgvector, TimescaleDB, PostGIS
 

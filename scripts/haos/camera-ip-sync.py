@@ -80,11 +80,16 @@ def main():
         else:
             print(f"  {camera_name}: NOT FOUND (MAC: {mac})")
 
+    # Create state string that changes when IPs change (for HA state trigger)
+    # Format: "hall:192.168.1.137,living_room:192.168.1.138"
+    ip_state = ",".join(f"{k}:{v}" for k, v in sorted(camera_ips.items()))
+
     # Write output
     output = {
         "timestamp": datetime.now().isoformat(),
         "cameras": camera_ips,
         "all_found": len(camera_ips) == len(CAMERAS),
+        "ip_state": ip_state,  # Changes when any IP changes - triggers HA automation
     }
 
     with open(OUTPUT_FILE, 'w') as f:

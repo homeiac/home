@@ -2,22 +2,33 @@
 # Add these to your configuration.yaml
 #
 # Discovers camera IPs by MAC address using nmap and writes to /config/camera_ips.json
-# When IPs change, fires an event that can trigger a notification or automation
+# When IPs change, automation calls webhook to update Frigate ConfigMap
 
 # Shell command to run the discovery script
 shell_command:
   camera_ip_sync: "python3 /config/scripts/camera-ip-sync.py"
 
+# REST command to update Frigate ConfigMap via K8s webhook
+rest_command:
+  update_frigate_camera_ips:
+    url: "http://frigate-webhook.app.home.panderosystems.com/update"
+    method: POST
+    content_type: "application/json"
+    payload: '{{ state_attr("sensor.camera_ips", "cameras") | tojson }}'
+
 # Command line sensor to read current camera IPs
+# State = ip_state string (changes when IPs change, triggering automations)
+# Attributes = cameras dict, timestamp, all_found
 command_line:
   - sensor:
       name: Camera IPs
       unique_id: camera_ips_sensor
-      command: "cat /config/camera_ips.json 2>/dev/null || echo '{\"cameras\":{},\"all_found\":false}'"
-      value_template: "{{ value_json.all_found }}"
+      command: "cat /config/camera_ips.json 2>/dev/null || echo '{\"cameras\":{},\"all_found\":false,\"ip_state\":\"\"}'"
+      value_template: "{{ value_json.ip_state }}"
       json_attributes:
         - cameras
         - timestamp
+        - all_found
       scan_interval: 300  # Check every 5 minutes
 
 # Automation to detect IP changes and notify

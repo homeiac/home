@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: frigate
 resources:
   - deployment.yaml
+  - ingress.yaml

@@ -1,0 +1,42 @@
+# Automation: Sync Camera IPs to Frigate
+# Triggers when sensor.camera_ips state changes (IPs changed)
+# Calls K8s webhook to update Frigate ConfigMap
+#
+# Add to automations.yaml or import via HA UI
+
+- id: camera_ip_sync_to_frigate
+  alias: "Camera IP Sync to Frigate"
+  description: "When camera IPs change, update Frigate ConfigMap via webhook"
+  trigger:
+    - platform: state
+      entity_id: sensor.camera_ips
+      # State is ip_state string (e.g., "hall:192.168.1.137,living_room:192.168.1.138")
+      # Only triggers when actual IPs change, not on every scan
+  condition:
+    # Ignore unavailable/unknown states
+    - condition: template
+      value_template: "{{ trigger.from_state.state not in ['unavailable', 'unknown', ''] }}"
+    - condition: template
+      value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown', ''] }}"
+    # Only trigger if state actually changed (IPs are different)
+    - condition: template
+      value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+    # Only trigger if we found all cameras
+    - condition: template
+      value_template: "{{ state_attr('sensor.camera_ips', 'all_found') == true }}"
+  action:
+    # Call the webhook with new IPs
+    - service: rest_command.update_frigate_camera_ips
+      data: {}
+    # Log the change
+    - service: persistent_notification.create
+      data:
+        title: "Camera IPs Updated"
+        message: >
+          Frigate ConfigMap updated with new camera IPs:
+          - Hall: {{ state_attr('sensor.camera_ips', 'cameras').hall }}
+          - Living Room: {{ state_attr('sensor.camera_ips', 'cameras').living_room }}
+
+          Previous: {{ trigger.from_state.state }}
+          New: {{ trigger.to_state.state }}
+  mode: single
