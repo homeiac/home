@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crucible-build
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: crucible-nbd-build
+  namespace: crucible-build
+spec:
+  ttlSecondsAfterFinished: 7200
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      containers:
+      - name: rust-builder
+        image: rust:1.83-bookworm
+        resources:
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+          limits:
+            cpu: "8"
+            memory: "16Gi"
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -ex
+
+          # Install dependencies
+          apt-get update
+          apt-get install -y git pkg-config libssl-dev
+
+          # Clone Crucible
+          cd /build
+          git clone --depth 1 https://github.com/oxidecomputer/crucible.git
+          cd crucible
+
+          # Show the line we're patching
+          echo "=== Before patch ==="
+          grep -n 'generation: u64' nbd_server/src/main.rs
+          grep -n 'TcpListener::bind' nbd_server/src/main.rs
+
+          # Apply patch: Add --address flag after the generation field
+          sed -i '/generation: u64,/a\
+          \
+              /// Address to bind the NBD server (default: 127.0.0.1:10809)\
+              #[clap(short = '\''a'\'', long, default_value = "127.0.0.1:10809")]\
+              address: String,' nbd_server/src/main.rs
+
+          # Replace hardcoded bind address with opt.address
+          sed -i 's/TcpListener::bind("127.0.0.1:10809")/TcpListener::bind(\&opt.address)/' nbd_server/src/main.rs
+
+          # Verify patch
+          echo "=== After patch ==="
+          grep -A3 'generation: u64' nbd_server/src/main.rs
+          grep -n 'bind(&opt.address)' nbd_server/src/main.rs || { echo "PATCH FAILED!"; exit 1; }
+
+          # Build
+          echo "=== Building crucible-nbd-server ==="
+          cargo build --release -p crucible-nbd-server 2>&1
+
+          # Copy to output
+          cp target/release/crucible-nbd-server /output/
+          chmod +x /output/crucible-nbd-server
+
+          # Verify
+          echo "=== Verifying build ==="
+          /output/crucible-nbd-server --help
+
+          echo "=== BUILD COMPLETE ==="
+          echo "Binary at: /output/crucible-nbd-server"
+          ls -la /output/
+        volumeMounts:
+        - name: build-cache
+          mountPath: /build
+        - name: cargo-cache
+          mountPath: /usr/local/cargo/registry
+        - name: output
+          mountPath: /output
+      restartPolicy: Never
+      volumes:
+      - name: build-cache
+        emptyDir:
+          sizeLimit: 20Gi
+      - name: cargo-cache
+        emptyDir:
+          sizeLimit: 10Gi
+      - name: output
+        hostPath:
+          path: /tmp/crucible-build
+          type: DirectoryOrCreate
+  backoffLimit: 1

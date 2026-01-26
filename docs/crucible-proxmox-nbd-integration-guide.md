@@ -2,6 +2,23 @@
 
 **Complete step-by-step guide for integrating Oxide Crucible distributed storage with Proxmox via NBD (Network Block Device)**
 
+## ⚠️ CURRENT DEPLOYMENT: SINGLE POINT OF FAILURE
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  WARNING: All 3 downstairs run on ONE sled (proper-raptor, ONE SSD)    │
+│                                                                         │
+│  This is QUORUM MODE for testing - NOT true 3-way replication!         │
+│  If proper-raptor dies → ALL CRUCIBLE DATA IS LOST                     │
+│                                                                         │
+│  For real fault tolerance: Add 2 more MA90 sleds (~$60)                │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+See `docs/crucible-deployment-runbook.md` for current deployment details.
+
+---
+
 ## ⚠️ CRITICAL REQUIREMENT: MINIMUM 3 DOWNSTAIRS PROCESSES
 
 **THIS INTEGRATION REQUIRES 3 DOWNSTAIRS PROCESSES** - Single sled testing is NOT SUPPORTED!
@@ -325,14 +342,58 @@ fio --name=crucible-test --rw=randwrite --bs=4k --size=100M --filename=/dev/nbd0
 curl http://192.168.4.121:7810/metrics
 ```
 
+## Generation Number - CRITICAL
+
+### What is the Generation Number?
+
+The `--gen` parameter is a **split-brain prevention mechanism**. It ensures only one upstairs can be "active" at a time.
+
+### How It Works
+
+1. **Stored in extents**: Each extent stores the generation from the last flush
+2. **Checked on connect**: Upstairs compares its `--gen` against max stored gen
+3. **Validation rules**:
+   - `gen == 0` → **ILLEGAL** (error: "Generation 0 is illegal")
+   - `gen < stored` → **REJECTED** (error: "Generation number is too low")
+   - `gen >= stored` → **ALLOWED**
+4. **Updated on flush**: When data is flushed, gen is stored with it
+
+### The Problem with Hardcoded Gen
+
+If you hardcode `--gen 4`:
+1. Boot 1: gen 4 >= 0 ✅ → writes data → stored gen becomes 4
+2. Boot 2: gen 4 >= 4 ✅ → writes data → stored gen stays 4
+3. Boot 3: gen 4 >= 4 ✅ → still works...
+
+But if another upstairs connected with gen 5, your hardcoded gen 4 fails forever.
+
+### The Solution: Unix Timestamp (Oxide Pattern)
+
+From Crucible README line 68:
+```bash
+--gen $(date "+%s")
+```
+
+This ensures gen is always increasing across reboots.
+
 ## Systemd Service Configuration (Optional)
 
 For persistent operation, create systemd services:
 
 ### Crucible NBD Server Service
 
+**IMPORTANT**: Use a wrapper script to generate gen at runtime!
+
 ```bash
-# Create service file
+# Create wrapper script for dynamic generation number
+cat > /usr/local/bin/crucible-nbd-wrapper.sh << 'EOF'
+#!/bin/bash
+# Uses Unix timestamp per Oxide's pattern (crucible README)
+exec /usr/local/bin/crucible-nbd-server "$@" --gen $(date +%s)
+EOF
+chmod +x /usr/local/bin/crucible-nbd-wrapper.sh
+
+# Create service file (uses wrapper)
 cat > /etc/systemd/system/crucible-nbd-server.service << 'EOF'
 [Unit]
 Description=Crucible NBD Server
@@ -340,11 +401,10 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/tmp/crucible/target/release/crucible-nbd-server \
+ExecStart=/usr/local/bin/crucible-nbd-wrapper.sh \
   --target 192.168.4.121:3810 \
   --target 192.168.4.121:3811 \
-  --target 192.168.4.121:3812 \
-  --gen 4
+  --target 192.168.4.121:3812
 Restart=always
 RestartSec=5
 User=root
@@ -393,10 +453,111 @@ systemctl enable crucible-nbd-mount.service
 ## Limitations and Considerations
 
 1. **Single NBD Server**: Current setup uses one NBD server per volume
-2. **Generation Management**: Must increment generation numbers for new volumes
+2. **Generation Number**: Use `$(date +%s)` pattern - never hardcode!
 3. **Failover**: Manual restart required if NBD server fails
 4. **Performance**: Network bandwidth limits throughput
 5. **Scalability**: Each volume requires dedicated NBD server process
+
+## HA-Ready Storage (Per-VM Volumes)
+
+The default per-host volume approach doesn't support Proxmox HA because a VM's disk is tied to the host it started on. The per-VM volume approach solves this.
+
+### Architecture Comparison
+
+**Per-Host (Default):**
+```
+pve       → NBD → volume-for-pve       → All VMs on pve share this
+still-fawn → NBD → volume-for-still-fawn → All VMs on still-fawn share this
+```
+Problem: VM can't failover - disk is "owned" by host.
+
+**Per-VM (HA Ready):**
+```
+VM-200 → NBD → vm-200-volume (ports 3900-3902) → ANY host can connect
+VM-201 → NBD → vm-201-volume (ports 3910-3912) → ANY host can connect
+```
+Solution: Any host can start any VM by connecting to its dedicated volume.
+
+### How Generation Numbers Enable HA
+
+The generation number is the key to split-brain prevention:
+
+1. VM-200 runs on `pve` with gen=1737820800 (timestamp)
+2. `pve` dies, HA manager triggers failover
+3. `still-fawn` starts VM-200 with gen=1737821000 (new timestamp, higher)
+4. Crucible accepts because new_gen > stored_gen
+5. If `pve` comes back with old gen, it's **rejected** (split-brain prevented!)
+
+No shared filesystem needed - Crucible's quorum + generation handles everything.
+
+### Port Allocation Scheme
+
+```
+Base: 3900 (avoiding conflict with per-host volumes on 3810-3852)
+
+VM-200: downstairs 3900, 3901, 3902 | NBD 10809 | /dev/nbd0
+VM-201: downstairs 3910, 3911, 3912 | NBD 10810 | /dev/nbd1
+VM-202: downstairs 3920, 3921, 3922 | NBD 10811 | /dev/nbd2
+...
+VM-2XX: downstairs 3900 + ((XX - 200) * 10) | NBD 10809 + (XX - 200)
+
+Formula: base_port = 3900 + ((vmid - 200) * 10)
+```
+
+Capacity: VMIDs 200-299 = 100 VMs (ports 3900-4892)
+
+### Quick Start
+
+```bash
+# 1. Build patched NBD server (adds --address flag)
+./scripts/crucible/build-nbd-server.sh
+
+# 2. Deploy to all Proxmox hosts
+./scripts/crucible/deploy-ha-storage.sh
+
+# 3. Create a volume for VM-200 (50GB)
+./scripts/crucible/create-vm-volume.sh 200 50
+
+# 4. Connect from any host
+ssh root@pve "systemctl start crucible-vm@200 crucible-vm-connect@200"
+ssh root@pve "mkfs.ext4 /dev/nbd0"  # First time only
+
+# 5. Test failover
+./scripts/crucible/test-ha-failover.sh 200 pve still-fawn.maas
+```
+
+### Systemd Service Templates
+
+**crucible-vm@.service** - Starts NBD server for a VM:
+```bash
+systemctl start crucible-vm@200.service  # Connects to proper-raptor:3900-3902
+```
+
+**crucible-vm-connect@.service** - Connects NBD device:
+```bash
+systemctl start crucible-vm-connect@200.service  # Creates /dev/nbd0
+```
+
+### HA Hook Integration
+
+The `ha-hook.sh` script handles HA events:
+- **start**: Starts crucible-vm@VMID and crucible-vm-connect@VMID
+- **stop**: Stops both services
+- **migrate**: Stops services (target node's hook will start them)
+
+Install location: `/var/lib/pve-cluster/hooks/crucible-storage.sh`
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/crucible/create-vm-volume.sh` | Create per-VM volume on proper-raptor |
+| `scripts/crucible/build-nbd-server.sh` | Build patched NBD server with --address |
+| `scripts/crucible/deploy-ha-storage.sh` | Deploy to all Proxmox hosts |
+| `scripts/crucible/test-ha-failover.sh` | Test failover between hosts |
+| `scripts/crucible/ha-hook.sh` | Proxmox HA integration hook |
+| `scripts/crucible/templates/crucible-vm@.service` | NBD server template |
+| `scripts/crucible/templates/crucible-vm-connect@.service` | NBD client template |
 
 ## Next Steps
 
