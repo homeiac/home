@@ -1,0 +1,96 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frigate-ip-webhook
+  namespace: frigate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: frigate-ip-webhook
+  namespace: frigate
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: frigate-ip-webhook
+  namespace: frigate
+subjects:
+  - kind: ServiceAccount
+    name: frigate-ip-webhook
+    namespace: frigate
+roleRef:
+  kind: Role
+  name: frigate-ip-webhook
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frigate-ip-webhook
+  namespace: frigate
+  labels:
+    app: frigate-ip-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frigate-ip-webhook
+  template:
+    metadata:
+      labels:
+        app: frigate-ip-webhook
+    spec:
+      serviceAccountName: frigate-ip-webhook
+      containers:
+        - name: webhook
+          image: ghcr.io/homeiac/frigate-ip-webhook:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: FRIGATE_NAMESPACE
+              value: "frigate"
+            - name: FRIGATE_CONFIGMAP
+              value: "frigate-config"
+            - name: FRIGATE_DEPLOYMENT
+              value: "frigate"
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frigate-ip-webhook
+  namespace: frigate
+spec:
+  selector:
+    app: frigate-ip-webhook
+  ports:
+    - port: 8080
+      targetPort: 8080

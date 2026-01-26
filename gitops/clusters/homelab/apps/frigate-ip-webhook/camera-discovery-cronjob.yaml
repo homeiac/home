@@ -1,0 +1,180 @@
+---
+# CronJob to discover Reolink camera IPs and update Frigate ConfigMap
+# Runs every 5 minutes, scans for ONVIF devices, identifies cameras by DNS hostname
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: camera-ip-discovery
+  namespace: frigate
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 300
+      template:
+        spec:
+          serviceAccountName: frigate-ip-webhook
+          restartPolicy: OnFailure
+          containers:
+            - name: discover
+              image: python:3.12-slim
+              command: ["sh", "-c"]
+              args:
+                - |
+                  pip install -q kubernetes
+                  python3 << 'PYEOF'
+                  import re
+                  import socket
+                  from datetime import datetime
+                  from kubernetes import client, config
+
+                  NAMESPACE = "frigate"
+                  CONFIGMAP_NAME = "frigate-config"
+                  DEPLOYMENT_NAME = "frigate"
+
+                  # Camera identification by reverse DNS hostname (set in Reolink app)
+                  # These are the hostnames registered via DHCP
+                  CAMERA_HOSTNAMES = {
+                      "living": "living_room",  # Living.attlocal.net -> living_room
+                      "hall": "hall",           # Hall.attlocal.net -> hall
+                  }
+
+                  def find_onvif_devices(ip_range_start=130, ip_range_end=150):
+                      """Scan for devices with ONVIF port 8000 open."""
+                      devices = []
+                      for i in range(ip_range_start, ip_range_end + 1):
+                          ip = f"192.168.1.{i}"
+                          try:
+                              s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                              s.settimeout(0.5)
+                              if s.connect_ex((ip, 8000)) == 0:
+                                  devices.append(ip)
+                              s.close()
+                          except:
+                              pass
+                      return devices
+
+                  def check_rtsp(ip):
+                      """Check if RTSP port 554 is open."""
+                      try:
+                          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                          s.settimeout(2)
+                          result = s.connect_ex((ip, 554))
+                          s.close()
+                          return result == 0
+                      except:
+                          return False
+
+                  def get_hostname(ip):
+                      """Get reverse DNS hostname for IP."""
+                      try:
+                          hostname, _, _ = socket.gethostbyaddr(ip)
+                          return hostname.lower()
+                      except:
+                          return None
+
+                  def identify_camera(ip):
+                      """Identify camera by its hostname."""
+                      hostname = get_hostname(ip)
+                      if hostname:
+                          for prefix, camera_name in CAMERA_HOSTNAMES.items():
+                              if hostname.startswith(prefix):
+                                  return camera_name
+                      return None
+
+                  def get_current_ips():
+                      """Get current camera IPs from Frigate ConfigMap."""
+                      config.load_incluster_config()
+                      v1 = client.CoreV1Api()
+                      cm = v1.read_namespaced_config_map(name=CONFIGMAP_NAME, namespace=NAMESPACE)
+                      config_yaml = cm.data.get("config.yml", "")
+                      ips = {}
+                      match = re.search(r'living_room_main:.*?@(\d+\.\d+\.\d+\.\d+):', config_yaml)
+                      if match:
+                          ips["living_room"] = match.group(1)
+                      match = re.search(r'hall_main:.*?@(\d+\.\d+\.\d+\.\d+):', config_yaml)
+                      if match:
+                          ips["hall"] = match.group(1)
+                      return ips, config_yaml, cm
+
+                  def update_configmap(cm, config_yaml, old_ip, new_ip, camera_name):
+                      """Update ConfigMap with new IP and restart Frigate."""
+                      config.load_incluster_config()
+                      v1 = client.CoreV1Api()
+                      apps_v1 = client.AppsV1Api()
+
+                      new_config = config_yaml.replace(old_ip, new_ip)
+                      cm.data["config.yml"] = new_config
+
+                      v1.patch_namespaced_config_map(
+                          name=CONFIGMAP_NAME,
+                          namespace=NAMESPACE,
+                          body={"data": cm.data}
+                      )
+                      print(f"Updated ConfigMap: {camera_name} {old_ip} -> {new_ip}")
+
+                      patch = {
+                          "spec": {
+                              "template": {
+                                  "metadata": {
+                                      "annotations": {
+                                          "camera-ip-updated": datetime.utcnow().isoformat()
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                      apps_v1.patch_namespaced_deployment(
+                          name=DEPLOYMENT_NAME,
+                          namespace=NAMESPACE,
+                          body=patch
+                      )
+                      print("Triggered Frigate restart")
+
+                  # Main
+                  print(f"=== Camera IP Discovery [{datetime.now().isoformat()}] ===")
+
+                  current_ips, config_yaml, cm = get_current_ips()
+                  print(f"Current IPs: {current_ips}")
+
+                  # Check current IPs
+                  all_good = True
+                  for camera_name, ip in current_ips.items():
+                      if check_rtsp(ip):
+                          print(f"  {camera_name} ({ip}): OK")
+                      else:
+                          print(f"  {camera_name} ({ip}): DOWN")
+                          all_good = False
+
+                  if all_good:
+                      print("All cameras OK.")
+                  else:
+                      print("\nScanning for cameras...")
+                      devices = find_onvif_devices()
+                      cameras_found = [(ip, identify_camera(ip)) for ip in devices if check_rtsp(ip)]
+                      print(f"Found: {cameras_found}")
+
+                      # Build new IP mapping
+                      new_ips = {}
+                      for ip, name in cameras_found:
+                          if name:
+                              new_ips[name] = ip
+
+                      # Update any changed IPs
+                      for camera_name, old_ip in current_ips.items():
+                          if camera_name in new_ips and new_ips[camera_name] != old_ip:
+                              update_configmap(cm, config_yaml, old_ip, new_ips[camera_name], camera_name)
+                              config_yaml = config_yaml.replace(old_ip, new_ips[camera_name])
+
+                  print("Done.")
+                  PYEOF
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "50m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "200m"
