@@ -50,6 +50,8 @@ spec:
         app: frigate-ip-webhook
     spec:
       serviceAccountName: frigate-ip-webhook
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: webhook
           image: ghcr.io/homeiac/frigate-ip-webhook:latest
