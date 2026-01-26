@@ -1,0 +1,22 @@
+diff --git a/nbd_server/src/main.rs b/nbd_server/src/main.rs
+--- a/nbd_server/src/main.rs
++++ b/nbd_server/src/main.rs
+@@ -24,6 +24,10 @@ struct Opt {
+     #[clap(short, long, action)]
+     target: Vec<SocketAddr>,
+
++    /// Address to bind the NBD server (default: 127.0.0.1:10809)
++    #[clap(short, long, default_value = "127.0.0.1:10809")]
++    address: String,
++
+     /// TLS certificate in PEM format
+     #[clap(long)]
+     cert_pem: Option<PathBuf>,
+@@ -XXX,XX +XXX,XX @@ async fn main() -> Result<()> {
+     // ... existing code ...
+
+-    let listener = TcpListener::bind("127.0.0.1:10809").await?;
++    let listener = TcpListener::bind(&opt.address).await?;
++    info!(log, "NBD server listening on {}", opt.address);
+
+     // ... rest of code ...

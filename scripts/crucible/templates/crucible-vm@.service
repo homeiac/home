@@ -1,0 +1,27 @@
+[Unit]
+Description=Crucible NBD Server for VM %i
+Documentation=https://github.com/oxidecomputer/crucible
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Calculate ports from VMID:
+#   Downstairs ports: 3900 + ((VMID - 200) * 10) for each of 3 regions
+#   NBD listen port: 10809 + (VMID - 200)
+# Example VM-200: downstairs 3900,3901,3902, NBD 10809
+# Example VM-205: downstairs 3950,3951,3952, NBD 10814
+Environment=CRUCIBLE_IP=192.168.4.189
+ExecStartPre=/bin/bash -c 'OFFSET=$((%i - 200)); BASE=$((3900 + OFFSET * 10)); NBD=$((10809 + OFFSET)); echo "PORT1=$BASE PORT2=$((BASE+1)) PORT3=$((BASE+2)) NBD_PORT=$NBD" > /run/crucible-vm-%i.env'
+EnvironmentFile=/run/crucible-vm-%i.env
+# Use wrapper script for timestamp-based generation (split-brain prevention)
+ExecStart=/usr/local/bin/crucible-nbd-wrapper.sh \
+  --target ${CRUCIBLE_IP}:${PORT1} \
+  --target ${CRUCIBLE_IP}:${PORT2} \
+  --target ${CRUCIBLE_IP}:${PORT3} \
+  --address 127.0.0.1:${NBD_PORT}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

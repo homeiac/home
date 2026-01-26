@@ -21,6 +21,7 @@ declare -A VOLUMES=(
     ["still-fawn"]=3830
     ["pumped-piglet"]=3840
     ["chief-horse"]=3850
+    ["fun-bedbug"]=3860
 )
 
 # Volume size: 100 extents * 32768 blocks * 4096 bytes = ~12.5 GB per volume

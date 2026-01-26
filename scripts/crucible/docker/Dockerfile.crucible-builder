@@ -1,0 +1,52 @@
+# Crucible NBD Server Builder
+# Multi-stage build for creating patched crucible-nbd-server binary
+#
+# Build: docker build -t crucible-builder -f Dockerfile.crucible-builder .
+# Extract: docker run --rm crucible-builder cat /crucible-nbd-server > crucible-nbd-server
+
+FROM rust:1.83-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Clone Crucible
+RUN git clone --depth 1 https://github.com/oxidecomputer/crucible.git
+
+WORKDIR /build/crucible
+
+# Apply patch to add --address flag for custom listen address
+# This is needed to run multiple NBD servers on different ports (one per VM)
+RUN sed -i '/generation: u64,/a\
+\
+    /// Address to bind the NBD server (default: 127.0.0.1:10809)\
+    #[clap(short = '\''a'\'', long, default_value = "127.0.0.1:10809")]\
+    address: String,' nbd_server/src/main.rs && \
+    sed -i 's/TcpListener::bind("127.0.0.1:10809")/TcpListener::bind(\&opt.address)/' nbd_server/src/main.rs
+
+# Verify patch was applied
+RUN grep -A2 'address: String' nbd_server/src/main.rs && \
+    grep 'bind(&opt.address)' nbd_server/src/main.rs
+
+# Build just the nbd_server binary
+RUN cargo build --release -p nbd_server
+
+# Verify the binary has the new flag
+RUN ./target/release/crucible-nbd-server --help | grep -E 'address|gen'
+
+# Final stage - just the binary
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/crucible/target/release/crucible-nbd-server /crucible-nbd-server
+
+ENTRYPOINT ["/crucible-nbd-server"]

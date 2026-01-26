@@ -1,0 +1,20 @@
+[Unit]
+Description=Connect NBD Device for VM %i
+Documentation=https://github.com/oxidecomputer/crucible
+After=crucible-vm@%i.service
+BindsTo=crucible-vm@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Calculate NBD port and device number from VMID
+# Device mapping: VM-200 -> /dev/nbd0, VM-201 -> /dev/nbd1, etc.
+ExecStartPre=/bin/bash -c 'OFFSET=$((%i - 200)); echo "NBD_PORT=$((10809 + OFFSET)) NBD_DEV=$OFFSET" > /run/crucible-vm-connect-%i.env'
+EnvironmentFile=/run/crucible-vm-connect-%i.env
+# Wait for NBD server to be ready
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/sbin/nbd-client 127.0.0.1 ${NBD_PORT} /dev/nbd${NBD_DEV}
+ExecStop=/usr/sbin/nbd-client -d /dev/nbd${NBD_DEV}
+
+[Install]
+WantedBy=multi-user.target
