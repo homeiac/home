@@ -23,9 +23,9 @@ data:
       streams:
         # Re-encode MJPEG to H264 for old camera
         mjpeg_cam: "ffmpeg:http://{FRIGATE_CAM_MJPEG_USER}:{FRIGATE_CAM_MJPEG_PASS}@192.168.1.220/videostream.cgi#video=h264#hardware"
-        # Reolink doorbell - DISABLED (offline for several days as of 2026-01-25)
-        # reolink_doorbell_main: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy#audio=copy#audio=opus"
-        # reolink_doorbell_sub: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy"
+        # Reolink doorbell - HTTP-FLV streams (more reliable than RTSP per Frigate docs)
+        reolink_doorbell_main: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy#audio=copy#audio=opus"
+        reolink_doorbell_sub: "ffmpeg:http://reolink-vdb.home.panderosystems.com/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_CAM_REOLINK_USER}&password={FRIGATE_CAM_REOLINK_PASS}#video=copy"
         # Reolink E1 Zoom (living room) - RTSP streams (no HTTP-FLV support)
         living_room_main: "rtsp://{FRIGATE_CAM_LIVINGROOM_USER}:{FRIGATE_CAM_LIVINGROOM_PASS}@192.168.1.183:554/h264Preview_01_main"
         living_room_sub: "rtsp://{FRIGATE_CAM_LIVINGROOM_USER}:{FRIGATE_CAM_LIVINGROOM_PASS}@192.168.1.183:554/h264Preview_01_sub"
@@ -87,38 +87,39 @@ data:
             days: 5
             mode: motion
 
-      # reolink_doorbell - DISABLED (offline for several days as of 2026-01-25)
-      # Restore from backup: configmap.yaml.backup-with-doorbell-20260125
-      # reolink_doorbell:
-      #   enabled: true
-      #   ffmpeg:
-      #     inputs:
-      #       - path: rtsp://127.0.0.1:8554/reolink_doorbell_main
-      #         input_args: preset-rtsp-restream
-      #         roles:
-      #           - record
-      #       - path: rtsp://127.0.0.1:8554/reolink_doorbell_sub
-      #         input_args: preset-rtsp-restream
-      #         roles:
-      #           - detect
-      #   detect:
-      #     enabled: true
-      #     width: 640
-      #     height: 480
-      #     fps: 10
-      #   objects:
-      #     track:
-      #       - person
-      #       - car
-      #       - package
-      #   motion:
-      #     threshold: 25
-      #     contour_area: 50
-      #   record:
-      #     enabled: true
-      #     retain:
-      #       days: 7
-      #       mode: motion
+      reolink_doorbell:
+        enabled: true
+        ffmpeg:
+          inputs:
+            # Main stream for recording (high quality)
+            - path: rtsp://127.0.0.1:8554/reolink_doorbell_main
+              input_args: preset-rtsp-restream
+              roles:
+                - record
+            # Substream for detection (lower resolution = faster processing)
+            - path: rtsp://127.0.0.1:8554/reolink_doorbell_sub
+              input_args: preset-rtsp-restream
+              roles:
+                - detect
+        detect:
+          enabled: true
+          # Substream resolution (typically 640x480 or 640x360 for Reolink)
+          width: 640
+          height: 480
+          fps: 10
+        objects:
+          track:
+            - person
+            - car
+            - package
+        motion:
+          threshold: 25
+          contour_area: 50
+        record:
+          enabled: true
+          retain:
+            days: 7
+            mode: motion
 
       # Reolink E1 Zoom (living room) - indoor camera
       living_room:
