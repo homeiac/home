@@ -21,4 +21,4 @@
 | `setup-sops-encryption.sh` | Setup SOPS + age encryption for Flux GitOps secrets<br>This allows encrypting secrets in git that Flux can decrypt automatically |
 | `setup-ssh-keys.sh` | Setup SSH keys for passwordless access to Proxmox hosts<br>Usage: ./setup-ssh-keys.sh <password><br>This uses Python's pty module to handle password prompts since<br>sshpass is not available in the claudecodeui container. |
 
-*Generated: 2026-01-18*
+*Generated: 2026-01-25*
