@@ -1,0 +1,48 @@
+# Home Assistant Configuration for Camera IP Sync
+# Add these to your configuration.yaml
+#
+# Discovers camera IPs by MAC address using nmap and writes to /config/camera_ips.json
+# When IPs change, fires an event that can trigger a notification or automation
+
+# Shell command to run the discovery script
+shell_command:
+  camera_ip_sync: "python3 /config/scripts/camera-ip-sync.py"
+
+# Command line sensor to read current camera IPs
+command_line:
+  - sensor:
+      name: Camera IPs
+      unique_id: camera_ips_sensor
+      command: "cat /config/camera_ips.json 2>/dev/null || echo '{\"cameras\":{},\"all_found\":false}'"
+      value_template: "{{ value_json.all_found }}"
+      json_attributes:
+        - cameras
+        - timestamp
+      scan_interval: 300  # Check every 5 minutes
+
+# Automation to detect IP changes and notify
+# Add this to automations.yaml or create via UI
+#
+# - id: camera_ip_changed
+#   alias: "Camera IP Changed - Notify"
+#   trigger:
+#     - platform: state
+#       entity_id: sensor.camera_ips
+#       attribute: cameras
+#   condition:
+#     - condition: template
+#       value_template: "{{ trigger.from_state.attributes.cameras != trigger.to_state.attributes.cameras }}"
+#   action:
+#     - service: notify.mobile_app_iphone
+#       data:
+#         title: "📷 Camera IPs Changed"
+#         message: >
+#           Hall: {{ state_attr('sensor.camera_ips', 'cameras').hall }}
+#           Living Room: {{ state_attr('sensor.camera_ips', 'cameras').living_room }}
+#     - service: persistent_notification.create
+#       data:
+#         title: "Camera IPs Updated"
+#         message: >
+#           New camera IPs detected. Update Frigate if needed:
+#           - Hall: {{ state_attr('sensor.camera_ips', 'cameras').hall }}
+#           - Living Room: {{ state_attr('sensor.camera_ips', 'cameras').living_room }}
