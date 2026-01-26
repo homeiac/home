@@ -75,14 +75,15 @@ spec:
             - name: vip_leaderelection
               value: "true"
             # Lease configuration
+            # Increased from 5/3/1 to reduce flapping on minor hiccups
             - name: vip_leasename
               value: "kube-vip-lease"
             - name: vip_leaseduration
-              value: "5"
+              value: "15"
             - name: vip_renewdeadline
-              value: "3"
+              value: "10"
             - name: vip_retryperiod
-              value: "1"
+              value: "2"
             # Enable prometheus metrics
             - name: prometheus_server
               value: ":2112"
