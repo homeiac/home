@@ -46,7 +46,7 @@ export HA_TOKEN HA_URL
 #   JSON response on stdout
 #######################################
 ha_api_get() {
-    local endpoint="${1:?Usage: ha_api_get <endpoint>}"
+    local endpoint="${1:-}"  # Empty allowed for root /api/ endpoint
     curl -s --fail-with-body --max-time 30 \
         -H "Authorization: Bearer $HA_TOKEN" \
         "$HA_URL/api/$endpoint"
