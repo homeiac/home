@@ -108,8 +108,27 @@
 
 ---
 
+## AT&T Router - 192.168.1.0/24 (Fixed Allocations)
+
+These devices have **Fixed Allocation** configured in the AT&T router's IP Allocation table.
+When replacing the router, reconfigure these allocations.
+
+| IP | Device | MAC Address | Notes |
+|----|--------|-------------|-------|
+| 192.168.1.107 | TPLINK-WEBCAM | 00:14:d1:7c:e9:60 | Trendnet IP camera |
+| 192.168.1.124 | homeassistant | bc:24:11:21:f4:ab | HAOS VM |
+| 192.168.1.131 | OPNsense | bc:24:11:c2:5e:3b | Router/firewall |
+| 192.168.1.110 | cloudflared | bc:24:11:dd:72:5f | Cloudflare tunnel |
+| 192.168.1.137 | Hall | 0c:79:55:4b:d4:2a | Reolink E1 Zoom (hall) |
+| 192.168.1.138 | Living | 14:ea:63:a9:04:08 | Reolink E1 Zoom (living room) |
+
+**AT&T Router Config Location:** Home Network → IP Allocation → Click "Allocate" → Select "Private fixed:IP" → Save
+
+---
+
 ## Update Log
 
 | Date | Change |
 |------|--------|
+| 2026-01-26 | Added AT&T router 192.168.1.x fixed allocations |
 | 2026-01-25 | Created from scattered sources |
