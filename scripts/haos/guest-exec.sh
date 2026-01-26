@@ -9,7 +9,8 @@ set -e
 
 VMID=116
 PROXMOX_HOST="chief-horse.maas"
+TIMEOUT="${TIMEOUT:-120}"  # Default 120 second timeout
 CMD="${1:-echo 'No command provided'}"
 
 echo "Running on HAOS VM $VMID via $PROXMOX_HOST..."
-ssh root@$PROXMOX_HOST "qm guest exec $VMID -- $CMD"
+ssh root@$PROXMOX_HOST "qm guest exec $VMID --timeout $TIMEOUT -- $CMD"
