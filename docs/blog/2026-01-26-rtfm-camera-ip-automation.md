@@ -87,10 +87,40 @@ The automation work wasn't entirely wasted:
 
 And the auto-sync system is now a backup. If the router allocations ever fail, the automation will catch it.
 
+## In Defense of Bad UX
+
+Let's be fair to my past self: this UI is genuinely terrible.
+
+- **No visual indicator** that a form appeared below
+- **No scroll-to behavior** after clicking "Allocate"
+- **No inline expansion** - the form just appears... somewhere
+- **Button says "Allocate"** but actually means "open a form that you need to find and submit"
+- **"Changes saved" appears at the top** even when you didn't complete the form
+
+This is 2005-era enterprise UI design. The kind where the developers knew how it worked, so obviously users would too. The help text is actually good - it explains exactly what to do. But who reads help text when the button seems self-explanatory?
+
+I'm not excusing my failure to scroll. But I am saying: if your UI requires users to read documentation to click a button correctly, your UI has failed.
+
+## Belt and Suspenders: Actually Fine
+
+Here's the thing: having both solutions isn't bad.
+
+**The DHCP reservations** are the primary fix. Simple, router-level, works automatically.
+
+**The automation** is now a safety net:
+- If the router gets factory reset
+- If I forget to reconfigure allocations on a new router
+- If a camera gets replaced with a different MAC
+- If AT&T pushes a firmware update that wipes settings (it's happened)
+
+Defense in depth isn't over-engineering when the failure mode is "wake up to dead security cameras."
+
+The automation cost me 4 hours once. A camera outage I don't notice could cost me much more.
+
 ## Lessons Learned
 
 ### 1. Scroll the Entire Page
-Enterprise UIs from 2005 love putting forms below the fold with no visual indication.
+Enterprise UIs from 2005 love putting forms below the fold with no visual indication. Always scroll after clicking anything.
 
 ### 2. Re-Read the Docs When Stuck
 "I already tried that" often means "I tried something similar once and made assumptions."
@@ -101,7 +131,10 @@ Enterprise UIs from 2005 love putting forms below the fold with no visual indica
 ### 4. Simple Solutions First
 Before building a distributed system to work around a limitation, verify the limitation exists.
 
-### 5. Document Anyway
+### 5. But Belt and Suspenders is OK
+Having backup automation for critical systems isn't waste - it's resilience. The automation I built will sit quietly until it's needed, and if it's ever needed, I'll be glad it exists.
+
+### 6. Document Anyway
 Even though I didn't need the automation, the IP assignments are now documented with MAC addresses for when I replace the router.
 
 ## The Final State
