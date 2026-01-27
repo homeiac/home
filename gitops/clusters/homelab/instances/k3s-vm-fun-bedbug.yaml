@@ -24,10 +24,10 @@ spec:
     vmId: 114
     description: "K3s control-plane node - Crossplane managed"
 
-    # Disabled 2026-01-25 - thermal issues (91°C under load)
-    # Using 3-node cluster: pumped-piglet, still-fawn, pve (standby)
-    started: false
-    onBoot: false
+    # Enabled 2026-01-27 - adding 4th control plane node
+    # Note: fun-bedbug has thermal constraints (AMD A9-9400), 1 core allocated
+    started: true
+    onBoot: true
 
     # Machine configuration - i440fx for simplicity (no GPU passthrough needed)
     machine: pc-i440fx-8.1
