@@ -78,6 +78,8 @@ Add a 120mm USB fan pointed at the case vents. Expected improvement: 5-10°C.
 
 ## Results
 
+### Phase 1: vCPU Reduction (2026-01-18)
+
 | Metric | Before | After |
 |--------|--------|-------|
 | vCPUs | 2 | 1 |
@@ -85,11 +87,25 @@ Add a 120mm USB fan pointed at the case vents. Expected improvement: 5-10°C.
 | CPU Idle | 27% | 50% |
 | Temperature | 92°C | 89-90°C |
 
+### Phase 2: Thermal Paste Replacement (2026-01-26)
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Temperature (idle) | 89-90°C | ~50°C |
+| Temperature (VM running) | 92°C+ | **54.5°C** |
+| Improvement | - | **-37.5°C** |
+
+The original thermal paste was dried out after years of operation. Replacement with fresh paste dramatically improved thermal performance.
+
+## Completed Improvements
+
+1. ~~External USB fan~~ - Not needed after thermal paste replacement
+2. **Dust cleaning** - Done 2026-01-26
+3. **Thermal paste** - Replaced 2026-01-26, dramatic improvement
+
 ## Future Improvements
 
-1. **External USB fan** - Point 120mm fan at exhaust vents
-2. **Dust cleaning** - Open case and blow out accumulated dust
-3. **Thermal paste** - Repaste with Arctic MX-4 or Noctua NT-H1 if still hot after above steps
+1. **D-Bus monitoring** - Add check for socket existence after reboot (see RCA)
 
 ## Re-enabling DaemonSets
 
