@@ -59,6 +59,15 @@ nodes:
         type: zfspool
         pool: rpool/data
         content: [images, rootdir]
+    # ZFS mirror configuration (rpool redundancy)
+    # Boot SSD replaced Jan 2026; second 2TB added for mirror
+    zfs_mirrors:
+      - pool: rpool
+        existing_disk: "ata-T-FORCE_2TB_TPBF2211070040100214"
+        new_disk: "ata-T-FORCE_2TB_TPBF2509220070101290"
+        zfs_partition: 3
+        efi_partition: 2
+        bios_boot_partition: 1
 
   - name: pumped-piglet
     ip: 192.168.4.175

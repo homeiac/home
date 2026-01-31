@@ -393,6 +393,175 @@ def monitoring_status(
         raise typer.Exit(1)
 
 
+# === STORAGE COMMANDS ===
+
+storage_app = typer.Typer(help="Storage infrastructure management")
+app.add_typer(storage_app, name="storage")
+
+mirror_app = typer.Typer(help="ZFS mirror management")
+storage_app.add_typer(mirror_app, name="mirror")
+
+
+@mirror_app.command("apply")
+def mirror_apply(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    ),
+    host: str = typer.Option(
+        ...,
+        "--host", "-H",
+        help="Proxmox host to configure mirror on"
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes"
+    ),
+) -> None:
+    """
+    Apply ZFS mirror configuration to a Proxmox host.
+
+    Reads zfs_mirrors from cluster.yaml and performs idempotent
+    mirror setup: partition cloning, GUID randomization, boot config,
+    mirror attach, and resilver verification.
+    """
+    if not config_file.exists():
+        console.print(f"Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    mode = "DRY RUN" if dry_run else "APPLY"
+    console.print(f"[bold]ZFS Mirror {mode}[/bold] on {host}")
+
+    try:
+        from homelab.zfs_mirror_manager import ZfsMirrorManager
+
+        with ZfsMirrorManager(host, config_path=config_file) as mgr:
+            result = mgr.apply(dry_run=dry_run)
+
+        if not result["mirrors"]:
+            console.print(f"No zfs_mirrors configured for {host}")
+            raise typer.Exit(0)
+
+        for m in result["mirrors"]:
+            console.print(f"\n[bold]Pool: {m['pool']}[/bold]  status: {m['status']}")
+            console.print(f"  existing: {m['existing_disk']}")
+            console.print(f"  new:      {m['new_disk']}")
+
+            if m.get("failed_checks"):
+                console.print(f"  [red]Pre-flight failures: {m['failed_checks']}[/red]")
+
+            for step in m.get("steps", []):
+                icon = {"done": "[green]done[/green]",
+                        "skipped": "[dim]skipped[/dim]",
+                        "would_execute": "[yellow]would execute[/yellow]",
+                        "failed": "[red]FAILED[/red]"}.get(step["status"], step["status"])
+                console.print(f"  {step['step']}: {icon}")
+                if step.get("error"):
+                    console.print(f"    error: {step['error']}")
+                if step.get("cmd"):
+                    console.print(f"    cmd: {step['cmd']}")
+                if step.get("cmds"):
+                    for c in step["cmds"]:
+                        console.print(f"    cmd: {c}")
+
+            if m.get("resilver"):
+                r = m["resilver"]
+                console.print(f"  resilver: {r.get('scan', 'n/a')}")
+
+        if result["success"]:
+            console.print(f"\n[green]Mirror operation completed successfully[/green]")
+        else:
+            console.print(f"\n[red]Mirror operation had failures[/red]")
+            raise typer.Exit(1)
+
+    except ValueError as e:
+        console.print(f"Configuration error: {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"Failed: {e}")
+        logger.exception("Mirror apply error")
+        raise typer.Exit(1)
+
+
+@mirror_app.command("status")
+def mirror_status(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    ),
+    host: Optional[str] = typer.Option(
+        None,
+        "--host", "-H",
+        help="Specific host (default: all hosts with mirrors)"
+    ),
+) -> None:
+    """
+    Show ZFS mirror status for Proxmox hosts.
+
+    Displays mirror topology, resilver progress, and disk status.
+    """
+    if not config_file.exists():
+        console.print(f"Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    try:
+        from homelab.zfs_mirror_manager import load_cluster_config, ZfsMirrorManager
+
+        config = load_cluster_config(config_file)
+        nodes = config.get("nodes", [])
+
+        # Filter to hosts with zfs_mirrors configured
+        targets = []
+        for node in nodes:
+            if node.get("zfs_mirrors"):
+                if host is None or node["name"] == host:
+                    targets.append(node["name"])
+
+        if not targets:
+            msg = f"No zfs_mirrors configured"
+            if host:
+                msg += f" for {host}"
+            console.print(msg)
+            raise typer.Exit(0)
+
+        table = Table(title="ZFS Mirror Status")
+        table.add_column("Host", style="cyan")
+        table.add_column("Pool", style="blue")
+        table.add_column("Mirror", style="bold")
+        table.add_column("State")
+        table.add_column("Disks")
+        table.add_column("Scan")
+
+        for hostname in targets:
+            try:
+                with ZfsMirrorManager(hostname, config=config) as mgr:
+                    s = mgr.status()
+                    for m in s["mirrors"]:
+                        mirror_icon = "[green]Yes[/green]" if m["is_mirror"] else "[red]No[/red]"
+                        disk_count = str(len(m["vdev_disks"]))
+                        scan = m["scan"][:50] if m["scan"] else "n/a"
+                        table.add_row(
+                            hostname,
+                            m["pool"],
+                            mirror_icon,
+                            m["state"],
+                            disk_count,
+                            scan,
+                        )
+            except Exception as e:
+                table.add_row(hostname, "?", "?", f"[red]ERROR: {e}[/red]", "", "")
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"Failed: {e}")
+        logger.exception("Mirror status error")
+        raise typer.Exit(1)
+
+
 @app.callback()
 def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
