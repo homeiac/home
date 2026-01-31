@@ -177,3 +177,18 @@ monitoring:
   # Prometheus scrape targets reference (update monitoring-values.yaml)
   prometheus_job: proxmox-node-exporter
   # Auto-generated from nodes list above
+
+  # ZFS pool health exporter (pdf/zfs_exporter)
+  # Exposes zfs_pool_health, zfs_pool_readonly, zfs_pool_free_bytes, etc.
+  # Only deploy to hosts with ZFS pools (fun-bedbug uses local dir, not ZFS)
+  zfs_exporter:
+    enabled: true
+    version: "2.3.11"
+    port: 9134
+    binary_path: /usr/local/bin/zfs_exporter
+    service: zfs-exporter
+    hosts:
+      - still-fawn
+      - pumped-piglet
+      - pve
+      - chief-horse

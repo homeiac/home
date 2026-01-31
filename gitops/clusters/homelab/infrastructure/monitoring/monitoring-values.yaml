@@ -30,6 +30,13 @@ prometheus:
         static_configs:
           - targets:
               - 192.168.4.122:9221   # pve-proxmox-metrics
+      - job_name: "proxmox-zfs-exporter"
+        static_configs:
+          - targets:
+              - 192.168.4.122:9134   # pve
+              - 192.168.4.17:9134    # still-fawn
+              - 192.168.4.19:9134    # chief-horse
+              - 192.168.4.175:9134   # pumped-piglet
       - job_name: "nvidia-dcgm-exporter"
         kubernetes_sd_configs:
           - role: service
@@ -43,6 +50,26 @@ prometheus:
           - source_labels: [__meta_kubernetes_service_port_name]
             action: keep
             regex: gpu-metrics
+
+alertmanager:
+  alertmanagerSpec:
+    secrets:
+      - smtp-credentials
+  config:
+    route:
+      receiver: email
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+    receivers:
+      - name: email
+        email_configs:
+          - to: g_skumar@yahoo.com
+            from: alertmanager@home.panderosystems.com
+            smarthost: smtp.mail.yahoo.com:587
+            auth_username: g_skumar@yahoo.com
+            auth_password_file: /etc/alertmanager/secrets/smtp-credentials/pass
+            require_tls: true
 
 grafana:
   service:

@@ -27,6 +27,12 @@ from homelab.node_exporter_manager import (
     get_status_from_config as get_node_exporter_status,
     print_status_table,
 )
+from homelab.zfs_exporter_manager import (
+    ZfsExporterManager,
+    apply_from_config as apply_zfs_exporter,
+    get_status_from_config as get_zfs_exporter_status,
+    print_status_table as print_zfs_status_table,
+)
 
 # Initialize CLI app and console
 app = typer.Typer(
@@ -390,6 +396,99 @@ def monitoring_status(
     except Exception as e:
         console.print(f"❌ Failed: {e}")
         logger.exception("Monitoring status error")
+        raise typer.Exit(1)
+
+
+# === ZFS EXPORTER SUBCOMMANDS ===
+
+zfs_exporter_app = typer.Typer(help="ZFS pool health exporter management")
+monitoring_app.add_typer(zfs_exporter_app, name="zfs-exporter")
+
+
+@zfs_exporter_app.command("apply")
+def zfs_exporter_apply(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    ),
+    host: Optional[str] = typer.Option(
+        None,
+        "--host", "-H",
+        help="Deploy to specific host only"
+    ),
+) -> None:
+    """
+    Deploy zfs_exporter to Proxmox hosts.
+
+    Downloads pdf/zfs_exporter binary, installs as systemd service.
+    Only deploys to hosts with ZFS pools (configured in cluster.yaml).
+    Idempotent - safe to run multiple times.
+    """
+    console.print(f"Applying zfs_exporter from: {config_file}")
+
+    if not config_file.exists():
+        console.print(f"Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    try:
+        if host:
+            console.print(f"Deploying zfs_exporter to {host}...")
+            with ZfsExporterManager(host, config_path=config_file) as manager:
+                result = manager.deploy()
+
+            status_icon = "OK" if result["status"] == "success" else "FAIL"
+            console.print(f"\n{status_icon} {host}: {result['status']}")
+            if result.get("pools"):
+                console.print(f"   Pools: {', '.join(result['pools'])}")
+            if result.get("error"):
+                console.print(f"   Error: {result['error']}")
+        else:
+            results = apply_zfs_exporter(config_file)
+            print_zfs_status_table(results)
+
+            success = sum(1 for r in results if r.get("status") == "success")
+            failed = sum(1 for r in results if r.get("status") == "failed")
+            already = sum(1 for r in results if "already_installed" in r.get("actions", []))
+
+            console.print(f"\n{success} deployed, {already} already installed, {failed} failed")
+
+    except Exception as e:
+        console.print(f"Failed: {e}")
+        logger.exception("zfs_exporter apply error")
+        raise typer.Exit(1)
+
+
+@zfs_exporter_app.command("status")
+def zfs_exporter_status(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    ),
+) -> None:
+    """
+    Show zfs_exporter status on configured hosts.
+
+    Checks installation, service status, and ZFS pool health.
+    """
+    console.print(f"ZFS Exporter Status (from {config_file})")
+
+    if not config_file.exists():
+        console.print(f"Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    try:
+        results = get_zfs_exporter_status(config_file)
+        print_zfs_status_table(results)
+
+        running = sum(1 for r in results if r.get("running"))
+        total = len(results)
+        console.print(f"\n{running}/{total} hosts have zfs_exporter running")
+
+    except Exception as e:
+        console.print(f"Failed: {e}")
+        logger.exception("zfs_exporter status error")
         raise typer.Exit(1)
 
 

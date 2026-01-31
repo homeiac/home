@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: zfs-pool-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: zfs-pool-health
+      rules:
+        - alert: ZfsPoolDegraded
+          expr: zfs_pool_health > 0
+          for: 2m
+          labels:
+            severity: critical
+            service: proxmox-storage
+          annotations:
+            summary: "ZFS pool {{ $labels.pool }} on {{ $labels.instance }} is unhealthy"
+            description: "ZFS pool {{ $labels.pool }} health is {{ $value }} (0=ONLINE, 1=DEGRADED, 2=FAULTED). Check with: ssh root@{{ $labels.instance }} 'zpool status {{ $labels.pool }}'"
+
+        - alert: ZfsPoolReadOnly
+          expr: zfs_pool_readonly > 0
+          for: 2m
+          labels:
+            severity: critical
+            service: proxmox-storage
+          annotations:
+            summary: "ZFS pool {{ $labels.pool }} on {{ $labels.instance }} is read-only"
+            description: "ZFS pool {{ $labels.pool }} is in read-only mode. Immediate investigation required."
+
+        - alert: ZfsPoolSpaceCritical
+          expr: (zfs_pool_free_bytes / zfs_pool_size_bytes) < 0.1
+          for: 5m
+          labels:
+            severity: warning
+            service: proxmox-storage
+          annotations:
+            summary: "ZFS pool {{ $labels.pool }} on {{ $labels.instance }} is >90% full"
+            description: "ZFS pool {{ $labels.pool }} has only {{ $value | humanizePercentage }} free space remaining."
