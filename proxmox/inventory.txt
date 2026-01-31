@@ -1,5 +1,10 @@
 # inventory.txt
 # See also: docs/reference/ip-assignments.md (comprehensive IP table)
+# Updated: 2026-01-31
+
+# ============================================================================
+# PROXMOX HOSTS
+# ============================================================================
 
 [proxmox]
 192.168.4.122   # pve
@@ -12,15 +17,19 @@
 [maas]
 192.168.4.53    # ubuntu-maas-vm
 
+# ============================================================================
+# K3s CLUSTER VMs
+# ============================================================================
+
 [k3s-vms]
 192.168.4.210   # k3s-vm-pumped-piglet-gpu (VMID 105 on pumped-piglet)
 192.168.4.212   # k3s-vm-still-fawn (VMID 108 on still-fawn) - GPU + Coral TPU
 192.168.4.192   # k3s-vm-fun-bedbug (VMID 114 on fun-bedbug) - DISABLED thermal
 192.168.4.193   # k3s-vm-pve (VMID 107 on pve) - STANDBY powered off
 
-[crucible]
-192.168.4.189   # proper-raptor (management - enp1s0 1GbE)
-192.168.4.190   # proper-raptor (storage - enx* USB 2.5GbE) - PLANNED
+# ============================================================================
+# RKE2 EVALUATION (on pumped-piglet)
+# ============================================================================
 
 [rke2-eval]
 # On pumped-piglet (VMID 200, 201, 202)
@@ -28,3 +37,94 @@
 192.168.4.202   # linux-control (VMID 202)
 # windows-worker (VMID 201) - stopped
 
+# ============================================================================
+# STORAGE: PROXMOX HOST DISKS & ZFS POOLS
+# ============================================================================
+#
+# Pool names and sizes from live `zpool list` / `pvesm status` as of 2026-01-31.
+# "active on" = node restriction in /etc/pve/storage.cfg; shared pools omit this.
+
+[storage:pve]
+# Physical: 1x HighRel 512GB NVMe SSD (nvme0n1)
+# rpool          472G total   98G used   375G free   ONLINE
+# local-zfs      rpool/data   active (images, rootdir)
+# local          /var/lib/vz  active (iso, vztmpl, backup, images, rootdir, snippets)
+
+[storage:still-fawn]
+# Physical: 2x T-FORCE 2TB SATA SSD (sda + sdb)
+# rpool          1.86T total  209G used  1.65T free  ONLINE  mirror-0 (both SSDs)
+# local-zfs      rpool/data   active (images, rootdir)
+# local          /var/lib/vz  active
+
+[storage:pumped-piglet]
+# Physical: 1x Intel 2TB NVMe (nvme1n1), 1x Transcend 256GB NVMe (nvme0n1 boot),
+#           1x WD 2.5TB HDD (sda), 1x WD 3TB HDD (sdb)
+# local-2TB-zfs     1.86T total  135G used  1.73T free  ONLINE  (Intel NVMe)
+# local-3TB-backup  2.72T total  916G used  1.82T free  ONLINE  (WD 3TB HDD)
+# local-zfs         disabled (not present on this node)
+# local             /var/lib/vz  active
+
+[storage:chief-horse]
+# Physical: 1x SanDisk 256GB SSD (sda), 1x LiteOn 128GB mSATA (sdb)
+# local-256-gb-zfs  238G total  117G used  121G free  ONLINE  (SanDisk SSD)
+# local-zfs         disabled (not present on this node)
+# local             /var/lib/vz  active
+# Note: pvesm calls the pool "local-zfs" but it maps to local-256-gb-zfs zpool
+
+[storage:fun-bedbug]
+# Physical: 1x SCY 128GB SSD (sda) - no ZFS, uses ext4 directory storage
+# No ZFS pools
+# local          /var/lib/vz  active (iso, vztmpl, backup, images, rootdir)
+
+[storage:rapid-civet]
+# SSH timed out - host may be offline
+# 192.168.4.11
+
+# ============================================================================
+# STORAGE: PROXMOX BACKUP SERVER (PBS)
+# ============================================================================
+#
+# Single PBS instance serves all cluster nodes.
+
+[pbs]
+192.168.4.211   # proxmox-backup-server (LXC 103 on pumped-piglet)
+                # Web UI: https://proxmox-backup-server.maas:8007
+                # Datastore: homelab-backup
+                # Backend: local-3TB-backup zpool on pumped-piglet (2.72T, 916G used)
+                # Retention: keep-all=1
+                # Content: backup
+                # Fingerprint: 54:52:3A:D2:...
+                #
+                # All nodes mount as "homelab-backup" (pbs type) in pvesm.
+                # Total backup data: ~631G across VMs and LXCs.
+
+# ============================================================================
+# STORAGE: CRUCIBLE (Oxide)
+# ============================================================================
+#
+# Crucible volumes mounted as /mnt/crucible-storage on each Proxmox node.
+# Registered in pvesm as "crucible-storage" (dir type) for images, iso, vztmpl.
+
+[crucible]
+192.168.4.189   # proper-raptor (management - enp1s0 1GbE)
+192.168.4.190   # proper-raptor (storage - enx* USB 2.5GbE) - PLANNED
+                #
+                # Crucible mount usage per node (via NBD):
+                #   pve:            12.5G mounted,  <1G used
+                #   still-fawn:     1.7T  mounted,  1.8G used
+                #   chief-horse:    12.5G mounted,  <1G used
+                #   fun-bedbug:     120G  mounted,  56G used
+                #   pumped-piglet:  244G  mounted,  44G used
+
+# ============================================================================
+# STORAGE: K3s PERSISTENT VOLUMES (inside K3s cluster)
+# ============================================================================
+#
+# K3s VMs get Proxmox storage passed through as virtual disks:
+#   k3s-vm-still-fawn (108):    scsi0=700G (local-zfs)
+#   k3s-vm-pumped-piglet (105): scsi0=1800G (local-2TB-zfs), scsi1=200G (local-3TB-backup)
+#   k3s-vm-pve (107):           scsi0=50G (local-zfs)
+#
+# Inside K3s, storage classes:
+#   local-path (default)      - Rancher local-path-provisioner
+#   prometheus-2tb-storage    - For Prometheus TSDB on still-fawn large disk
