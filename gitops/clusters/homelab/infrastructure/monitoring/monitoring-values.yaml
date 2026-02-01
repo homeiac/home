@@ -32,11 +32,21 @@ prometheus:
               - 192.168.4.122:9221   # pve-proxmox-metrics
       - job_name: "proxmox-zfs-exporter"
         static_configs:
-          - targets:
-              - 192.168.4.122:9134   # pve
-              - 192.168.4.17:9134    # still-fawn
-              - 192.168.4.19:9134    # chief-horse
-              - 192.168.4.175:9134   # pumped-piglet
+          - targets: ["192.168.4.122:9134"]
+            labels:
+              hostname: pve
+          - targets: ["192.168.4.17:9134"]
+            labels:
+              hostname: still-fawn
+          - targets: ["192.168.4.19:9134"]
+            labels:
+              hostname: chief-horse
+          - targets: ["192.168.4.175:9134"]
+            labels:
+              hostname: pumped-piglet
+        relabel_configs:
+          - source_labels: [hostname]
+            target_label: instance
       - job_name: "nvidia-dcgm-exporter"
         kubernetes_sd_configs:
           - role: service
