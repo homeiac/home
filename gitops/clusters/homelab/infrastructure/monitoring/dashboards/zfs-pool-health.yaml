@@ -74,7 +74,7 @@ data:
                 ]
               },
               "color": {
-                "mode": "background_fixed"
+                "mode": "thresholds"
               },
               "mappings": [
                 {
@@ -197,7 +197,7 @@ data:
                 ]
               },
               "color": {
-                "mode": "background_fixed"
+                "mode": "thresholds"
               },
               "mappings": [
                 {
