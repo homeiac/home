@@ -12,39 +12,54 @@ prometheus:
           resources:
             requests:
               storage: 500Gi
+    # Mount file_sd targets from ConfigMap (managed by: homelab monitoring generate-targets)
+    volumes:
+      - name: file-sd-targets
+        configMap:
+          name: prometheus-scrape-targets
+    volumeMounts:
+      - name: file-sd-targets
+        mountPath: /etc/prometheus/file-sd
+        readOnly: true
     additionalScrapeConfigs:
+      # All bare-metal targets are discovered via file_sd_configs.
+      # The same targets.json file is shared; each job filters by the "job" label.
+      # To update targets: poetry run homelab monitoring generate-targets
       - job_name: "proxmox-node-exporter"
-        static_configs:
-          - targets:
-              - 192.168.4.122:9100   # pve
-              - 192.168.4.17:9100    # still-fawn
-              - 192.168.4.19:9100    # chief-horse
-              - 192.168.4.172:9100   # fun-bedbug
-              - 192.168.4.175:9100   # pumped-piglet
-      - job_name: "crucible-node-exporter"
-        static_configs:
-          - targets:
-              - 192.168.4.189:9100   # proper-raptor (Crucible storage)
+        file_sd_configs:
+          - files: ["/etc/prometheus/file-sd/targets.json"]
+        relabel_configs:
+          - source_labels: [job]
+            regex: proxmox-node-exporter
+            action: keep
+          - source_labels: [hostname]
+            target_label: instance
+      - job_name: "proxmox-zfs-exporter"
+        file_sd_configs:
+          - files: ["/etc/prometheus/file-sd/targets.json"]
+        relabel_configs:
+          - source_labels: [job]
+            regex: proxmox-zfs-exporter
+            action: keep
+          - source_labels: [hostname]
+            target_label: instance
       - job_name: "proxmox-pve-exporter"
         metrics_path: /pve
-        static_configs:
-          - targets:
-              - 192.168.4.122:9221   # pve-proxmox-metrics
-      - job_name: "proxmox-zfs-exporter"
-        static_configs:
-          - targets: ["192.168.4.122:9134"]
-            labels:
-              hostname: pve
-          - targets: ["192.168.4.17:9134"]
-            labels:
-              hostname: still-fawn
-          - targets: ["192.168.4.19:9134"]
-            labels:
-              hostname: chief-horse
-          - targets: ["192.168.4.175:9134"]
-            labels:
-              hostname: pumped-piglet
+        file_sd_configs:
+          - files: ["/etc/prometheus/file-sd/targets.json"]
         relabel_configs:
+          - source_labels: [job]
+            regex: proxmox-pve-exporter
+            action: keep
+          - source_labels: [hostname]
+            target_label: instance
+      - job_name: "crucible-node-exporter"
+        file_sd_configs:
+          - files: ["/etc/prometheus/file-sd/targets.json"]
+        relabel_configs:
+          - source_labels: [job]
+            regex: crucible-node-exporter
+            action: keep
           - source_labels: [hostname]
             target_label: instance
       - job_name: "nvidia-dcgm-exporter"

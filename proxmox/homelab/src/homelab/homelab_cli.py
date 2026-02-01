@@ -366,6 +366,68 @@ def monitoring_apply(
         raise typer.Exit(1)
 
 
+@monitoring_app.command("generate-targets")
+def monitoring_generate_targets(
+    config_file: Path = typer.Option(
+        "config/cluster.yaml",
+        "--config", "-c",
+        help="Cluster configuration file"
+    ),
+    kubeconfig: Optional[str] = typer.Option(
+        None,
+        "--kubeconfig", "-k",
+        help="Path to kubeconfig file"
+    ),
+    namespace: str = typer.Option(
+        "monitoring",
+        "--namespace", "-n",
+        help="Kubernetes namespace for the ConfigMap"
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print generated JSON without applying"
+    ),
+) -> None:
+    """
+    Generate Prometheus scrape targets from cluster.yaml and apply as ConfigMap.
+
+    Reads node IPs and monitoring config from cluster.yaml, produces
+    file_sd_configs JSON, and creates/updates the prometheus-scrape-targets
+    ConfigMap in Kubernetes.
+    """
+    if not config_file.exists():
+        console.print(f"Config file not found: {config_file}")
+        raise typer.Exit(1)
+
+    try:
+        from homelab.prometheus_targets import apply_targets_configmap, generate_targets_json
+
+        if dry_run:
+            targets_json = generate_targets_json(config_file)
+            console.print(targets_json)
+            return
+
+        result = apply_targets_configmap(
+            config_file,
+            kubeconfig=kubeconfig,
+            namespace=namespace,
+        )
+
+        if result["success"]:
+            console.print(f"ConfigMap applied with {result['targets_count']} target groups")
+            if result.get("output"):
+                console.print(f"  {result['output']}")
+        else:
+            console.print(f"Failed to apply ConfigMap: {result.get('error', 'unknown')}")
+            raise typer.Exit(1)
+
+    except Exception as e:
+        console.print(f"Failed: {e}")
+        logger.exception("generate-targets error")
+        raise typer.Exit(1)
+
+
 @monitoring_app.command("status")
 def monitoring_status(
     config_file: Path = typer.Option(

@@ -106,8 +106,21 @@ nodes:
         pool: rpool/data
         content: [images, rootdir]
 
+  - name: pve
+    ip: 192.168.4.122
+    fqdn: pve.maas
+    role: compute
+    enabled: true
+    gpu_passthrough:
+      enabled: false
+    storage:
+      - name: local-zfs
+        type: zfspool
+        pool: rpool/data
+        content: [images, rootdir]
+
   - name: chief-horse
-    ip: 192.168.4.174
+    ip: 192.168.4.19
     fqdn: chief-horse.maas
     role: compute
     enabled: true
@@ -192,3 +205,20 @@ monitoring:
       - pumped-piglet
       - pve
       - chief-horse
+
+  # Proxmox VE API exporter (prometheus-pve-exporter)
+  # Exposes cluster-level metrics: VM status, storage, etc.
+  pve_exporter:
+    enabled: true
+    port: 9221
+    metrics_path: /pve
+    host: pve
+
+  # Extra scrape targets not managed as Proxmox nodes
+  # (e.g. NAS, dedicated storage servers)
+  extra_targets:
+    - job: crucible-node-exporter
+      targets:
+        - host: proper-raptor
+          ip: 192.168.4.189
+          port: 9100
