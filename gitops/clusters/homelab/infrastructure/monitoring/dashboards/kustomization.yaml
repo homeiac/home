@@ -6,3 +6,4 @@ resources:
   - node-exporter-full.yaml
   - proxmox-ve.yaml
   - kubernetes-pvcs.yaml
+  - zfs-pool-health.yaml
