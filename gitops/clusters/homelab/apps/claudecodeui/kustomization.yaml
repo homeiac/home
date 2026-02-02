@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - secrets/ghcr-credentials.sops.yaml
+  # GitHub SSH key + PAT (create with: scripts/claudecodeui/setup-github-ssh-secret.sh)
+  # - secrets/github-ssh-key.sops.yaml  # Uncomment after running setup script
   - rbac.yaml
   - pvc.yaml
   - deployment.yaml
@@ -11,6 +13,7 @@ resources:
   # Blue deployment (v1.15.0 with MQTT)
   - blue/pvc-blue.yaml
   - blue/mqtt-secret.yaml
+  - blue/configmap-ssh-known-hosts.yaml
   - blue/deployment-blue.yaml
   - blue/service-blue.yaml
   - blue/ingress-blue.yaml

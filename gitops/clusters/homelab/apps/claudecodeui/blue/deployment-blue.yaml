@@ -18,7 +18,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-credentials
       initContainers:
-        # Fix permissions on PVC data and copy auth.db if needed
+        # Fix permissions on PVC data, copy auth.db, and set up SSH keys for GitHub
         # Runs as root to fix ownership, then main container runs as claude user
         - name: init-permissions
           image: ghcr.io/homeiac/claudecodeui:main
@@ -40,9 +40,56 @@ spec:
               else
                 echo "auth.db already exists ($(stat -c%s /data/auth.db) bytes)"
               fi
+
+              # --- SSH key setup ---
+              # Store SSH config in PVC so it persists across restarts
+              SSH_DIR="/data/ssh"
+              mkdir -p "$SSH_DIR"
+
+              # Copy private key from mounted secret
+              if [ -f /ssh-secret/id_ed25519 ]; then
+                echo "Setting up SSH key for GitHub..."
+                cp /ssh-secret/id_ed25519 "$SSH_DIR/id_ed25519"
+                cp /ssh-secret/id_ed25519.pub "$SSH_DIR/id_ed25519.pub"
+                chmod 700 "$SSH_DIR"
+                chmod 600 "$SSH_DIR/id_ed25519"
+                chmod 644 "$SSH_DIR/id_ed25519.pub"
+              else
+                echo "WARN: No SSH key secret mounted, skipping SSH setup"
+              fi
+
+              # Copy known_hosts from configmap
+              if [ -f /ssh-known-hosts/known_hosts ]; then
+                cp /ssh-known-hosts/known_hosts "$SSH_DIR/known_hosts"
+                chmod 644 "$SSH_DIR/known_hosts"
+              fi
+
+              # Create SSH config pointing to PVC-backed path
+              # In main container: /home/claude/.claude/ssh/ (via PVC mount)
+              cat > "$SSH_DIR/config" <<'SSHEOF'
+              Host github.com
+                HostName github.com
+                User git
+                IdentityFile /home/claude/.claude/ssh/id_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking yes
+              SSHEOF
+              # Remove leading whitespace from heredoc
+              sed -i 's/^              //' "$SSH_DIR/config"
+              chmod 600 "$SSH_DIR/config"
+
+              # Fix ownership of SSH dir
+              chown -R 1001:1001 "$SSH_DIR"
+              echo "SSH setup complete at /data/ssh/ (maps to /home/claude/.claude/ssh/)"
           volumeMounts:
             - name: claude-data
               mountPath: /data
+            - name: github-ssh-key
+              mountPath: /ssh-secret
+              readOnly: true
+            - name: github-known-hosts
+              mountPath: /ssh-known-hosts
+              readOnly: true
       containers:
         - name: claudecodeui
           image: ghcr.io/homeiac/claudecodeui:main
@@ -85,6 +132,25 @@ spec:
                 secretKeyRef:
                   name: mqtt-credentials
                   key: password
+            # SSH config for GitHub (keys stored in PVC at /home/claude/.claude/ssh/)
+            - name: GIT_SSH_COMMAND
+              value: "ssh -F /home/claude/.claude/ssh/config"
+            # Git identity for commits
+            - name: GIT_AUTHOR_NAME
+              value: "homeiac"
+            - name: GIT_COMMITTER_NAME
+              value: "homeiac"
+            - name: GIT_AUTHOR_EMAIL
+              value: "noreply@github.com"
+            - name: GIT_COMMITTER_EMAIL
+              value: "noreply@github.com"
+            # GitHub PAT for API access (gh CLI if available)
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: github-ssh-key
+                  key: gh_token
+                  optional: true
           volumeMounts:
             - name: claude-data
               mountPath: /home/claude/.claude
@@ -104,3 +170,12 @@ spec:
         - name: claude-projects
           persistentVolumeClaim:
             claimName: claude-projects-blue
+        - name: github-ssh-key
+          secret:
+            secretName: github-ssh-key
+            optional: true
+            defaultMode: 0600
+        - name: github-known-hosts
+          configMap:
+            name: github-known-hosts
+            optional: true
