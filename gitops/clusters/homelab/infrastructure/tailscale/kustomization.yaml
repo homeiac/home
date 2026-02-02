@@ -5,5 +5,4 @@ resources:
   - secrets/operator-oauth.sops.yaml
   - helmrepository.yaml
   - helmrelease.yaml
-  # TODO: Move to separate Flux Kustomization with dependency on tailscale-operator HelmRelease
-  # - connector.yaml  # CRDs installed by operator
+  - connector.yaml
