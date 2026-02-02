@@ -8,7 +8,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: claude-green.app.home.panderosystems.com
+  - host: claude-green.app.homelab
     http:
       paths:
       - path: /
