@@ -155,6 +155,18 @@ spec:
               chown -R 1001:1001 "$PROJECTS_DIR"
               chown 1001:1001 "$CONFIG_FILE"
               echo "Project setup complete"
+
+              # --- Homelab .env setup ---
+              # Copy .env from secret into PVC so scripts can source it
+              if [ -f /homelab-env-secret/dot-env ]; then
+                echo "Copying homelab .env from secret to PVC..."
+                cp /homelab-env-secret/dot-env /data/.env
+                chown 1001:1001 /data/.env
+                chmod 600 /data/.env
+                echo "Homelab .env installed ($(wc -l < /data/.env) lines)"
+              else
+                echo "WARN: No homelab-env secret mounted, skipping .env setup"
+              fi
           volumeMounts:
             - name: claude-data
               mountPath: /data
@@ -168,6 +180,9 @@ spec:
               readOnly: true
             - name: github-repos
               mountPath: /github-repos
+              readOnly: true
+            - name: homelab-env-file
+              mountPath: /homelab-env-secret
               readOnly: true
       containers:
         - name: claudecodeui
@@ -230,6 +245,91 @@ spec:
                   name: github-ssh-key
                   key: gh_token
                   optional: true
+            # Homelab credentials (from SOPS-encrypted secret)
+            - name: HA_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: HA_TOKEN
+                  optional: true
+            - name: HA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: HA_URL
+                  optional: true
+            - name: HOME_ASSISTANT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: HOME_ASSISTANT_TOKEN
+                  optional: true
+            - name: HOME_ASSISTANT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: HOME_ASSISTANT_URL
+                  optional: true
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: API_TOKEN
+                  optional: true
+            - name: PBS_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: PBS_API_TOKEN
+                  optional: true
+            - name: PBS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: PBS_URL
+                  optional: true
+            - name: PVE_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: PVE_ROOT_PASSWORD
+                  optional: true
+            - name: MAAS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: MAAS_URL
+                  optional: true
+            - name: MAAS_USER
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: MAAS_USER
+                  optional: true
+            - name: MAAS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: MAAS_PASSWORD
+                  optional: true
+            - name: FRIGATE_MQTT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: FRIGATE_MQTT_USER
+                  optional: true
+            - name: FRIGATE_MQTT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: FRIGATE_MQTT_PASS
+                  optional: true
+            - name: CRUCIBLE_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: homelab-env
+                  key: CRUCIBLE_USER_PASSWORD
+                  optional: true
           volumeMounts:
             - name: claude-data
               mountPath: /home/claude/.claude
@@ -261,3 +361,10 @@ spec:
         - name: github-repos
           configMap:
             name: github-repos
+        - name: homelab-env-file
+          secret:
+            secretName: homelab-env
+            optional: true
+            items:
+              - key: dot-env
+                path: dot-env

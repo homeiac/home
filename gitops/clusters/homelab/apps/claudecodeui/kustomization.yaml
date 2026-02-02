@@ -15,6 +15,7 @@ resources:
   - blue/mqtt-secret.yaml
   - blue/configmap-ssh-known-hosts.yaml
   - blue/configmap-github-repos.yaml
+  - blue/secrets/homelab-env.sops.yaml
   - blue/deployment-blue.yaml
   - blue/service-blue.yaml
   - blue/ingress-blue.yaml
