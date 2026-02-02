@@ -131,26 +131,17 @@ spec:
                     git -C "$CLONE_DIR" pull --ff-only 2>&1 || echo "WARN: Pull failed for $DIR_NAME"
                   fi
 
-                  # Register in project-config.json
+                  # Register in project-config.json using jq
                   # Key format: path with / replaced by -
                   PROJECT_KEY=$(echo "$PROJECT_PATH" | sed 's|/|-|g')
                   if ! grep -q "$PROJECT_KEY" "$CONFIG_FILE"; then
                     echo "Registering project: $DISPLAY_NAME ($PROJECT_PATH)"
-                    # Use python3 if available, fall back to manual JSON
-                    if command -v python3 > /dev/null 2>&1; then
-                      python3 -c "
-import json, sys
-with open('$CONFIG_FILE', 'r') as f:
-    config = json.load(f)
-config['$PROJECT_KEY'] = {
-    'manuallyAdded': True,
-    'originalPath': '$PROJECT_PATH',
-    'displayName': '$DISPLAY_NAME'
-}
-with open('$CONFIG_FILE', 'w') as f:
-    json.dump(config, f, indent=2)
-"
-                    fi
+                    TMP_CFG=$(mktemp)
+                    jq --arg key "$PROJECT_KEY" \
+                       --arg path "$PROJECT_PATH" \
+                       --arg name "$DISPLAY_NAME" \
+                       '.[$key] = {"manuallyAdded": true, "originalPath": $path, "displayName": $name}' \
+                       "$CONFIG_FILE" > "$TMP_CFG" && mv "$TMP_CFG" "$CONFIG_FILE"
                   fi
                 done < "$REPOS_FILE"
               fi
