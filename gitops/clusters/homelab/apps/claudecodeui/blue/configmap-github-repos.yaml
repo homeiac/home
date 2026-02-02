@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: github-repos
+  namespace: claudecodeui
+data:
+  # One repo per line: <clone-url> <directory-name> [display-name]
+  # Lines starting with # are ignored
+  # For private repos, the init container injects GH_TOKEN into the HTTPS URL
+  repos: |
+    https://github.com/homeiac/home.git home home

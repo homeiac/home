@@ -81,14 +81,97 @@ spec:
               # Fix ownership of SSH dir
               chown -R 1001:1001 "$SSH_DIR"
               echo "SSH setup complete at /data/ssh/ (maps to /home/claude/.claude/ssh/)"
+
+              # --- Auto-clone repos and register as projects ---
+              PROJECTS_DIR="/projects"
+              CONFIG_FILE="/data/project-config.json"
+              REPOS_FILE="/github-repos/repos"
+
+              # Read GH_TOKEN from secret if available (for private repo HTTPS auth)
+              GH_TOKEN=""
+              if [ -f /ssh-secret/gh_token ]; then
+                GH_TOKEN=$(cat /ssh-secret/gh_token)
+              fi
+
+              # Initialize project-config.json if missing
+              if [ ! -f "$CONFIG_FILE" ]; then
+                echo "{}" > "$CONFIG_FILE"
+              fi
+
+              if [ -f "$REPOS_FILE" ]; then
+                echo "Processing repo list..."
+                while IFS= read -r line; do
+                  # Skip comments and empty lines
+                  echo "$line" | grep -q '^\s*#' && continue
+                  echo "$line" | grep -q '^\s*$' && continue
+
+                  REPO_URL=$(echo "$line" | awk '{print $1}')
+                  DIR_NAME=$(echo "$line" | awk '{print $2}')
+                  DISPLAY_NAME=$(echo "$line" | awk '{print $3}')
+                  [ -z "$DISPLAY_NAME" ] && DISPLAY_NAME="$DIR_NAME"
+
+                  CLONE_DIR="$PROJECTS_DIR/$DIR_NAME"
+                  PROJECT_PATH="/home/claude/projects/$DIR_NAME"
+
+                  # Clone if not already present
+                  if [ ! -d "$CLONE_DIR/.git" ]; then
+                    echo "Cloning $REPO_URL -> $CLONE_DIR ..."
+                    # Inject PAT into HTTPS URL for private repos
+                    CLONE_URL="$REPO_URL"
+                    if [ -n "$GH_TOKEN" ]; then
+                      CLONE_URL=$(echo "$REPO_URL" | sed "s|https://github.com|https://${GH_TOKEN}@github.com|")
+                    fi
+                    git clone "$CLONE_URL" "$CLONE_DIR" 2>&1 || echo "WARN: Failed to clone $REPO_URL"
+                    # Remove token from remote URL after clone
+                    if [ -n "$GH_TOKEN" ] && [ -d "$CLONE_DIR/.git" ]; then
+                      git -C "$CLONE_DIR" remote set-url origin "$REPO_URL"
+                    fi
+                  else
+                    echo "Repo $DIR_NAME already cloned, pulling latest..."
+                    git -C "$CLONE_DIR" pull --ff-only 2>&1 || echo "WARN: Pull failed for $DIR_NAME"
+                  fi
+
+                  # Register in project-config.json
+                  # Key format: path with / replaced by -
+                  PROJECT_KEY=$(echo "$PROJECT_PATH" | sed 's|/|-|g')
+                  if ! grep -q "$PROJECT_KEY" "$CONFIG_FILE"; then
+                    echo "Registering project: $DISPLAY_NAME ($PROJECT_PATH)"
+                    # Use python3 if available, fall back to manual JSON
+                    if command -v python3 > /dev/null 2>&1; then
+                      python3 -c "
+import json, sys
+with open('$CONFIG_FILE', 'r') as f:
+    config = json.load(f)
+config['$PROJECT_KEY'] = {
+    'manuallyAdded': True,
+    'originalPath': '$PROJECT_PATH',
+    'displayName': '$DISPLAY_NAME'
+}
+with open('$CONFIG_FILE', 'w') as f:
+    json.dump(config, f, indent=2)
+"
+                    fi
+                  fi
+                done < "$REPOS_FILE"
+              fi
+
+              # Fix ownership of projects
+              chown -R 1001:1001 "$PROJECTS_DIR"
+              chown 1001:1001 "$CONFIG_FILE"
+              echo "Project setup complete"
           volumeMounts:
             - name: claude-data
               mountPath: /data
+            - name: claude-projects
+              mountPath: /projects
             - name: github-ssh-key
               mountPath: /ssh-secret
               readOnly: true
             - name: github-known-hosts
               mountPath: /ssh-known-hosts
+              readOnly: true
+            - name: github-repos
+              mountPath: /github-repos
               readOnly: true
       containers:
         - name: claudecodeui
@@ -179,3 +262,6 @@ spec:
           configMap:
             name: github-known-hosts
             optional: true
+        - name: github-repos
+          configMap:
+            name: github-repos
