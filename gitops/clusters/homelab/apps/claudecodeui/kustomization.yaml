@@ -4,7 +4,7 @@ resources:
   - namespace.yaml
   - secrets/ghcr-credentials.sops.yaml
   # GitHub SSH key + PAT (create with: scripts/claudecodeui/setup-github-ssh-secret.sh)
-  # - secrets/github-ssh-key.sops.yaml  # Uncomment after running setup script
+  - secrets/github-ssh-key.sops.yaml
   - rbac.yaml
   - pvc.yaml
   - deployment.yaml
