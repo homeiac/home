@@ -134,7 +134,14 @@ spec:
 
               # Fix ownership of SSH dir
               chown -R 1001:1001 "$SSH_DIR"
-              echo "SSH setup complete at /data/ssh/ (maps to /home/claude/.claude/ssh/)"
+
+              # Symlink ~/.ssh -> ~/.claude/ssh so plain 'ssh' commands find the config
+              # (GIT_SSH_COMMAND only covers git; Claude Code runs ssh directly via ~/.ssh)
+              HOME_SSH="/home/claude/.ssh"
+              rm -rf "$HOME_SSH"
+              ln -sf /home/claude/.claude/ssh "$HOME_SSH"
+              chown -h 1001:1001 "$HOME_SSH"
+              echo "SSH setup complete at /data/ssh/ (symlinked from ~/.ssh)"
 
               # --- Auto-clone repos and register as projects ---
               PROJECTS_DIR="/projects"
