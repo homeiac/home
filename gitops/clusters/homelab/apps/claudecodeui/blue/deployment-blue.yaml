@@ -148,12 +148,6 @@ spec:
               CONFIG_FILE="/data/project-config.json"
               REPOS_FILE="/github-repos/repos"
 
-              # Read GH_TOKEN from secret if available (for private repo HTTPS auth)
-              GH_TOKEN=""
-              if [ -f /ssh-secret/gh_token ]; then
-                GH_TOKEN=$(cat /ssh-secret/gh_token)
-              fi
-
               # Initialize project-config.json if missing
               if [ ! -f "$CONFIG_FILE" ]; then
                 echo "{}" > "$CONFIG_FILE"
@@ -161,6 +155,9 @@ spec:
 
               # Mark projects dir as safe for git (init runs as root, repos owned by uid 1001)
               git config --global --add safe.directory '*'
+
+              # Use SSH for git operations (key was set up above)
+              export GIT_SSH_COMMAND="ssh -F $SSH_DIR/config -o StrictHostKeyChecking=accept-new"
 
               if [ -f "$REPOS_FILE" ]; then
                 echo "Processing repo list..."
@@ -182,19 +179,12 @@ spec:
                   # Clone if not already present
                   if [ ! -d "$CLONE_DIR/.git" ]; then
                     echo "Cloning $REPO_URL -> $CLONE_DIR ..."
-                    # Inject PAT into HTTPS URL for private repos
-                    CLONE_URL="$REPO_URL"
-                    if [ -n "$GH_TOKEN" ]; then
-                      CLONE_URL=$(echo "$REPO_URL" | sed "s|https://github.com|https://${GH_TOKEN}@github.com|")
-                    fi
-                    git clone "$CLONE_URL" "$CLONE_DIR" 2>&1 || echo "WARN: Failed to clone $REPO_URL"
-                    # Remove token from remote URL after clone
-                    if [ -n "$GH_TOKEN" ] && [ -d "$CLONE_DIR/.git" ]; then
-                      git -C "$CLONE_DIR" remote set-url origin "$REPO_URL"
-                    fi
+                    git clone "$REPO_URL" "$CLONE_DIR" 2>&1 || echo "WARN: Failed to clone $REPO_URL"
                   else
-                    echo "Repo $DIR_NAME already cloned, pulling latest..."
-                    git -C "$CLONE_DIR" pull --ff-only 2>&1 || echo "WARN: Pull failed for $DIR_NAME"
+                    echo "Repo $DIR_NAME already cloned, fetching latest..."
+                    git -C "$CLONE_DIR" remote set-url origin "$REPO_URL"
+                    git -C "$CLONE_DIR" fetch origin 2>&1 || echo "WARN: Fetch failed for $DIR_NAME"
+                    git -C "$CLONE_DIR" reset --hard origin/$(git -C "$CLONE_DIR" rev-parse --abbrev-ref HEAD) 2>&1 || echo "WARN: Reset failed for $DIR_NAME"
                   fi
 
                   # Register in project-config.json using jq

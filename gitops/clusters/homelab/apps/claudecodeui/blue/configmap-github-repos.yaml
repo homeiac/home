@@ -6,6 +6,6 @@ metadata:
 data:
   # One repo per line: <clone-url> <directory-name> [display-name]
   # Lines starting with # are ignored
-  # For private repos, the init container injects GH_TOKEN into the HTTPS URL
+  # Uses SSH URLs — requires github-ssh-key secret to be deployed
   repos: |
-    https://github.com/homeiac/home.git home home
+    git@github.com:homeiac/home.git home home
