@@ -18,7 +18,7 @@ spec:
       imagePullSecrets:
         - name: ghcr-credentials
       initContainers:
-        # Fix permissions on PVC data, copy auth.db, and set up SSH keys for GitHub
+        # Fix permissions on PVC data, copy auth.db, and set up SSH keys for GitHub + Proxmox
         # Runs as root to fix ownership, then main container runs as claude user
         - name: init-permissions
           image: ghcr.io/homeiac/claudecodeui:main
@@ -46,7 +46,7 @@ spec:
               SSH_DIR="/data/ssh"
               mkdir -p "$SSH_DIR"
 
-              # Copy private key from mounted secret
+              # Copy GitHub private key from mounted secret
               if [ -f /ssh-secret/id_ed25519 ]; then
                 echo "Setting up SSH key for GitHub..."
                 cp /ssh-secret/id_ed25519 "$SSH_DIR/id_ed25519"
@@ -55,14 +55,29 @@ spec:
                 chmod 600 "$SSH_DIR/id_ed25519"
                 chmod 644 "$SSH_DIR/id_ed25519.pub"
               else
-                echo "WARN: No SSH key secret mounted, skipping SSH setup"
+                echo "WARN: No GitHub SSH key secret mounted, skipping GitHub SSH setup"
               fi
 
-              # Copy known_hosts from configmap
+              # Copy Proxmox private key from mounted secret
+              if [ -f /proxmox-ssh-secret/id_ed25519 ]; then
+                echo "Setting up SSH key for Proxmox hosts..."
+                cp /proxmox-ssh-secret/id_ed25519 "$SSH_DIR/proxmox_ed25519"
+                chmod 600 "$SSH_DIR/proxmox_ed25519"
+              else
+                echo "WARN: No Proxmox SSH key secret mounted, skipping Proxmox SSH setup"
+              fi
+
+              # Copy known_hosts from configmap (GitHub hosts)
               if [ -f /ssh-known-hosts/known_hosts ]; then
                 cp /ssh-known-hosts/known_hosts "$SSH_DIR/known_hosts"
                 chmod 644 "$SSH_DIR/known_hosts"
               fi
+
+              # Scan and add Proxmox host keys to known_hosts
+              echo "Scanning Proxmox host keys..."
+              for HOST in still-fawn.maas chief-horse.maas fun-bedbug.maas pumped-piglet.maas rapid-civet.maas 192.168.4.122; do
+                ssh-keyscan -T 3 "$HOST" >> "$SSH_DIR/known_hosts" 2>/dev/null || echo "WARN: Could not scan $HOST"
+              done
 
               # Create SSH config pointing to PVC-backed path
               # In main container: /home/claude/.claude/ssh/ (via PVC mount)
@@ -73,6 +88,45 @@ spec:
                 IdentityFile /home/claude/.claude/ssh/id_ed25519
                 UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
                 StrictHostKeyChecking yes
+
+              # Proxmox hosts - use dedicated Proxmox SSH key
+              # pve.maas is NOT in MAAS DNS (NXDOMAIN), so we alias to its IP
+              Host pve pve.maas
+                HostName 192.168.4.122
+                User root
+                IdentityFile /home/claude/.claude/ssh/proxmox_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking no
+
+              Host still-fawn.maas
+                User root
+                IdentityFile /home/claude/.claude/ssh/proxmox_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking no
+
+              Host chief-horse.maas
+                User root
+                IdentityFile /home/claude/.claude/ssh/proxmox_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking no
+
+              Host fun-bedbug.maas
+                User root
+                IdentityFile /home/claude/.claude/ssh/proxmox_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking no
+
+              Host pumped-piglet.maas
+                User root
+                IdentityFile /home/claude/.claude/ssh/proxmox_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking no
+
+              Host rapid-civet.maas
+                User root
+                IdentityFile /home/claude/.claude/ssh/proxmox_ed25519
+                UserKnownHostsFile /home/claude/.claude/ssh/known_hosts
+                StrictHostKeyChecking no
               SSHEOF
               # Remove leading whitespace from heredoc
               sed -i 's/^              //' "$SSH_DIR/config"
@@ -174,6 +228,9 @@ spec:
               mountPath: /projects
             - name: github-ssh-key
               mountPath: /ssh-secret
+              readOnly: true
+            - name: proxmox-ssh-key
+              mountPath: /proxmox-ssh-secret
               readOnly: true
             - name: github-known-hosts
               mountPath: /ssh-known-hosts
@@ -352,6 +409,11 @@ spec:
         - name: github-ssh-key
           secret:
             secretName: github-ssh-key
+            optional: true
+            defaultMode: 0600
+        - name: proxmox-ssh-key
+          secret:
+            secretName: proxmox-ssh-key
             optional: true
             defaultMode: 0600
         - name: github-known-hosts

@@ -16,6 +16,8 @@ resources:
   - blue/configmap-ssh-known-hosts.yaml
   - blue/configmap-github-repos.yaml
   - blue/secrets/homelab-env.sops.yaml
+  # Proxmox SSH key (create with: scripts/claudecodeui/setup-proxmox-ssh-secret.sh)
+  - blue/secrets/proxmox-ssh-key.sops.yaml
   - blue/deployment-blue.yaml
   - blue/service-blue.yaml
   - blue/ingress-blue.yaml
