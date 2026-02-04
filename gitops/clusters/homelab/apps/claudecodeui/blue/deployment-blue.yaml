@@ -219,20 +219,13 @@ spec:
                 echo "WARN: No homelab-env secret mounted, skipping .env setup"
               fi
 
-              # --- Claude CLI credentials symlink ---
-              # Native Claude CLI (v2.1.31+) stores credentials at ~/.local/share/claude/.credentials.json
-              # Create the directory structure in PVC and symlink to ~/.claude/.credentials.json
+              # --- Claude CLI state directory ---
+              # Native Claude CLI (v2.1.31+) stores all state in ~/.local/share/claude/
+              # Create directory in PVC so credentials persist across pod restarts
               CLAUDE_LOCAL_DIR="/data/local-share-claude"
               mkdir -p "$CLAUDE_LOCAL_DIR"
               chown 1001:1001 "$CLAUDE_LOCAL_DIR"
-
-              if [ -f /data/.credentials.json ]; then
-                echo "Symlinking Claude CLI credentials in PVC..."
-                ln -sf /home/claude/.claude/.credentials.json "$CLAUDE_LOCAL_DIR/.credentials.json"
-                echo "Claude CLI credentials symlink created in PVC"
-              else
-                echo "No existing credentials found, Claude CLI will create on first login"
-              fi
+              echo "Claude CLI state directory created at $CLAUDE_LOCAL_DIR"
           volumeMounts:
             - name: claude-data
               mountPath: /data
