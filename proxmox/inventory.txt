@@ -1,6 +1,6 @@
 # inventory.txt
 # See also: docs/reference/ip-assignments.md (comprehensive IP table)
-# Updated: 2026-01-31
+# Updated: 2026-02-04
 
 # ============================================================================
 # PROXMOX HOSTS
@@ -22,8 +22,13 @@
 # ============================================================================
 
 [k3s-vms]
-192.168.4.210   # k3s-vm-pumped-piglet-gpu (VMID 105 on pumped-piglet)
-192.168.4.212   # k3s-vm-still-fawn (VMID 108 on still-fawn) - GPU + Coral TPU
+192.168.4.210   # k3s-vm-pumped-piglet-gpu (VMID 105 on pumped-piglet) - RTX 3070 GPU
+                # Note: GPU passthrough VM - not currently in vzdump exclude list
+                #       (on different host than still-fawn, check pumped-piglet backup config)
+192.168.4.212   # k3s-vm-still-fawn (VMID 108 on still-fawn) - AMD GPU (VAAPI) + Coral TPU
+                # WARNING: PCI passthrough GPU - EXCLUDE from vzdump snapshot backups
+                #          (QEMU crashes ~17min into snapshot with passthrough device)
+                #          Excluded in backup job: backup-ff3d789f-f52b (exclude: 103,108)
 192.168.4.192   # k3s-vm-fun-bedbug (VMID 114 on fun-bedbug) - DISABLED thermal
 192.168.4.193   # k3s-vm-pve (VMID 107 on pve) - STANDBY powered off
 
@@ -97,6 +102,12 @@
                 #
                 # All nodes mount as "homelab-backup" (pbs type) in pvesm.
                 # Total backup data: ~631G across VMs and LXCs.
+                #
+                # Backup job: backup-ff3d789f-f52b
+                #   Schedule: 2:30 AM and 10:30 PM
+                #   Mode: snapshot (falls back to stop if VM is off)
+                #   Excludes: 103 (PBS itself), 108 (GPU passthrough crashes QEMU)
+                #   Retention: keep-daily=3, keep-weekly=2
 
 # ============================================================================
 # STORAGE: CRUCIBLE (Oxide)

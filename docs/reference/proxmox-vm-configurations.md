@@ -1,6 +1,6 @@
 # Proxmox VM Configurations Reference
 
-**Last Updated**: October 21, 2025
+**Last Updated**: February 4, 2026
 **Purpose**: Complete VM configuration backup for disaster recovery and documentation
 
 ## VM Topology
@@ -57,6 +57,9 @@
 ## VM 105: k3s-vm-pumped-piglet-gpu
 
 **Critical VM**: Main K3s GPU node hosting all migrated workloads
+
+**WARNING**: GPU passthrough VM - must be excluded from vzdump snapshot backups.
+See [VM 108 backup exclusion note](#critical-backup-exclusion) for details.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -227,6 +230,135 @@ ssh ubuntu@192.168.4.210 <<'EOF'
   sudo mkdir -p /mnt/samba-storage/smb_data
   sudo ln -s /mnt/samba-storage/smb_data /mnt/smb_data
 EOF
+```
+
+## VM 108: k3s-vm-still-fawn
+
+**Critical VM**: K3s node hosting Frigate NVR pod (AMD GPU VAAPI + Coral TPU)
+
+```
++----------------------------------------------------------------------+
+|                   VM 108: k3s-vm-still-fawn                           |
+|                   Host: still-fawn.maas (192.168.4.17)                |
++----------------------------------------------------------------------+
+| CPU:      4 cores (host CPU, AMD A9-9400)                            |
+| Memory:   25600 MB (25 GB)                                            |
+| Machine:  Q35                                                         |
+| BIOS:     SeaBIOS                                                     |
+| OS:       Ubuntu 24.04.3 LTS (cloud-init)                             |
+| IP:       192.168.4.212 (DHCP)                                        |
+| Hostname: k3s-vm-still-fawn                                           |
+| User:     ubuntu (cloud-init configured)                              |
+| Onboot:   Yes (auto-start with Proxmox)                              |
++----------------------------------------------------------------------+
+| Storage:                                                              |
+|   scsi0:     700GB (local-zfs:vm-108-disk-0) -> Root /               |
+|              cache=writeback, discard=on, iothread=1, aio=io_uring   |
+|   ide2:      CloudInit ISO (local-zfs:vm-108-cloudinit)              |
+|                                                                       |
+| GPU Passthrough:                                                      |
+|   hostpci0:  0000:01:00 (AMD Radeon R5 - VAAPI), pcie=1             |
+|                                                                       |
+| USB Passthrough:                                                      |
+|   usb0:      1a6e:089a (USB 3.0 device)                             |
+|   usb1:      18d1:9302 (Google Coral TPU)                            |
+|                                                                       |
+| VirtioFS:                                                             |
+|   virtiofs0: crucible-storage (cache=always)                         |
+|                                                                       |
+| Network:                                                              |
+|   net0:      virtio, MAC=BC:24:11:90:21:DF, bridge=vmbr0            |
+|                                                                       |
+| Cloud-Init:                                                           |
+|   Custom:    user=local:snippets/k3s-server-still-fawn.yaml          |
+|   User:      ubuntu                                                   |
++----------------------------------------------------------------------+
+```
+
+### CRITICAL: Backup Exclusion
+
+**VM 108 MUST be excluded from vzdump snapshot backups.**
+
+QEMU cannot snapshot a VM with PCI passthrough devices (AMD GPU). Attempting
+a snapshot backup causes the QEMU process to crash ~17 minutes in, silently
+killing the VM with no OOM or error in host logs. This was the root cause of
+a Frigate outage on 2026-02-04 (~9 hours downtime).
+
+- Backup job `backup-ff3d789f-f52b` excludes: `103,108`
+- If the backup job is recreated, VM 108 MUST be re-excluded
+- Same applies to VM 105 (RTX 3070 passthrough) on pumped-piglet
+
+### VM 108 Configuration File
+
+```ini
+#K3s node with AMD GPU (VAAPI) + Coral TPU - Crossplane managed
+acpi: 1
+agent: enabled=1,fstrim_cloned_disks=1,type=virtio
+balloon: 0
+bios: seabios
+boot: order=scsi0;net0
+cicustom: user=local:snippets/k3s-server-still-fawn.yaml
+ciuser: ubuntu
+cores: 4
+cpu: host
+hostpci0: 0000:01:00,pcie=1
+ide2: local-zfs:vm-108-cloudinit,media=cdrom
+ipconfig0: ip=dhcp
+keyboard: en-us
+machine: q35
+memory: 25600
+name: k3s-vm-still-fawn
+net0: virtio=BC:24:11:90:21:DF,bridge=vmbr0,firewall=0
+numa: 0
+onboot: 1
+ostype: other
+scsi0: local-zfs:vm-108-disk-0,aio=io_uring,backup=1,cache=writeback,discard=on,iothread=1,replicate=1,size=700G,ssd=0
+scsihw: virtio-scsi-pci
+serial0: socket
+usb0: host=1a6e:089a,usb3=1
+usb1: host=18d1:9302,usb3=1
+virtiofs0: crucible-storage,cache=always
+```
+
+### VM 108 Recreation Commands
+
+```bash
+# On still-fawn.maas
+# IMPORTANT: AMD GPU passthrough requires IOMMU enabled in BIOS
+
+qm create 108 \
+  --name k3s-vm-still-fawn \
+  --machine q35 \
+  --cores 4 \
+  --cpu host \
+  --memory 25600 \
+  --balloon 0 \
+  --scsihw virtio-scsi-pci \
+  --onboot 1 \
+  --acpi 1
+
+qm set 108 --scsi0 local-zfs:700,aio=io_uring,cache=writeback,discard=on,iothread=1
+qm set 108 --net0 virtio,bridge=vmbr0,firewall=0
+qm set 108 --ide2 local-zfs:cloudinit
+qm set 108 --ciuser ubuntu
+qm set 108 --ipconfig0 ip=dhcp
+qm set 108 --cicustom user=local:snippets/k3s-server-still-fawn.yaml
+qm set 108 --agent enabled=1,fstrim_cloned_disks=1,type=virtio
+qm set 108 --boot order=scsi0
+
+# GPU passthrough (AMD Radeon R5 - find PCI address: lspci | grep Radeon)
+qm set 108 --hostpci0 0000:01:00,pcie=1
+
+# Coral TPU USB passthrough
+qm set 108 --usb1 host=18d1:9302,usb3=1
+
+# VirtioFS mount for Crucible storage
+qm set 108 --virtiofs0 crucible-storage,cache=always
+
+qm start 108
+
+# IMPORTANT: Exclude from backup job after creation!
+# pvesh set /cluster/backup/<backup-job-id> --exclude '103,108'
 ```
 
 ## VM 107: k3s-vm-pve
