@@ -221,15 +221,15 @@ spec:
 
               # --- Claude CLI credentials symlink ---
               # Native Claude CLI (v2.1.31+) stores credentials at ~/.local/share/claude/.credentials.json
-              # Symlink it to ~/.claude/.credentials.json (on PVC) so credentials persist
-              CLAUDE_LOCAL_DIR="/home/claude/.local/share/claude"
+              # Create the directory structure in PVC and symlink to ~/.claude/.credentials.json
+              CLAUDE_LOCAL_DIR="/data/local-share-claude"
               mkdir -p "$CLAUDE_LOCAL_DIR"
-              chown 1001:1001 /home/claude/.local /home/claude/.local/share "$CLAUDE_LOCAL_DIR"
+              chown 1001:1001 "$CLAUDE_LOCAL_DIR"
 
               if [ -f /data/.credentials.json ]; then
-                echo "Symlinking Claude CLI credentials to PVC..."
+                echo "Symlinking Claude CLI credentials in PVC..."
                 ln -sf /home/claude/.claude/.credentials.json "$CLAUDE_LOCAL_DIR/.credentials.json"
-                echo "Claude CLI credentials symlink created"
+                echo "Claude CLI credentials symlink created in PVC"
               else
                 echo "No existing credentials found, Claude CLI will create on first login"
               fi
@@ -404,6 +404,9 @@ spec:
               mountPath: /home/claude/.claude
             - name: claude-projects
               mountPath: /home/claude/projects
+            - name: claude-data
+              mountPath: /home/claude/.local/share/claude
+              subPath: local-share-claude
           resources:
             requests:
               memory: "512Mi"
