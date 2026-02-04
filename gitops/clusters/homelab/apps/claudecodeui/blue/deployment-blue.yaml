@@ -21,7 +21,7 @@ spec:
         # Fix permissions on PVC data, copy auth.db, and set up SSH keys for GitHub + Proxmox
         # Runs as root to fix ownership, then main container runs as claude user
         - name: init-permissions
-          image: ghcr.io/homeiac/claudecodeui:main@sha256:98978c5ba03e2f6ca012710d295ba5072ecf62a2c43132c27128898179b88521
+          image: ghcr.io/homeiac/claudecodeui:main@sha256:bb88846b4f2be7a046271c012330f6b9d72b0a48e0f3527e93ae8241896bd8e9
           securityContext:
             runAsUser: 0
           command:
@@ -240,7 +240,7 @@ spec:
               readOnly: true
       containers:
         - name: claudecodeui
-          image: ghcr.io/homeiac/claudecodeui:main@sha256:98978c5ba03e2f6ca012710d295ba5072ecf62a2c43132c27128898179b88521
+          image: ghcr.io/homeiac/claudecodeui:main@sha256:bb88846b4f2be7a046271c012330f6b9d72b0a48e0f3527e93ae8241896bd8e9
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
