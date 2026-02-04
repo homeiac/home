@@ -18,9 +18,12 @@ spec:
       imagePullSecrets:
         - name: ghcr-credentials
       initContainers:
-        # Fix permissions on PVC data, copy auth.db, and set up SSH keys for GitHub + Proxmox
-        # Runs as root to fix ownership, then main container runs as claude user
-        - name: init-permissions
+        # Persistent home directory init (DevPod/Coder pattern)
+        # PVC mounted at /mnt/home (NOT /home/claude) so image files are still accessible
+        # Phase 1: Seed home from image on first run
+        # Phase 2: Merge new files from image updates
+        # Phase 3: SSH keys, repos, env setup
+        - name: init-home
           image: ghcr.io/homeiac/claudecodeui:main@sha256:bb88846b4f2be7a046271c012330f6b9d72b0a48e0f3527e93ae8241896bd8e9
           securityContext:
             runAsUser: 0
@@ -28,22 +31,76 @@ spec:
             - sh
             - -c
             - |
-              # Fix ownership of entire .claude directory to claude user (uid 1001)
-              echo "Fixing ownership of /data to claude user (uid 1001)..."
-              chown -R 1001:1001 /data
+              set -e
 
-              # Copy auth.db if missing
-              if [ ! -s /data/auth.db ]; then
-                echo "Copying auth.db from image to PVC..."
-                cp /app/server/database/auth.db /data/auth.db 2>/dev/null || echo "No source auth.db"
-                chown 1001:1001 /data/auth.db 2>/dev/null || true
-              else
-                echo "auth.db already exists ($(stat -c%s /data/auth.db) bytes)"
+              # === Migration: old PVC layout → new home-dir layout ===
+              # Old layout: PVC was mounted at ~/.claude/ (auth.db, ssh/ at PVC root)
+              # New layout: PVC mounted at ~/ (auth.db at .claude/, everything under home)
+              if [ -f /mnt/home/auth.db ] && [ ! -f /mnt/home/.home-initialized ]; then
+                echo "Migrating PVC from old layout (was ~/.claude/) to new layout (~/)..."
+                mkdir -p /mnt/home/.claude
+                for item in auth.db ssh project-config.json .env; do
+                  if [ -e "/mnt/home/$item" ]; then
+                    echo "  Moving $item → .claude/$item"
+                    mv "/mnt/home/$item" "/mnt/home/.claude/$item"
+                  fi
+                done
+                # Move local-share-claude to proper XDG path
+                if [ -d /mnt/home/local-share-claude ]; then
+                  mkdir -p /mnt/home/.local/share
+                  mv /mnt/home/local-share-claude /mnt/home/.local/share/claude
+                  echo "  Moved local-share-claude → .local/share/claude/"
+                fi
+                # Move dot-claude.json to .claude.json
+                if [ -f /mnt/home/dot-claude.json ]; then
+                  mv /mnt/home/dot-claude.json /mnt/home/.claude.json
+                  echo "  Moved dot-claude.json → .claude.json"
+                fi
+                echo "Migration complete"
               fi
 
-              # --- SSH key setup ---
-              # Store SSH config in PVC so it persists across restarts
-              SSH_DIR="/data/ssh"
+              # === Phase 1: Seed home directory from image on first run ===
+              if [ ! -f /mnt/home/.home-initialized ]; then
+                echo "First run: seeding home directory from image..."
+                # cp -a preserves permissions, symlinks, timestamps
+                # Use /home/claude from the IMAGE (not mounted over by PVC)
+                cp -a /home/claude/. /mnt/home/
+                touch /mnt/home/.home-initialized
+                echo "Home directory seeded from image"
+              else
+                echo "Home already initialized"
+                # === Phase 2: Merge new files from image updates ===
+                # Add files that exist in image but not in PVC (new tools from image update)
+                # Never overwrite user-modified files
+                cd /home/claude
+                find . -type f 2>/dev/null | while read f; do
+                  if [ ! -e "/mnt/home/$f" ]; then
+                    mkdir -p "/mnt/home/$(dirname "$f")"
+                    cp -a "$f" "/mnt/home/$f"
+                    echo "Added new file from image: $f"
+                  fi
+                done
+              fi
+
+              # Ensure directory structure
+              mkdir -p /mnt/home/.claude
+              mkdir -p /mnt/home/.local/share/claude
+
+              # Fix ownership
+              echo "Fixing ownership to claude user (uid 1001)..."
+              chown -R 1001:1001 /mnt/home
+
+              # === Phase 3: Copy auth.db if missing ===
+              if [ ! -s /mnt/home/.claude/auth.db ]; then
+                echo "Copying auth.db from image to PVC..."
+                cp /app/server/database/auth.db /mnt/home/.claude/auth.db 2>/dev/null || echo "No source auth.db"
+                chown 1001:1001 /mnt/home/.claude/auth.db 2>/dev/null || true
+              else
+                echo "auth.db already exists ($(stat -c%s /mnt/home/.claude/auth.db) bytes)"
+              fi
+
+              # === Phase 4: SSH key setup ===
+              SSH_DIR="/mnt/home/.claude/ssh"
               mkdir -p "$SSH_DIR"
 
               # Copy GitHub private key from mounted secret
@@ -79,8 +136,7 @@ spec:
                 ssh-keyscan -T 3 "$HOST" >> "$SSH_DIR/known_hosts" 2>/dev/null || echo "WARN: Could not scan $HOST"
               done
 
-              # Create SSH config pointing to PVC-backed path
-              # In main container: /home/claude/.claude/ssh/ (via PVC mount)
+              # Create SSH config
               cat > "$SSH_DIR/config" <<'SSHEOF'
               Host github.com
                 HostName github.com
@@ -135,17 +191,14 @@ spec:
               # Fix ownership of SSH dir
               chown -R 1001:1001 "$SSH_DIR"
 
-              # Symlink ~/.ssh -> ~/.claude/ssh so plain 'ssh' commands find the config
-              # (GIT_SSH_COMMAND only covers git; Claude Code runs ssh directly via ~/.ssh)
-              HOME_SSH="/home/claude/.ssh"
-              rm -rf "$HOME_SSH"
-              ln -sf /home/claude/.claude/ssh "$HOME_SSH"
-              chown -h 1001:1001 "$HOME_SSH"
-              echo "SSH setup complete at /data/ssh/ (symlinked from ~/.ssh)"
+              # Symlink ~/.ssh → .claude/ssh on PVC (persists across restarts!)
+              ln -sfn .claude/ssh /mnt/home/.ssh
+              chown -h 1001:1001 /mnt/home/.ssh
+              echo "SSH setup complete (.ssh → .claude/ssh on PVC)"
 
-              # --- Auto-clone repos and register as projects ---
+              # === Phase 5: Auto-clone repos and register as projects ===
               PROJECTS_DIR="/projects"
-              CONFIG_FILE="/data/project-config.json"
+              CONFIG_FILE="/mnt/home/.claude/project-config.json"
               REPOS_FILE="/github-repos/repos"
 
               # Initialize project-config.json if missing
@@ -188,7 +241,6 @@ spec:
                   fi
 
                   # Register in project-config.json using jq
-                  # Key format: path with / replaced by -
                   PROJECT_KEY=$(echo "$PROJECT_PATH" | sed 's|/|-|g')
                   if ! grep -qF -- "$PROJECT_KEY" "$CONFIG_FILE"; then
                     echo "Registering project: $DISPLAY_NAME ($PROJECT_PATH)"
@@ -207,28 +259,21 @@ spec:
               chown 1001:1001 "$CONFIG_FILE"
               echo "Project setup complete"
 
-              # --- Homelab .env setup ---
-              # Copy .env from secret into PVC so scripts can source it
+              # === Phase 6: Homelab .env setup ===
               if [ -f /homelab-env-secret/dot-env ]; then
                 echo "Copying homelab .env from secret to PVC..."
-                cp /homelab-env-secret/dot-env /data/.env
-                chown 1001:1001 /data/.env
-                chmod 600 /data/.env
-                echo "Homelab .env installed ($(wc -l < /data/.env) lines)"
+                cp /homelab-env-secret/dot-env /mnt/home/.claude/.env
+                chown 1001:1001 /mnt/home/.claude/.env
+                chmod 600 /mnt/home/.claude/.env
+                echo "Homelab .env installed ($(wc -l < /mnt/home/.claude/.env) lines)"
               else
                 echo "WARN: No homelab-env secret mounted, skipping .env setup"
               fi
 
-              # --- Claude CLI state directory ---
-              # Native Claude CLI (v2.1.31+) stores all state in ~/.local/share/claude/
-              # Create directory in PVC so credentials persist across pod restarts
-              CLAUDE_LOCAL_DIR="/data/local-share-claude"
-              mkdir -p "$CLAUDE_LOCAL_DIR"
-              chown 1001:1001 "$CLAUDE_LOCAL_DIR"
-              echo "Claude CLI state directory created at $CLAUDE_LOCAL_DIR"
+              echo "=== Init complete ==="
           volumeMounts:
-            - name: claude-data
-              mountPath: /data
+            - name: claude-home
+              mountPath: /mnt/home
             - name: claude-projects
               mountPath: /projects
             - name: github-ssh-key
@@ -393,13 +438,10 @@ spec:
                   key: CRUCIBLE_USER_PASSWORD
                   optional: true
           volumeMounts:
-            - name: claude-data
-              mountPath: /home/claude/.claude
+            - name: claude-home
+              mountPath: /home/claude
             - name: claude-projects
               mountPath: /home/claude/projects
-            - name: claude-data
-              mountPath: /home/claude/.local/share/claude
-              subPath: local-share-claude
           resources:
             requests:
               memory: "512Mi"
@@ -408,7 +450,7 @@ spec:
               memory: "2Gi"
               cpu: "2000m"
       volumes:
-        - name: claude-data
+        - name: claude-home
           persistentVolumeClaim:
             claimName: claude-data-blue
         - name: claude-projects
