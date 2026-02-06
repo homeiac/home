@@ -85,9 +85,12 @@ spec:
             # Shared memory for FFmpeg
             - name: shm
               mountPath: /dev/shm
-            # GPU device access
-            - name: dri
-              mountPath: /dev/dri
+            # GPU device access - card0 (primary device)
+            - name: dri-card0
+              mountPath: /dev/dri/card0
+            # GPU device access - renderD128 (VAAPI render node)
+            - name: dri-render
+              mountPath: /dev/dri/renderD128
             # Sysfs for AMD GPU monitoring (radeontop)
             - name: sys
               mountPath: /sys
@@ -124,10 +127,15 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 2Gi
-        # GPU device node
-        - name: dri
+        # GPU device nodes (explicit mounts required for device propagation)
+        - name: dri-card0
           hostPath:
-            path: /dev/dri
+            path: /dev/dri/card0
+            type: CharDevice
+        - name: dri-render
+          hostPath:
+            path: /dev/dri/renderD128
+            type: CharDevice
         # Sysfs for AMD GPU monitoring
         - name: sys
           hostPath:
