@@ -25,6 +25,8 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          nodeSelector:
+            kubernetes.io/hostname: k3s-vm-fun-bedbug
           containers:
             - name: backup
               image: postgres:16
