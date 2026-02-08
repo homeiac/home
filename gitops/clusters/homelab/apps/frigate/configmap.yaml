@@ -13,9 +13,9 @@ data:
       password: "{FRIGATE_MQTT_PASSWORD}"
       client_id: frigate-k8s
 
-    # AMD VAAPI for hardware-accelerated decoding
+    # NVIDIA NVDEC for hardware-accelerated decoding
     ffmpeg:
-      hwaccel_args: preset-vaapi
+      hwaccel_args: preset-nvidia-h264
       output_args:
         record: preset-record-generic-audio-aac
 
@@ -214,7 +214,7 @@ data:
         type: edgetpu
         device: usb
 
-    # Face recognition (CPU-based without NVIDIA GPU)
+    # Face recognition (GPU-accelerated with NVIDIA RTX 3070)
     face_recognition:
       enabled: true
       model_size: large

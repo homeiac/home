@@ -19,9 +19,10 @@ spec:
       labels:
         app: frigate
     spec:
-      # Schedule on still-fawn (AMD VAAPI + Coral TPU)
+      # Schedule on pumped-piglet (NVIDIA RTX 3070 + Coral TPU after physical move)
+      runtimeClassName: nvidia
       nodeSelector:
-        kubernetes.io/hostname: k3s-vm-still-fawn
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
       # Init container: ALWAYS copy ConfigMap to PVC (GitOps is source of truth)
       # PVC preserves database/clips, but config comes from GitOps on every restart
       initContainers:
@@ -41,7 +42,7 @@ spec:
               mountPath: /config-template
       containers:
         - name: frigate
-          # Frigate 0.16.0 with Coral TPU + AMD VAAPI hwaccel
+          # Frigate 0.16.0 with Coral TPU + NVIDIA NVDEC hwaccel
           image: ghcr.io/blakeblackshear/frigate:0.16.0
           imagePullPolicy: IfNotPresent
           # Privileged for /dev/dri and USB access
@@ -53,8 +54,10 @@ spec:
           env:
             - name: TZ
               value: "America/Los_Angeles"
-            - name: LIBVA_DRIVER_NAME
-              value: "radeonsi"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "all"
           ports:
             - name: web
               containerPort: 5000
@@ -72,6 +75,8 @@ spec:
             requests:
               memory: "2Gi"
               cpu: "1000m"
+            limits:
+              nvidia.com/gpu: "1"
           volumeMounts:
             # Frigate database, config, and internal state (editable)
             - name: config-pvc
@@ -85,16 +90,9 @@ spec:
             # Shared memory for FFmpeg
             - name: shm
               mountPath: /dev/shm
-            # GPU device access - card0 (primary device)
-            - name: dri-card0
-              mountPath: /dev/dri/card0
-            # GPU device access - renderD128 (VAAPI render node)
-            - name: dri-render
-              mountPath: /dev/dri/renderD128
-            # Sysfs for AMD GPU monitoring (radeontop)
-            - name: sys
-              mountPath: /sys
-              readOnly: true
+            # GPU device access
+            - name: dri
+              mountPath: /dev/dri
           livenessProbe:
             httpGet:
               path: /api/version
@@ -127,20 +125,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 2Gi
-        # GPU device nodes (explicit mounts required for device propagation)
-        - name: dri-card0
+        # GPU device node
+        - name: dri
           hostPath:
-            path: /dev/dri/card0
-            type: CharDevice
-        - name: dri-render
-          hostPath:
-            path: /dev/dri/renderD128
-            type: CharDevice
-        # Sysfs for AMD GPU monitoring
-        - name: sys
-          hostPath:
-            path: /sys
-            type: Directory
+            path: /dev/dri
         # ConfigMap with initial config template
         - name: config-template
           configMap:
