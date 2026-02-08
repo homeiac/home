@@ -204,19 +204,14 @@ data:
           password: "{FRIGATE_CAM_LIVINGROOM_PASS}"
 
     # Frigate+ model for better detection (includes package detection)
-    # Using base edgetpu model - fine-tune later with your own images
     model:
       path: plus://c7b38453956cda87076baba4aca213e6
 
-    # Temporarily using CPU detection until Coral USB is moved to pumped-piglet
-    # After physical move, change back to:
-    #   coral:
-    #     type: edgetpu
-    #     device: usb
+    # Coral Edge TPU for object detection - ~19ms inference on USB 3.0
     detectors:
-      cpu:
-        type: cpu
-        num_threads: 4
+      coral:
+        type: edgetpu
+        device: usb
 
     # Face recognition (GPU-accelerated with NVIDIA RTX 3070)
     face_recognition:
