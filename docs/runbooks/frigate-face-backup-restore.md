@@ -13,7 +13,7 @@ This runbook documents the automated backup system and restore procedure.
 │  Backup Flow (runs daily at 3am on pumped-piglet)                       │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  pumped-piglet                        Frigate (still-fawn)              │
+│  pumped-piglet                        Frigate (pumped-piglet K3s VM)    │
 │  ┌─────────────────┐                  ┌─────────────────┐               │
 │  │ cron job        │───── HTTPS ─────▶│ /api/faces      │               │
 │  │ 3am daily       │                  │ /clips/faces/*  │               │
@@ -22,13 +22,17 @@ This runbook documents the automated backup system and restore procedure.
 │           ▼                                                             │
 │  ┌─────────────────┐                                                    │
 │  │ /local-3TB-backup/frigate-backups/                                   │
-│  │ ├── frigate-faces-20260125.tar.gz                                    │
-│  │ ├── frigate-faces-20260124.tar.gz                                    │
+│  │ ├── frigate-faces-20260206.tar.gz                                    │
+│  │ ├── frigate-faces-20260205.tar.gz                                    │
 │  │ └── ... (last 7 days)                                                │
 │  └─────────────────┘                                                    │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Note**: Frigate was migrated from still-fawn to pumped-piglet on 2026-02-08.
+> The backup architecture remains the same - backups stored on pumped-piglet's
+> 3TB ZFS, separate from the K3s VM storage.
 
 ## Backup Details
 
@@ -101,7 +105,8 @@ ssh root@pumped-piglet.maas "/root/scripts/backup-frigate-faces.sh"
 
 - After cluster rebuild
 - After Frigate PVC is deleted/recreated
-- After VM 108 (K3s still-fawn) is recreated
+- After Frigate migration to different node (e.g., still-fawn → pumped-piglet)
+- After K3s VM is recreated
 - If face recognition stops working and images are missing
 
 ### Prerequisites
@@ -133,24 +138,39 @@ cd ~/code/home
 
 ### Manual Restore (if script fails)
 
+**Method 1: Direct file copy (recommended)**
+
+The Frigate API may not accept bulk uploads reliably. Copy files directly to the pod:
+
 ```bash
-# 1. Download backup
-scp root@pumped-piglet.maas:/local-3TB-backup/frigate-backups/frigate-faces-20260125.tar.gz /tmp/
+# 1. Download and extract backup
+scp root@pumped-piglet.maas:/local-3TB-backup/frigate-backups/frigate-faces-20260206.tar.gz /tmp/
+cd /tmp && rm -rf faces-restore && mkdir faces-restore
+tar xzf frigate-faces-20260206.tar.gz -C faces-restore --strip-components=1
 
-# 2. Extract
-cd /tmp && tar xzf frigate-faces-20260125.tar.gz
+# 2. Create tarball and copy to pod
+tar czf /tmp/faces-all.tar.gz -C /tmp/faces-restore .
+export KUBECONFIG=~/kubeconfig
+POD=$(kubectl get pod -n frigate -l app=frigate -o jsonpath='{.items[0].metadata.name}')
+kubectl cp /tmp/faces-all.tar.gz frigate/${POD}:/tmp/faces-all.tar.gz
 
-# 3. Upload via API
+# 3. Extract in pod
+kubectl exec -n frigate ${POD} -- bash -c "cd /media/frigate/clips/faces && rm -rf * && tar xzf /tmp/faces-all.tar.gz && rm -f ._* ._.* && ls -la"
+
+# 4. Verify
+curl -sk https://frigate.app.home.panderosystems.com/api/faces | jq
+```
+
+**Method 2: Via API (may be unreliable)**
+
+```bash
 FRIGATE_URL="https://frigate.app.home.panderosystems.com"
-for face_dir in faces-20260125/*/; do
+for face_dir in /tmp/faces-restore/*/; do
     name=$(basename "$face_dir")
     for img in "$face_dir"/*.webp; do
         curl -sk -X POST "${FRIGATE_URL}/api/faces/${name}" -F "file=@${img}"
     done
 done
-
-# 4. Verify
-curl -sk "${FRIGATE_URL}/api/faces" | jq
 ```
 
 ### Verify Restore
@@ -263,15 +283,34 @@ ssh root@pumped-piglet.maas "(crontab -l 2>/dev/null | grep -v backup-frigate-fa
 
 ### Why not backup the PVC directly?
 
-- Frigate PVC is inside K3s VM on still-fawn
-- If still-fawn dies, both Frigate AND its PVC are gone
-- API-based backup stores data on separate physical machine (pumped-piglet)
+- Frigate PVC is inside K3s VM (local-path storage)
+- If the node dies, both Frigate AND its PVC are gone
+- API-based backup stores data on separate ZFS storage (survives node failure)
+- **Proven in practice**: 2026-02-08 still-fawn failure - face data restored from backup
 
 ### Why pumped-piglet?
 
 - Always on (hosts PBS and other critical services)
 - Has 3TB ZFS storage for backups
 - Network access to Frigate via Traefik
+
+---
+
+## Incident History
+
+### 2026-02-08: still-fawn Node Failure
+
+**What happened**: The still-fawn Proxmox host went offline, taking the K3s VM (108) and Frigate with it.
+
+**Impact**: Frigate was migrated to pumped-piglet. The old PVC with face training data was lost.
+
+**Recovery**:
+1. Backups existed on pumped-piglet's 3TB ZFS: `frigate-faces-20260206.tar.gz` (2.6MB)
+2. Direct file copy method used (API restore was unreliable)
+3. All 580 training images restored (Adil: 36, Asha: 153, G: 380, Waffles: 11)
+4. Face recognition operational within minutes of restore
+
+**Lesson**: The separate-storage backup strategy worked exactly as designed.
 
 ---
 
