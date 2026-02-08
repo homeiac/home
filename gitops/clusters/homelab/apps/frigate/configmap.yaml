@@ -208,11 +208,15 @@ data:
     model:
       path: plus://c7b38453956cda87076baba4aca213e6
 
-    # Coral Edge TPU for object detection - ~10ms inference
+    # Temporarily using CPU detection until Coral USB is moved to pumped-piglet
+    # After physical move, change back to:
+    #   coral:
+    #     type: edgetpu
+    #     device: usb
     detectors:
-      coral:
-        type: edgetpu
-        device: usb
+      cpu:
+        type: cpu
+        num_threads: 4
 
     # Face recognition (GPU-accelerated with NVIDIA RTX 3070)
     face_recognition:
