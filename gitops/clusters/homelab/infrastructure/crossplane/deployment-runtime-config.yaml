@@ -8,6 +8,8 @@ spec:
       selector: {}
       template:
         spec:
+          # Empty containers list required to pass validation (crossplane/crossplane#5442)
+          containers: []
           nodeSelector:
             kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
           tolerations:
