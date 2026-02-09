@@ -80,11 +80,17 @@ See: `docs/blog/2026-02-08-still-fawn-motherboard-replacement.md`
 
 ## Attachments
 
-Full session log (sanitized, credentials redacted) stored locally:
+Full session log (sanitized, credentials redacted) stored in multiple locations:
+
+**Samba share (K3s cluster)**:
+- `smb://192.168.4.120/secure/incidents/2026-02-06-still-fawn-boot-failure-session.jsonl`
+- Mount: `open smb://192.168.4.120/secure` (user: gshiva)
+
+**Local Mac**:
 - `~/Documents/incidents/2026-02-06-still-fawn-boot-failure-session.jsonl`
 - `~/.claude/projects/-Users-10381054-code-home/2026-02-06-still-fawn-boot-failure-session.jsonl`
 
-Original (unsanitized) session from claudecodeui-blue pod:
+**Original (unsanitized) session from claudecodeui-blue pod**:
 - `/home/claude/.claude/projects/-home-claude-projects-home/bc97c7b4-b453-4dbd-bf9f-4376574bb979.jsonl`
 
 ## Related Documents
