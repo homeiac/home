@@ -23,7 +23,7 @@ spec:
         - -c
         - |
           chown nobody:nogroup /mnt/smb_data
-          chmod 0770 /mnt/smb_data
+          chmod 0775 /mnt/smb_data
         volumeMounts:
         - name: share
           mountPath: /mnt/smb_data
