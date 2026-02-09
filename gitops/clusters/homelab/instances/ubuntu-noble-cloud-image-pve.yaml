@@ -2,8 +2,7 @@
 # Downloaded via Crossplane/Terraform bpg provider
 # Required: storage must have 'import' content type enabled
 #
-# NOTE: Image already exists at /var/lib/vz/import/noble-server-cloudimg-amd64.qcow2
-# This manifest adopts the existing file with overwriteUnmanaged: true
+# NOTE: pve host requires .img extension (Proxmox version/storage config difference)
 ---
 apiVersion: virtualenvironmentdownloadfile.crossplane.io/v1alpha1
 kind: EnvironmentDownloadFile
@@ -19,9 +18,8 @@ spec:
     datastoreId: local
     contentType: import
     url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-    # IMPORTANT: Must use .qcow2 extension for import content type
-    fileName: noble-server-cloudimg-amd64.qcow2
-    # Adopt existing file if present (avoids "refusing to override" error)
+    # pve requires .img extension (not .qcow2 like other nodes)
+    fileName: noble-server-cloudimg-amd64.img
     overwriteUnmanaged: true
   providerConfigRef:
     name: default

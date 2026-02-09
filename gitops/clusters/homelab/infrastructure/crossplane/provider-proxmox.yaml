@@ -6,4 +6,6 @@ spec:
   # Using the community-maintained provider based on bpg/terraform-provider-proxmox
   # https://marketplace.upbound.io/providers/valkiriaaquaticamendi/provider-proxmox-bpg
   package: xpkg.upbound.io/valkiriaaquaticamendi/provider-proxmox-bpg:v0.11.1
-  # Resource limits can be set via DeploymentRuntimeConfig after installation
+  # Schedule on pumped-piglet to avoid overloading k3s-vm-pve
+  runtimeConfigRef:
+    name: provider-proxmox-runtime
