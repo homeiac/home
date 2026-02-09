@@ -56,13 +56,19 @@ The system now won't even reach the bootloader - it's stuck at the BIOS POST scr
 - Possible initramfs corruption that's confusing the UEFI boot process
 - Or coincidental hardware failure (motherboard) triggered by the reboot
 
-## Diagnostic Steps Not Yet Completed
+## Diagnostic Steps Completed
 
 Per [ASUS forum suggestion](https://rog-forum.asus.com/t5/motherboards/asus-bios-stuck-at-press-f2-or-del-to-enter-bios-setup/td-p/954481):
 
-1. **Test without SSD connected** - If BIOS boots normally without SSD, the problem is boot sector/initramfs corruption, not hardware
-2. **If boots without SSD**: Boot from Proxmox USB installer and reinstall, or manually fix initramfs
-3. **If still stuck without SSD**: Motherboard is dead, proceed with replacement
+1. **Tested without SSD connected** - BIOS still stuck at "Press F2/DEL"
+2. **Conclusion**: Motherboard failure, likely triggered by the kernel changes
+
+**Context**: The UEFI boot device was changed in BIOS during this session. The combination of:
+- DKMS kernel module installation (vendor-reset)
+- UEFI boot configuration changes
+- Subsequent reboot
+
+...appears to have triggered the motherboard failure. While the system doesn't POST even without storage, this doesn't mean the changes were unrelated - they likely triggered a latent hardware issue or corrupted UEFI firmware state in a way that couldn't be recovered.
 
 ## Resolution
 
