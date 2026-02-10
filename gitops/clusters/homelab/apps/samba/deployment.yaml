@@ -22,11 +22,11 @@ spec:
         - sh
         - -c
         - |
-          chown nobody:nogroup /mnt/smb_data
-          chmod 0775 /mnt/smb_data
+          chown nobody:nogroup /mnt/samba-storage
+          chmod 0775 /mnt/samba-storage
         volumeMounts:
         - name: share
-          mountPath: /mnt/smb_data
+          mountPath: /mnt/samba-storage
       containers:
       - name: smbd
         image: ghcr.io/servercontainers/samba:latest
@@ -59,5 +59,5 @@ spec:
       volumes:
       - name: share
         hostPath:
-          path: /mnt/smb_data
+          path: /mnt/samba-storage
           type: Directory

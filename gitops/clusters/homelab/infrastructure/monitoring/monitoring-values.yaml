@@ -8,7 +8,7 @@ prometheus:
       volumeClaimTemplate:
         spec:
           accessModes: ["ReadWriteOnce"]
-          storageClassName: prometheus-2tb-storage
+          storageClassName: prometheus-storage
           resources:
             requests:
               storage: 500Gi
