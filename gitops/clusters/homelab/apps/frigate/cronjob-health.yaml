@@ -35,7 +35,7 @@ spec:
                   STUCK_THRESHOLD=2        # occurrences in 5 min
                   BACKLOG_THRESHOLD=5      # occurrences in 5 min
                   CONSECUTIVE_FAILURES_REQUIRED=2
-                  MAX_RESTARTS_PER_HOUR=2
+                  MAX_RESTARTS_PER_HOUR=3
 
                   # Read current state from ConfigMap
                   FAILURES=$(kubectl get cm frigate-health-state -n frigate -o jsonpath='{.data.consecutive_failures}' 2>/dev/null || echo "0")
@@ -139,6 +139,36 @@ spec:
                   if [[ $RECENT_RESTARTS -ge $MAX_RESTARTS_PER_HOUR ]]; then
                     echo "CIRCUIT BREAKER: Already restarted ${RECENT_RESTARTS}x in last hour - skipping restart"
                     echo "Manual intervention required. Check: scripts/k3s/frigate-cpu-stats.sh --status"
+
+                    # Send alert to Alertmanager (will trigger Grafana notification)
+                    if [[ "$ALERT_SENT" != "true" ]]; then
+                      echo "Sending alert to Alertmanager..."
+                      ALERT_JSON='[{
+                        "labels": {
+                          "alertname": "FrigateCircuitBreakerTriggered",
+                          "severity": "critical",
+                          "service": "frigate",
+                          "namespace": "frigate"
+                        },
+                        "annotations": {
+                          "summary": "Frigate circuit breaker triggered - manual intervention required",
+                          "description": "Frigate has been restarted '"$RECENT_RESTARTS"' times in the last hour. Last failure reason: '"$REASON"'. Auto-restart disabled until manual review."
+                        }
+                      }]'
+
+                      if curl -s -X POST \
+                        -H "Content-Type: application/json" \
+                        -d "$ALERT_JSON" \
+                        "http://kube-prometheus-stack-alertmanager.monitoring:9093/api/v2/alerts" >/dev/null 2>&1; then
+                        echo "Alert sent to Alertmanager"
+                        kubectl patch cm frigate-health-state -n frigate --type merge \
+                          -p '{"data":{"alert_sent_for_incident":"true"}}'
+                      else
+                        echo "Failed to send alert to Alertmanager"
+                      fi
+                    else
+                      echo "Alert already sent for this incident"
+                    fi
                     exit 0
                   fi
 
