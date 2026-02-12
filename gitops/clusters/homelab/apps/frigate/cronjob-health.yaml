@@ -34,6 +34,7 @@ spec:
                   INFERENCE_THRESHOLD=100  # ms
                   STUCK_THRESHOLD=2        # occurrences in 5 min
                   BACKLOG_THRESHOLD=5      # occurrences in 5 min
+                  TPU_RESTART_THRESHOLD=2  # detector restarts in 30 min
                   CONSECUTIVE_FAILURES_REQUIRED=2
                   MAX_RESTARTS_PER_HOUR=3
 
@@ -50,6 +51,7 @@ spec:
                   INF_SPEED="N/A"
                   STUCK_CT=0
                   BACKLOG_CT=0
+                  TPU_RESTART_CT=0
 
                   #=== Health Check 1: API Responsiveness ===#
                   echo "Checking Frigate API..."
@@ -98,6 +100,17 @@ spec:
                     if [[ "$BACKLOG_CT" -gt "$BACKLOG_THRESHOLD" ]]; then
                       UNHEALTHY=true
                       REASON="Recording backlog ${BACKLOG_CT}x in 5 min"
+                    fi
+
+                    #=== Health Check 4: Coral TPU Restarts ===#
+                    # Check logs from last 30 min for detector restart pattern (TPU instability)
+                    LOGS_30M=$(kubectl logs "$FRIGATE_POD" -n frigate --since=30m 2>/dev/null || echo "")
+                    TPU_RESTART_CT=$(echo "$LOGS_30M" | grep -c "detector.coral.*Starting detection process" 2>/dev/null | head -1 || echo 0)
+                    TPU_RESTART_CT=${TPU_RESTART_CT:-0}
+                    echo "TPU/detector restarts in 30 min: $TPU_RESTART_CT (threshold: $TPU_RESTART_THRESHOLD)"
+                    if [[ "$TPU_RESTART_CT" -gt "$TPU_RESTART_THRESHOLD" ]]; then
+                      UNHEALTHY=true
+                      REASON="Coral TPU unstable - ${TPU_RESTART_CT} detector restarts in 30 min"
                     fi
                   fi
 
@@ -231,6 +244,12 @@ spec:
                   2. Check recordings: kubectl logs deploy/frigate -n frigate | grep record
                   3. May need to clear old recordings"
                         ;;
+                      *"TPU"*|*"Coral"*)
+                        NEXT_STEPS="1. Check USB connection: ssh root@still-fawn.maas 'dmesg | grep -i usb | tail -20'
+                  2. Check Coral device: ssh root@still-fawn.maas 'lsusb | grep Google'
+                  3. If recurring, physical Coral USB unplug/replug required
+                  4. Check VM USB passthrough: ssh root@still-fawn.maas 'qm config 108 | grep usb'"
+                        ;;
                       *)
                         NEXT_STEPS="1. Check logs: kubectl logs deploy/frigate -n frigate --tail=100
                   2. Check pod: kubectl get pods -n frigate
@@ -256,6 +275,7 @@ spec:
                   - Coral inference speed: ${INF_SPEED}ms (threshold: ${INFERENCE_THRESHOLD}ms)
                   - Detection stuck in 5 min: ${STUCK_CT} (threshold: ${STUCK_THRESHOLD})
                   - Recording backlog in 5 min: ${BACKLOG_CT} (threshold: ${BACKLOG_THRESHOLD})
+                  - TPU/detector restarts in 30 min: ${TPU_RESTART_CT} (threshold: ${TPU_RESTART_THRESHOLD})
 
                   === NEXT STEPS ===
                   ${NEXT_STEPS}
