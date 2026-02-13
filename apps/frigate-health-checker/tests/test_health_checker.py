@@ -114,8 +114,8 @@ class TestHealthChecker:
         stats_healthy = {
             "detectors": {"coral": {"inference_speed": 15.0}},
             "cameras": {
-                "front_door": {"camera_fps": 5.0, "detection_fps": 0.2},
-                "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1},
+                "front_door": {"camera_fps": 5.0, "detection_fps": 0.2, "skipped_fps": 0.0},
+                "back_yard": {"camera_fps": 5.0, "detection_fps": 0.1, "skipped_fps": 0.5},
             },
         }
         mock_k8s_client.get_frigate_pod.return_value = mock_pod
@@ -132,6 +132,166 @@ class TestHealthChecker:
         assert result.reason is None
         assert result.metrics.api_responsive is True
         assert result.metrics.inference_speed_ms == 15.0
+
+    def test_check_health_high_skip_ratio(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test health check when camera has high frame skip ratio (>80%)."""
+        # Simulate ffmpeg crash loop: camera_fps=5.0 but skipped_fps=4.5 (90% dropped)
+        stats_high_skip = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "trendnet_ip_572w": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.1,
+                    "skipped_fps": 4.5,  # 90% frames skipped!
+                },
+                "back_yard": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.1,
+                    "skipped_fps": 0.5,  # 10% is healthy
+                },
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_high_skip),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        assert result.status == HealthStatus.UNHEALTHY
+        assert result.reason == UnhealthyReason.HIGH_SKIP_RATIO
+        assert "trendnet_ip_572w" in result.message
+        assert "skip=90%" in result.message
+
+    def test_check_health_skip_ratio_at_threshold(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test that skip ratio exactly at threshold (80%) is healthy."""
+        stats_at_threshold = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.2,
+                    "skipped_fps": 4.0,  # Exactly 80% - at threshold, not over
+                },
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_at_threshold),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        # 80% = threshold, not over threshold, so healthy
+        assert result.status == HealthStatus.HEALTHY
+
+    def test_check_health_skip_ratio_just_over_threshold(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test that skip ratio just over threshold (81%) is unhealthy."""
+        stats_over_threshold = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.2,
+                    "skipped_fps": 4.1,  # 82% - over threshold
+                },
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_over_threshold),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        assert result.status == HealthStatus.UNHEALTHY
+        assert result.reason == UnhealthyReason.HIGH_SKIP_RATIO
+
+    def test_check_health_skipped_camera_high_skip_ignored(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test that skipped cameras (reolink_doorbell) with high skip ratio don't fail."""
+        stats_doorbell_high_skip = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "reolink_doorbell": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.0,
+                    "skipped_fps": 5.0,  # 100% skipped - but in skip list
+                },
+                "back_yard": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.1,
+                    "skipped_fps": 0.5,
+                },
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_doorbell_high_skip),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        # Should be healthy because reolink_doorbell is in skip list
+        assert result.status == HealthStatus.HEALTHY
+
+    def test_check_health_no_skipped_fps_field(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test health check when skipped_fps field is missing (older Frigate)."""
+        stats_no_skipped = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {"camera_fps": 5.0, "detection_fps": 0.2},
+                # No skipped_fps field
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_no_skipped),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        # Should be healthy - missing skipped_fps defaults to 0
+        assert result.status == HealthStatus.HEALTHY
 
 
 class TestRestartManager:

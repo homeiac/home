@@ -35,6 +35,7 @@ class HealthChecker:
         1. Pod exists
         2. API accessible
         3. Cameras have frames (camera_fps > 0)
+        4. Cameras are processing frames (skipped_fps / camera_fps < threshold)
 
         Skip cameras in SKIP_CAMERAS list (e.g., doorbell on flaky WiFi).
         """
@@ -82,6 +83,23 @@ class HealthChecker:
                 reason=UnhealthyReason.NO_FRAMES,
                 metrics=metrics,
                 message=f"No frames from: {camera_list}",
+            )
+
+        # Check 4: Frame skip ratio - are frames being processed or dropped?
+        # High skip ratio indicates ffmpeg crash loops or processing backlog
+        cameras_high_skip = self._check_camera_skip_ratio(stats)
+        if cameras_high_skip:
+            camera_list = ", ".join(cameras_high_skip)
+            logger.warning(
+                "Cameras have high frame skip ratio",
+                cameras=cameras_high_skip,
+                threshold=self.settings.skip_ratio_threshold,
+            )
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                reason=UnhealthyReason.HIGH_SKIP_RATIO,
+                metrics=metrics,
+                message=f"High skip ratio: {camera_list}",
             )
 
         # Extract inference speed for logging (but don't fail on it)
@@ -132,6 +150,65 @@ class HealthChecker:
                 cameras_without_frames.append(f"{camera_name}(fps={fps})")
 
         return cameras_without_frames
+
+    def _check_camera_skip_ratio(self, stats: dict[str, object]) -> list[str]:
+        """Check which cameras have high frame skip ratio.
+
+        Returns list of camera names with skip ratio above threshold.
+        High skip ratio indicates processing backlog or repeated ffmpeg crashes.
+
+        Skip ratio = skipped_fps / camera_fps
+        Example: camera_fps=5.0, skipped_fps=4.5 → 90% frames skipped (unhealthy)
+        """
+        skip_cameras = (
+            self.settings.skip_cameras
+            if hasattr(self.settings, "skip_cameras")
+            else ["reolink_doorbell"]
+        )
+        threshold = (
+            self.settings.skip_ratio_threshold
+            if hasattr(self.settings, "skip_ratio_threshold")
+            else 0.8
+        )
+
+        cameras_high_skip = []
+        cameras = stats.get("cameras")
+        if not isinstance(cameras, dict):
+            return []  # Already handled by _check_camera_fps
+
+        for camera_name, camera_stats in cameras.items():
+            if camera_name in skip_cameras:
+                continue
+            if not isinstance(camera_stats, dict):
+                continue
+
+            # Get camera_fps and skipped_fps
+            try:
+                camera_fps = float(camera_stats.get("camera_fps", 0))
+                skipped_fps = float(camera_stats.get("skipped_fps", 0))
+            except (TypeError, ValueError):
+                continue
+
+            # Skip if no frames (already caught by _check_camera_fps)
+            if camera_fps < 1:
+                continue
+
+            # Calculate skip ratio
+            skip_ratio = skipped_fps / camera_fps
+
+            if skip_ratio > threshold:
+                pct = int(skip_ratio * 100)
+                cameras_high_skip.append(f"{camera_name}(skip={pct}%)")
+                logger.debug(
+                    "Camera has high skip ratio",
+                    camera=camera_name,
+                    camera_fps=camera_fps,
+                    skipped_fps=skipped_fps,
+                    skip_ratio=skip_ratio,
+                    threshold=threshold,
+                )
+
+        return cameras_high_skip
 
     def _get_camera_count(self, stats: dict[str, object]) -> int:
         """Get count of cameras with frames."""

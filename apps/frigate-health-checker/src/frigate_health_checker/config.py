@@ -25,6 +25,10 @@ class Settings(BaseSettings):
         default=["reolink_doorbell"],
         description="Cameras to skip in FPS check (on flaky networks)",
     )
+    skip_ratio_threshold: float = Field(
+        default=0.8,
+        description="Max acceptable frame skip ratio (0.8 = 80% dropped is unhealthy)",
+    )
     consecutive_failures_required: int = Field(
         default=2, description="Consecutive failures before restart"
     )

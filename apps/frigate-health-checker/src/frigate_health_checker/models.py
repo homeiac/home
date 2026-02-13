@@ -19,6 +19,7 @@ class UnhealthyReason(Enum):
     NO_POD = "no_pod_running"
     API_UNRESPONSIVE = "api_unresponsive"
     NO_FRAMES = "no_frames"  # camera_fps < 1 for one or more cameras
+    HIGH_SKIP_RATIO = "high_skip_ratio"  # >80% frames skipped (skipped_fps/camera_fps)
     # Legacy reasons (kept for backwards compatibility)
     INFERENCE_SLOW = "inference_slow"
     DETECTION_STUCK = "detection_stuck"

@@ -39,7 +39,9 @@ spec:
                   value: "app=frigate"
                 # Health check thresholds
                 - name: FRIGATE_HC_SKIP_CAMERAS
-                  value: '["reolink_doorbell"]'  # Cameras on flaky networks to skip
+                  value: '[]'  # WiFi issues fixed, monitoring all cameras now
+                - name: FRIGATE_HC_SKIP_RATIO_THRESHOLD
+                  value: "0.8"  # Detect cameras skipping >80% frames (ffmpeg crash loops)
                 - name: FRIGATE_HC_CONSECUTIVE_FAILURES_REQUIRED
                   value: "2"
                 - name: FRIGATE_HC_MAX_RESTARTS_PER_HOUR
