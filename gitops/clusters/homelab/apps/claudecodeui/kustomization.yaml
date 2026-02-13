@@ -10,6 +10,8 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  # SMB mount for session logs backup
+  - smb-claude-sessions-pv.yaml
   # Blue deployment (v1.15.0 with MQTT)
   - blue/pvc-blue.yaml
   - blue/mqtt-secret.yaml
