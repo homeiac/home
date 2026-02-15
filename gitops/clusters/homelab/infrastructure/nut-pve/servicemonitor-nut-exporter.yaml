@@ -14,7 +14,7 @@ spec:
     - port: metrics
       interval: 30s
       scrapeTimeout: 10s
-      path: /metrics
+      path: /ups_metrics
   namespaceSelector:
     matchNames:
       - monitoring
@@ -33,7 +33,7 @@ spec:
     - name: nut.rules
       rules:
         - alert: UPSOnBattery
-          expr: nut_ups_status{status="OB"} == 1
+          expr: network_ups_tools_ups_status{flag="OB"} == 1
           for: 0m
           labels:
             severity: warning
@@ -42,7 +42,7 @@ spec:
             description: "UPS is running on battery. Power outage detected."
 
         - alert: UPSLowBattery
-          expr: nut_battery_charge < 30
+          expr: network_ups_tools_battery_charge < 30
           for: 0m
           labels:
             severity: critical
@@ -51,7 +51,7 @@ spec:
             description: "UPS battery is below 30%. Tiered shutdown may be in progress."
 
         - alert: UPSBatteryCritical
-          expr: nut_battery_charge < 15
+          expr: network_ups_tools_battery_charge < 15
           for: 0m
           labels:
             severity: critical
@@ -69,7 +69,7 @@ spec:
             description: "Cannot scrape UPS metrics from pve. Check nut_exporter service."
 
         - alert: UPSHighLoad
-          expr: nut_load > 80
+          expr: network_ups_tools_ups_load > 80
           for: 5m
           labels:
             severity: warning
@@ -78,7 +78,7 @@ spec:
             description: "UPS load is above 80%. Consider reducing connected equipment."
 
         - alert: UPSReplaceBattery
-          expr: nut_ups_status{status="RB"} == 1
+          expr: network_ups_tools_ups_status{flag="RB"} == 1
           for: 0m
           labels:
             severity: warning
