@@ -1,0 +1,55 @@
+# Debug pod for testing SMB CSI driver mount
+# NOT included in kustomization - apply manually with:
+#   kubectl apply -f debug-smb-pod.yaml
+#   kubectl logs -n kube-system smb-debug-pod
+#   kubectl exec -it -n kube-system smb-debug-pod -- sh
+#   kubectl delete -f debug-smb-pod.yaml
+#
+# Prerequisites:
+#   1. SMB CSI driver installed (csi-driver-smb HelmRelease)
+#   2. samba-credentials secret in kube-system namespace
+#   3. Samba server running at 192.168.4.120 with 'secure' share
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: smb-debug-pod
+  namespace: kube-system
+  labels:
+    app: smb-debug
+spec:
+  containers:
+    - name: debug
+      image: busybox:latest
+      command:
+        - sh
+        - -c
+        - |
+          echo "=== SMB Debug Pod ==="
+          echo "Checking mount point..."
+          ls -la /mnt/smb-test/
+          echo ""
+          echo "Creating test file..."
+          echo "test-$(date +%s)" > /mnt/smb-test/debug-test.txt && echo "Write OK" || echo "Write FAILED"
+          echo ""
+          echo "Reading test file..."
+          cat /mnt/smb-test/debug-test.txt && echo "Read OK" || echo "Read FAILED"
+          echo ""
+          echo "Mount info:"
+          mount | grep smb || mount | grep cifs || echo "No SMB mount found"
+          echo ""
+          echo "Sleeping forever - exec into pod to debug further"
+          sleep infinity
+      volumeMounts:
+        - name: smb-volume
+          mountPath: /mnt/smb-test
+  volumes:
+    - name: smb-volume
+      csi:
+        driver: smb.csi.k8s.io
+        volumeAttributes:
+          source: "//192.168.4.120/secure"
+        nodeStageSecretRef:
+          name: samba-credentials
+          namespace: kube-system
+  restartPolicy: Never
