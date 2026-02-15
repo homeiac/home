@@ -11,7 +11,7 @@ data:
 
     set -e
 
-    PVE_HOST="pve.maas"
+    PVE_HOST="192.168.4.122"
     SSH_KEY="/ssh/id_rsa"
     SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -i $SSH_KEY"
 
