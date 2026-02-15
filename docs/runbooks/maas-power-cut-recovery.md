@@ -94,23 +94,21 @@ ping 192.168.4.19    # chief-horse (HAOS)
 curl -s http://192.168.4.19:8123/api/ | head
 ```
 
-### Step 8: Verify UPS Connection to pve
+### Step 8: Verify pve is Plugged into UPS
+
+**Physical check**: Ensure the pve host power cable is connected to a UPS battery-backed outlet (not surge-only).
+
+Most UPS units have two outlet types:
+- **Battery + Surge**: Keeps running during outage (use this for pve)
+- **Surge Only**: No battery backup (for non-critical devices)
 
 ```bash
-# Check NUT (Network UPS Tools) status on pve
-ssh root@192.168.4.122 "upsc ups@localhost 2>/dev/null || echo 'NUT not configured'"
+# After physical verification, check pve uptime to confirm it stayed up
+ssh root@192.168.4.122 "uptime"
 
-# If NUT is configured, check UPS status
-ssh root@192.168.4.122 "upsc ups@localhost ups.status 2>/dev/null"
-# OL = Online (on mains power)
-# OB = On Battery
-# LB = Low Battery
-
-# Check battery charge
-ssh root@192.168.4.122 "upsc ups@localhost battery.charge 2>/dev/null"
-
-# If NUT is not installed, install and configure it
-# See Prevention section for setup instructions
+# If pve rebooted recently, it wasn't on UPS battery backup
+# Check last boot time
+ssh root@192.168.4.122 "who -b"
 ```
 
 ## Troubleshooting
