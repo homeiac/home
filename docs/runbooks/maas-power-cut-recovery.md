@@ -94,6 +94,25 @@ ping 192.168.4.19    # chief-horse (HAOS)
 curl -s http://192.168.4.19:8123/api/ | head
 ```
 
+### Step 8: Verify UPS Connection to pve
+
+```bash
+# Check NUT (Network UPS Tools) status on pve
+ssh root@192.168.4.122 "upsc ups@localhost 2>/dev/null || echo 'NUT not configured'"
+
+# If NUT is configured, check UPS status
+ssh root@192.168.4.122 "upsc ups@localhost ups.status 2>/dev/null"
+# OL = Online (on mains power)
+# OB = On Battery
+# LB = Low Battery
+
+# Check battery charge
+ssh root@192.168.4.122 "upsc ups@localhost battery.charge 2>/dev/null"
+
+# If NUT is not installed, install and configure it
+# See Prevention section for setup instructions
+```
+
 ## Troubleshooting
 
 ### Cannot Ping pve After Static IP
@@ -141,10 +160,63 @@ ssh root@192.168.4.122 "qm guest exec 102 -- systemctl restart maas-dhcpd"
 
 ## Prevention
 
-Consider:
-1. Setting MAAS VM to auto-start on boot: `qm set 102 --onboot 1`
-2. Adding UPS monitoring to gracefully shutdown VMs
-3. Documenting boot order dependencies
+### 1. Set MAAS VM to Auto-Start
+
+```bash
+ssh root@192.168.4.122 "qm set 102 --onboot 1"
+```
+
+### 2. Configure UPS Monitoring on pve
+
+Install and configure NUT (Network UPS Tools) for graceful shutdown:
+
+```bash
+# SSH to pve
+ssh root@192.168.4.122
+
+# Install NUT
+apt update && apt install -y nut
+
+# Find your UPS
+lsusb | grep -i ups
+# Example: Bus 001 Device 003: ID 051d:0002 American Power Conversion UPS
+
+# Configure NUT driver (/etc/nut/ups.conf)
+cat >> /etc/nut/ups.conf << 'EOF'
+[ups]
+    driver = usbhid-ups
+    port = auto
+    desc = "APC UPS"
+EOF
+
+# Configure NUT mode (/etc/nut/nut.conf)
+sed -i 's/MODE=none/MODE=standalone/' /etc/nut/nut.conf
+
+# Configure monitoring (/etc/nut/upsmon.conf)
+echo 'MONITOR ups@localhost 1 admin secret master' >> /etc/nut/upsmon.conf
+echo 'SHUTDOWNCMD "/sbin/shutdown -h +0"' >> /etc/nut/upsmon.conf
+
+# Start services
+systemctl enable nut-server nut-monitor
+systemctl start nut-server nut-monitor
+
+# Verify UPS is detected
+upsc ups@localhost
+```
+
+### 3. Configure Graceful VM Shutdown
+
+```bash
+# Enable HA shutdown policy for critical VMs
+ssh root@192.168.4.122 "qm set 102 --onboot 1 --startup order=1"
+```
+
+### 4. Document Boot Order Dependencies
+
+Critical boot order:
+1. pve host (physical)
+2. MAAS VM (VMID 102) - provides DHCP
+3. Other VMs/LXCs
 
 ## Tags
 
