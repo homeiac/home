@@ -1,0 +1,100 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nut-deploy
+  namespace: monitoring
+spec:
+  # Run hourly to ensure configs stay in sync
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: nut-deploy
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: deploy
+              image: dtzar/helm-kubectl:3.14
+              command: ["/bin/bash", "/deploy/deploy.sh"]
+              volumeMounts:
+                - name: deploy-script
+                  mountPath: /deploy
+                - name: nut-configs
+                  mountPath: /nut-configs
+                - name: nut-scripts
+                  mountPath: /nut-scripts
+                - name: ssh-key
+                  mountPath: /ssh
+                  readOnly: true
+          volumes:
+            - name: deploy-script
+              configMap:
+                name: nut-deploy-script
+                defaultMode: 0755
+            - name: nut-configs
+              configMap:
+                name: nut-configs
+            - name: nut-scripts
+              configMap:
+                name: nut-scripts
+                defaultMode: 0755
+            - name: ssh-key
+              secret:
+                secretName: nut-deploy-ssh-key
+                defaultMode: 0600
+---
+# Manual trigger job - apply this to force immediate deployment
+# kubectl create job --from=cronjob/nut-deploy nut-deploy-manual -n monitoring
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nut-deploy-initial
+  namespace: monitoring
+  annotations:
+    description: "Initial NUT deployment - delete after first successful run"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: nut-deploy
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: deploy
+          image: dtzar/helm-kubectl:3.14
+          command: ["/bin/bash", "/deploy/deploy.sh"]
+          volumeMounts:
+            - name: deploy-script
+              mountPath: /deploy
+            - name: nut-configs
+              mountPath: /nut-configs
+            - name: nut-scripts
+              mountPath: /nut-scripts
+            - name: ssh-key
+              mountPath: /ssh
+              readOnly: true
+      volumes:
+        - name: deploy-script
+          configMap:
+            name: nut-deploy-script
+            defaultMode: 0755
+        - name: nut-configs
+          configMap:
+            name: nut-configs
+        - name: nut-scripts
+          configMap:
+            name: nut-scripts
+            defaultMode: 0755
+        - name: ssh-key
+          secret:
+            secretName: nut-deploy-ssh-key
+            defaultMode: 0600

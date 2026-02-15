@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+resources:
+  - configmap-nut-configs.yaml
+  - configmap-nut-scripts.yaml
+  - configmap-deploy-script.yaml
+  - secrets/pve-ssh-key.sops.yaml
+  - cronjob-nut-deploy.yaml
+  - service-nut-exporter.yaml
+  - servicemonitor-nut-exporter.yaml

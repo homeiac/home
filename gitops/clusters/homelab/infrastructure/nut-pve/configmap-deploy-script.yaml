@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nut-deploy-script
+  namespace: monitoring
+data:
+  deploy.sh: |
+    #!/bin/bash
+    # deploy.sh - Deploy NUT configuration to pve via SSH
+    # Run from K8s Job/CronJob with SSH key mounted
+
+    set -e
+
+    PVE_HOST="pve.maas"
+    SSH_KEY="/ssh/id_rsa"
+    SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -i $SSH_KEY"
+
+    log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"; }
+
+    log "Starting NUT deployment to $PVE_HOST"
+
+    # Test SSH connectivity
+    if ! ssh $SSH_OPTS root@$PVE_HOST "hostname" >/dev/null 2>&1; then
+        log "ERROR: Cannot SSH to $PVE_HOST"
+        exit 1
+    fi
+    log "SSH connectivity OK"
+
+    # Install NUT if not present
+    log "Ensuring NUT is installed..."
+    ssh $SSH_OPTS root@$PVE_HOST "dpkg -l | grep -q '^ii.*nut ' || (apt-get update && apt-get install -y nut nut-client nut-server)"
+
+    # Deploy NUT configs
+    log "Deploying NUT configuration files..."
+    for conf in nut.conf ups.conf upsd.conf upsd.users upsmon.conf; do
+        if [[ -f "/nut-configs/$conf" ]]; then
+            scp $SSH_OPTS "/nut-configs/$conf" "root@$PVE_HOST:/etc/nut/$conf"
+            log "  Deployed $conf"
+        fi
+    done
+
+    # Set permissions on sensitive files
+    ssh $SSH_OPTS root@$PVE_HOST "chmod 640 /etc/nut/upsd.users /etc/nut/upsmon.conf && chown root:nut /etc/nut/upsd.users /etc/nut/upsmon.conf"
+
+    # Deploy scripts
+    log "Deploying NUT scripts..."
+    for script in nut-notify.sh test-nut-status.sh; do
+        if [[ -f "/nut-scripts/$script" ]]; then
+            scp $SSH_OPTS "/nut-scripts/$script" "root@$PVE_HOST:/root/$script"
+            ssh $SSH_OPTS root@$PVE_HOST "chmod +x /root/$script"
+            log "  Deployed $script"
+        fi
+    done
+
+    # Setup udev rules for CyberPower UPS
+    log "Setting up udev rules..."
+    ssh $SSH_OPTS root@$PVE_HOST 'cat > /etc/udev/rules.d/90-nut-ups.rules << EOF
+    # CyberPower UPS - allow nut user access
+    SUBSYSTEM=="usb", ATTR{idVendor}=="0764", MODE="0664", GROUP="nut"
+    EOF
+    udevadm control --reload-rules && udevadm trigger'
+
+    # Install nut_exporter if not present
+    log "Ensuring nut_exporter is installed..."
+    ssh $SSH_OPTS root@$PVE_HOST '
+    if ! command -v nut_exporter &>/dev/null && ! [[ -f /usr/local/bin/nut_exporter ]]; then
+        echo "Installing nut_exporter..."
+        cd /tmp
+        curl -sLO https://github.com/DRuggeri/nut_exporter/releases/download/2.5.2/nut_exporter-2.5.2.linux-amd64.tar.gz
+        tar xzf nut_exporter-2.5.2.linux-amd64.tar.gz
+        mv nut_exporter-2.5.2.linux-amd64/nut_exporter /usr/local/bin/
+        chmod +x /usr/local/bin/nut_exporter
+        rm -rf nut_exporter-2.5.2.linux-amd64*
+        echo "nut_exporter installed"
+    else
+        echo "nut_exporter already installed"
+    fi
+    '
+
+    # Create systemd service for nut_exporter
+    log "Configuring nut_exporter systemd service..."
+    ssh $SSH_OPTS root@$PVE_HOST 'cat > /etc/systemd/system/nut_exporter.service << EOF
+    [Unit]
+    Description=NUT Exporter for Prometheus
+    After=network.target nut-server.service
+
+    [Service]
+    Type=simple
+    ExecStart=/usr/local/bin/nut_exporter --nut.server=127.0.0.1 --web.listen-address=:9199
+    Restart=always
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+    '
+
+    # Enable and start services
+    log "Enabling and starting services..."
+    ssh $SSH_OPTS root@$PVE_HOST '
+    systemctl daemon-reload
+    systemctl enable nut-server nut-monitor nut_exporter
+    systemctl restart nut-server
+    sleep 2
+    systemctl restart nut-monitor
+    systemctl restart nut_exporter
+    '
+
+    # Verify UPS connection
+    log "Verifying UPS connection..."
+    sleep 3
+    if ssh $SSH_OPTS root@$PVE_HOST "upsc ups@localhost battery.charge" 2>/dev/null; then
+        CHARGE=$(ssh $SSH_OPTS root@$PVE_HOST "upsc ups@localhost battery.charge 2>/dev/null")
+        log "UPS detected! Battery charge: ${CHARGE}%"
+    else
+        log "WARNING: UPS not detected. Check USB connection."
+    fi
+
+    # Verify nut_exporter
+    log "Verifying nut_exporter..."
+    if ssh $SSH_OPTS root@$PVE_HOST "curl -s http://localhost:9199/metrics | grep -q nut_battery_charge"; then
+        log "nut_exporter is serving metrics"
+    else
+        log "WARNING: nut_exporter metrics not available yet"
+    fi
+
+    # Check service status
+    log "Service status:"
+    ssh $SSH_OPTS root@$PVE_HOST '
+    for svc in nut-server nut-monitor nut_exporter; do
+        status=$(systemctl is-active $svc 2>/dev/null || echo "inactive")
+        echo "  $svc: $status"
+    done
+    '
+
+    log "Deployment complete!"

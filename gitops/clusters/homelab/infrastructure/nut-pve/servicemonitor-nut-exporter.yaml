@@ -1,0 +1,87 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nut-exporter
+  namespace: monitoring
+  labels:
+    app: nut-exporter
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: nut-exporter
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - monitoring
+---
+# PrometheusRule for UPS alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nut-alerts
+  namespace: monitoring
+  labels:
+    app: nut-exporter
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: nut.rules
+      rules:
+        - alert: UPSOnBattery
+          expr: nut_ups_status{status="OB"} == 1
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "UPS {{ $labels.ups }} is on battery power"
+            description: "UPS is running on battery. Power outage detected."
+
+        - alert: UPSLowBattery
+          expr: nut_battery_charge < 30
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "UPS {{ $labels.ups }} battery low ({{ $value }}%)"
+            description: "UPS battery is below 30%. Tiered shutdown may be in progress."
+
+        - alert: UPSBatteryCritical
+          expr: nut_battery_charge < 15
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "UPS {{ $labels.ups }} battery critical ({{ $value }}%)"
+            description: "UPS battery is critically low. Imminent shutdown expected."
+
+        - alert: UPSOffline
+          expr: up{job="nut-exporter"} == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NUT exporter on pve is unreachable"
+            description: "Cannot scrape UPS metrics from pve. Check nut_exporter service."
+
+        - alert: UPSHighLoad
+          expr: nut_load > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "UPS {{ $labels.ups }} load high ({{ $value }}%)"
+            description: "UPS load is above 80%. Consider reducing connected equipment."
+
+        - alert: UPSReplaceBattery
+          expr: nut_ups_status{status="RB"} == 1
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "UPS {{ $labels.ups }} battery needs replacement"
+            description: "UPS is reporting battery needs replacement."
