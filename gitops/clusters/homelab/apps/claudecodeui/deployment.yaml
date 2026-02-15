@@ -38,10 +38,6 @@ spec:
             # Persist projects
             - name: claude-projects
               mountPath: /home/claude/projects
-            # SMB mount for session logs backup (backup destination only)
-            - name: claude-sessions-smb
-              mountPath: /mnt/claude-sessions
-              subPath: claude-sessions
           resources:
             requests:
               memory: "512Mi"
@@ -56,6 +52,3 @@ spec:
         - name: claude-projects
           persistentVolumeClaim:
             claimName: claude-projects
-        - name: claude-sessions-smb
-          persistentVolumeClaim:
-            claimName: claude-sessions-smb
