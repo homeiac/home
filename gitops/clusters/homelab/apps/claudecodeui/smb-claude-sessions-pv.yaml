@@ -22,7 +22,8 @@ spec:
     # volumeHandle must be unique per PV
     volumeHandle: claude-sessions-smb
     volumeAttributes:
-      source: "//192.168.4.120/secure/claude-sessions"
+      # Use existing 'secure' share - subdirectory created automatically
+      source: "//192.168.4.120/secure"
     nodeStageSecretRef:
       name: samba-credentials
       namespace: kube-system
