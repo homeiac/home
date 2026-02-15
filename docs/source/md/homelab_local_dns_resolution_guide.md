@@ -50,29 +50,59 @@ option domain-name-servers 192.168.4.53, 192.168.4.1;
 
 ## 4. macOS Client Setup
 
-1. **Remove stale scoped resolver (if present)**
+### Recommended: Scoped Resolver (Survives DHCP)
 
-   ```bash
-   sudo rm /etc/resolver/homelab
-   sudo killall -HUP mDNSResponder
-   ```
-2. **Manually set DNS order so OPNsense is primary**
+When your Mac is on multiple networks (e.g., Wi-Fi on `192.168.1.x` and USB LAN on `192.168.4.x`), macOS uses DNS from the default route interface. If Wi-Fi is your default route, `*.app.homelab` won't resolve because your ISP's DNS doesn't know about it.
 
-   ```bash
-   SERVICE="USB 10/100/1000 LAN"   # or "Wi-Fi"
-   sudo networksetup -setdnsservers "$SERVICE" 192.168.4.1 192.168.4.53
-   sudo killall -HUP mDNSResponder
-   ```
-3. **Verify**
+**Solution**: Create a scoped resolver that routes `*.homelab` to OPNsense:
 
-   ```bash
-   networksetup -getdnsservers "$SERVICE"
-   ```
-4. **Flush DNS cache after any change**
+```bash
+# Run the setup script
+sudo ./scripts/dns/setup-macos-resolver.sh
 
-   ```bash
-   sudo killall -HUP mDNSResponder
-   ```
+# Or manually:
+sudo sh -c 'echo "nameserver 192.168.4.1" > /etc/resolver/homelab'
+```
+
+**Verify**:
+```bash
+# Check macOS sees the resolver
+scutil --dns | grep -A3 "homelab"
+
+# Test resolution
+dig frigate.app.homelab +short
+# Should return: 192.168.4.80
+```
+
+**Why this is better than `networksetup`**:
+- Survives DHCP lease renewals
+- Only affects `*.homelab` domains, not all DNS
+- Works regardless of which interface has the default route
+- No need to reconfigure when switching networks
+
+### Alternative: Manual DNS (Gets Overwritten by DHCP)
+
+If you prefer setting DNS on a specific interface (note: DHCP will overwrite this):
+
+```bash
+SERVICE="USB 10/100/1000 LAN"   # or "Wi-Fi"
+sudo networksetup -setdnsservers "$SERVICE" 192.168.4.1 192.168.4.53
+sudo killall -HUP mDNSResponder
+```
+
+Verify:
+```bash
+networksetup -getdnsservers "$SERVICE"
+```
+
+### Cleanup Stale Resolvers
+
+Remove any old/incorrect resolver files:
+```bash
+ls -la /etc/resolver/
+# Remove files pointing to wrong IPs
+sudo rm /etc/resolver/homelab.local  # example
+```
 
 ---
 
@@ -388,6 +418,12 @@ EOF
 - OPNsense Host Overrides: supports wildcards (`Host=*`, `Domain=app.homelab`).
 - Reboot needed: OPNsense only reliably applies new overrides after a reboot.
 - MAAS DHCP snippet reboot: DHCP options may require a rack controller reboot to apply.
-- macOS scoped resolvers: remove `/etc/resolver/homelab` to avoid conflicts.
-- Client DNS ordering: manually enforce the correct DNS order, as MAAS DHCP won't.
+- **macOS scoped resolvers are the fix**: Use `/etc/resolver/homelab` to route `*.homelab` to OPNsense. This survives DHCP renewals and works on multi-network setups.
+- **macOS default route determines DNS**: If Wi-Fi is your default route, `networksetup` DNS settings on USB LAN won't be used. Scoped resolvers bypass this.
+- AT&T routers lock DNS settings: Can't customize DHCP-provided DNS, use scoped resolvers instead.
+
+## 11. Related Documentation
+
+- [macOS Homelab DNS Resolver Runbook](../../runbooks/macos-homelab-dns-resolver.md) - Quick setup and troubleshooting
+- [Blog: Why Your Homelab DNS Breaks on Wi-Fi](blog-macos-scoped-dns-multi-network.md) - Deep dive explanation
 
