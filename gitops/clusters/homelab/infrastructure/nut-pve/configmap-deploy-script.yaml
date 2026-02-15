@@ -63,14 +63,10 @@ data:
     # Install nut_exporter if not present
     log "Ensuring nut_exporter is installed..."
     ssh $SSH_OPTS root@$PVE_HOST '
-    if ! command -v nut_exporter &>/dev/null && ! [[ -f /usr/local/bin/nut_exporter ]]; then
-        echo "Installing nut_exporter..."
-        cd /tmp
-        curl -sLO https://github.com/DRuggeri/nut_exporter/releases/download/2.5.2/nut_exporter-2.5.2.linux-amd64.tar.gz
-        tar xzf nut_exporter-2.5.2.linux-amd64.tar.gz
-        mv nut_exporter-2.5.2.linux-amd64/nut_exporter /usr/local/bin/
+    if ! [[ -f /usr/local/bin/nut_exporter ]]; then
+        echo "Installing nut_exporter v3.2.2..."
+        curl -sL -o /usr/local/bin/nut_exporter https://github.com/DRuggeri/nut_exporter/releases/download/v3.2.2/nut_exporter-v3.2.2-linux-amd64
         chmod +x /usr/local/bin/nut_exporter
-        rm -rf nut_exporter-2.5.2.linux-amd64*
         echo "nut_exporter installed"
     else
         echo "nut_exporter already installed"
