@@ -1,6 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: kube-system
+# NOTE: Do NOT set namespace here - resources declare their own namespaces
+# HelmRepository must be in flux-system for HelmRelease sourceRef to find it
+# HelmRelease is in kube-system where CSI driver deploys
+# StorageClass is cluster-scoped (no namespace)
 resources:
   - helmrepository.yaml
   - helmrelease.yaml
