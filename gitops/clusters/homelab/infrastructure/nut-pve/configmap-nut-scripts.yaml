@@ -46,30 +46,15 @@ data:
         local charge=$(get_battery_charge)
         local runtime=$(upsc "$UPS_NAME@localhost" battery.runtime 2>/dev/null || echo "unknown")
         local runtime_mins=$((runtime / 60))
+        local t1=$(tier_done 1 && echo "DONE" || echo "pending")
+        local t2=$(tier_done 2 && echo "DONE" || echo "pending")
+        local t3=$(tier_done 3 && echo "DONE" || echo "pending")
 
-        # Build detailed message
-        local full_body="$body
-
-UPS Status:
-  Battery: ${charge}%
-  Runtime: ${runtime_mins} minutes
-  Host: ${HOSTNAME}
-  Time: $(date)
-
-Tiered Shutdown Status:
-  Tier 1 (40%): $(tier_done 1 && echo "DONE" || echo "pending")
-  Tier 2 (20%): $(tier_done 2 && echo "DONE" || echo "pending")
-  Tier 3 (10%): $(tier_done 3 && echo "DONE" || echo "pending")
-"
+        # Build message (avoiding colons at line start for YAML compatibility)
+        local full_body="${body} | Battery=${charge}% | Runtime=${runtime_mins}min | Host=${HOSTNAME} | Tiers: T1=${t1} T2=${t2} T3=${t3}"
 
         # Send via ntfy.sh (works even when K8s/Prometheus is down)
-        # Topic is unique to this homelab but not secret - anyone can subscribe
-        curl -s \
-            -H "Title: [HOMELAB UPS] $subject" \
-            -H "Priority: high" \
-            -H "Tags: electric_plug,warning" \
-            -d "$full_body" \
-            "https://ntfy.sh/homelab-pve-ups-alerts" 2>/dev/null &
+        curl -s -H "Title: [HOMELAB UPS] $subject" -H "Priority: high" -H "Tags: electric_plug,warning" -d "$full_body" "https://ntfy.sh/homelab-pve-ups-alerts" 2>/dev/null &
 
         log "INFO" "Notification sent: $subject"
     }
