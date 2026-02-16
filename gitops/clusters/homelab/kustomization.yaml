@@ -13,6 +13,7 @@ resources:
   - infrastructure/reloader              #(auto-restart pods on ConfigMap/Secret changes)
   - infrastructure/smb-csi-driver       #(SMB/CIFS CSI driver for samba mounts)
   - infrastructure/nut-pve              #(NUT UPS monitoring + tiered shutdown for pve)
+  - infrastructure/proxmox-provisioner #(GPU hookscripts for still-fawn VM 108)
   - infrastructure/external-dns          #(Cloudflare DNS sync)
   - infrastructure/cert-manager          #(LetsEncrypt DNS-01 certs - HelmRelease)
   - infrastructure/cert-manager-config  #(ClusterIssuer, Certs - depends on CRDs)

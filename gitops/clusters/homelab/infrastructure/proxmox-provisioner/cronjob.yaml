@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: proxmox-provisioner-still-fawn
+  namespace: kube-system
+spec:
+  schedule: "0 4 * * *"  # Daily at 4am
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: provisioner
+              image: ghcr.io/mikeprivette/proxmox-provisioner:latest
+              env:
+                - name: TARGET_HOST
+                  value: "still-fawn.maas"
+                - name: VMID
+                  value: "108"
+              volumeMounts:
+                - name: ssh-key
+                  mountPath: /ssh
+                  readOnly: true
+          volumes:
+            - name: ssh-key
+              secret:
+                secretName: proxmox-ssh-key
+                defaultMode: 0400
+---
+# Initial run
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: proxmox-provisioner-still-fawn-init
+  namespace: kube-system
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: provisioner
+          image: ghcr.io/mikeprivette/proxmox-provisioner:latest
+          env:
+            - name: TARGET_HOST
+              value: "still-fawn.maas"
+            - name: VMID
+              value: "108"
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /ssh
+              readOnly: true
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: proxmox-ssh-key
+            defaultMode: 0400
