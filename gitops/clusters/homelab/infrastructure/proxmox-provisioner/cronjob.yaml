@@ -17,7 +17,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: provisioner
-              image: ghcr.io/mikeprivette/proxmox-provisioner:latest
+              image: ghcr.io/homeiac/proxmox-provisioner:latest
               env:
                 - name: TARGET_HOST
                   value: "still-fawn.maas"
@@ -47,7 +47,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: provisioner
-          image: ghcr.io/mikeprivette/proxmox-provisioner:latest
+          image: ghcr.io/homeiac/proxmox-provisioner:latest
           env:
             - name: TARGET_HOST
               value: "still-fawn.maas"
