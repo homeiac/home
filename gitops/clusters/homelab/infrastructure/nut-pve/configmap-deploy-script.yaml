@@ -54,32 +54,26 @@ data:
 
     # Deploy SMS gateway credentials (for out-of-band notifications)
     log "Deploying SMS gateway configuration..."
-    ssh $SSH_OPTS root@$PVE_HOST "cat > /root/.sms-gateway-env << 'ENVEOF'
-export SMS_GATEWAY_IP=\"${SMS_GATEWAY_IP:-}\"
-export SMS_GATEWAY_PORT=\"${SMS_GATEWAY_PORT:-8082}\"
-export SMS_GATEWAY_TOKEN=\"${SMS_GATEWAY_TOKEN:-}\"
-export SMS_RECIPIENT=\"${SMS_RECIPIENT:-}\"
-ENVEOF
-chmod 600 /root/.sms-gateway-env"
+    ssh $SSH_OPTS root@$PVE_HOST "printf '%s\n' \
+      \"export SMS_GATEWAY_IP=\\\"\${SMS_GATEWAY_IP:-}\\\"\" \
+      \"export SMS_GATEWAY_PORT=\\\"\${SMS_GATEWAY_PORT:-8082}\\\"\" \
+      \"export SMS_GATEWAY_TOKEN=\\\"\${SMS_GATEWAY_TOKEN:-}\\\"\" \
+      \"export SMS_RECIPIENT=\\\"\${SMS_RECIPIENT:-}\\\"\" \
+      > /root/.sms-gateway-env && chmod 600 /root/.sms-gateway-env"
     log "  Deployed SMS gateway config"
 
-    # Update nut-notify.sh to source the env file
-    ssh $SSH_OPTS root@$PVE_HOST "sed -i '2a\\
-# Source SMS gateway credentials\\
-[[ -f /root/.sms-gateway-env ]] \\&\\& source /root/.sms-gateway-env
-' /root/nut-notify.sh"
+    # Update nut-notify.sh to source the env file (only if not already present)
+    ssh $SSH_OPTS root@$PVE_HOST "grep -q 'sms-gateway-env' /root/nut-notify.sh || \
+      sed -i '2a# Source SMS gateway credentials\n[[ -f /root/.sms-gateway-env ]] \\&\\& source /root/.sms-gateway-env' /root/nut-notify.sh"
 
     # Configure Pixel 7 hotspot as WiFi fallback for out-of-band SMS
     # pve uses iwd for WiFi management. When wiremore2 (main WiFi) goes down
     # during power outage, iwd will auto-connect to Pixel_7 hotspot.
-    # Main WiFi: wiremore2 (Google Mesh) - config at /var/lib/iwd/wiremore2.psk
+    # Main WiFi wiremore2 (Google Mesh) - config at /var/lib/iwd/wiremore2.psk
     if [[ -n "${HOTSPOT_SSID:-}" ]] && [[ -n "${HOTSPOT_PASSWORD:-}" ]]; then
-        log "Configuring WiFi fallback hotspot: ${HOTSPOT_SSID}"
-        ssh $SSH_OPTS root@$PVE_HOST "cat > /var/lib/iwd/${HOTSPOT_SSID}.psk << 'IWDEOF'
-[Security]
-Passphrase=${HOTSPOT_PASSWORD}
-IWDEOF
-chmod 600 /var/lib/iwd/${HOTSPOT_SSID}.psk"
+        log "Configuring WiFi fallback hotspot - ${HOTSPOT_SSID}"
+        ssh $SSH_OPTS root@$PVE_HOST "printf '%s\n' '[Security]' \"Passphrase=${HOTSPOT_PASSWORD}\" \
+          > \"/var/lib/iwd/${HOTSPOT_SSID}.psk\" && chmod 600 \"/var/lib/iwd/${HOTSPOT_SSID}.psk\""
         log "  Deployed iwd config for ${HOTSPOT_SSID}"
     else
         log "  Skipping WiFi fallback (HOTSPOT_SSID/HOTSPOT_PASSWORD not set)"
