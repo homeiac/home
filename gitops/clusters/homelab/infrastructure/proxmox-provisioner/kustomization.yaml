@@ -6,3 +6,4 @@ namespace: kube-system
 resources:
   - cronjob.yaml
   - secrets/proxmox-ssh-key.sops.yaml
+  - secrets/ghcr-creds.sops.yaml
