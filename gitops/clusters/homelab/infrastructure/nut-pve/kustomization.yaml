@@ -9,8 +9,8 @@ resources:
   - secrets/sms-gateway-creds.sops.yaml
   # Deployment Job (triggered by image update)
   - job-deploy.yaml
-  # Flux Image Automation
-  - image-policy.yaml
+  # Flux Image Automation (disabled - image-reflector-controller not installed)
+  # - image-policy.yaml
   # Prometheus monitoring
   - service-nut-exporter.yaml
   - servicemonitor-nut-exporter.yaml
