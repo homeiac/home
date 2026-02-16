@@ -54,12 +54,12 @@ data:
 
     # Deploy SMS gateway credentials (for out-of-band notifications)
     log "Deploying SMS gateway configuration..."
-    ssh $SSH_OPTS root@$PVE_HOST "printf '%s\n' \
-      \"export SMS_GATEWAY_IP=\\\"\${SMS_GATEWAY_IP:-}\\\"\" \
-      \"export SMS_GATEWAY_PORT=\\\"\${SMS_GATEWAY_PORT:-8082}\\\"\" \
-      \"export SMS_GATEWAY_TOKEN=\\\"\${SMS_GATEWAY_TOKEN:-}\\\"\" \
-      \"export SMS_RECIPIENT=\\\"\${SMS_RECIPIENT:-}\\\"\" \
-      > /root/.sms-gateway-env && chmod 600 /root/.sms-gateway-env"
+    {
+      echo "export SMS_GATEWAY_IP=\"${SMS_GATEWAY_IP:-}\""
+      echo "export SMS_GATEWAY_PORT=\"${SMS_GATEWAY_PORT:-8082}\""
+      echo "export SMS_GATEWAY_TOKEN=\"${SMS_GATEWAY_TOKEN:-}\""
+      echo "export SMS_RECIPIENT=\"${SMS_RECIPIENT:-}\""
+    } | ssh $SSH_OPTS root@$PVE_HOST "cat > /root/.sms-gateway-env && chmod 600 /root/.sms-gateway-env"
     log "  Deployed SMS gateway config"
 
     # Update nut-notify.sh to source the env file (only if not already present)
