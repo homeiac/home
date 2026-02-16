@@ -18,8 +18,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: deploy
-          # {"$imagepolicy": "flux-system:pve-nut"}
-          image: ghcr.io/homeiac/pve-nut:0000000  # Placeholder - Flux will update to actual SHA
+          image: ghcr.io/homeiac/pve-nut:e6e2d9b
           env:
             - name: TARGET_HOST
               value: "192.168.4.122"
