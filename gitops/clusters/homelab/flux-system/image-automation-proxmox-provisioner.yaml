@@ -2,10 +2,10 @@
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
 metadata:
-  name: pve-nut
+  name: proxmox-provisioner
   namespace: flux-system
 spec:
-  image: ghcr.io/homeiac/pve-nut
+  image: ghcr.io/homeiac/proxmox-provisioner
   interval: 5m
   secretRef:
     name: ghcr-creds
@@ -13,11 +13,11 @@ spec:
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
 metadata:
-  name: pve-nut
+  name: proxmox-provisioner
   namespace: flux-system
 spec:
   imageRepositoryRef:
-    name: pve-nut
+    name: proxmox-provisioner
   filterTags:
     # Match only git SHA tags (7 chars) - never use 'latest' for reproducibility
     pattern: '^[a-f0-9]{7}$'
@@ -29,7 +29,7 @@ spec:
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageUpdateAutomation
 metadata:
-  name: pve-nut
+  name: proxmox-provisioner
   namespace: flux-system
 spec:
   interval: 5m
@@ -45,9 +45,9 @@ spec:
         name: fluxcdbot
         email: fluxcd@homelab.local
       messageTemplate: |
-        chore(flux): update pve-nut image to {{range .Changed.Changes}}{{.NewValue}}{{end}}
+        chore(flux): update proxmox-provisioner image to {{range .Changed.Changes}}{{.NewValue}}{{end}}
     push:
       branch: master
   update:
-    path: ./gitops/clusters/homelab/infrastructure/nut-pve/deploy
+    path: ./gitops/clusters/homelab/infrastructure/proxmox-provisioner
     strategy: Setters

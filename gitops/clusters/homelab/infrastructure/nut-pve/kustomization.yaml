@@ -8,9 +8,8 @@ resources:
   - secrets/pve-ssh-key.sops.yaml
   - secrets/sms-gateway-creds.sops.yaml
   - secrets/ghcr-creds.sops.yaml
-  # Deployment Job (triggered by image update)
-  - job-deploy.yaml
-  # Flux Image Automation moved to flux-system/image-automation-pve-nut.yaml
+  # Deploy Job moved to ./deploy/ with separate Flux Kustomization (force:true)
+  # See: infrastructure/nut-pve-deploy/flux-kustomization.yaml
   # Prometheus monitoring
   - service-nut-exporter.yaml
   - servicemonitor-nut-exporter.yaml

@@ -48,7 +48,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix=
+            # Use only SHA tags for reproducibility (same format as pve-nut)
+            type=sha,prefix=,format=short
             type=raw,value=latest
 
       - name: Build and push

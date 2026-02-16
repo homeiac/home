@@ -19,7 +19,7 @@ spec:
             - name: ghcr-creds
           containers:
             - name: provisioner
-              image: ghcr.io/homeiac/proxmox-provisioner:latest
+              image: ghcr.io/homeiac/proxmox-provisioner:latest  # {"$imagepolicy": "flux-system:proxmox-provisioner"}
               env:
                 - name: TARGET_HOST
                   value: "still-fawn.maas"
@@ -34,35 +34,3 @@ spec:
               secret:
                 secretName: proxmox-ssh-key
                 defaultMode: 0400
----
-# Initial run
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: proxmox-provisioner-still-fawn-init
-  namespace: kube-system
-spec:
-  ttlSecondsAfterFinished: 3600
-  backoffLimit: 2
-  template:
-    spec:
-      restartPolicy: Never
-      imagePullSecrets:
-        - name: ghcr-creds
-      containers:
-        - name: provisioner
-          image: ghcr.io/homeiac/proxmox-provisioner:latest
-          env:
-            - name: TARGET_HOST
-              value: "still-fawn.maas"
-            - name: VMID
-              value: "108"
-          volumeMounts:
-            - name: ssh-key
-              mountPath: /ssh
-              readOnly: true
-      volumes:
-        - name: ssh-key
-          secret:
-            secretName: proxmox-ssh-key
-            defaultMode: 0400

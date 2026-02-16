@@ -5,3 +5,4 @@ resources:
 - gotk-sync.yaml
 - secrets/ghcr-creds.sops.yaml
 - image-automation-pve-nut.yaml
+- image-automation-proxmox-provisioner.yaml
