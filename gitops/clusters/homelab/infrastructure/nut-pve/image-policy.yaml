@@ -7,7 +7,8 @@ metadata:
 spec:
   image: ghcr.io/homeiac/pve-nut
   interval: 5m
-  # No secretRef needed - GHCR packages from public repos are public
+  secretRef:
+    name: ghcr-auth
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImagePolicy
