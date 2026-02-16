@@ -514,7 +514,163 @@ curl -H "Authorization: $SMS_GATEWAY_TOKEN" ...
 
 No secrets in Git. No separate vault. Uses the same K8s Secrets + SOPS encryption as everything else.
 
-## The Workflow
+## The Workflow (Fully Automated)
+
+The key insight: **Kubernetes Jobs are immutable**. When the image tag changes, Flux can't patch the existing Job—it fails with "spec.template: field is immutable."
+
+The solution: Use a **separate Flux Kustomization with `force: true`** for the Job. This tells Flux to delete and recreate the Job when any immutable field changes.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FULLY AUTOMATED FLOW                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  1. PUSH CODE                    2. GHA BUILDS                3. IMAGE REPO SCANS
+  ─────────────                   ─────────────                ───────────────────
+  scripts/pve-nut/  ──push──►    ghcr.io/myorg/    ──scan──►   ImageRepository
+  └── nut-notify.sh               pve-nut:def5678              "Found new tag!"
+                                                                      │
+                                                                      ▼
+  6. JOB RUNS                     5. FLUX KUSTOMIZATION        4. IMAGE POLICY
+  ───────────                     ─────────────────────        ────────────────
+  Host is updated  ◄──create──   force: true                   "def5678 is latest"
+  /opt/nut/scripts/              "Delete old Job,                    │
+                                  create new one"              ▼
+                                        ▲                ImageUpdateAutomation
+                                        │                "Commit tag update"
+                                        │                      │
+                                        └──────────────────────┘
+```
+
+### Step 1: Flux Image Automation
+
+Install the image automation controllers (add to gotk-components.yaml):
+
+```bash
+flux install --components-extra=image-reflector-controller,image-automation-controller --export > gotk-components.yaml
+```
+
+Create ImageRepository, ImagePolicy, and ImageUpdateAutomation:
+
+```yaml
+# flux-system/image-automation-pve-nut.yaml
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: pve-nut
+  namespace: flux-system
+spec:
+  image: ghcr.io/myorg/pve-nut
+  interval: 5m
+  secretRef:
+    name: ghcr-creds  # For private registries
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: pve-nut
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: pve-nut
+  filterTags:
+    pattern: '^[a-f0-9]{7}$'  # Match only SHA tags (e.g., abc1234)
+  policy:
+    alphabetical:
+      order: desc  # Newest SHA first
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: pve-nut
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcd@homelab.local
+      messageTemplate: "chore(flux): update pve-nut to {{range .Changed.Changes}}{{.NewValue}}{{end}}"
+    push:
+      branch: master
+  update:
+    path: ./gitops/clusters/homelab/infrastructure/nut-pve/deploy
+    strategy: Setters
+```
+
+### Step 2: Add Image Policy Marker
+
+In your Job manifest, add a marker comment so Flux knows where to update:
+
+```yaml
+# nut-pve/deploy/job-deploy.yaml
+containers:
+  - name: deploy
+    image: ghcr.io/myorg/pve-nut:abc1234  # {"$imagepolicy": "flux-system:pve-nut"}
+```
+
+The comment `{"$imagepolicy": "flux-system:pve-nut"}` tells ImageUpdateAutomation to update this line when the policy resolves a new tag.
+
+### Step 3: Separate Flux Kustomization with `force: true`
+
+This is the critical piece. Create a **separate Flux Kustomization** just for the Job:
+
+```yaml
+# nut-pve-deploy/flux-kustomization.yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: nut-pve-deploy
+  namespace: flux-system
+spec:
+  interval: 5m
+  path: ./gitops/clusters/homelab/infrastructure/nut-pve/deploy
+  prune: true
+  wait: true
+  force: true  # <-- THE KEY: Recreates Job when image changes
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: flux-system  # Wait for secrets
+```
+
+When `force: true`:
+1. Flux detects the Job spec changed (new image tag)
+2. Flux **deletes** the old Job
+3. Flux **creates** a new Job with the new image
+4. Job runs, host is updated
+
+**No manual deletion needed.**
+
+### The Directory Structure
+
+```
+gitops/clusters/homelab/infrastructure/
+├── nut-pve/                    # Secrets, monitoring, etc.
+│   ├── kustomization.yaml
+│   ├── secrets/
+│   └── deploy/                 # Job lives here (separate path)
+│       ├── kustomization.yaml
+│       └── job-deploy.yaml
+└── nut-pve-deploy/             # Flux Kustomization with force:true
+    ├── kustomization.yaml
+    └── flux-kustomization.yaml
+```
+
+The Job is in a **separate path** from other resources so `force: true` only affects the Job, not your secrets or services.
+
+### The Complete Flow
 
 1. **Edit scripts locally**
    ```bash
@@ -528,51 +684,35 @@ No secrets in Git. No separate vault. Uses the same K8s Secrets + SOPS encryptio
    git push
    ```
 
-3. **CI builds new image**
+3. **GHA builds new image** (automatic)
    ```
    ghcr.io/myorg/pve-nut:abc1234 → ghcr.io/myorg/pve-nut:def5678
    ```
 
-4. **Update image tag in GitOps**
-   ```bash
-   # Edit gitops/.../job-deploy.yaml
-   # Change image: ghcr.io/myorg/pve-nut:def5678
-   git commit -m "deploy: update nut to def5678"
-   git push
+4. **ImageRepository detects new tag** (automatic, every 5m)
+
+5. **ImagePolicy selects it** (automatic)
+   ```
+   Latest: def5678
    ```
 
-5. **Delete old Job, reconcile Flux**
-   ```bash
-   kubectl delete job nut-deploy -n monitoring
-   flux reconcile kustomization flux-system --with-source
+6. **ImageUpdateAutomation commits tag update** (automatic)
+   ```
+   chore(flux): update pve-nut to def5678
    ```
 
-6. **Job runs, host is updated**
+7. **Flux Kustomization (force:true) recreates Job** (automatic)
    ```
-   [2024-02-16 19:32:35] Deployment complete!
-   [2024-02-16 19:32:35] Scripts deployed to: /opt/nut/scripts/
+   Job nut-deploy deleted
+   Job nut-deploy created
    ```
 
-## Optional: Flux Image Automation
+8. **Job runs, host is updated** (automatic)
+   ```
+   [2026-02-16 19:32:35] Deployment complete!
+   ```
 
-If you install Flux's image-reflector-controller and image-automation-controller, you can automate step 4:
-
-```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: pve-nut
-spec:
-  imageRepositoryRef:
-    name: pve-nut
-  filterTags:
-    pattern: '^[a-f0-9]{7}$'  # Match SHA tags only
-  policy:
-    alphabetical:
-      order: desc
-```
-
-Then Flux automatically commits image tag updates. I chose not to use this (yet) to keep the setup simpler.
+**Push code → host is updated. Zero manual steps.**
 
 ## Addressing the Weaknesses
 
@@ -735,7 +875,10 @@ The cost of a DaemonSet is: one YAML file.
 
 ---
 
-*This post describes the setup I use for my homelab. DaemonSet for K8s node configuration, Job + SSH for the Proxmox hosts. Full implementation in [gitops/clusters/homelab/infrastructure/nut-pve/](https://github.com/homeiac/home/tree/master/gitops/clusters/homelab/infrastructure/nut-pve).*
+*This post describes the fully automated GitOps setup I use for my homelab. DaemonSet for K8s node configuration, Job + SSH + Flux Image Automation for the Proxmox hosts. Push code, hosts are updated. Full implementation:*
+- *[nut-pve deployer](https://github.com/homeiac/home/tree/master/gitops/clusters/homelab/infrastructure/nut-pve)*
+- *[Flux image automation](https://github.com/homeiac/home/tree/master/gitops/clusters/homelab/flux-system/image-automation-pve-nut.yaml)*
+- *[force:true Kustomization](https://github.com/homeiac/home/tree/master/gitops/clusters/homelab/infrastructure/nut-pve-deploy)*
 
 ## Further Reading
 
