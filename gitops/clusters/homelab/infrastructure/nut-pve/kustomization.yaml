@@ -10,8 +10,7 @@ resources:
   - secrets/ghcr-creds.sops.yaml
   # Deployment Job (triggered by image update)
   - job-deploy.yaml
-  # Flux Image Automation
-  - image-policy.yaml
+  # Flux Image Automation moved to flux-system/image-automation-pve-nut.yaml
   # Prometheus monitoring
   - service-nut-exporter.yaml
   - servicemonitor-nut-exporter.yaml
