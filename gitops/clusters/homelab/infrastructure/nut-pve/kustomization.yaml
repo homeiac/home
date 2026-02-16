@@ -10,5 +10,6 @@ resources:
   - secrets/pve-ssh-key.sops.yaml
   - secrets/sms-gateway-creds.sops.yaml
   - cronjob-nut-deploy.yaml
+  - cronjob-disaster-drill.yaml
   - service-nut-exporter.yaml
   - servicemonitor-nut-exporter.yaml

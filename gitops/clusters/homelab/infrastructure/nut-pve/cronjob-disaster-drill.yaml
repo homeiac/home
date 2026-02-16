@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nut-disaster-drill
+  namespace: monitoring
+spec:
+  # Run on the first Saturday of each month at 10:00 AM
+  schedule: "0 10 1-7 * 6"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app: nut-disaster-drill
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: drill
+              image: curlimages/curl:8.5.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "=== Monthly UPS Disaster Drill ==="
+                  echo "Date: $(date)"
+                  echo ""
+                  echo "Testing SMS Gateway connectivity..."
+
+                  # Test SMS Gateway on Pixel 7 hotspot IP
+                  response=$(curl -s -w "\n%{http_code}" -X POST "http://${SMS_GATEWAY_IP}:${SMS_GATEWAY_PORT}/" \
+                    -H "Authorization: ${SMS_GATEWAY_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"to\": \"${SMS_RECIPIENT}\", \"message\": \"[DRILL] Monthly UPS disaster drill - $(date '+%Y-%m-%d %H:%M'). If you received this, SMS notifications are working.\"}" \
+                    --connect-timeout 10 --max-time 15 2>/dev/null || echo "FAILED")
+
+                  http_code=$(echo "$response" | tail -1)
+
+                  if [ "$http_code" = "200" ] || [ "$http_code" = "204" ]; then
+                    echo "SMS Gateway: OK (HTTP $http_code)"
+                    echo ""
+                    echo "Drill complete. Check your phone for the test SMS."
+                    exit 0
+                  else
+                    echo "SMS Gateway: FAILED (HTTP $http_code)"
+                    echo "Response: $response"
+                    echo ""
+                    echo "DRILL FAILED - SMS notifications may not work during power outage!"
+                    exit 1
+                  fi
+              envFrom:
+                - secretRef:
+                    name: sms-gateway-creds
