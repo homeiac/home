@@ -52,12 +52,24 @@ data:
             log "DEBUG" "SMS not configured, skipping"
             return 0
         fi
-        log "INFO" "Sending SMS via gateway at ${SMS_GATEWAY_IP}:${SMS_GATEWAY_PORT}"
-        curl -s -X POST "http://${SMS_GATEWAY_IP}:${SMS_GATEWAY_PORT}/" \
-            -H "Authorization: ${SMS_GATEWAY_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"to\": \"${SMS_RECIPIENT}\", \"message\": \"${message}\"}" \
-            --connect-timeout 5 --max-time 10 2>/dev/null &
+
+        # Try configured IP first, then try wlan0 gateway (for hotspot fallback)
+        local gateway_ip
+        gateway_ip=$(ip route show dev wlan0 2>/dev/null | grep default | awk '{print $3}')
+
+        for ip in "${SMS_GATEWAY_IP}" "${gateway_ip}"; do
+            [[ -z "$ip" ]] && continue
+            log "INFO" "Trying SMS gateway at ${ip}:${SMS_GATEWAY_PORT}"
+            if curl -s -X POST "http://${ip}:${SMS_GATEWAY_PORT}/" \
+                -H "Authorization: ${SMS_GATEWAY_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"to\": \"${SMS_RECIPIENT}\", \"message\": \"${message}\"}" \
+                --connect-timeout 5 --max-time 10 2>/dev/null; then
+                log "INFO" "SMS sent via ${ip}"
+                return 0
+            fi
+        done
+        log "WARN" "SMS delivery failed - could not reach gateway"
     }
 
     send_notification() {
