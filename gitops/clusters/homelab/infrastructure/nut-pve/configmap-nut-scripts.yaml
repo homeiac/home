@@ -20,6 +20,9 @@ data:
     STATE_FILE="/var/run/nut-shutdown-state"
     UPS_NAME="${UPSNAME:-ups}"
 
+    # Notification settings
+    HOSTNAME=$(hostname)
+
     TIER1_THRESHOLD=40
     TIER2_THRESHOLD=20
     TIER3_THRESHOLD=10
@@ -35,6 +38,40 @@ data:
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
         echo "[$timestamp] [$level] $msg" | tee -a "$LOG_FILE"
         logger -t nut-notify "[$level] $msg"
+    }
+
+    send_notification() {
+        local subject="$1"
+        local body="$2"
+        local charge=$(get_battery_charge)
+        local runtime=$(upsc "$UPS_NAME@localhost" battery.runtime 2>/dev/null || echo "unknown")
+        local runtime_mins=$((runtime / 60))
+
+        # Build detailed message
+        local full_body="$body
+
+UPS Status:
+  Battery: ${charge}%
+  Runtime: ${runtime_mins} minutes
+  Host: ${HOSTNAME}
+  Time: $(date)
+
+Tiered Shutdown Status:
+  Tier 1 (40%): $(tier_done 1 && echo "DONE" || echo "pending")
+  Tier 2 (20%): $(tier_done 2 && echo "DONE" || echo "pending")
+  Tier 3 (10%): $(tier_done 3 && echo "DONE" || echo "pending")
+"
+
+        # Send via ntfy.sh (works even when K8s/Prometheus is down)
+        # Topic is unique to this homelab but not secret - anyone can subscribe
+        curl -s \
+            -H "Title: [HOMELAB UPS] $subject" \
+            -H "Priority: high" \
+            -H "Tags: electric_plug,warning" \
+            -d "$full_body" \
+            "https://ntfy.sh/homelab-pve-ups-alerts" 2>/dev/null &
+
+        log "INFO" "Notification sent: $subject"
     }
 
     get_battery_charge() {
@@ -96,6 +133,7 @@ data:
             return 0
         fi
         log "WARN" "=== TIER 1 SHUTDOWN: Heavy hosts (battery <= ${TIER1_THRESHOLD}%) ==="
+        send_notification "Tier 1 Shutdown" "Shutting down heavy hosts: pumped-piglet, still-fawn (GPU/K3s workers)"
         for host in "${TIER1_HOSTS[@]}"; do
             shutdown_host "$host" &
         done
@@ -109,6 +147,7 @@ data:
             return 0
         fi
         log "WARN" "=== TIER 2 SHUTDOWN: MAAS VM (battery <= ${TIER2_THRESHOLD}%) ==="
+        send_notification "Tier 2 Shutdown" "Shutting down MAAS VM (DHCP/DNS server)"
         shutdown_local_vm "$MAAS_VMID"
         mark_tier_done 2
     }
@@ -119,6 +158,7 @@ data:
             return 0
         fi
         log "CRIT" "=== TIER 3 SHUTDOWN: Critical infrastructure (battery <= ${TIER3_THRESHOLD}%) ==="
+        send_notification "Tier 3 - FINAL SHUTDOWN" "Shutting down all remaining infrastructure. pve will shutdown in 10 seconds. Goodbye!"
         for host in "${TIER3_HOSTS[@]}"; do
             shutdown_host "$host" &
         done
@@ -160,20 +200,24 @@ data:
         case "$notify_type" in
             ONLINE)
                 log "INFO" "Power restored - UPS back online"
+                send_notification "Power Restored" "Mains power has been restored. UPS back online."
                 reset_state
                 ;;
             ONBATT)
                 log "WARN" "Running on battery power!"
+                send_notification "POWER OUTAGE - On Battery" "Power outage detected! Running on UPS battery power. Tiered shutdown will begin if battery drops below 40%."
                 process_battery_level
                 ;;
             LOWBATT)
                 log "CRIT" "Low battery warning from UPS!"
+                send_notification "LOW BATTERY - Emergency Shutdown" "UPS battery critically low! Executing full tiered shutdown of all hosts."
                 execute_tier1
                 execute_tier2
                 execute_tier3
                 ;;
             FSD)
                 log "CRIT" "Forced shutdown requested!"
+                send_notification "FORCED SHUTDOWN" "Forced shutdown signal received. Executing emergency shutdown of all hosts."
                 execute_tier1
                 execute_tier2
                 execute_tier3
