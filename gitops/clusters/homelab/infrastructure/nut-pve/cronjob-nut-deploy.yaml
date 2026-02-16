@@ -23,6 +23,9 @@ spec:
             - name: deploy
               image: dtzar/helm-kubectl:3.14
               command: ["/bin/bash", "/deploy/deploy.sh"]
+              envFrom:
+                - secretRef:
+                    name: sms-gateway-creds
               volumeMounts:
                 - name: deploy-script
                   mountPath: /deploy
@@ -72,6 +75,9 @@ spec:
         - name: deploy
           image: dtzar/helm-kubectl:3.14
           command: ["/bin/bash", "/deploy/deploy.sh"]
+          envFrom:
+            - secretRef:
+                name: sms-gateway-creds
           volumeMounts:
             - name: deploy-script
               mountPath: /deploy

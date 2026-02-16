@@ -23,6 +23,12 @@ data:
     # Notification settings
     HOSTNAME=$(hostname)
 
+    # SMS Gateway settings (Pixel 7 hotspot - out-of-band when internet is down)
+    SMS_GATEWAY_IP="${SMS_GATEWAY_IP:-192.0.0.4}"
+    SMS_GATEWAY_PORT="${SMS_GATEWAY_PORT:-8082}"
+    SMS_GATEWAY_TOKEN="${SMS_GATEWAY_TOKEN:-}"
+    SMS_RECIPIENT="${SMS_RECIPIENT:-}"
+
     TIER1_THRESHOLD=40
     TIER2_THRESHOLD=20
     TIER3_THRESHOLD=10
@@ -40,6 +46,20 @@ data:
         logger -t nut-notify "[$level] $msg"
     }
 
+    send_sms() {
+        local message="$1"
+        if [[ -z "$SMS_GATEWAY_TOKEN" ]] || [[ -z "$SMS_RECIPIENT" ]]; then
+            log "DEBUG" "SMS not configured, skipping"
+            return 0
+        fi
+        log "INFO" "Sending SMS via gateway at ${SMS_GATEWAY_IP}:${SMS_GATEWAY_PORT}"
+        curl -s -X POST "http://${SMS_GATEWAY_IP}:${SMS_GATEWAY_PORT}/" \
+            -H "Authorization: ${SMS_GATEWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"to\": \"${SMS_RECIPIENT}\", \"message\": \"${message}\"}" \
+            --connect-timeout 5 --max-time 10 2>/dev/null &
+    }
+
     send_notification() {
         local subject="$1"
         local body="$2"
@@ -55,6 +75,10 @@ data:
 
         # Send via ntfy.sh (works even when K8s/Prometheus is down)
         curl -s -H "Title: [HOMELAB UPS] $subject" -H "Priority: high" -H "Tags: electric_plug,warning" -d "$full_body" "https://ntfy.sh/homelab-pve-ups-alerts" 2>/dev/null &
+
+        # Send SMS via Pixel 7 hotspot (out-of-band - works even when internet is down)
+        local sms_msg="[UPS] ${subject} - ${charge}% (${runtime_mins}min)"
+        send_sms "$sms_msg"
 
         log "INFO" "Notification sent: $subject"
     }

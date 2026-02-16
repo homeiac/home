@@ -8,6 +8,7 @@ resources:
   - configmap-nut-scripts.yaml
   - configmap-deploy-script.yaml
   - secrets/pve-ssh-key.sops.yaml
+  - secrets/sms-gateway-creds.sops.yaml
   - cronjob-nut-deploy.yaml
   - service-nut-exporter.yaml
   - servicemonitor-nut-exporter.yaml
