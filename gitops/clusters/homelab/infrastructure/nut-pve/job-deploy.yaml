@@ -16,6 +16,8 @@ spec:
         app: nut-deploy
     spec:
       restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: deploy
           image: ghcr.io/homeiac/pve-nut:e6e2d9b

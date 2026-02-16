@@ -7,6 +7,7 @@ resources:
   # Secrets (SOPS encrypted)
   - secrets/pve-ssh-key.sops.yaml
   - secrets/sms-gateway-creds.sops.yaml
+  - secrets/ghcr-creds.sops.yaml
   # Deployment Job (triggered by image update)
   - job-deploy.yaml
   # Flux Image Automation (disabled - image-reflector-controller not installed)
