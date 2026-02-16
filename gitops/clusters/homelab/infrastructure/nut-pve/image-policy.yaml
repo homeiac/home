@@ -1,0 +1,53 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: pve-nut
+  namespace: flux-system
+spec:
+  image: ghcr.io/homeiac/pve-nut
+  interval: 5m
+  secretRef:
+    name: ghcr-auth
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: pve-nut
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: pve-nut
+  filterTags:
+    # Match only git SHA tags (7 chars) - never use 'latest' for reproducibility
+    pattern: '^[a-f0-9]{7}$'
+  policy:
+    alphabetical:
+      # Use descending order to get newest SHA (alphabetically later = newer commit)
+      order: desc
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: pve-nut
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcd@homelab.local
+      messageTemplate: |
+        chore(flux): update pve-nut image to {{range .Changed.Changes}}{{.NewValue}}{{end}}
+    push:
+      branch: master
+  update:
+    path: ./gitops/clusters/homelab/infrastructure/nut-pve
+    strategy: Setters

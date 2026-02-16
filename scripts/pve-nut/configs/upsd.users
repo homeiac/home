@@ -1,0 +1,12 @@
+[admin]
+    password = nutadmin
+    actions = SET
+    instcmds = ALL
+
+[upsmon]
+    password = upsmonpass
+    upsmon master
+
+[exporter]
+    password = exporterpass
+    upsmon slave

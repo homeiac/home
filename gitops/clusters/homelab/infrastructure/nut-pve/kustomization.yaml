@@ -4,12 +4,13 @@ kind: Kustomization
 namespace: monitoring
 
 resources:
-  - configmap-nut-configs.yaml
-  - configmap-nut-scripts.yaml
-  - configmap-deploy-script.yaml
+  # Secrets (SOPS encrypted)
   - secrets/pve-ssh-key.sops.yaml
   - secrets/sms-gateway-creds.sops.yaml
-  - cronjob-nut-deploy.yaml
-  - cronjob-disaster-drill.yaml
+  # Deployment Job (triggered by image update)
+  - job-deploy.yaml
+  # Flux Image Automation
+  - image-policy.yaml
+  # Prometheus monitoring
   - service-nut-exporter.yaml
   - servicemonitor-nut-exporter.yaml

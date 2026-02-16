@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nut-deploy
+  namespace: monitoring
+  annotations:
+    # Job is recreated when image tag changes (Flux ImagePolicy)
+    description: "Deploy NUT scripts and configs to pve host"
+spec:
+  ttlSecondsAfterFinished: 86400  # Cleanup after 24h
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: nut-deploy
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: deploy
+          # {"$imagepolicy": "flux-system:pve-nut"}
+          image: ghcr.io/homeiac/pve-nut:0000000  # Placeholder - Flux will update to actual SHA
+          env:
+            - name: TARGET_HOST
+              value: "192.168.4.122"
+            - name: DEPLOY_DIR
+              value: "/opt/nut"
+          envFrom:
+            - secretRef:
+                name: sms-gateway-creds
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /ssh
+              readOnly: true
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: nut-deploy-ssh-key
+            defaultMode: 0600
