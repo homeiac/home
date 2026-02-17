@@ -31,5 +31,4 @@ resources:
   - apps/frigate-ip-webhook             # Auto-update Frigate IPs from HA sensor
   - apps/claudecodeui                    # Claude Code web UI (ghcr.io/homeiac/claudecodeui)
   - apps/postgres                        # PostgreSQL 16 with pgvector, TimescaleDB, PostGIS
-  - apps/soracom-arc                     # Soracom Arc WireGuard VPN (DR SMS gateway prototype)
 
