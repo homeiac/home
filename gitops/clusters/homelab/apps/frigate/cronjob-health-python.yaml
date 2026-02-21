@@ -7,13 +7,13 @@ metadata:
     app: frigate-health-checker
     version: python
 spec:
-  schedule: "*/5 * * * *"  # Every 5 minutes
+  schedule: "*/5 * * * *" # Every 5 minutes
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      ttlSecondsAfterFinished: 3600  # Clean up completed jobs after 1 hour
+      ttlSecondsAfterFinished: 3600 # Clean up completed jobs after 1 hour
       template:
         metadata:
           labels:
@@ -25,7 +25,7 @@ spec:
             - name: ghcr-creds
           containers:
             - name: health-check
-              image: ghcr.io/homeiac/frigate-health-checker:43801d4 # {"$imagepolicy": "flux-system:frigate-health-checker"}
+              image: ghcr.io/homeiac/frigate-health-checker:223f173 # {"$imagepolicy": "flux-system:frigate-health-checker"}
               imagePullPolicy: IfNotPresent
               env:
                 # Kubernetes settings
@@ -39,9 +39,9 @@ spec:
                   value: "app=frigate"
                 # Health check thresholds
                 - name: FRIGATE_HC_SKIP_CAMERAS
-                  value: '[]'  # WiFi issues fixed, monitoring all cameras now
+                  value: '[]' # WiFi issues fixed, monitoring all cameras now
                 - name: FRIGATE_HC_SKIP_RATIO_THRESHOLD
-                  value: "0.8"  # Detect cameras skipping >80% frames (ffmpeg crash loops)
+                  value: "0.8" # Detect cameras skipping >80% frames (ffmpeg crash loops)
                 - name: FRIGATE_HC_CONSECUTIVE_FAILURES_REQUIRED
                   value: "2"
                 - name: FRIGATE_HC_MAX_RESTARTS_PER_HOUR
