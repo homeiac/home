@@ -133,6 +133,32 @@ class TestHealthChecker:
         assert result.metrics.api_responsive is True
         assert result.metrics.inference_speed_ms == 15.0
 
+    def test_check_health_python_repr_output(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test health check handles Python dict repr (single quotes) from k8s stream."""
+        # Kubernetes stream() sometimes returns Python repr instead of JSON
+        python_repr = str(
+            {
+                "detectors": {"coral": {"inference_speed": 15.0}},
+                "cameras": {
+                    "front_door": {"camera_fps": 5.0, "detection_fps": 0.2, "skipped_fps": 0.0},
+                },
+            }
+        )
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (python_repr, True)
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        assert result.status == HealthStatus.HEALTHY
+        assert result.metrics.api_responsive is True
+
     def test_check_health_high_skip_ratio(
         self,
         settings: Settings,

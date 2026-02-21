@@ -1,5 +1,6 @@
 """Core health checking logic for Frigate."""
 
+import ast
 import json
 import re
 import time
@@ -263,10 +264,22 @@ class HealthChecker:
             if not stats or stats == {}:
                 return None
             return stats
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
+            # Kubernetes stream() sometimes returns Python repr (single quotes)
+            # instead of raw JSON. Try ast.literal_eval as fallback.
+            try:
+                parsed = ast.literal_eval(output)
+                if isinstance(parsed, dict) and parsed:
+                    logger.warning(
+                        "Parsed stats as Python dict (not JSON)",
+                        output_preview=repr(output[:200]) if len(output) > 200 else repr(output),
+                    )
+                    return parsed
+            except (ValueError, SyntaxError):
+                pass
+
             logger.error(
-                "Failed to parse Frigate stats JSON",
-                error=str(e),
+                "Failed to parse Frigate stats",
                 output_type=type(output).__name__,
                 output_preview=repr(output[:200]) if len(output) > 200 else repr(output),
             )
