@@ -19,12 +19,12 @@ spec:
   imageRepositoryRef:
     name: frigate-health-checker
   filterTags:
-    # Match only git SHA tags (7 chars) - never use 'latest' for reproducibility
-    pattern: '^[a-f0-9]{7}$'
+    # Match build-sha tags (e.g., 42-abc1234...), extract build number for ordering
+    pattern: '^(\d+)-[a-f0-9]+$'
+    extract: '$1'
   policy:
-    alphabetical:
-      # Use descending order to get newest SHA (alphabetically later = newer commit)
-      order: desc
+    numerical:
+      order: asc
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageUpdateAutomation
