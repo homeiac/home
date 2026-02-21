@@ -6,3 +6,4 @@ resources:
 - secrets/ghcr-creds.sops.yaml
 - image-automation-pve-nut.yaml
 - image-automation-proxmox-provisioner.yaml
+- image-automation-frigate-health-checker.yaml
