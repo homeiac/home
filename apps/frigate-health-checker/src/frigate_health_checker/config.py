@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None, description="SMTP password")
     alert_email: str | None = Field(default=None, description="Email for alerts")
 
+    # Alert cooldown (one consolidated alert per day)
+    alert_cooldown_seconds: int = Field(
+        default=86400, description="Seconds between alert emails (default: 24h)"
+    )
+
     # Restart history retention
     restart_history_hours: int = Field(default=2, description="Hours to retain restart timestamps")
 

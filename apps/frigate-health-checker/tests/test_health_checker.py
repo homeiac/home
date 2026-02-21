@@ -423,18 +423,20 @@ class TestRestartManager:
         assert decision.should_alert is True  # Alert even without restart
         assert "not Ready" in decision.reason
 
-    def test_evaluate_restart_alert_not_sent_twice(
+    def test_evaluate_restart_alert_cooldown(
         self,
         settings: Settings,
         mock_k8s_client: MagicMock,
     ) -> None:
-        """Test that alert is not sent twice for same incident."""
+        """Test that alert is suppressed within 24h cooldown."""
+        import time
+
         mock_k8s_client.is_node_ready.return_value = True
         manager = RestartManager(settings, mock_k8s_client)
         state = HealthState(
             consecutive_failures=1,
             last_restart_times=[],
-            alert_sent_for_incident=True,  # Already sent
+            last_alert_time=int(time.time()) - 3600,  # 1 hour ago (within 24h cooldown)
         )
         result = HealthCheckResult(
             status=HealthStatus.UNHEALTHY,
@@ -445,7 +447,33 @@ class TestRestartManager:
         decision = manager.evaluate_restart(result, state)
 
         assert decision.should_restart is True
-        assert decision.should_alert is False  # Don't send again
+        assert decision.should_alert is False  # Within cooldown
+
+    def test_evaluate_restart_alert_after_cooldown(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+    ) -> None:
+        """Test that alert fires after 24h cooldown expires."""
+        import time
+
+        mock_k8s_client.is_node_ready.return_value = True
+        manager = RestartManager(settings, mock_k8s_client)
+        state = HealthState(
+            consecutive_failures=1,
+            last_restart_times=[],
+            last_alert_time=int(time.time()) - 90000,  # 25 hours ago (past cooldown)
+        )
+        result = HealthCheckResult(
+            status=HealthStatus.UNHEALTHY,
+            reason=UnhealthyReason.API_UNRESPONSIVE,
+            metrics=HealthMetrics(node_name="still-fawn"),
+        )
+
+        decision = manager.evaluate_restart(result, state)
+
+        assert decision.should_restart is True
+        assert decision.should_alert is True  # Cooldown expired
 
     def test_handle_healthy_resets_state(
         self,
@@ -458,13 +486,13 @@ class TestRestartManager:
         state = HealthState(
             consecutive_failures=3,
             last_restart_times=[],
-            alert_sent_for_incident=True,
+            last_alert_time=1700000000,
         )
 
         manager.handle_healthy(state)
 
         assert state.consecutive_failures == 0
-        assert state.alert_sent_for_incident is False
+        assert state.last_alert_time == 0
         mock_k8s_client.patch_configmap.assert_called_once()
 
     def test_execute_restart_success(

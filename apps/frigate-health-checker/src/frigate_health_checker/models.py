@@ -62,6 +62,7 @@ class HealthState:
     consecutive_failures: int = 0
     last_restart_times: list[int] = field(default_factory=list)
     alert_sent_for_incident: bool = False
+    last_alert_time: int = 0  # Unix timestamp of last alert sent
 
     @classmethod
     def from_configmap_data(cls, data: dict[str, str]) -> "HealthState":
@@ -78,6 +79,7 @@ class HealthState:
             consecutive_failures=int(data.get("consecutive_failures", "0")),
             last_restart_times=restart_times,
             alert_sent_for_incident=data.get("alert_sent_for_incident", "false").lower() == "true",
+            last_alert_time=int(data.get("last_alert_time", "0")),
         )
 
     def to_configmap_data(self) -> dict[str, str]:
@@ -86,7 +88,16 @@ class HealthState:
             "consecutive_failures": str(self.consecutive_failures),
             "last_restart_times": ",".join(str(ts) for ts in self.last_restart_times),
             "alert_sent_for_incident": str(self.alert_sent_for_incident).lower(),
+            "last_alert_time": str(self.last_alert_time),
         }
+
+    def alert_cooldown_active(self, cooldown_seconds: int) -> bool:
+        """Check if we're still within the alert cooldown window."""
+        import time
+
+        if self.last_alert_time == 0:
+            return False
+        return (int(time.time()) - self.last_alert_time) < cooldown_seconds
 
     def restarts_in_window(self, window_seconds: int) -> int:
         """Count restarts within the given time window."""

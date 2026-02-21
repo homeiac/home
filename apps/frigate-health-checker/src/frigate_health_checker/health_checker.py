@@ -349,8 +349,8 @@ class RestartManager:
                 reason=f"Waiting for confirmation ({new_failures}/{self.settings.consecutive_failures_required} failures)",
             )
 
-        # Alert flag: send alert if we haven't already for this incident
-        should_alert = not state.alert_sent_for_incident
+        # Alert flag: send alert if cooldown has expired (max once per day)
+        should_alert = not state.alert_cooldown_active(self.settings.alert_cooldown_seconds)
 
         # Check circuit breaker (max restarts per hour)
         recent_restarts = state.restarts_in_window(3600)
@@ -394,9 +394,9 @@ class RestartManager:
 
     def handle_healthy(self, state: HealthState) -> None:
         """Handle transition to healthy state."""
-        if state.consecutive_failures > 0 or state.alert_sent_for_incident:
+        if state.consecutive_failures > 0 or state.last_alert_time > 0:
             state.consecutive_failures = 0
-            state.alert_sent_for_incident = False
+            state.last_alert_time = 0
             self.save_state(state)
             logger.info("Reset health state after recovery")
 
@@ -410,13 +410,13 @@ class RestartManager:
         if decision.should_restart:
             success = self.execute_restart(state)
             if success and decision.should_alert:
-                state.alert_sent_for_incident = True
+                state.last_alert_time = int(time.time())
             self.save_state(state)
         else:
-            # Update failure count; mark alert sent if we're about to alert
+            # Update failure count; record alert time if we're about to alert
             state.consecutive_failures += 1
             if decision.should_alert:
-                state.alert_sent_for_incident = True
+                state.last_alert_time = int(time.time())
             self.save_state(state)
             logger.info(
                 "Updated failure count",

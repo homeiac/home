@@ -64,7 +64,8 @@ class TestFullWorkflow:
         mock_k8s.get_pod_logs.return_value = "Normal operation"
         mock_k8s.get_configmap_data.return_value = {
             "consecutive_failures": "3",
-            "alert_sent_for_incident": "true",
+            "alert_sent_for_incident": "false",
+            "last_alert_time": "1700000000",
             "last_restart_times": "",
         }
         mock_k8s.patch_configmap.return_value = True
@@ -82,7 +83,7 @@ class TestFullWorkflow:
         mock_k8s.patch_configmap.assert_called()
         # State should be reset
         assert state.consecutive_failures == 0
-        assert state.alert_sent_for_incident is False
+        assert state.last_alert_time == 0
 
     def test_first_failure_does_not_restart(
         self,
@@ -201,43 +202,33 @@ class TestFullWorkflow:
         assert "not Ready" in decision.reason
         mock_k8s.restart_deployment.assert_not_called()
 
-    def test_alert_sent_only_once_per_incident(
+    def test_alert_cooldown_suppresses_duplicate(
         self,
         settings: Settings,
         mock_k8s: MagicMock,
     ) -> None:
-        """Test that email alert is only sent once per incident."""
-        # Setup: First restart (alert should be sent)
+        """Test that alert is suppressed within 24h cooldown."""
+        import time
+
         mock_k8s.exec_in_pod.return_value = ("", False)
+        # Alert sent 1 hour ago - within 24h cooldown
         mock_k8s.get_configmap_data.return_value = {
             "consecutive_failures": "1",
             "alert_sent_for_incident": "false",
+            "last_alert_time": str(int(time.time()) - 3600),
             "last_restart_times": "",
         }
         mock_k8s.is_node_ready.return_value = True
 
-        # Execute first check
         checker = HealthChecker(settings, mock_k8s)
         manager = RestartManager(settings, mock_k8s)
 
         result = checker.check_health()
         state = manager.load_state()
-        decision1 = manager.evaluate_restart(result, state)
+        decision = manager.evaluate_restart(result, state)
 
-        assert decision1.should_alert is True
-
-        # Setup: Second restart attempt (alert already sent)
-        mock_k8s.get_configmap_data.return_value = {
-            "consecutive_failures": "1",
-            "alert_sent_for_incident": "true",
-            "last_restart_times": "",
-        }
-
-        state2 = manager.load_state()
-        decision2 = manager.evaluate_restart(result, state2)
-
-        assert decision2.should_restart is True
-        assert decision2.should_alert is False
+        assert decision.should_restart is True
+        assert decision.should_alert is False  # Within cooldown
 
     def test_no_frames_triggers_restart(
         self,
