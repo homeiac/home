@@ -48,14 +48,14 @@ class TestHealthChecker:
         assert result.status == HealthStatus.UNHEALTHY
         assert result.reason == UnhealthyReason.API_UNRESPONSIVE
 
-    def test_check_health_no_frames(
+    def test_check_health_single_camera_no_frames_is_healthy(
         self,
         settings: Settings,
         mock_k8s_client: MagicMock,
         mock_pod: MagicMock,
     ) -> None:
-        """Test health check when camera has no frames (fps=0)."""
-        stats_no_frames = {
+        """Test that one camera down with others OK does not trigger restart."""
+        stats_partial = {
             "detectors": {"coral": {"inference_speed": 15.0}},
             "cameras": {
                 "front_door": {"camera_fps": 0.0, "detection_fps": 0.0},
@@ -65,7 +65,34 @@ class TestHealthChecker:
         mock_k8s_client.get_frigate_pod.return_value = mock_pod
         mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
         mock_k8s_client.exec_in_pod.return_value = (
-            json.dumps(stats_no_frames),
+            json.dumps(stats_partial),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
+        # Partial camera failure = camera/network issue, not Frigate
+        assert result.status == HealthStatus.HEALTHY
+
+    def test_check_health_all_cameras_no_frames(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test that ALL cameras down triggers unhealthy (Frigate-level problem)."""
+        stats_all_down = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {"camera_fps": 0.0, "detection_fps": 0.0},
+                "back_yard": {"camera_fps": 0.0, "detection_fps": 0.0},
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_all_down),
             True,
         )
         checker = HealthChecker(settings, mock_k8s_client)
@@ -75,6 +102,7 @@ class TestHealthChecker:
         assert result.status == HealthStatus.UNHEALTHY
         assert result.reason == UnhealthyReason.NO_FRAMES
         assert "front_door" in result.message
+        assert "back_yard" in result.message
 
     def test_check_health_skipped_camera_no_frames(
         self,
@@ -159,14 +187,13 @@ class TestHealthChecker:
         assert result.status == HealthStatus.HEALTHY
         assert result.metrics.api_responsive is True
 
-    def test_check_health_high_skip_ratio(
+    def test_check_health_single_high_skip_ratio_is_healthy(
         self,
         settings: Settings,
         mock_k8s_client: MagicMock,
         mock_pod: MagicMock,
     ) -> None:
-        """Test health check when camera has high frame skip ratio (>80%)."""
-        # Simulate ffmpeg crash loop: camera_fps=5.0 but skipped_fps=4.5 (90% dropped)
+        """Test that one camera with high skip ratio doesn't trigger restart."""
         stats_high_skip = {
             "detectors": {"coral": {"inference_speed": 15.0}},
             "cameras": {
@@ -192,10 +219,43 @@ class TestHealthChecker:
 
         result = checker.check_health()
 
+        # Single camera skip = camera issue, not Frigate
+        assert result.status == HealthStatus.HEALTHY
+
+    def test_check_health_majority_high_skip_ratio(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        mock_pod: MagicMock,
+    ) -> None:
+        """Test that majority of cameras with high skip triggers unhealthy."""
+        stats_all_skipping = {
+            "detectors": {"coral": {"inference_speed": 15.0}},
+            "cameras": {
+                "front_door": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.1,
+                    "skipped_fps": 4.5,  # 90%
+                },
+                "back_yard": {
+                    "camera_fps": 5.0,
+                    "detection_fps": 0.1,
+                    "skipped_fps": 4.5,  # 90%
+                },
+            },
+        }
+        mock_k8s_client.get_frigate_pod.return_value = mock_pod
+        mock_k8s_client.get_pod_node_name.return_value = "still-fawn"
+        mock_k8s_client.exec_in_pod.return_value = (
+            json.dumps(stats_all_skipping),
+            True,
+        )
+        checker = HealthChecker(settings, mock_k8s_client)
+
+        result = checker.check_health()
+
         assert result.status == HealthStatus.UNHEALTHY
         assert result.reason == UnhealthyReason.HIGH_SKIP_RATIO
-        assert "trendnet_ip_572w" in result.message
-        assert "skip=90%" in result.message
 
     def test_check_health_skip_ratio_at_threshold(
         self,

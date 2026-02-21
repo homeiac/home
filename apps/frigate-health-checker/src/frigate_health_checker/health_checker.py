@@ -71,37 +71,63 @@ class HealthChecker:
         metrics.api_responsive = True
 
         # Check 3: Camera FPS - are frames actually coming in?
-        # This is the most important check - if no frames, nothing works
-        cameras_without_frames = self._check_camera_fps(stats)
+        # Only restart if majority of cameras are down (Frigate-level problem).
+        # A single camera dropping is a camera/network issue, not worth restarting.
+        cameras_without_frames, total_monitored = self._check_camera_fps(stats)
         if cameras_without_frames:
             camera_list = ", ".join(cameras_without_frames)
-            logger.warning(
-                "Cameras have no frames",
-                cameras=cameras_without_frames,
-            )
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                reason=UnhealthyReason.NO_FRAMES,
-                metrics=metrics,
-                message=f"No frames from: {camera_list}",
-            )
+            down_count = len(cameras_without_frames)
+            majority_down = down_count > total_monitored / 2
+
+            if majority_down:
+                logger.warning(
+                    "Majority of cameras have no frames",
+                    cameras_down=down_count,
+                    total_monitored=total_monitored,
+                    cameras=cameras_without_frames,
+                )
+                return HealthCheckResult(
+                    status=HealthStatus.UNHEALTHY,
+                    reason=UnhealthyReason.NO_FRAMES,
+                    metrics=metrics,
+                    message=f"{down_count}/{total_monitored} cameras down: {camera_list}",
+                )
+            else:
+                logger.warning(
+                    "Some cameras have no frames (not restarting)",
+                    cameras_down=down_count,
+                    total_monitored=total_monitored,
+                    cameras=cameras_without_frames,
+                )
 
         # Check 4: Frame skip ratio - are frames being processed or dropped?
-        # High skip ratio indicates ffmpeg crash loops or processing backlog
+        # Only restart if majority of working cameras have high skip ratio.
         cameras_high_skip = self._check_camera_skip_ratio(stats)
         if cameras_high_skip:
             camera_list = ", ".join(cameras_high_skip)
-            logger.warning(
-                "Cameras have high frame skip ratio",
-                cameras=cameras_high_skip,
-                threshold=self.settings.skip_ratio_threshold,
-            )
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                reason=UnhealthyReason.HIGH_SKIP_RATIO,
-                metrics=metrics,
-                message=f"High skip ratio: {camera_list}",
-            )
+            cameras_ok = total_monitored - len(cameras_without_frames)
+            majority_skipping = cameras_ok > 0 and len(cameras_high_skip) > cameras_ok / 2
+
+            if majority_skipping:
+                logger.warning(
+                    "Majority of cameras have high frame skip ratio",
+                    cameras_skipping=len(cameras_high_skip),
+                    cameras_ok=cameras_ok,
+                    cameras=cameras_high_skip,
+                    threshold=self.settings.skip_ratio_threshold,
+                )
+                return HealthCheckResult(
+                    status=HealthStatus.UNHEALTHY,
+                    reason=UnhealthyReason.HIGH_SKIP_RATIO,
+                    metrics=metrics,
+                    message=f"High skip ratio: {camera_list}",
+                )
+            else:
+                logger.warning(
+                    "Some cameras have high skip ratio (not restarting)",
+                    cameras_skipping=cameras_high_skip,
+                    threshold=self.settings.skip_ratio_threshold,
+                )
 
         # Extract inference speed for logging (but don't fail on it)
         inference_speed = self._extract_inference_speed(stats)
@@ -118,12 +144,11 @@ class HealthChecker:
             message="All health checks passed",
         )
 
-    def _check_camera_fps(self, stats: dict[str, object]) -> list[str]:
+    def _check_camera_fps(self, stats: dict[str, object]) -> tuple[list[str], int]:
         """Check which cameras have no frames (camera_fps < 1).
 
-        Returns list of camera names with no frames, excluding skipped cameras.
+        Returns (cameras_without_frames, total_monitored_count).
         """
-        # Cameras to skip (on flaky networks, etc.)
         skip_cameras = (
             self.settings.skip_cameras
             if hasattr(self.settings, "skip_cameras")
@@ -131,9 +156,10 @@ class HealthChecker:
         )
 
         cameras_without_frames = []
+        total_monitored = 0
         cameras = stats.get("cameras")
         if not isinstance(cameras, dict):
-            return ["unknown"]  # Can't parse cameras = unhealthy
+            return ["unknown"], 1
 
         for camera_name, camera_stats in cameras.items():
             if camera_name in skip_cameras:
@@ -141,6 +167,7 @@ class HealthChecker:
             if not isinstance(camera_stats, dict):
                 continue
 
+            total_monitored += 1
             camera_fps = camera_stats.get("camera_fps", 0)
             try:
                 fps = float(camera_fps)
@@ -150,7 +177,7 @@ class HealthChecker:
             if fps < 1:
                 cameras_without_frames.append(f"{camera_name}(fps={fps})")
 
-        return cameras_without_frames
+        return cameras_without_frames, total_monitored
 
     def _check_camera_skip_ratio(self, stats: dict[str, object]) -> list[str]:
         """Check which cameras have high frame skip ratio.
