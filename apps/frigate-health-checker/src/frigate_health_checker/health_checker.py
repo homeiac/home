@@ -336,6 +336,9 @@ class RestartManager:
                 reason=f"Waiting for confirmation ({new_failures}/{self.settings.consecutive_failures_required} failures)",
             )
 
+        # Alert flag: send alert if we haven't already for this incident
+        should_alert = not state.alert_sent_for_incident
+
         # Check circuit breaker (max restarts per hour)
         recent_restarts = state.restarts_in_window(3600)
         if recent_restarts >= self.settings.max_restarts_per_hour:
@@ -343,6 +346,7 @@ class RestartManager:
                 should_restart=False,
                 reason=f"Circuit breaker: {recent_restarts} restarts in last hour",
                 circuit_breaker_triggered=True,
+                should_alert=should_alert,
             )
 
         # Check node availability
@@ -353,13 +357,14 @@ class RestartManager:
                 should_restart=False,
                 reason=f"Node {node_name} is not Ready",
                 node_unavailable=True,
+                should_alert=should_alert,
             )
 
         # All checks passed, should restart
         return RestartDecision(
             should_restart=True,
             reason=health_result.message,
-            should_alert=not state.alert_sent_for_incident,
+            should_alert=should_alert,
         )
 
     def execute_restart(self, state: HealthState) -> bool:
@@ -395,8 +400,10 @@ class RestartManager:
                 state.alert_sent_for_incident = True
             self.save_state(state)
         else:
-            # Just update failure count
+            # Update failure count; mark alert sent if we're about to alert
             state.consecutive_failures += 1
+            if decision.should_alert:
+                state.alert_sent_for_incident = True
             self.save_state(state)
             logger.info(
                 "Updated failure count",

@@ -73,20 +73,21 @@ def main() -> int:
             node_unavailable=decision.node_unavailable,
         )
 
+        # Handle state update and restart (if applicable)
+        manager.handle_unhealthy(result, state, decision)
+
         if decision.should_restart:
-            manager.handle_unhealthy(result, state, decision)
-
-            if decision.should_alert:
-                restarts = state.restarts_in_window(3600)
-                notifier.send_restart_notification(result, restarts)
-
             logger.info("Restart triggered", reason=result.message)
         else:
-            manager.handle_unhealthy(result, state, decision)
             logger.info(
                 "Restart not triggered",
                 reason=decision.reason,
             )
+
+        # Send alert regardless of restart decision
+        if decision.should_alert:
+            restarts = state.restarts_in_window(3600)
+            notifier.send_alert_notification(result, restarts, decision)
 
         return 0
 

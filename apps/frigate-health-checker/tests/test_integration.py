@@ -168,6 +168,7 @@ class TestFullWorkflow:
         # Verify
         assert decision.should_restart is False
         assert decision.circuit_breaker_triggered is True
+        assert decision.should_alert is True  # Alert still sent even without restart
         mock_k8s.restart_deployment.assert_not_called()
 
     def test_node_down_prevents_restart(
@@ -196,6 +197,7 @@ class TestFullWorkflow:
         # Verify
         assert decision.should_restart is False
         assert decision.node_unavailable is True
+        assert decision.should_alert is True  # Alert still sent even without restart
         assert "not Ready" in decision.reason
         mock_k8s.restart_deployment.assert_not_called()
 

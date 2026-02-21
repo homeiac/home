@@ -372,6 +372,7 @@ class TestRestartManager:
 
         assert decision.should_restart is False
         assert decision.circuit_breaker_triggered is True
+        assert decision.should_alert is True  # Alert even without restart
         assert "circuit breaker" in decision.reason.lower()
 
     def test_evaluate_restart_node_not_ready(
@@ -393,6 +394,7 @@ class TestRestartManager:
 
         assert decision.should_restart is False
         assert decision.node_unavailable is True
+        assert decision.should_alert is True  # Alert even without restart
         assert "not Ready" in decision.reason
 
     def test_evaluate_restart_alert_not_sent_twice(

@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 import structlog
 
 from .config import Settings
-from .models import HealthCheckResult, UnhealthyReason
+from .models import HealthCheckResult, RestartDecision, UnhealthyReason
 
 logger = structlog.get_logger()
 
@@ -24,27 +24,50 @@ class EmailNotifier:
         health_result: HealthCheckResult,
         restarts_in_hour: int,
     ) -> bool:
-        """Send email notification about a restart."""
+        """Send email notification about a restart (legacy, use send_alert_notification)."""
+        decision = RestartDecision(should_restart=True, reason=health_result.message, should_alert=True)
+        return self.send_alert_notification(health_result, restarts_in_hour, decision)
+
+    def send_alert_notification(
+        self,
+        health_result: HealthCheckResult,
+        restarts_in_hour: int,
+        decision: RestartDecision,
+    ) -> bool:
+        """Send email notification about unhealthy Frigate."""
         if not self.settings.smtp_enabled:
             logger.info("SMTP not configured, skipping email notification")
             return False
 
-        subject = f"[Homelab] Frigate Restarted - {health_result.message}"
-        body = self._build_email_body(health_result, restarts_in_hour)
+        if decision.should_restart:
+            subject = f"[Homelab] Frigate Restarted - {health_result.message}"
+        else:
+            subject = f"[Homelab] Frigate UNHEALTHY - {health_result.message}"
 
+        body = self._build_email_body(health_result, restarts_in_hour, decision)
         return self._send_email(subject, body)
 
     def _build_email_body(
         self,
         health_result: HealthCheckResult,
         restarts_in_hour: int,
+        decision: RestartDecision | None = None,
     ) -> str:
-        """Build email body with restart details."""
+        """Build email body with health check details."""
         metrics = health_result.metrics
         next_steps = self._get_next_steps(health_result.reason)
 
+        if decision and decision.should_restart:
+            action = "Frigate was automatically restarted by the health checker."
+        elif decision and decision.circuit_breaker_triggered:
+            action = f"Frigate is UNHEALTHY but restart was blocked by circuit breaker ({restarts_in_hour} restarts in last hour)."
+        elif decision and decision.node_unavailable:
+            action = f"Frigate is UNHEALTHY but restart was skipped because node {metrics.node_name or 'unknown'} is NotReady."
+        else:
+            action = "Frigate is UNHEALTHY but was NOT restarted."
+
         return f"""=== WHAT HAPPENED ===
-Frigate was automatically restarted by the health checker.
+{action}
 
 Time: {health_result.timestamp.isoformat()}
 Restarts in last hour: {restarts_in_hour}
@@ -52,10 +75,8 @@ Restarts in last hour: {restarts_in_hour}
 === WHY ===
 Primary reason: {health_result.message}
 
-Metrics at restart:
-- Coral inference speed: {metrics.inference_speed_ms or "N/A"}ms (threshold: {self.settings.inference_threshold_ms}ms)
-- Detection stuck count: {metrics.stuck_detection_count} (threshold: {self.settings.stuck_detection_threshold})
-- Recording backlog count: {metrics.recording_backlog_count} (threshold: {self.settings.backlog_threshold})
+Metrics:
+- Coral inference speed: {metrics.inference_speed_ms or "N/A"}ms
 - Pod: {metrics.pod_name or "N/A"}
 - Node: {metrics.node_name or "N/A"}
 

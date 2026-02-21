@@ -42,6 +42,33 @@ rules:
     resources: ["replicasets"]
     verbs: ["get", "list"]
 ---
+# ClusterRole for reading node status (nodes are cluster-scoped)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: frigate-health-checker-nodes
+  labels:
+    app: frigate-health-checker
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: frigate-health-checker-nodes
+  labels:
+    app: frigate-health-checker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: frigate-health-checker-nodes
+subjects:
+  - kind: ServiceAccount
+    name: frigate-health-checker
+    namespace: frigate
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
