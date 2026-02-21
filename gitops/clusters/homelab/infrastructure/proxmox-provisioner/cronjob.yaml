@@ -4,7 +4,7 @@ metadata:
   name: proxmox-provisioner-still-fawn
   namespace: kube-system
 spec:
-  schedule: "0 4 * * *"  # Daily at 4am
+  schedule: "0 4 * * *" # Daily at 4am
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -19,7 +19,7 @@ spec:
             - name: ghcr-creds
           containers:
             - name: provisioner
-              image: ghcr.io/homeiac/proxmox-provisioner:latest  # {"$imagepolicy": "flux-system:proxmox-provisioner"}
+              image: ghcr.io/homeiac/proxmox-provisioner:a98be8a # {"$imagepolicy": "flux-system:proxmox-provisioner"}
               env:
                 - name: TARGET_HOST
                   value: "still-fawn.maas"
