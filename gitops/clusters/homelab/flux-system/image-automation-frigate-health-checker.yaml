@@ -19,8 +19,8 @@ spec:
   imageRepositoryRef:
     name: frigate-health-checker
   filterTags:
-    # Match build-sha tags (e.g., 42-abc1234...), extract build number for ordering
-    pattern: '^(\d+)-[a-f0-9]+$'
+    # Match build-sha tags (e.g., 42-abc1234), extract build number for ordering
+    pattern: '^(\d+)-[a-f0-9]{7}$'
     extract: '$1'
   policy:
     numerical:
