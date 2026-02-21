@@ -25,7 +25,9 @@ class EmailNotifier:
         restarts_in_hour: int,
     ) -> bool:
         """Send email notification about a restart (legacy, use send_alert_notification)."""
-        decision = RestartDecision(should_restart=True, reason=health_result.message, should_alert=True)
+        decision = RestartDecision(
+            should_restart=True, reason=health_result.message, should_alert=True
+        )
         return self.send_alert_notification(health_result, restarts_in_hour, decision)
 
     def send_alert_notification(
