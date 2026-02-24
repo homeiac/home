@@ -3,8 +3,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ESPHOME_IMAGE="ghcr.io/esphome/esphome:2025.11.5"
-VOICE_PE_IP="192.168.86.245"
+ESPHOME_IMAGE="ghcr.io/esphome/esphome:2025.12.4"
+VOICE_PE_IP="192.168.86.10"
 TIMEOUT="${1:-900}"  # Default 15 minutes
 
 cd "$SCRIPT_DIR"
