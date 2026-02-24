@@ -36,7 +36,7 @@ condition: []
 
 action:
   - choose:
-      # Command received - start thinking effect
+      # Command received - start thinking effect with timeout fallback
       - conditions:
           - condition: trigger
             id: command_received
@@ -63,6 +63,14 @@ action:
                 data:
                   rgb_color: [0, 255, 255]
                   brightness: 128
+          # Timeout: if response_complete doesn't arrive within 60s,
+          # turn off the LED. Since mode is 'restart', a new trigger
+          # (including response_complete) cancels this delay.
+          - delay:
+              seconds: 60
+          - service: light.turn_off
+            target:
+              entity_id: light.home_assistant_voice_09f5a3_led_ring
 
       # Response complete - turn off LED
       - conditions:

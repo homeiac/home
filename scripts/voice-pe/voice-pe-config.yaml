@@ -3,6 +3,9 @@ substitutions:
   friendly_name: Home Assistant Voice 09f5a3
 packages:
   # Pin to 25.11.0 - 25.12.0 has broken hey_jarvis model
+  # TODO: Upgrade to 25.12.4+ which fixes LED stuck-on bug after long TTS
+  # (see github.com/esphome/home-assistant-voice-pe/issues/382)
+  # Verify hey_jarvis regression is fixed before upgrading
   Nabu Casa.Home Assistant Voice PE: github://esphome/home-assistant-voice-pe/home-assistant-voice.yaml@25.11.0
 esphome:
   name: ${name}
