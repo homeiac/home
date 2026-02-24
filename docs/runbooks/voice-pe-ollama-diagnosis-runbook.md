@@ -1,12 +1,16 @@
 # Runbook: Voice PE / Ollama Diagnosis and Recovery
 
-**Last Updated**: 2026-01-01
+**Last Updated**: 2026-02-23
 **Owner**: Homelab
-**Related RCA**: [RCA-Voice-PE-Ollama-Outage-2026-01-01](../rca/RCA-Voice-PE-Ollama-Outage-2026-01-01.md)
+**Related RCAs**:
+- [RCA-Voice-PE-Ollama-Outage-2026-01-01](../rca/RCA-Voice-PE-Ollama-Outage-2026-01-01.md) — ZFS/USB cascade
+- [RCA-Ollama-Voice-PE-Slow-2026-02-23](../rca/2026-02-23-ollama-voice-pe-slow-response.md) — setup_error + VRAM overflow
 
 ## Overview
 
-This runbook covers diagnosis and recovery procedures when the Voice PE device is not responding or showing abnormal LED states.
+This runbook covers diagnosis and recovery when the Voice PE device is not responding, showing stuck blue LED, or responding slowly.
+
+**Architecture**: Voice PE → (wake word) → HA STT → HA Conversation Agent (Ollama) → HA TTS → Voice PE speaker
 
 ## Voice PE LED States
 
@@ -19,249 +23,254 @@ This runbook covers diagnosis and recovery procedures when the Voice PE device i
 | Red | Error/Muted | Check mute switch |
 | Yellow | Booting/Updating | Wait or check WiFi |
 
-## Quick Diagnosis Checklist
+---
+
+## Quick Fix (90% of cases)
 
 ```bash
-# 1. Check Ollama conversation agent status in HA
-curl -s -H "Authorization: Bearer $HA_TOKEN" \
-  "http://192.168.4.240:8123/api/states/conversation.ollama_conversation" | jq '{state}'
+# 1. Full status check
+scripts/ollama/check-ollama.sh
 
-# Expected: timestamp like "2025-12-20T00:50:08.025472+00:00"
-# Problem: "unavailable"
+# 2. If HA integration shows setup_error → reload it
+scripts/haos/reload-config-entry.sh ollama
 
-# 2. Check Voice PE assist satellite status
-curl -s -H "Authorization: Bearer $HA_TOKEN" \
-  "http://192.168.4.240:8123/api/states/assist_satellite.home_assistant_voice_09f5a3_assist_satellite" | jq '{state}'
+# 3. Reset the stuck Voice PE
+scripts/haos/reset-voice-pe.sh
 
-# Expected: "idle" or "listening" or "responding"
-
-# 3. Quick reset - send an announce to cycle the state
-curl -s -X POST \
-  -H "Authorization: Bearer $HA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"entity_id": "assist_satellite.home_assistant_voice_09f5a3_assist_satellite", "message": "Test"}' \
-  "http://192.168.4.240:8123/api/services/assist_satellite/announce"
+# Done. Try "OK Nabu" again.
 ```
 
-## Diagnosis Flow
+---
+
+## Detailed Diagnosis Flow
 
 ```
 Voice PE Stuck Blue?
         │
         ▼
-Check HA Ollama Status ──────────────────────────────────────┐
-        │                                                     │
-        ▼                                                     │
-   "unavailable"?                                             │
-        │ YES                                                 │
-        ▼                                                     │
-Check Ollama Pod ─────────────────────────────────────────┐  │
-        │                                                  │  │
-        ▼                                                  │  │
-   Pod Running?                                            │  │
-        │ NO                                               │  │
-        ▼                                                  │  │
-Check k3s GPU Node ────────────────────────────────────┐  │  │
-        │                                               │  │  │
-        ▼                                               │  │  │
-   Node Ready?                                          │  │  │
-        │ NO                                            │  │  │
-        ▼                                               │  │  │
-Check VM 105 ───────────────────────────────────────┐  │  │  │
-        │                                            │  │  │  │
-        ▼                                            │  │  │  │
-Check Proxmox/ZFS ──────────────────────────────────┼──┼──┼──┤
-                                                    │  │  │  │
-                                                    ▼  ▼  ▼  ▼
-                                              See specific section below
+scripts/ollama/check-ollama.sh
+        │
+        ├── HA Integration: setup_error? ──→ Section 1
+        ├── Pod: Not Running? ─────────────→ Section 2
+        ├── GPU: Not available? ───────────→ Section 3
+        ├── API: Unreachable? ─────────────→ Section 2
+        └── All OK but slow? ─────────────→ Section 4
 ```
 
-## Section 1: Check HA Ollama Integration
+---
+
+## Section 1: HA Ollama Integration Issue
+
+**Symptom**: `check-ollama.sh` shows `State: setup_error`
 
 ```bash
-# Set HA token
-export HA_TOKEN="your-long-lived-access-token"
-
 # Check integration state
-curl -s -H "Authorization: Bearer $HA_TOKEN" \
-  "http://192.168.4.240:8123/api/config/config_entries/entry" | \
-  jq '.[] | select(.domain == "ollama") | {title, state}'
+scripts/haos/get-integration-config.sh ollama
+# Look for: "state": "loaded" (good) vs "setup_error" (bad)
 
-# If state is "setup_error":
-# 1. Go to HA Settings → Devices & Services → Ollama
-# 2. Click 3 dots → Reload
-# 3. If still failing, reconfigure with IP: http://192.168.4.85
+# Fix: reload the config entry
+scripts/haos/reload-config-entry.sh ollama
+
+# Reset the stuck Voice PE
+scripts/haos/reset-voice-pe.sh
 ```
 
-## Section 2: Check Ollama Pod
+**If reload doesn't fix it** (state stays `setup_error`):
+1. Check that Ollama API is actually reachable from HAOS:
+   ```bash
+   scripts/haos/guest-exec.sh "docker exec homeassistant curl -s http://192.168.4.85/api/tags"
+   ```
+2. If unreachable → go to Section 2 (pod issue)
+3. If reachable but still setup_error → reconfigure in HA UI:
+   - Settings → Devices & Services → Ollama → Delete → Re-add with `http://192.168.4.85`
+
+**IMPORTANT**: HA integrations do NOT auto-recover from `setup_error`. Manual reload is always required.
+
+---
+
+## Section 2: Ollama Pod Not Running
+
+**Symptom**: `check-ollama.sh` shows pod not Running, or API unreachable
 
 ```bash
-# From a k3s node (via Proxmox guest exec)
-ssh root@192.168.4.122 "qm guest exec 107 -- kubectl get pods -n ollama -o wide"
-
-# Expected output:
-# ollama-gpu-xxx   1/1   Running   ...   k3s-vm-pumped-piglet-gpu
-
-# If Pending:
-ssh root@192.168.4.122 "qm guest exec 107 -- kubectl describe pod -n ollama ollama-gpu-xxx"
-# Look for: node selector issues, resource constraints, taints
-
-# If no pod exists:
-ssh root@192.168.4.122 "qm guest exec 107 -- kubectl get deploy -n ollama"
-# Check if deployment exists and desired replicas > 0
+# Detailed pod status
+export KUBECONFIG=~/kubeconfig
+kubectl get pods -n ollama -o wide
+kubectl describe pod -n ollama -l app=ollama-gpu
+kubectl logs -n ollama -l app=ollama-gpu --tail=30
 ```
 
-## Section 3: Check k3s GPU Node
+**If Pending**: Check GPU node status → Section 3
 
+**If CrashLoopBackOff**:
 ```bash
-# Check all nodes
-ssh root@192.168.4.122 "qm guest exec 107 -- kubectl get nodes"
-
-# Expected: All nodes Ready
-# NAME                       STATUS   ROLES                       AGE    VERSION
-# k3s-vm-pumped-piglet-gpu   Ready    control-plane,etcd,master   71d    v1.33.6+k3s1
-# k3s-vm-pve                 Ready    control-plane,etcd,master   231d   v1.33.6+k3s1
-# k3s-vm-still-fawn          Ready    control-plane,etcd,master   49d    v1.33.6+k3s1
-
-# If GPU node is NotReady:
-ssh root@192.168.4.122 "qm guest exec 107 -- kubectl describe node k3s-vm-pumped-piglet-gpu"
-# Look for: Conditions, Taints, Events
+kubectl logs -n ollama -l app=ollama-gpu --previous --tail=50
+# Common: OOM, GPU driver mismatch, image pull failure
 ```
 
-## Section 4: Check VM 105 (GPU Node VM)
-
+**If no pod at all**:
 ```bash
-# SSH to pumped-piglet Proxmox host
-ssh root@192.168.4.175
-
-# Check VM status
-qm list
-# VMID NAME                 STATUS
-# 105  k3s-vm-pumped-piglet running
-
-# If stopped, start it:
-qm start 105
-
-# If running but k3s NotReady, check inside VM:
-qm guest exec 105 -- systemctl status k3s --no-pager
-
-# If guest exec times out, VM may be hung - see Section 5
+kubectl get deploy -n ollama
+# If 0 replicas → check Flux reconciliation
+flux reconcile kustomization flux-system --with-source
 ```
 
-## Section 5: Check Proxmox/ZFS Health
+---
+
+## Section 3: GPU Node / VM Issue
+
+**Symptom**: GPU node NotReady, Ollama pod Pending
 
 ```bash
-ssh root@192.168.4.175
+# Check nodes
+kubectl get nodes
 
-# Check ZFS pool health
-zpool status -x
+# If GPU node NotReady, check k3s inside VM
+ssh root@pumped-piglet.maas "qm guest exec 105 -- systemctl status k3s --no-pager"
 
-# CRITICAL: If any pool shows SUSPENDED:
-# This blocks ALL I/O and requires physical intervention
+# If guest exec times out → VM may be hung
+ssh root@pumped-piglet.maas "qm list"
 
-# Check which disks:
-lsblk -o NAME,SIZE,MODEL,TRAN | grep usb
-
-# If USB disk is faulted:
-# 1. Identify the faulty drive (see drive table below)
-# 2. UNPLUG the faulty USB drive
-# 3. Power cycle the host (hold power button or pull plug)
-# 4. After reboot, remove disk references from VM:
-#    qm set 105 --delete scsi1  # (if 20TB disk)
-# 5. Start VM: qm start 105
+# Check ZFS (common cause of VM hangs)
+ssh root@pumped-piglet.maas "zpool status -x"
 ```
 
-### USB Drive Identification (pumped-piglet)
+**If ZFS SUSPENDED**: See the [full GPU node recovery procedure](#full-gpu-node-recovery) below.
 
-| Size | Model | ZFS Pool | Action |
-|------|-------|----------|--------|
-| 2.3TB | WD WD25EZRS | ? | Keep |
-| 2.7TB | WD WD30EZRX | local-3TB-backup | Keep |
-| 21.8TB | Seagate Expansion HDD | local-20TB-zfs | Safe to unplug if faulted |
+**If VM stopped**:
+```bash
+ssh root@pumped-piglet.maas "qm start 105"
+```
 
-**Seagate Logo**: Horizontal oval/disc shape, usually green or white text on black enclosure. It's the largest/heaviest drive.
+---
 
-## Section 6: Recovery Procedures
+## Section 4: Ollama Slow (Responding but Taking Forever)
 
-### Quick Reset Voice PE (No Backend Issue)
+**Symptom**: Voice PE eventually responds but takes 30+ seconds
 
 ```bash
-# Cycle the satellite state via announce
-curl -s -X POST \
-  -H "Authorization: Bearer $HA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"entity_id": "assist_satellite.home_assistant_voice_09f5a3_assist_satellite", "message": "System reset"}' \
-  "http://192.168.4.240:8123/api/services/assist_satellite/announce"
+# Check model and GPU split
+scripts/ollama/check-ollama.sh
+# Look at "Loaded Models" → PROCESSOR column
 
-# Or manually set LED to off then let it recover
-curl -s -X POST \
-  -H "Authorization: Bearer $HA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"entity_id": "light.home_assistant_voice_09f5a3_led_ring"}' \
-  "http://192.168.4.240:8123/api/services/light/turn_off"
+# Benchmark
+scripts/ollama/test-inference.sh qwen2.5:3b "hello"
+```
+
+**Key metric**: The PROCESSOR column in `ollama ps`:
+| Split | Meaning | Action |
+|-------|---------|--------|
+| 100% GPU | Full GPU acceleration | Good — issue is elsewhere |
+| 80%+ GPU | Mostly GPU | Acceptable for voice |
+| 50/50 | Split CPU/GPU | Model too large — switch to smaller |
+| 100% CPU | No GPU | GPU not available — check nvidia-smi |
+
+**Switch to a faster model**:
+```bash
+# Switch HA conversation agent to qwen2.5:3b (fits in VRAM)
+scripts/ollama/set-ha-model.sh qwen2.5:3b
+
+# Pre-load the model
+kubectl exec -n ollama $(kubectl get pods -n ollama -l app=ollama-gpu -o name | head -1) -- ollama run qwen2.5:3b "hi"
+```
+
+### Model Selection Guide (RTX 3070, 8GB VRAM)
+
+| Model | Size | GPU Split | Speed | Voice Use |
+|-------|------|-----------|-------|-----------|
+| qwen2.5:3b | 1.9 GB | 86% GPU | Fast | Recommended |
+| gemma3:4b | 3.3 GB | ~70% GPU | Medium | Good quality |
+| qwen2.5:7b | 4.7 GB | 46% GPU | ~1 tok/s | Too slow |
+
+---
+
+## Recovery Procedures
+
+### Reset Voice PE (Quick)
+
+```bash
+scripts/haos/reset-voice-pe.sh
+# Or with custom message:
+scripts/haos/reset-voice-pe.sh "System reset complete"
+```
+
+### Reload HA Ollama Integration
+
+```bash
+scripts/haos/reload-config-entry.sh ollama
+```
+
+### Change Ollama Model
+
+```bash
+# Safe: creates backup, edits atomically, verifies, rolls back on failure
+scripts/ollama/set-ha-model.sh qwen2.5:3b
+```
+
+### Check Current Model Configuration
+
+```bash
+scripts/haos/read-ha-storage.sh core.config_entries \
+  '.data.entries[] | select(.domain == "ollama") | .subentries[0].data'
 ```
 
 ### Restart Ollama Pod
 
 ```bash
-ssh root@192.168.4.122 "qm guest exec 107 -- kubectl rollout restart deployment/ollama-gpu -n ollama"
+kubectl rollout restart deployment/ollama-gpu -n ollama
 ```
 
-### Restart k3s on GPU Node
+### Full GPU Node Recovery
 
 ```bash
-ssh root@192.168.4.175 "qm guest exec 105 -- systemctl restart k3s"
-```
+ssh root@pumped-piglet.maas
 
-### Full GPU Node Recovery (VM Hung)
+# 1. Check ZFS
+zpool status -x
 
-```bash
-ssh root@192.168.4.175
+# 2. If SUSPENDED → unplug faulty USB drive, power cycle host
 
-# 1. Stop VM (may take time if I/O blocked)
-qm stop 105 --skiplock
-
-# 2. If stop hangs, force kill
-pkill -9 -f 'qemu.*105'
-rm -f /var/lock/qemu-server/lock-105.conf
-
-# 3. If ZFS pool suspended, unplug USB drive and power cycle host
-
-# 4. After host is back, remove problematic disks if needed
+# 3. After host is back, remove problematic disks if needed
 qm set 105 --delete scsi1      # 20TB data disk
 qm set 105 --delete virtiofs0  # virtiofs share
 
-# 5. Start VM
+# 4. Start VM
 qm start 105
+
+# 5. Verify
+qm guest exec 105 -- systemctl status k3s --no-pager
 ```
 
-### Reconfigure HA Ollama Integration
-
-If DNS issues prevent HA from reaching Ollama:
-
-1. Go to **Settings → Devices & Services → Ollama**
-2. Click **3 dots → Delete**
-3. Click **Add Integration → Ollama**
-4. Use direct IP: `http://192.168.4.85` (check with `kubectl get svc -n ollama`)
+---
 
 ## Key IPs and Hosts
 
 | Component | IP/Host | Notes |
 |-----------|---------|-------|
-| Home Assistant | 192.168.4.240 | HAOS on chief-horse |
-| Ollama LoadBalancer | 192.168.4.85 | MetalLB IP (may change) |
-| Traefik Ingress | 192.168.4.80 | For *.app.homelab |
-| pumped-piglet (Proxmox) | 192.168.4.175 | Hosts GPU VM |
-| k3s-vm-pumped-piglet-gpu | 192.168.4.210 | GPU node (VM 105) |
-| k3s-vm-pve | 192.168.4.238 | Control plane (VM 107) |
-| pve.maas (Proxmox) | 192.168.4.122 | Hosts k3s-vm-pve |
+| Home Assistant | 192.168.4.240 | HAOS on chief-horse (VMID 116) |
+| Ollama LoadBalancer | 192.168.4.85 | MetalLB IP |
+| pumped-piglet (Proxmox) | pumped-piglet.maas | Hosts GPU VM |
+| k3s-vm-pumped-piglet-gpu | VM 105 | GPU node (RTX 3070) |
+| k3s-vm-pve | VM 107 on pve.maas | Control plane |
 
-## Monitoring Gaps to Address
+## Scripts Reference
 
+| Script | Purpose |
+|--------|---------|
+| `scripts/ollama/check-ollama.sh` | Full status: pod, API, models, GPU, HA integration |
+| `scripts/ollama/test-inference.sh` | Benchmark model with timing breakdown |
+| `scripts/ollama/set-ha-model.sh` | Change HA conversation model (backup + atomic) |
+| `scripts/haos/get-integration-config.sh` | Get any HA integration's config entry |
+| `scripts/haos/reload-config-entry.sh` | Reload config entry by domain or entry_id |
+| `scripts/haos/reset-voice-pe.sh` | Reset stuck Voice PE satellite |
+| `scripts/haos/read-ha-storage.sh` | Read .storage files from HA container |
+| `scripts/haos/get-entity-state.sh` | Get any HA entity state |
+
+## Monitoring Gaps
+
+- [ ] HA integration health checks (detect `setup_error` automatically)
+- [ ] Ollama model VRAM monitoring (alert when CPU/GPU split > 50%)
 - [ ] ZFS pool health alerts (DEGRADED, SUSPENDED states)
-- [ ] k3s node health alerts
-- [ ] HA integration health checks
-- [ ] USB device connect/disconnect alerts
+- [ ] Voice PE stuck-blue detection (satellite state monitoring)
 
-**Tags**: voice-pe, ollama, runbook, diagnosis, troubleshooting, k3s, proxmox, zfs, pumped-piglet, home-assistant, gpu
-
+**Tags**: voice-pe, ollama, runbook, diagnosis, troubleshooting, k3s, proxmox, zfs, pumped-piglet, home-assistant, gpu, qwen2.5, model-selection, vram
