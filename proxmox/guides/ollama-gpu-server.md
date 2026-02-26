@@ -16,17 +16,27 @@ the models to survive pod restarts.
 1. Pull a model into the running pod:
 
    ```bash
-   kubectl exec deployment/ollama-server -- ollama pull llama3
+   kubectl exec deployment/ollama-gpu -- ollama pull qwen3:4b
    ```
 
 2. Verify the model is available:
 
    ```bash
-   kubectl exec deployment/ollama-server -- ollama list
+   kubectl exec deployment/ollama-gpu -- ollama list
    ```
 
 3. Send a test request to the service:
 
    ```bash
-   curl http://<service-ip>:80/api/generate -d '{"model":"llama3","prompt":"Hello"}'
+   curl http://<service-ip>:80/api/generate -d '{"model":"qwen3:4b","prompt":"Hello"}'
    ```
+
+### Model Swap Script
+
+To swap models (pull new, remove old, verify GPU):
+
+```bash
+scripts/ollama/update-model.sh qwen3:4b qwen2.5:3b
+```
+
+Add `--ha` to also update the Home Assistant conversation agent.
