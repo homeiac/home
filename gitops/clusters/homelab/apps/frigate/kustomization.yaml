@@ -17,6 +17,11 @@ resources:
   - configmap-health-state.yaml
   - rbac-health-checker.yaml
   - cronjob-health-python.yaml
+  # Recordings backup (requires 3TB mount in K3s VM - see backup-storage-class.yaml)
+  # Uncomment when VM mount is configured:
+  # - backup-storage-class.yaml
+  # - backup-pvc.yaml
+  # - backup-recordings-cronjob.yaml
 
 # Note: frigate-credentials Secret is now SOPS-encrypted in secrets/
 # Note: smtp-credentials Secret for health checker email notifications

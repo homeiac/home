@@ -314,6 +314,122 @@ ssh root@pumped-piglet.maas "(crontab -l 2>/dev/null | grep -v backup-frigate-fa
 
 ---
 
+---
+
+## Recordings Backup
+
+### Overview
+
+Frigate recordings are stored in the `frigate-media` PVC at `/media/frigate/recordings/`. Unlike face data (which uses API backup), recordings are backed up via file-based streaming.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Recordings Backup Flow (manual or scheduled from Mac)                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Mac                             K3s (pumped-piglet VM 105)             │
+│  ┌─────────────────┐             ┌─────────────────┐                    │
+│  │ backup script   │──kubectl──▶│ Frigate pod     │                    │
+│  │ (streaming tar) │             │ /media/frigate/ │                    │
+│  └────────┬────────┘             │   recordings/   │                    │
+│           │                      └─────────────────┘                    │
+│           │ ssh pipe                                                    │
+│           ▼                                                             │
+│  pumped-piglet Proxmox Host                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐
+│  │  /local-3TB-backup/frigate-recordings/                              │
+│  │  ├── backyard_hd/                                                   │
+│  │  │   └── 2026-02-08/00/xx.mp4, 01/xx.mp4, ...                       │
+│  │  ├── driveway/                                                      │
+│  │  └── ... (per camera, per day, per hour)                            │
+│  └─────────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Backup Details
+
+| Setting | Value |
+|---------|-------|
+| **Schedule** | Manual (or add to Mac crontab for automation) |
+| **Location** | `pumped-piglet.maas:/local-3TB-backup/frigate-recordings/` |
+| **Retention** | 7 days (matching Frigate's default) |
+| **Script** | `scripts/frigate/backup-recordings-mac.sh` |
+| **Size** | Typically 1-50GB depending on motion activity |
+
+### Manual Backup
+
+```bash
+cd ~/code/home
+./scripts/frigate/backup-recordings-mac.sh
+```
+
+Or dry run to preview:
+
+```bash
+./scripts/frigate/backup-recordings-mac.sh --dry-run
+```
+
+### Restore Recordings
+
+```bash
+# Restore all cameras
+./scripts/frigate/restore-recordings.sh
+
+# Restore specific camera
+./scripts/frigate/restore-recordings.sh backyard_hd
+
+# Preview what would be restored
+./scripts/frigate/restore-recordings.sh --dry-run
+```
+
+### GitOps CronJob (Future)
+
+A K8s CronJob approach is prepared but requires VM storage passthrough:
+
+**Files**:
+- `gitops/clusters/homelab/apps/frigate/backup-storage-class.yaml`
+- `gitops/clusters/homelab/apps/frigate/backup-pvc.yaml`
+- `gitops/clusters/homelab/apps/frigate/backup-recordings-cronjob.yaml`
+
+**Prerequisite**: VM 105 needs 3TB mount via virtio-fs or 9p:
+```bash
+# On pumped-piglet
+qm set 105 --virtiofs1 local-3TB-backup:/mnt/3tb-backup,cache=auto
+# Requires VM restart
+```
+
+Then uncomment the resources in `gitops/clusters/homelab/apps/frigate/kustomization.yaml`.
+
+### Verify Backup
+
+```bash
+# Check backup exists
+ssh root@pumped-piglet.maas "ls -la /local-3TB-backup/frigate-recordings/"
+
+# Check backup size
+ssh root@pumped-piglet.maas "du -sh /local-3TB-backup/frigate-recordings/"
+
+# Check per-camera breakdown
+ssh root@pumped-piglet.maas "du -sh /local-3TB-backup/frigate-recordings/*/"
+```
+
+---
+
+## Comparison: Faces vs Recordings Backup
+
+| Aspect | Faces | Recordings |
+|--------|-------|------------|
+| **Size** | ~3MB | ~1-50GB |
+| **Method** | API download (curl) | File streaming (tar+kubectl) |
+| **Schedule** | Host cron at 3 AM | Manual or Mac cron |
+| **Location** | `/local-3TB-backup/frigate-backups/` | `/local-3TB-backup/frigate-recordings/` |
+| **Restore** | API upload or kubectl cp | tar stream via kubectl |
+| **Critical?** | Yes (AI training data) | Medium (can be regenerated) |
+
+---
+
 ## Tags
 
-frigate, face-recognition, backup, restore, training-data, pumped-piglet, 3tb-backup, api, runbook, disaster-recovery
+frigate, face-recognition, recordings, backup, restore, training-data, pumped-piglet, 3tb-backup, api, runbook, disaster-recovery

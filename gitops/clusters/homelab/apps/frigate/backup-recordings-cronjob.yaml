@@ -1,0 +1,86 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: frigate-recordings-backup
+  namespace: frigate
+spec:
+  schedule: "0 4 * * *"  # 4 AM daily (after faces backup at 3 AM)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+          containers:
+          - name: backup
+            image: instrumentisto/rsync-ssh:alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              DATE=$(date +%Y-%m-%d)
+              echo "Starting Frigate recordings backup at $(date)..."
+              echo "Source: /source/recordings/"
+              echo "Destination: /backup/"
+
+              # Verify source exists
+              if [ ! -d "/source/recordings" ]; then
+                echo "ERROR: Source directory /source/recordings not found"
+                exit 1
+              fi
+
+              # Rsync recordings (incremental, preserves structure)
+              # --delete: Remove files from backup that no longer exist in source
+              # --exclude: Skip tmp files
+              # -a: Archive mode (preserves permissions, times, etc)
+              # -v: Verbose
+              rsync -av --delete \
+                --exclude='*.tmp' \
+                --exclude='.cache' \
+                /source/recordings/ \
+                /backup/
+
+              echo ""
+              echo "Backup complete at $(date)"
+              echo "Current backup size:"
+              du -sh /backup/
+
+              # Show what's in the backup
+              echo ""
+              echo "Backup contents (cameras):"
+              ls -la /backup/ 2>/dev/null || echo "No recordings yet"
+
+              # Cleanup any stale recordings older than 7 days
+              # This matches Frigate's default retention, but ensures backup
+              # doesn't grow unbounded if Frigate's cleanup fails
+              echo ""
+              echo "Checking for stale recordings older than 7 days..."
+              find /backup -type f -name "*.mp4" -mtime +7 -delete 2>/dev/null || true
+              find /backup -type d -empty -delete 2>/dev/null || true
+
+            volumeMounts:
+            - name: frigate-media
+              mountPath: /source
+              readOnly: true
+            - name: backup
+              mountPath: /backup
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 1000m
+                memory: 512Mi
+          volumes:
+          - name: frigate-media
+            persistentVolumeClaim:
+              claimName: frigate-media
+          - name: backup
+            persistentVolumeClaim:
+              claimName: frigate-backup
+          restartPolicy: OnFailure

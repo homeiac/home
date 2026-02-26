@@ -1,0 +1,39 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: frigate-backup-3tb
+provisioner: rancher.io/local-path
+parameters:
+  nodePath: /mnt/3tb-backup/frigate-recordings
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+# NOTE: This PV requires VM 105 (pumped-piglet K3s) to have access to the 3TB backup storage.
+# The mount is NOT currently configured. Options:
+#   1. virtiofs: qm set 105 --virtiofs1 local-3TB-backup:/mnt/3tb-backup,cache=auto (requires VM restart)
+#   2. 9p: qm set 105 --mp0 /local-3TB-backup,mp=/mnt/3tb-backup
+#   3. NFS: Configure NFS server on host, mount in VM
+#
+# Until this is set up, use the host-based backup script:
+#   scripts/frigate/backup-recordings-host.sh
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: frigate-backup-pv
+spec:
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: frigate-backup-3tb
+  local:
+    path: /mnt/3tb-backup/frigate-recordings
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - k3s-vm-pumped-piglet-gpu
