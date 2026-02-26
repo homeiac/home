@@ -9,6 +9,48 @@
 #   1. SMB CSI driver installed (csi-driver-smb HelmRelease)
 #   2. samba-credentials secret in kube-system namespace
 #   3. Samba server running at 192.168.4.120 with 'secure' share
+#
+# NOTE: Inline CSI volumes don't support nodeStageSecretRef.
+#       Must use PV/PVC approach for SMB authentication.
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: smb-debug-pv
+  labels:
+    usage: smb-debug
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: smb-debug
+  mountOptions:
+    - dir_mode=0777
+    - file_mode=0666
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: smb-debug-pv
+    volumeAttributes:
+      source: "//192.168.4.120/secure"
+    nodeStageSecretRef:
+      name: samba-credentials
+      namespace: kube-system
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smb-debug-pvc
+  namespace: kube-system
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: smb-debug
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: smb-debug-pv
 ---
 apiVersion: v1
 kind: Pod
@@ -45,11 +87,6 @@ spec:
           mountPath: /mnt/smb-test
   volumes:
     - name: smb-volume
-      csi:
-        driver: smb.csi.k8s.io
-        volumeAttributes:
-          source: "//192.168.4.120/secure"
-        nodeStageSecretRef:
-          name: samba-credentials
-          namespace: kube-system
+      persistentVolumeClaim:
+        claimName: smb-debug-pvc
   restartPolicy: Never
