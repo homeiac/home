@@ -7,3 +7,4 @@ resources:
 - image-automation-pve-nut.yaml
 - image-automation-proxmox-provisioner.yaml
 - image-automation-frigate-health-checker.yaml
+- image-automation-ollama-scripts.yaml

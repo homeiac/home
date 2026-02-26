@@ -6,4 +6,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-
+  - job-model-update.yaml
+  - secrets/ghcr-creds.sops.yaml

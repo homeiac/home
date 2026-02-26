@@ -1,0 +1,51 @@
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: ollama-scripts
+  namespace: flux-system
+spec:
+  image: ghcr.io/homeiac/ollama-scripts
+  interval: 5m
+  secretRef:
+    name: ghcr-creds
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: ollama-scripts
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: ollama-scripts
+  filterTags:
+    pattern: '^[a-f0-9]{7}$'
+  policy:
+    alphabetical:
+      order: desc
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: ollama-scripts
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: master
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcd@homelab.local
+      messageTemplate: |
+        chore(flux): update ollama-scripts image to {{range .Changed.Changes}}{{.NewValue}}{{end}}
+    push:
+      branch: master
+  update:
+    path: ./gitops/clusters/homelab/apps/ollama
+    strategy: Setters

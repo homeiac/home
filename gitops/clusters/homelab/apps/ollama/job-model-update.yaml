@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-model-update
+  namespace: ollama
+  annotations:
+    description: "Pull new Ollama model and remove old one via HTTP API"
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: ollama-model-update
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: ghcr-creds
+      containers:
+        - name: model-update
+          image: ghcr.io/homeiac/ollama-scripts:INITIAL # {"$imagepolicy": "flux-system:ollama-scripts"}
+          env:
+            - name: NEW_MODEL
+              value: "qwen3:4b"
+            - name: OLD_MODEL
+              value: "qwen2.5:3b"
+            - name: OLLAMA_URL
+              value: "http://ollama-gpu.ollama.svc:80"
