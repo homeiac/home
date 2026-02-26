@@ -19,7 +19,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: model-update
-          image: ghcr.io/homeiac/ollama-scripts:INITIAL # {"$imagepolicy": "flux-system:ollama-scripts"}
+          image: ghcr.io/homeiac/ollama-scripts:a5af24f # {"$imagepolicy": "flux-system:ollama-scripts"}
           env:
             - name: NEW_MODEL
               value: "qwen3:4b"
