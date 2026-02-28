@@ -4,6 +4,7 @@ metadata:
   name: crossplane
   namespace: crossplane-system
 spec:
+  suspend: true  # Suspended: provider-proxmox runs terraform in a loop burning CPU due to missing state
   interval: 5m
   install:
     createNamespace: true
