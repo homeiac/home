@@ -46,6 +46,8 @@ class TestFullWorkflow:
         pod.spec.node_name = "test-node"
         k8s.get_frigate_pod.return_value = pod
         k8s.get_pod_node_name.return_value = "test-node"
+        # Pod started long ago (well past grace period)
+        k8s.get_pod_start_time.return_value = int(time.time()) - 3600
 
         return k8s
 

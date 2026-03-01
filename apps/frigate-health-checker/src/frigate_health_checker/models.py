@@ -36,6 +36,7 @@ class HealthMetrics:
     recording_backlog_count: int = 0
     pod_name: str | None = None
     node_name: str | None = None
+    pod_start_time: int | None = None
     api_responsive: bool = False
 
 

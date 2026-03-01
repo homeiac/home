@@ -1,6 +1,7 @@
 """Tests for health checker logic."""
 
 import json
+import time
 from unittest.mock import MagicMock
 
 from frigate_health_checker.config import Settings
@@ -554,6 +555,73 @@ class TestRestartManager:
         assert state.consecutive_failures == 0
         assert state.last_alert_time == 0
         mock_k8s_client.patch_configmap.assert_called_once()
+
+    def test_evaluate_restart_startup_grace_period_blocks_restart(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        state_with_one_failure: HealthState,
+    ) -> None:
+        """Test that restart is blocked when pod is within startup grace period."""
+        mock_k8s_client.is_node_ready.return_value = True
+        manager = RestartManager(settings, mock_k8s_client)
+        # Pod started 60 seconds ago (within 600s grace period)
+        result = HealthCheckResult(
+            status=HealthStatus.UNHEALTHY,
+            reason=UnhealthyReason.API_UNRESPONSIVE,
+            metrics=HealthMetrics(
+                node_name="still-fawn",
+                pod_start_time=int(time.time()) - 60,
+            ),
+        )
+
+        decision = manager.evaluate_restart(result, state_with_one_failure)
+
+        assert decision.should_restart is False
+        assert "grace period" in decision.reason.lower()
+
+    def test_evaluate_restart_after_grace_period_allows_restart(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        state_with_one_failure: HealthState,
+    ) -> None:
+        """Test that restart is allowed when pod is past startup grace period."""
+        mock_k8s_client.is_node_ready.return_value = True
+        manager = RestartManager(settings, mock_k8s_client)
+        # Pod started 700 seconds ago (past 600s grace period)
+        result = HealthCheckResult(
+            status=HealthStatus.UNHEALTHY,
+            reason=UnhealthyReason.API_UNRESPONSIVE,
+            metrics=HealthMetrics(
+                node_name="still-fawn",
+                pod_start_time=int(time.time()) - 700,
+            ),
+        )
+
+        decision = manager.evaluate_restart(result, state_with_one_failure)
+
+        assert decision.should_restart is True
+
+    def test_evaluate_restart_no_start_time_allows_restart(
+        self,
+        settings: Settings,
+        mock_k8s_client: MagicMock,
+        state_with_one_failure: HealthState,
+    ) -> None:
+        """Test that restart is allowed when pod start time is unknown."""
+        mock_k8s_client.is_node_ready.return_value = True
+        manager = RestartManager(settings, mock_k8s_client)
+        # No pod_start_time set
+        result = HealthCheckResult(
+            status=HealthStatus.UNHEALTHY,
+            reason=UnhealthyReason.API_UNRESPONSIVE,
+            metrics=HealthMetrics(node_name="still-fawn"),
+        )
+
+        decision = manager.evaluate_restart(result, state_with_one_failure)
+
+        assert decision.should_restart is True
 
     def test_execute_restart_success(
         self,

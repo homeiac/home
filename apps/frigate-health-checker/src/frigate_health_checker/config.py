@@ -33,6 +33,9 @@ class Settings(BaseSettings):
         default=2, description="Consecutive failures before restart"
     )
     max_restarts_per_hour: int = Field(default=2, description="Circuit breaker: max restarts/hour")
+    startup_grace_period_seconds: int = Field(
+        default=600, description="Seconds after pod start before restarts are allowed"
+    )
 
     # Legacy thresholds (no longer used for health decisions, kept for compatibility)
     inference_threshold_ms: int = Field(

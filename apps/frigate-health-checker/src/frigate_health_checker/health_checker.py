@@ -56,6 +56,7 @@ class HealthChecker:
         pod_name = pod.metadata.name if pod.metadata else "unknown"
         metrics.pod_name = pod_name
         metrics.node_name = self.k8s.get_pod_node_name(pod)
+        metrics.pod_start_time = self.k8s.get_pod_start_time(pod)
 
         # Check 2: API responsiveness
         stats = self._get_frigate_stats(pod_name)
@@ -375,6 +376,21 @@ class RestartManager:
                 should_restart=False,
                 reason=f"Waiting for confirmation ({new_failures}/{self.settings.consecutive_failures_required} failures)",
             )
+
+        # Check startup grace period — don't restart a pod that just started
+        pod_start_time = health_result.metrics.pod_start_time
+        if pod_start_time is not None:
+            pod_age = int(time.time()) - pod_start_time
+            if pod_age < self.settings.startup_grace_period_seconds:
+                logger.info(
+                    "Pod in startup grace period, skipping restart",
+                    pod_age_seconds=pod_age,
+                    grace_period=self.settings.startup_grace_period_seconds,
+                )
+                return RestartDecision(
+                    should_restart=False,
+                    reason=f"Startup grace period: pod is {pod_age}s old (need {self.settings.startup_grace_period_seconds}s)",
+                )
 
         # Alert flag: send alert if cooldown has expired (max once per day)
         should_alert = not state.alert_cooldown_active(self.settings.alert_cooldown_seconds)

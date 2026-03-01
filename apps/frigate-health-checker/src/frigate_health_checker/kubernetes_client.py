@@ -63,6 +63,24 @@ class KubernetesClient:
             logger.error("Failed to get node status", node=node_name, error=str(e))
             return False
 
+    def get_pod_start_time(self, pod: client.V1Pod) -> int | None:
+        """Get the pod's start time as a Unix timestamp.
+
+        Returns the container start time if available, otherwise the pod's
+        creation timestamp. Returns None if neither is available.
+        """
+        # Prefer container start time (when Frigate actually started running)
+        if pod.status and pod.status.container_statuses:
+            for cs in pod.status.container_statuses:
+                if cs.state and cs.state.running and cs.state.running.started_at:
+                    return int(cs.state.running.started_at.timestamp())
+
+        # Fall back to pod creation time
+        if pod.metadata and pod.metadata.creation_timestamp:
+            return int(pod.metadata.creation_timestamp.timestamp())
+
+        return None
+
     def exec_in_pod(self, pod_name: str, command: list[str], timeout: int = 10) -> tuple[str, bool]:
         """Execute a command in a pod and return output."""
         try:
