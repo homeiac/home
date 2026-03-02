@@ -12,6 +12,8 @@ apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
 kind: EnvironmentVM
 metadata:
   name: k3s-vm-pve
+  annotations:
+    crossplane.io/paused: "true"  # Staged rollout: unpause after cloud images verified
   labels:
     role: k3s-control-plane
     node: pve

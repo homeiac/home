@@ -6,6 +6,8 @@ apiVersion: virtualenvironmentdownloadfile.crossplane.io/v1alpha1
 kind: EnvironmentDownloadFile
 metadata:
   name: ubuntu-noble-cloud-image
+  annotations:
+    crossplane.io/paused: "true"  # Staged rollout: unpause after verifying provider is healthy
   labels:
     managed-by: crossplane
     image-type: cloud-init

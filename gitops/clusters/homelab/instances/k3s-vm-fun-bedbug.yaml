@@ -13,6 +13,8 @@ apiVersion: virtualenvironmentvm.crossplane.io/v1alpha1
 kind: EnvironmentVM
 metadata:
   name: k3s-vm-fun-bedbug
+  annotations:
+    crossplane.io/paused: "true"  # Staged rollout: unpause LAST (running control-plane, highest risk)
   labels:
     role: k3s-control-plane
     node: fun-bedbug

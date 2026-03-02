@@ -11,6 +11,7 @@ resources:
   # If Flux apply-order issues occur, move these to a separate Kustomization with dependsOn.
   - cpu-alerting-rules.yaml
   - zfs-alerting-rules.yaml
+  - crossplane-alerting-rules.yaml
   # - flux-alerting-rules.yaml
   # - flux-servicemonitor.yaml
   - grafana-ingress.yaml

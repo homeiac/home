@@ -8,8 +8,18 @@ spec:
       selector: {}
       template:
         spec:
-          # Empty containers list required to pass validation (crossplane/crossplane#5442)
-          containers: []
+          containers:
+            - name: package-runtime
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"         # Hard cap: 1 core (was unbounded → 200%+)
+                  memory: 512Mi
+              args:
+                - --max-reconcile-rate=1   # 1/sec instead of default 100/sec
+                - --poll=30m               # Check drift every 30m (homelab doesn't change often)
           nodeSelector:
             kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
           tolerations:

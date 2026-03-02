@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: crossplane-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: crossplane-provider
+      rules:
+        - alert: CrossplaneProviderHighCPU
+          expr: |
+            sum(rate(container_cpu_usage_seconds_total{
+              namespace="crossplane-system",
+              container="package-runtime"
+            }[5m])) > 0.8
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Crossplane provider CPU >80% for 10 min (possible terraform loop)"
+            description: "Check state secrets: kubectl get secrets -n crossplane-system | grep tf-"

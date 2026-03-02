@@ -4,7 +4,14 @@ metadata:
   name: crossplane
   namespace: crossplane-system
 spec:
-  suspend: true  # Suspended: provider-proxmox runs terraform in a loop burning CPU due to missing state
+  # Re-enabled 2026-03-01 with safeguards:
+  # - CPU limit 1 core on provider pod (was unbounded → 200%+)
+  # - --max-reconcile-rate=1 (was default 100/sec)
+  # - --poll=30m (drift check interval)
+  # - All managed resources paused in git (staged unpause)
+  # - CrossplaneProviderHighCPU alert at 80% for 10m
+  # Emergency: set suspend: true to kill immediately
+  suspend: false
   interval: 5m
   install:
     createNamespace: true
