@@ -36,7 +36,11 @@ echo ""
 # 4. Terraform state secrets
 echo "--- Terraform State Secrets ---"
 TF_SECRETS=$(kubectl get secrets -n crossplane-system --no-headers 2>/dev/null | grep "^tf-" || true)
-TF_COUNT=$(echo "$TF_SECRETS" | grep -c "^tf-" 2>/dev/null || echo "0")
+if [[ -z "$TF_SECRETS" ]]; then
+  TF_COUNT=0
+else
+  TF_COUNT=$(echo "$TF_SECRETS" | wc -l | tr -d ' ')
+fi
 echo "Found $TF_COUNT tf-* state secrets"
 if [[ -n "$TF_SECRETS" ]]; then
   echo "$TF_SECRETS"
