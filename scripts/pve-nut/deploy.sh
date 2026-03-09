@@ -105,6 +105,14 @@ CRONEOF
 chmod 644 /etc/cron.d/nut-disaster-drill"
 log "  Created /etc/cron.d/nut-disaster-drill"
 
+# Frigate external watchdog cron (every 5 minutes)
+ssh $SSH_OPTS root@$HOST "cat > /etc/cron.d/frigate-watchdog << 'CRONEOF'
+# External Frigate health watchdog - runs outside K3s so alerts work even when cluster is degraded
+*/5 * * * * root $DEPLOY_DIR/scripts/frigate-watchdog.sh 2>&1
+CRONEOF
+chmod 644 /etc/cron.d/frigate-watchdog"
+log "  Created /etc/cron.d/frigate-watchdog"
+
 # Setup udev rules for CyberPower UPS
 log "Setting up udev rules..."
 ssh $SSH_OPTS root@$HOST 'cat > /etc/udev/rules.d/90-nut-ups.rules << EOF
