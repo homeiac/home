@@ -10,18 +10,28 @@
 #   1. Frigate API reachable (via MetalLB IP)
 #   2. Majority of cameras have frames (camera_fps > 0)
 #
-# Alerts via ntfy.sh (same channel as UPS alerts)
+# Alerts via ntfy.sh + SMS (same channels as UPS alerts)
 #
 # Usage: ./frigate-watchdog.sh
 #        FRIGATE_URL=http://192.168.4.81:5000 ./frigate-watchdog.sh
 
 set -euo pipefail
 
+# Source environment (SMS credentials deployed by NUT K8s Job)
+ENV_FILE="${ENV_FILE:-/opt/nut/.env}"
+[[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
+
 FRIGATE_URL="${FRIGATE_URL:-http://192.168.4.81:5000}"
 NTFY_TOPIC="${NTFY_TOPIC:-homelab-frigate-watchdog}"
 STATE_FILE="/var/run/frigate-watchdog-state"
 LOG_FILE="/var/log/frigate-watchdog.log"
 API_TIMEOUT=10
+
+# SMS Gateway settings (shared with nut-notify.sh)
+SMS_GATEWAY_IP="${SMS_GATEWAY_IP:-192.0.0.4}"
+SMS_GATEWAY_PORT="${SMS_GATEWAY_PORT:-8082}"
+SMS_GATEWAY_TOKEN="${SMS_GATEWAY_TOKEN:-}"
+SMS_RECIPIENT="${SMS_RECIPIENT:-}"
 
 # Cameras to skip (flaky WiFi, known intermittent)
 SKIP_CAMERAS="${SKIP_CAMERAS:-reolink_doorbell}"
@@ -35,17 +45,45 @@ log() {
     echo "[$timestamp] [$level] $msg" >> "$LOG_FILE"
 }
 
+send_sms() {
+    local message="$1"
+    if [[ -z "$SMS_GATEWAY_TOKEN" ]] || [[ -z "$SMS_RECIPIENT" ]]; then
+        log "DEBUG" "SMS not configured, skipping"
+        return 0
+    fi
+
+    local gateway_ip
+    gateway_ip=$(ip route show dev wlan0 2>/dev/null | grep default | awk '{print $3}' || true)
+
+    for ip in "${SMS_GATEWAY_IP}" "${gateway_ip}"; do
+        [[ -z "$ip" ]] && continue
+        if curl -s -X POST "http://${ip}:${SMS_GATEWAY_PORT}/" \
+            -H "Authorization: ${SMS_GATEWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"to\": \"${SMS_RECIPIENT}\", \"message\": \"${message}\"}" \
+            --connect-timeout 5 --max-time 10 2>/dev/null; then
+            log "INFO" "SMS sent via ${ip}"
+            return 0
+        fi
+    done
+    log "WARN" "SMS delivery failed - could not reach gateway"
+}
+
 send_alert() {
     local title="$1"
     local body="$2"
     local priority="${3:-high}"
 
+    # ntfy.sh push notification
     curl -s \
         -H "Title: [FRIGATE] $title" \
         -H "Priority: $priority" \
         -H "Tags: camera,warning" \
         -d "$body" \
-        "https://ntfy.sh/${NTFY_TOPIC}" 2>/dev/null || true
+        "https://ntfy.sh/${NTFY_TOPIC}" 2>/dev/null &
+
+    # SMS via Pixel 7 gateway
+    send_sms "[FRIGATE] ${title}"
 
     log "ALERT" "Sent: $title"
 }
