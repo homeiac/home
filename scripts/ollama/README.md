@@ -27,8 +27,10 @@ scripts/ollama/set-ha-model.sh qwen2.5:3b
 
 | Model | GPU Split | Speed | Voice Use |
 |-------|-----------|-------|-----------|
-| qwen2.5:3b | 86% GPU | Fast | Recommended |
-| gemma3:4b | ~70% GPU | Medium | Good quality |
+| gemma4:e2b | ~85% GPU | 20 tok/s | **Recommended** (2026-04-05) |
+| qwen3.5:4b | ~70% GPU | 5.4 tok/s | Previous default, below threshold |
+| gemma3:4b | ~70% GPU | ~15 tok/s | Vision (LLM Vision blueprint) |
+| qwen2.5:3b | 86% GPU | Fast | Legacy |
 | qwen2.5:7b | 46% GPU | ~1 tok/s | Too slow |
 
 ## Related

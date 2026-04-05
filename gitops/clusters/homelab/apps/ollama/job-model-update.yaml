@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ollama-model-update-qwen35
+  name: ollama-model-update-gemma4
   namespace: ollama
   annotations:
     description: "Pull new Ollama model and remove old one via HTTP API"
@@ -22,8 +22,8 @@ spec:
           image: ghcr.io/homeiac/ollama-scripts:5cde4ad # {"$imagepolicy": "flux-system:ollama-scripts"}
           env:
             - name: NEW_MODEL
-              value: "qwen3.5:4b"
+              value: "gemma4:e2b"
             - name: OLD_MODEL
-              value: "qwen2.5:3b"
+              value: "qwen3.5:4b"
             - name: OLLAMA_URL
               value: "http://ollama-gpu.ollama.svc:80"

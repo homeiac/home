@@ -82,6 +82,7 @@ print(json.dumps({
     'prompt': $(python3 -c "import json; print(json.dumps('''${prompt}'''))"),
     'system': $(python3 -c "import json; print(json.dumps('''${system}'''))"),
     'stream': False,
+    'think': False,
     'options': {'num_predict': 256}
 }))
 " > "$TMPDIR_WORK/payload.json"
@@ -94,7 +95,7 @@ print(json.dumps({
 
 parse_result() {
     local file="$1"
-    python3 << 'PYEOF' "$file"
+    python3 -c "
 import json, sys
 try:
     with open(sys.argv[1]) as f:
@@ -108,13 +109,13 @@ try:
     ttft = load_s + prompt_s
     print(f'{total_s:.2f}|{tps:.1f}|{tokens}|{ttft:.2f}|{eval_s:.2f}')
 except Exception as e:
-    print(f'0|0|0|0|0')
-PYEOF
+    print('0|0|0|0|0')
+" "$file"
 }
 
 extract_response() {
     local file="$1"
-    python3 << 'PYEOF' "$file"
+    python3 -c "
 import json, sys
 try:
     with open(sys.argv[1]) as f:
@@ -125,7 +126,7 @@ try:
     print(r)
 except:
     print('ERROR: Could not parse response')
-PYEOF
+" "$file"
 }
 
 ensure_model() {
