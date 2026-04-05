@@ -14,7 +14,7 @@
       - binary_sensor.old_ip_camera_motion
       trigger_state: recording
       provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
-      model: gemma3:4b
+      model: gemma4:e2b
       max_tokens: 211
       notify: false
       message: 'Analyze the images from this camera and describe any activity detected.
@@ -34,7 +34,7 @@
     path: valentinfrlch/event_summary.yaml
     input:
       provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
-      model: gemma3:4b
+      model: gemma4:e2b
       camera_entities:
       - camera.reolink_video_doorbell_wifi_fluent
       - camera.trendnet_ip_572w
@@ -181,12 +181,12 @@
       - action: logbook.log
         data:
           name: Package Detection
-          message: '[PKG-{{ trace_id }}] EVENT:llm_call | model=llava:7b | prompt=describe_visitor'
+          message: '[PKG-{{ trace_id }}] EVENT:llm_call | model=gemma4:e2b | prompt=describe_visitor'
           entity_id: automation.package_delivery_detection
       - action: llmvision.image_analyzer
         data:
           provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
-          model: llava:7b
+          model: gemma4:e2b
           image_file: /config/www/tmp/doorbell_visitor.jpg
           message: 'Is this a delivery person WITH a package? Answer format: ''DELIVERY:
             [yes/no] - [brief description]''. Say yes ONLY if you see a delivery uniform
@@ -311,12 +311,12 @@
         - action: logbook.log
           data:
             name: Package Detection
-            message: '[PKG-{{ trace_id }}] EVENT:llm_call | model=llava:7b | prompt=package_check'
+            message: '[PKG-{{ trace_id }}] EVENT:llm_call | model=gemma4:e2b | prompt=package_check'
             entity_id: automation.package_delivery_detection
         - action: llmvision.image_analyzer
           data:
             provider: 01K1KDVH6Y1GMJ69MJF77WGJEA
-            model: llava:7b
+            model: gemma4:e2b
             image_file: /config/www/tmp/doorbell_after.jpg
             message: 'Answer ONLY YES or NO: Is there a package, box, or delivery
               item visible on this porch/doorstep?'

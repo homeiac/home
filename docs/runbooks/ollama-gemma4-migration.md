@@ -61,14 +61,13 @@ Migrate Ollama models from current stack to Gemma 4 (e2b) after benchmark testin
 - **What it does**: Edits HA storage JSON inside HAOS container, reloads Ollama integration
 - **Rollback**: Timestamped backup created automatically
 
-### Step 4: Update vision automations (NOT changing)
-- **LLM Vision** (automations.yaml lines 17, 37): `gemma3:4b` -> keep as-is
-- **Package Detection** (lines 189, 319): `llava:7b` -> keep as-is
-- **Why**: These use the `llmvision.image_analyzer` action with separate provider config.
-  gemma4:e2b is multimodal but the LLM Vision integration manages its own model loading.
-  Since OLLAMA_MAX_LOADED_MODELS=1, loading gemma4:e2b for vision would evict
-  the conversation model. The vision models are loaded on-demand when events trigger.
-  Changing these requires testing the LLM Vision integration separately.
+### Step 4: Update vision automations (DONE)
+- **LLM Vision** (automations.yaml lines 17, 37): `gemma3:4b` -> `gemma4:e2b`
+- **Package Detection** (lines 189, 319): `llava:7b` -> `gemma4:e2b`
+- **Why**: gemma4:e2b is multimodal and passed vision testing at 13.5 tok/s.
+  Consolidating to one model eliminates model swap latency when camera events
+  fire (gemma4:e2b is already loaded for conversation).
+- **Tested**: `scripts/ollama/test-vision.sh gemma4:e2b` - accurate scene description from doorbell camera
 
 ### Step 5: Update model selection reference
 - **File**: `scripts/ollama/README.md`
@@ -100,6 +99,5 @@ scripts/ollama/test-inference.sh gemma4:e2b "what time is it?"
 
 ## Future Work
 
-- Test gemma4:e2b with LLM Vision integration for camera analysis (replace gemma3:4b)
-- Test gemma4:e2b with package detection (replace llava:7b)
 - Consider gemma4:e4b if a GPU upgrade happens
+- Monitor package detection accuracy with gemma4:e2b vs llava:7b over 1 week
