@@ -7,7 +7,7 @@ metadata:
     # Job is recreated when image tag changes (Flux ImagePolicy)
     description: "Deploy NUT scripts and configs to pve host"
 spec:
-  ttlSecondsAfterFinished: 86400  # Cleanup after 24h
+  ttlSecondsAfterFinished: 86400 # Cleanup after 24h
   backoffLimit: 2
   activeDeadlineSeconds: 300
   template:
@@ -20,7 +20,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: deploy
-          image: ghcr.io/homeiac/pve-nut:e6e2d9b  # {"$imagepolicy": "flux-system:pve-nut"}
+          image: ghcr.io/homeiac/pve-nut:5cde4ad # {"$imagepolicy": "flux-system:pve-nut"}
           env:
             - name: TARGET_HOST
               value: "192.168.4.122"
