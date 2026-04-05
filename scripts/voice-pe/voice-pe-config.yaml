@@ -2,9 +2,9 @@ substitutions:
   name: home-assistant-voice-09f5a3
   friendly_name: Home Assistant Voice 09f5a3
 packages:
-  # 25.12.4 fixes LED stuck-on bug after long TTS (esphome/home-assistant-voice-pe#382)
-  # Upgraded from 25.11.0 on 2026-02-24
-  Nabu Casa.Home Assistant Voice PE: github://esphome/home-assistant-voice-pe/home-assistant-voice.yaml@25.12.4
+  # 26.4.0 fixes TTS stutter/timeout (media playback stability + TTS timeout fix)
+  # Upgraded from 25.12.4 on 2026-04-05
+  Nabu Casa.Home Assistant Voice PE: github://esphome/home-assistant-voice-pe/home-assistant-voice.yaml@26.4.0
 esphome:
   name: ${name}
   name_add_mac_suffix: false

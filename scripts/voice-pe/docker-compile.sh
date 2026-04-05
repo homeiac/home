@@ -4,7 +4,7 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ESPHOME_IMAGE="ghcr.io/esphome/esphome:2025.12.4"
+ESPHOME_IMAGE="ghcr.io/esphome/esphome:2026.3.2"
 VOICE_PE_IP="192.168.86.10"
 CONFIG_FILE="${1:-voice-pe-config.yaml}"
 

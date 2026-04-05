@@ -3,7 +3,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ESPHOME_IMAGE="ghcr.io/esphome/esphome:2025.11.5"
+ESPHOME_IMAGE="ghcr.io/esphome/esphome:2026.3.2"
 
 cd "$SCRIPT_DIR"
 

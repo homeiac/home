@@ -2,7 +2,7 @@
 # Check ESPHome logs from Voice PE
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ESPHOME_IMAGE="ghcr.io/esphome/esphome:2025.11.5"
+ESPHOME_IMAGE="ghcr.io/esphome/esphome:2026.3.2"
 VOICE_PE_IP="192.168.86.245"
 TIMEOUT="${1:-20}"
 

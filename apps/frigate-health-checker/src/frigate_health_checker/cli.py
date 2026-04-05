@@ -1,4 +1,8 @@
-"""CLI entrypoint for Frigate Health Checker."""
+"""CLI entrypoint for Frigate Health Checker.
+
+Runs as a K8s CronJob every 5 minutes. Checks camera health,
+triggers Frigate restart if majority of cameras are down.
+"""
 
 import sys
 from datetime import UTC, datetime
