@@ -19,7 +19,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: model-update
-          image: ghcr.io/homeiac/ollama-scripts:5cde4ad # {"$imagepolicy": "flux-system:ollama-scripts"}
+          image: ghcr.io/homeiac/ollama-scripts:0835164 # {"$imagepolicy": "flux-system:ollama-scripts"}
           env:
             - name: NEW_MODEL
               value: "gemma4:e2b"
