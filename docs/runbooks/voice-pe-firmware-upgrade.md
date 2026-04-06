@@ -342,7 +342,15 @@ This announces + explicitly turns off the LED ring.
 
 | Date | From | To | Reason | Issues Hit |
 |------|------|----|--------|------------|
+| 2026-04-05 | 25.12.4 | 26.4.0 | TTS stutter/timeout fix (media playback stability) | ESPHome Docker image tag mismatch (2026.4.0 doesn't exist, use 2026.3.2) |
 | 2026-02-24 | 25.11.0 | 25.12.4 | Fix LED stuck-on bug (#382) | SOPS decrypt, missing manual_ip, no serial logs |
+
+## Lessons Learned (2026-04-05 Upgrade)
+
+1. **Voice PE firmware version ≠ ESPHome Docker image version.** Voice PE firmware `26.4.0` compiles with ESPHome `2026.3.2`. The Docker tag `2026.4.0` doesn't exist.
+2. **TTS stutter was firmware-side, not server-side.** Piper synthesis is 21ms, audio fetch via proxy is 19ms. The stutter was caused by small audio buffers in firmware 25.12.4. Firmware 26.4.0 adds `buffer_size: 250000` for announcements.
+3. **Remaining stutter is network topology.** Voice PE (192.168.86.x) fetches TTS audio via socat proxy through 3 network hops. HAOS is reachable at 192.168.86.22 but changing `internal_url` would break other integrations.
+4. **`power_save_mode: none` is critical and NOT in upstream.** Always verify it persists across upgrades.
 
 ## Lessons Learned (2026-02-24 Upgrade)
 

@@ -97,6 +97,13 @@ scripts/ollama/test-inference.sh gemma4:e2b "what time is it?"
 # Say "Hey Nabu, what's the weather like?" and confirm response <3s
 ```
 
+## Post-Migration Issues
+
+### Flux Reconciliation Blocked by Immutable Job
+Renaming the model-update Job from `ollama-model-update-qwen35` to `ollama-model-update-gemma4` caused Flux to fail reconciliation for the entire kustomization. K8s Jobs are immutable once created. Fix: `kubectl delete job ollama-model-update-gemma4 -n ollama`, then reconcile.
+
+**Lesson**: When renaming Jobs in GitOps, delete the old Job before pushing the manifest change.
+
 ## Future Work
 
 - Consider gemma4:e4b if a GPU upgrade happens
