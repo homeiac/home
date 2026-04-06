@@ -78,8 +78,8 @@ data:
           track:
             - person
         motion:
-          threshold: 30
-          contour_area: 10
+          threshold: 40
+          contour_area: 25
           improve_contrast: true
         record:
           enabled: true
