@@ -7,6 +7,8 @@ metadata:
     app: frigate-health-checker
     version: python
 spec:
+  # Suspended: restart loop triggered by unreachable 192.168.1.x cameras (see #187)
+  suspend: true
   schedule: "*/5 * * * *" # Every 5 minutes
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
