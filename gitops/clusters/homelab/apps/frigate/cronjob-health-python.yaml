@@ -7,8 +7,6 @@ metadata:
     app: frigate-health-checker
     version: python
 spec:
-  # Suspended: restart loop triggered by unreachable 192.168.1.x cameras (see #187)
-  suspend: true
   schedule: "*/5 * * * *" # Every 5 minutes
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
@@ -41,7 +39,9 @@ spec:
                   value: "app=frigate"
                 # Health check thresholds
                 - name: FRIGATE_HC_SKIP_CAMERAS
-                  value: '[]' # WiFi issues fixed, monitoring all cameras now
+                  # Cameras on 192.168.1.x currently unreachable — skip to avoid restart loop (see #187).
+                  # Only trendnet_ip_572w and reolink_doorbell are actively monitored.
+                  value: '["old_ip_camera", "living_room", "hall"]'
                 - name: FRIGATE_HC_SKIP_RATIO_THRESHOLD
                   value: "0.8" # Detect cameras skipping >80% frames (ffmpeg crash loops)
                 - name: FRIGATE_HC_CONSECUTIVE_FAILURES_REQUIRED
