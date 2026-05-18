@@ -342,8 +342,8 @@ The age private key should be backed up to multiple locations:
 
 - [x] **K8s cluster** (authoritative): `kubectl get secret sops-age -n flux-system`
 - [x] Proxmox host: `chief-horse.maas:/root/.sops-backup/age-keys.txt` (older key, may be stale)
-- [ ] Google Drive (encrypted)
-- [ ] Password manager
+- [x] **Google Password Manager** entry `sops-age-key.homeiac` (private key in the password field, comments in the note field — recoverable via any device signed into the Google Account)
+- [ ] Google Drive / OneDrive (encrypted with `age -p` if added — optional belt-and-suspenders)
 
 **Current Public Key:** `age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna`
 
@@ -359,6 +359,24 @@ If you need to encrypt/decrypt secrets locally (e.g., from Mac):
 mkdir -p ~/.config/sops/age
 KUBECONFIG=~/kubeconfig kubectl get secret sops-age -n flux-system \
   -o jsonpath='{.data.age\.agekey}' | base64 -d > ~/.config/sops/age/keys.txt
+chmod 600 ~/.config/sops/age/keys.txt
+```
+
+**macOS gotcha**: sops doesn't read `~/.config/sops/age/keys.txt` by default on macOS — you must set `SOPS_AGE_KEY_FILE` explicitly. Add to `~/.zshrc`:
+
+```bash
+export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
+```
+
+**No local kubectl?** You can fetch the key via any K3s VM through SSH + qm guest exec:
+
+```bash
+ssh root@pumped-piglet.maas "qm guest exec 105 --timeout 15 -- \
+  /usr/local/bin/kubectl get secret sops-age -n flux-system \
+  -o jsonpath='{.data.age\.agekey}'" \
+| python3 -c "import sys,json,base64; \
+  print(base64.b64decode(json.load(sys.stdin)['out-data']).decode(),end='')" \
+> ~/.config/sops/age/keys.txt
 chmod 600 ~/.config/sops/age/keys.txt
 ```
 
