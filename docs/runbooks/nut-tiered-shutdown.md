@@ -114,18 +114,11 @@ kubectl create job --from=cronjob/nut-deploy nut-deploy-now -n monitoring
 kubectl logs -f job/nut-deploy-now -n monitoring
 ```
 
-### Manual Deploy (Legacy)
+### Manual Deploy (Removed)
 
-```bash
-# From Mac, copy scripts to pve
-scp scripts/pve/setup-nut.sh scripts/pve/nut-notify.sh root@pve.maas:/tmp/
+The legacy `scripts/pve/{setup-nut.sh,nut-notify.sh,test-nut-status.sh}` files have been removed. Deploy exclusively via the GitOps flow above — the canonical source for the deployed scripts and configs is `scripts/pve-nut/` (built into the `ghcr.io/homeiac/pve-nut` image and pushed to pve by the K8s Job).
 
-# On pve, run setup
-ssh root@pve.maas
-cd /tmp
-chmod +x setup-nut.sh nut-notify.sh
-./setup-nut.sh
-```
+For ad-hoc end-to-end SMS testing from a Mac, `scripts/pve/test-sms-gateway.sh` is kept — it decrypts the SOPS secret and posts directly to the Traccar gateway.
 
 ## Verification
 
