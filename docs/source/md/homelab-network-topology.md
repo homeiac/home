@@ -75,9 +75,9 @@ This document describes the complete network topology of the homelab, including 
 │   │     PVE      │  │  STILL-FAWN  │  │ CHIEF-HORSE  │  │  FUN-BEDBUG  │        │
 │   │  .4.122      │  │    .4.17     │  │    .4.19     │  │    .4.172    │        │
 │   │              │  │              │  │              │  │              │        │
-│   │ • Gateway    │  │ • K3s VM     │  │ • K3s VM     │  │ • Frigate    │        │
-│   │ • K3s VM     │  │   .4.212     │  │   .4.237     │  │   LXC 113    │        │
-│   │   .4.238     │  │              │  │ • HA VM      │  │              │        │
+│   │ • Gateway    │  │ • K3s VM     │  │ • K3s VM     │  │ • K3s VM     │        │
+│   │ • K3s VM     │  │   .4.212     │  │   .4.237     │  │   .4.192     │        │
+│   │   .4.238     │  │              │  │ • HA VM      │  │ • Docker LXC │        │
 │   │              │  │              │  │   .4.240     │  │              │        │
 │   └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘        │
 │                                              │                                   │
@@ -135,7 +135,12 @@ This document describes the complete network topology of the homelab, including 
 
 | Container | CTID | Host | Purpose |
 |-----------|------|------|---------|
-| Frigate | 113 | fun-bedbug | NVR with Coral TPU |
+| docker | 112 | fun-bedbug | Docker host |
+| proxmox-backup-server | 103 | pumped-piglet | PBS datastore |
+| docker | 100 | pve | Docker host |
+| cloudflared | 111 | pve | Cloudflare tunnel |
+
+> Frigate was previously LXC 113 on fun-bedbug; it now runs as a K3s pod on `k3s-vm-pumped-piglet-gpu` (RTX 3070 ONNX detector) — see `gitops/clusters/homelab/apps/frigate/`.
 
 ### K3s Services (MetalLB)
 

@@ -26,7 +26,7 @@ Use the `external-name` annotation to adopt existing infrastructure:
 ```yaml
 metadata:
   annotations:
-    crossplane.io/external-name: "113"  # Existing VMID
+    crossplane.io/external-name: "112"  # Existing VMID (example: docker LXC)
 spec:
   deletionPolicy: Orphan  # Don't delete if CR removed from Git
 ```
@@ -34,8 +34,8 @@ spec:
 Generate YAML from existing VM/LXC:
 
 ```bash
-# Generate from existing LXC
-./scripts/crossplane/import-lxc.sh 113 > frigate-nvr.yaml
+# Generate from existing LXC (example: docker LXC on fun-bedbug)
+./scripts/crossplane/import-lxc.sh 112 > docker-host.yaml
 
 # Generate from existing VM
 ./scripts/crossplane/import-vm.sh 200 > my-vm.yaml
@@ -52,4 +52,4 @@ Generate YAML from existing VM/LXC:
 | File | VMID | Node | Purpose |
 |------|------|------|---------|
 | rancher-server.yaml | 200 | pumped-piglet | RKE2 eval (test) |
-| frigate-nvr.yaml | 113 | fun-bedbug | Frigate NVR (adopt) |
+| ~~frigate-nvr.yaml~~ | ~~113~~ | ~~fun-bedbug~~ | **Removed** — Frigate migrated to K3s pod (see `apps/frigate/`) |

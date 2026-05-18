@@ -92,7 +92,7 @@ graph TB
     
     subgraph "LXC Network Assignment"
         vmbr0 --> lxc_wan[LXC containers on WAN<br/>docker LXC-100, cloudflared LXC-111]
-        vmbr25gbe --> lxc_lan[LXC containers on LAN<br/>docker LXC-112, frigate LXC-113<br/>proxmox-backup-server LXC-103]
+        vmbr25gbe --> lxc_lan[LXC containers on LAN<br/>docker LXC-112<br/>proxmox-backup-server LXC-103]
     end
 ```
 
@@ -346,32 +346,29 @@ Features:
 Tags: cloudflare, community-script, network
 ```
 
-#### Frigate NVR (LXC 113)
+#### Frigate NVR (~~LXC 113~~ — now a K3s pod)
+
+> **⚠️ DEPRECATED.** Frigate is no longer an LXC. It runs as a K3s pod on `k3s-vm-pumped-piglet-gpu` (RTX 3070 ONNX detector), managed via Flux at `gitops/clusters/homelab/apps/frigate/`. The LXC-era details below are historical.
+
 ```yaml
-Location: fun-bedbug node
+# Historical: LXC 113 on fun-bedbug, retired during K3s migration.
+Location: fun-bedbug node (RETIRED)
 Purpose: Network Video Recorder with AI detection
 Resources:
   - CPU: 4 cores
   - RAM: 4GB
   - Storage: 500GB from local-3TB-backup ZFS pool
-Network:
-  - eth0: vmbr25gbe, DHCP
-Features:
-  - High CPU usage for video processing
-  - AI-powered object detection
-  - Storage migrated from Samsung T5 USB to 3TB HDD SATA
-  - 16x storage capacity increase (from 928GB to 2.72TB pool)
-Current Version: 0.14.1 (installed via PVE Helper Scripts)
 Hardware Acceleration:
   - AMD Radeon R5 GPU with VA-API (preset-vaapi)
   - Google Coral USB TPU for object detection
-  - Automated TPU initialization via coral-tpu-init.service
-Upgrade Policy:
-  - Wait for PVE Helper Scripts to support newer versions
-  - DO NOT manually update - breaks LXC integration
-  - Face recognition requires v0.16.0+ (pending script update)
-Tags: community-script, nvr
+Last LXC Version: 0.14.1 (installed via PVE Helper Scripts)
 ```
+
+**Current deployment:**
+- Manifests: `gitops/clusters/homelab/apps/frigate/`
+- Detector: ONNX on RTX 3070 (`nvidia.com/gpu: 1`)
+- URL: https://frigate.app.home.panderosystems.com
+- Upgrades: bump image tag in `deployment.yaml`, commit, `flux reconcile`
 
 #### Proxmox Backup Server (LXC 103)
 ```yaml
@@ -582,7 +579,7 @@ graph TB
 - **100** - docker-pve (Docker services)
 - **111** - cloudflared (Tunnel service)
 - **112** - docker-fun-bedbug (Docker services)
-- **113** - frigate (NVR/Security cameras)
+- ~~**113** - frigate~~ (decommissioned — Frigate now runs as a K3s pod, see `gitops/clusters/homelab/apps/frigate/`)
 
 **Excluded**:
 - **103** - proxmox-backup-server (Prevents recursive backups)

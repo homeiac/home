@@ -385,15 +385,18 @@ Always use `namespace="home"` for this repo.
 ## Service-Specific Update Policies
 
 ### Frigate NVR
-- **WAIT for PVE Helper Scripts** to support new versions
-- LXC 113 on fun-bedbug.maas (AMD A9-9400)
-- Reference: `docs/reference/frigate-upgrade-decision-framework.md`
+- Runs as a K3s pod (namespace `frigate`) pinned to `k3s-vm-pumped-piglet-gpu` via nodeSelector
+- Detector: ONNX on RTX 3070 (`nvidia.com/gpu: 1`) — Coral TPU no longer used by Frigate
+- Manifests: `gitops/clusters/homelab/apps/frigate/` (Flux-managed)
+- URL: https://frigate.app.home.panderosystems.com
+- **DEPRECATED**: Frigate previously ran as LXC 113 on fun-bedbug; that LXC is gone. Migration history is in `docs/runbooks/frigate-migration-to-still-fawn-k3s.md` and `scripts/frigate/virtiofs-import/`.
+- Reference: `docs/reference/frigate-upgrade-decision-framework.md` (parts about LXC 113 are historical)
 
 ### Coral USB TPU - CRITICAL
-**NEVER test from host while LXC has it mounted!**
+**NEVER test the Coral from a Proxmox host while a VM/LXC has it passed through!**
 - Corrupts Coral state ("did not claim interface 0")
 - ONLY FIX: Physical unplug/replug
-- Check INSIDE container: `pct exec 113 -- cat /dev/shm/logs/frigate/current | grep -i TPU`
+- Coral USB is currently passed through to `k3s-vm-still-fawn` (VMID 108 on still-fawn). It is **not** in use by Frigate anymore (Frigate uses RTX 3070 ONNX detector); check whether any pod still needs it before touching.
 
 ### GPU Passthrough (VFIO)
 **MANDATORY FIRST**: Check BIOS VT-d
@@ -407,7 +410,9 @@ ls /sys/kernel/iommu_groups/ | wc -l  # If 0 → VT-d disabled in BIOS
 ## Proxmox Host Inventory
 | Hostname | Role | Key Hardware |
 |----------|------|--------------|
-| still-fawn.maas | K3s VM host | AMD Radeon GPU, Coral USB TPU, Frigate pod |
-| pumped-piglet.maas | K3s VM host | RTX 3070 GPU |
+| still-fawn.maas | K3s VM host | AMD Radeon GPU (VAAPI), Coral USB TPU (idle — was Frigate) |
+| pumped-piglet.maas | K3s VM host | RTX 3070 GPU — runs Frigate pod (ONNX detector) |
 | chief-horse.maas | HAOS host (VMID 116) | - |
-| fun-bedbug.maas | LXC host | - |
+| fun-bedbug.maas | LXC host | (formerly hosted Frigate LXC 113 — now decommissioned) |
+| pve.maas | K3s + LXC host | OPNsense, MAAS, cloudflared, docker LXC, k3s-vm-pve |
+| rapid-civet.maas | (intentionally offline) | - |

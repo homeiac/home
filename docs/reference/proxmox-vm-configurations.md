@@ -630,6 +630,8 @@ qm set 116 --agent 1
 
 ### LXC 113: Frigate NVR
 
+> **⚠️ DEPRECATED — historical reference only.** LXC 113 has been retired. Frigate now runs as a K3s pod on `k3s-vm-pumped-piglet-gpu` (RTX 3070 ONNX detector) — see `gitops/clusters/homelab/apps/frigate/`. The configuration below is preserved as a recovery / rebuild reference, not the current state.
+
 **Host**: fun-bedbug.maas (192.168.4.172)
 
 ```

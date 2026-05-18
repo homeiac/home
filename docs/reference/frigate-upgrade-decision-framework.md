@@ -1,5 +1,7 @@
 # Frigate Upgrade Decision Framework
 
+> **⚠️ DEPRECATED (kept for historical reference).** This document describes the upgrade workflow for Frigate as a Proxmox LXC (LXC 113 on fun-bedbug), which has been retired. Frigate now runs as a K3s pod managed by Flux (`gitops/clusters/homelab/apps/frigate/`). The "wait for PVE Helper Scripts" rule no longer applies — upgrades are done by bumping the container image tag in the deployment manifest. See `docs/runbooks/frigate-migration-to-still-fawn-k3s.md` for migration history.
+
 ## MANDATORY Pre-Upgrade Checks
 
 **BEFORE considering any Frigate upgrade, ALWAYS follow this checklist:**

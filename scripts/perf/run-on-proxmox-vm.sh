@@ -19,8 +19,9 @@ get_host() {
     case "$1" in
         116|109) echo "chief-horse.maas" ;;
         108) echo "still-fawn.maas" ;;
-        105) echo "pumped-piglet.maas" ;;
-        113) echo "fun-bedbug.maas" ;;  # LXC
+        105|103) echo "pumped-piglet.maas" ;;  # 103 = PBS LXC
+        114|112) echo "fun-bedbug.maas" ;;  # 114 = k3s VM, 112 = docker LXC
+        107|100|101|102|111) echo "pve.maas" ;;
         *) echo "chief-horse.maas" ;;
     esac
 }

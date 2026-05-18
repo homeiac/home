@@ -55,7 +55,7 @@ graph TB
 
     subgraph LXC_Containers[LXC Containers]
         PBS[Proxmox Backup Server<br>LXC 103<br>pumped-piglet<br>192.168.4.218<br>1.3TB/21TB storage]
-        FRIG[Frigate NVR<br>LXC 113<br>fun-bedbug<br>AMD Radeon R5 + Coral TPU]
+        FRIG[Frigate NVR<br>K3s pod<br>k3s-vm-pumped-piglet-gpu<br>RTX 3070 ONNX detector]
         DOCK[Docker Host<br>LXC 112<br>fun-bedbug]
     end
 
@@ -137,7 +137,8 @@ ssh ubuntu@192.168.4.210             # k3s-vm-pumped-piglet-gpu
 ssh gshiva@192.168.4.83              # Webtop development environment
 
 # LXC Containers
-ssh root@192.168.4.<frigate-ip>      # Frigate NVR (LXC 113)
+# (Frigate is no longer an LXC — it's a K3s pod on k3s-vm-pumped-piglet-gpu,
+#  reach the UI at https://frigate.app.home.panderosystems.com)
 ssh root@192.168.4.<docker-ip>       # Docker host (LXC 112)
 ```
 
@@ -295,16 +296,15 @@ curl -X POST http://ollama.app.homelab/api/generate \
 
 ### Frigate NVR
 
-**Type**: LXC Container 113 on fun-bedbug.maas
-**Hardware**: AMD Radeon R5 (renderD128), Google Coral TPU (USB)
-**Storage**: 500G mount at `/media` (local-3TB-backup)
+**Type**: K3s pod (namespace `frigate`), pinned to `k3s-vm-pumped-piglet-gpu` via nodeSelector
+**Hardware**: NVIDIA RTX 3070 (passed through to VM 105 on pumped-piglet, then exposed to the pod via `nvidia.com/gpu: 1`)
+**Detector**: ONNX on RTX 3070 (Coral TPU no longer used by Frigate)
+**Manifests**: `gitops/clusters/homelab/apps/frigate/` (Flux-managed)
+**Storage**: ZFS-backed PVCs; old recordings imported from former LXC 113 via `scripts/frigate/virtiofs-import/`
 
-**Access**: http://<frigate-ip>:5000 (check fun-bedbug DHCP lease)
+**Access**: https://frigate.app.home.panderosystems.com (Traefik 192.168.4.80, valid LE wildcard cert)
 
-**Features**:
-- Object detection with Coral TPU
-- AMD GPU hardware acceleration
-- Face recognition (requires Frigate 0.16.0+, waiting for PVE Helper Scripts update)
+**History**: Previously ran as LXC 113 on fun-bedbug with Coral USB + AMD VAAPI. Decommissioned during migration to K3s. See `docs/runbooks/frigate-migration-to-still-fawn-k3s.md` and the ONNX detector action logs in `scripts/frigate/`.
 
 ### Netdata Monitoring
 
@@ -415,8 +415,8 @@ gitops/clusters/homelab/
 
 **fun-bedbug.maas (192.168.4.172)**
 - CPU: AMD A9-9400 (low-power)
-- GPU: AMD Radeon R5 (integrated, used by Frigate)
-- TPU: Google Coral USB (passed to Frigate LXC 113)
+- GPU: AMD Radeon R5 (integrated; previously used by Frigate LXC 113, now idle)
+- TPU: (previously hosted Google Coral USB for Frigate LXC 113; LXC retired, Coral USB now passed to still-fawn / k3s-vm-still-fawn)
 - RAM: Unknown (check via `lshw`)
 - Storage: 1TB local + 3TB ZFS
 - Network: 2.5GbE vmbr0 (USB adapter)
