@@ -106,9 +106,14 @@ chmod 644 /etc/cron.d/nut-disaster-drill"
 log "  Created /etc/cron.d/nut-disaster-drill"
 
 # Frigate external watchdog cron (every 5 minutes)
+# SKIP_CAMERAS must stay in sync with FRIGATE_HC_SKIP_CAMERAS in
+# gitops/clusters/homelab/apps/frigate/cronjob-health-python.yaml — both monitors
+# need to ignore the same retired cameras, otherwise the watchdog pages on
+# cameras the in-cluster checker (correctly) ignores. Revert once the
+# 192.168.1.x cameras are restored.
 ssh $SSH_OPTS root@$HOST "cat > /etc/cron.d/frigate-watchdog << 'CRONEOF'
 # External Frigate health watchdog - runs outside K3s so alerts work even when cluster is degraded
-*/5 * * * * root $DEPLOY_DIR/scripts/frigate-watchdog.sh 2>&1
+*/5 * * * * root SKIP_CAMERAS='old_ip_camera,living_room,hall' $DEPLOY_DIR/scripts/frigate-watchdog.sh 2>&1
 CRONEOF
 chmod 644 /etc/cron.d/frigate-watchdog"
 log "  Created /etc/cron.d/frigate-watchdog"
