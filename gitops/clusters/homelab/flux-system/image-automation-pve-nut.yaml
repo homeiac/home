@@ -19,12 +19,14 @@ spec:
   imageRepositoryRef:
     name: pve-nut
   filterTags:
-    # Match only git SHA tags (7 chars) - never use 'latest' for reproducibility
-    pattern: '^[a-f0-9]{7}$'
+    # Match build-sha tags (e.g. 42-abc1234) and extract the build number for
+    # ordering. Alphabetical-desc on bare 7-char SHAs is unsound — see
+    # build-pve-nut.yaml for the rationale.
+    pattern: '^(\d+)-[a-f0-9]{7}$'
+    extract: '$1'
   policy:
-    alphabetical:
-      # Use descending order to get newest SHA (alphabetically later = newer commit)
-      order: desc
+    numerical:
+      order: asc
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageUpdateAutomation
