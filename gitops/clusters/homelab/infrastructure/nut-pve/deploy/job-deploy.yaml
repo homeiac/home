@@ -20,7 +20,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: deploy
-          image: ghcr.io/homeiac/pve-nut:5cde4ad # {"$imagepolicy": "flux-system:pve-nut"}
+          image: ghcr.io/homeiac/pve-nut:4-c08d962 # {"$imagepolicy": "flux-system:pve-nut"}
           env:
             - name: TARGET_HOST
               value: "192.168.4.122"
