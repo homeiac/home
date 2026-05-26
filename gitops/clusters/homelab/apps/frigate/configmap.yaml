@@ -35,7 +35,13 @@ data:
 
     cameras:
       old_ip_camera:
-        enabled: true
+        # Disabled 2026-05-26: 192.168.1.x cameras unreachable (#187). Frigate's
+        # repeated stream-failure retries cross an internal threshold and exit
+        # the process, container-restarting ~every 80s. Disabling at the camera
+        # level (vs. just FRIGATE_HC_SKIP_CAMERAS) is what #187 already called
+        # out as the proper fix. Re-enable once the 192.168.1.x cameras are
+        # restored.
+        enabled: false
         ffmpeg:
           inputs:
             - path: rtsp://127.0.0.1:8554/mjpeg_cam
@@ -124,7 +130,8 @@ data:
 
       # Reolink E1 Zoom (living room) - indoor camera
       living_room:
-        enabled: true
+        # Disabled 2026-05-26: 192.168.1.138 unreachable (#187). See note on old_ip_camera.
+        enabled: false
         ffmpeg:
           inputs:
             # Main stream for recording (high quality)
@@ -167,7 +174,8 @@ data:
 
       # Reolink E1 Zoom (hall) - indoor camera
       hall:
-        enabled: true
+        # Disabled 2026-05-26: 192.168.1.137 unreachable (#187). See note on old_ip_camera.
+        enabled: false
         ffmpeg:
           inputs:
             - path: rtsp://127.0.0.1:8554/hall_main
