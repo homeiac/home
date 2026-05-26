@@ -7,6 +7,15 @@ metadata:
     app: frigate-health-checker
     version: python
 spec:
+  # Suspended 2026-05-26: restart loop recurred — same pattern as #187 (Apr 18).
+  # Frigate container exits ~every 60-90s with SIGTERM (exit 143) before liveness
+  # probe (180s delay) even fires; the health-checker observes 'API unresponsive'
+  # via `kubectl exec` ("container not found") and does a rollout restart every
+  # cycle. The skip-list (FRIGATE_HC_SKIP_CAMERAS) added in 20cb3f9 only suppresses
+  # the majority_down code path, not this api_unresponsive one. Need to fix the
+  # container-level exit and the circuit breaker's last_restart_times reset bug
+  # before un-suspending.
+  suspend: true
   schedule: "*/5 * * * *" # Every 5 minutes
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
