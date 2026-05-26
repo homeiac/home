@@ -214,8 +214,14 @@ data:
           password: "{FRIGATE_CAM_LIVINGROOM_PASS}"
 
     # Frigate+ model for better detection (includes package detection)
-    model:
-      path: plus://c7b38453956cda87076baba4aca213e6
+    # 2026-05-26: Commented out because c7b38453956cda87076baba4aca213e6 is the
+    # EdgeTPU variant and we're temporarily on the CPU detector
+    # (`Model does not support detector type of cpu`). Frigate falls back to
+    # its bundled default model. Re-enable in the same PR that switches the
+    # detector back to edgetpu (Coral move) or onnx (RTX 3070 — see note on
+    # detectors below).
+    # model:
+    #   path: plus://c7b38453956cda87076baba4aca213e6
 
     # Detector config
     # 2026-05-26: Switched back to CPU because the Coral USB TPU is no longer
