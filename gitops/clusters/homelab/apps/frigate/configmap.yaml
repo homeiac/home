@@ -217,11 +217,21 @@ data:
     model:
       path: plus://c7b38453956cda87076baba4aca213e6
 
-    # Coral Edge TPU for object detection - ~19ms inference on USB 3.0
+    # Detector config
+    # 2026-05-26: Switched back to CPU because the Coral USB TPU is no longer
+    # passed through to pumped-piglet (it's on still-fawn per CLAUDE.md
+    # inventory; `lsusb` on VM 105 confirms no Coral device present). Frigate
+    # was crash-looping with `No EdgeTPU was detected / Failed to load delegate
+    # from libedgetpu.so.1.0`. Same pattern as commit 926df02 (Feb 2026).
+    #
+    # Target state per CLAUDE.md is `onnx` on the RTX 3070 — never implemented
+    # in code; needs a separate PR to switch detector + verify Frigate+ model
+    # delivers the ONNX format. Until then, CPU detection works (slower but
+    # keeps Frigate alive).
     detectors:
-      coral:
-        type: edgetpu
-        device: usb
+      cpu:
+        type: cpu
+        num_threads: 4
 
     # Face recognition (GPU-accelerated with NVIDIA RTX 3070)
     face_recognition:
