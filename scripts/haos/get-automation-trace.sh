@@ -10,7 +10,7 @@ ENV_FILE="${SCRIPT_DIR}/../../proxmox/homelab/.env"
 [[ -f "$ENV_FILE" ]] && HA_TOKEN=$(grep "^HA_TOKEN=" "$ENV_FILE" | cut -d'=' -f2-)
 [[ -z "$HA_TOKEN" ]] && { echo "ERROR: HA_TOKEN not found in $ENV_FILE"; exit 1; }
 
-HA_URL="http://homeassistant.maas:8123"
+HA_URL="${HA_URL:-http://homeassistant.maas:8123}"
 AUTOMATION_ID="${1:-}"
 COUNT="${2:-5}"
 
