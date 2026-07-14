@@ -20,7 +20,7 @@ websocket-client = "^1.8.0"
 uptime-kuma-api = "^1.2.1"
 # New dependencies for Crucible integration
 aiofiles = "^24.1.0"
-aiohttp = "^3.9.0"
+aiohttp = "^3.13.3"
 pydantic = "^2.5.0"
 typer = {extras = ["all"], version = "^0.12.0"}
 pyyaml = "^6.0.2"
