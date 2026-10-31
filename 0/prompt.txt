@@ -1,0 +1,9 @@
+fix the entire search issue
+
+---
+
+it is fine. can you use browser integration to show me a demo of what you did?
+
+---
+
+i wanted more the demo of the 'trails' and also code review agents/pr dashboard
