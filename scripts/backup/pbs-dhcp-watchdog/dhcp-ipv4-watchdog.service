@@ -1,0 +1,8 @@
+[Unit]
+Description=Re-acquire IPv4 DHCP lease on eth0 if missing (PBS boot-race guard)
+After=networking.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dhcp-ipv4-watchdog.sh
+TimeoutStartSec=90
