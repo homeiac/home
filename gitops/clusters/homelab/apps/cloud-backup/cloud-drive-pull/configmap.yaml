@@ -29,7 +29,7 @@ data:
       rclone copy "$remote:" "$DATA/$dest" \
         --config "$CONF" \
         --backup-dir "$DATA/.versions/$DAY/$dest" \
-        --fast-list --transfers 4 --checkers 8 \
+        --fast-list --transfers 16 --checkers 16 \
         --stats 1m --stats-one-line --log-level INFO --log-file "$LOG" \
         "$@"
       rc=$?
@@ -37,7 +37,8 @@ data:
       [ $rc -eq 0 ] || rc_all=$rc
       summary="$summary\"$remote\": $rc, "
     }
-    pull gdrive-backup gdrive --drive-acknowledge-abuse
+    # Drive is slow with many small files: shorter pacer sleep (default 100ms); rclone backs off on 403 rate limits
+    pull gdrive-backup gdrive --drive-acknowledge-abuse --drive-pacer-min-sleep 20ms --drive-pacer-burst 200
     pull onedrive onedrive --exclude "/Personal Vault/**"
     printf '{"finished": "%s", "exit": %d, "remotes": {%s}, "log": "%s"}\n' \
       "$(date -Iseconds)" "$rc_all" "${summary%, }" "$LOG" > "$STATUS/last-run.json"

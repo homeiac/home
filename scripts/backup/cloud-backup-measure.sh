@@ -8,7 +8,7 @@
 #   - `rclone about`: quota total / used / trash / other. For Google, "other" includes
 #     Google Photos and Gmail, which share the same quota.
 #   - one recursive listing (`rclone lsjson -R`), summarised into: total bytes and files,
-#     Google-native Docs count (no real size, exported on backup), size per top-level folder,
+#     Google-native Docs count (no real size, exported on backup), size and file count per folder,
 #     the largest files, and any Takeout archives already on the drive.
 # Then evaluates the capacity gate in §10 of the design (primary 170G free, SSK ~220G usable).
 #
@@ -57,6 +57,17 @@ for i in real:
 print("\nTop-level folders by size:")
 for k, v in by_top.most_common(25):
     print("  %s  %s" % (gb(v), k))
+by_count = collections.Counter()
+for i in real:
+    by_count[i["Path"].split("/", 1)[0] if "/" in i["Path"] else "(root files)"] += 1
+print("\nTop-level folders by file count:")
+for k, v in by_count.most_common(15):
+    print("  %7d files  %s  %s" % (v, gb(by_top[k]), k))
+# Second level, so a folder full of small files (code checkouts, caches) is easy to spot
+by_count2 = collections.Counter("/".join(i["Path"].split("/")[:2]) for i in real if i["Path"].count("/") >= 2)
+print("\nSecond-level folders by file count:")
+for k, v in by_count2.most_common(15):
+    print("  %7d files  %s" % (v, k))
 print("\nLargest 30 files:")
 for i in sorted(real, key=lambda i: -i["Size"])[:30]:
     print("  %s  %s" % (gb(i["Size"]), i["Path"]))

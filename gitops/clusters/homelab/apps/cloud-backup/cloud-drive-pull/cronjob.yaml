@@ -18,7 +18,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 21600   # 6h
+      activeDeadlineSeconds: 43200   # 12h; the first full copy (~23k small Drive files) can take several runs
       template:
         metadata:
           labels:
