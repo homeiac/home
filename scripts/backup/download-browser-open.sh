@@ -11,7 +11,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/cloud-backup-common.sh"
 URL="${1:?usage: $0 <url>}"
-[[ "$URL" =~ ^https?:// ]] || { echo "ERROR: give a full http(s) URL"; exit 1; }
+[[ "$URL" =~ ^(https?://|about:) ]] || { echo "ERROR: give a full http(s) URL or an about: page"; exit 1; }
 
 POD="$(cb_kubectl -n cloud-backup get pods -l app=download-browser -o jsonpath='{.items[0].metadata.name}')"
 [[ -n "$POD" ]] || { echo "ERROR: download-browser pod not found"; exit 1; }
