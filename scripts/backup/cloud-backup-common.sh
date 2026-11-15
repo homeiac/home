@@ -39,3 +39,12 @@ cb_ssh() { ssh "${CB_SSH_OPTS[@]}" "$CB_HOST" "$@"; }
 
 # Repo root (scripts/backup/ -> repo)
 CB_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# kubectl inside the K3s VM on the backup host (no kubeconfig needed on the workstation).
+# Same mechanism as scripts/k3s/exec.sh: qm guest exec. Prints stdout+stderr, returns the exit code.
+CB_K3S_VMID="${CB_K3S_VMID:-105}"
+cb_kubectl() {
+  local q; q="$(printf '%q ' "$@")"
+  cb_ssh "qm guest exec $CB_K3S_VMID --timeout 120 -- bash -c $(printf '%q' "k3s kubectl $q")" \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.stdout.write(d.get("out-data","")); sys.stderr.write(d.get("err-data","")); sys.exit(d.get("exitcode",1))'
+}

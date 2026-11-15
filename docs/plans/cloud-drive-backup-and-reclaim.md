@@ -128,7 +128,8 @@ and rides the Drive pipeline:
    LAN/Tailscale only), signs in to Google once (the profile persists), and clicks the download
    links. The Mac only displays the remote browser; archive bytes go Google → homelab disk (G4).
    The browser profile lives in `/var/lib/cloud-backup/browser/`, outside the share, so cookies
-   are never browseable. Scaled to 0 replicas when not in use. Links expire after 7 days.
+   are never browseable. Small footprint (1 Gi request), always on, behind basic auth
+   (`download-browser-auth` SOPS secret). Links expire after 7 days.
    *Later (optional):* a Playwright job reuses that same signed-in profile to open the Takeout
    "manage exports" page and click every part, so each export is one command. Fully headless
    sign-in isn't used: Google blocks automated sign-ins and often re-asks for the password before
@@ -293,7 +294,7 @@ Each phase ends with a check that has to pass before the next one starts.
 - **Gate:** status marker shows exit 0; `rclone check --one-way` cloud→primary reports 0 differences; files visible at `\\192.168.4.120\secure\cloud-backup`.
 
 ### Phase 2b — Google Photos ingest
-- `apps/cloud-backup/download-browser`: Firefox web desktop, Downloads = `gphotos/_incoming/`, Ingress on the wildcard domain, replicas 0 by default; `scripts/backup/download-browser.sh up|down` scales it (§5.4).
+- `apps/cloud-backup/download-browser`: Firefox web desktop, Downloads = `gphotos/_incoming/`, Ingress on the wildcard domain, basic auth (§5.4). Scripts: `download-browser-create-secret.sh`, `download-browser-password.sh` (clipboard), `download-browser-status.sh`.
 - `photos-takeout-ingest` CronJob (§5.4).
 - **Gate:** the first full export is ingested; `_ingested.tsv` file counts match `tar -tzf` for every
   archive; the item count in `gphotos/` is within a few percent of the library count shown in Google

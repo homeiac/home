@@ -1,0 +1,21 @@
+# TLS: wildcard cert from Traefik's default TLSStore (no per-app cert).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: download-browser
+  namespace: cloud-backup
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: download-browser.app.home.panderosystems.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: download-browser
+            port:
+              number: 3000
