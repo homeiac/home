@@ -1,39 +1,52 @@
 #!/bin/bash
-# Control the SSK mirror on the backup host: run now, status, log
+# Control the USB-disk mirrors on the backup host: run now, status, log
 #
 # Usage:
-#   ./cloud-backup-mirror-ctl.sh run      # start a mirror now and follow it until it finishes
-#   ./cloud-backup-mirror-ctl.sh status   # last result, timer, SSK contents (read-only)
-#   ./cloud-backup-mirror-ctl.sh log      # last 40 lines of the newest mirror log
+#   ./cloud-backup-mirror-ctl.sh run <target>   # start a mirror now (ssk | wd25) and follow it to the end
+#   ./cloud-backup-mirror-ctl.sh status         # last result per target, timers, attached disks (read-only)
+#   ./cloud-backup-mirror-ctl.sh log <target>   # last 40 lines of the newest log for that target
 #
-# The mirror itself is host/cloud-backup-mirror.sh (installed by cloud-backup-install-mirror.sh).
-# `run` is safe to repeat: the mirror takes a lock, and copy is incremental.
+# The mirror is host/cloud-backup-mirror.sh (installed by cloud-backup-install-mirror.sh).
+# `run` is safe to repeat: the mirror takes a lock, and copy is incremental. Exit code 0 only if the
+# run finished with status ok.
 
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/cloud-backup-common.sh"
+readonly TARGETS="ssk wd25"
 
-latest_log='ls -t '"$CB_REPORT_DIR"'/mirror-logs/mirror-*.log 2>/dev/null | head -1'
+usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
+need_target() {
+  [[ " $TARGETS " == *" ${1:-} "* ]] || { usage; echo "ERROR: target must be one of: $TARGETS"; exit 1; }
+}
 
 case "${1:-}" in
   run)
-    cb_ssh "systemctl start --no-block cloud-backup-mirror.service"
-    echo "[$(date +%H:%M:%S)] started cloud-backup-mirror.service on $CB_HOST"
+    need_target "${2:-}"; t="$2"; unit="cloud-backup-mirror@$t.service"
+    cb_ssh "systemctl start --no-block $unit"
+    echo "[$(date +%H:%M:%S)] started $unit on $CB_HOST"
     while true; do
       sleep 30
-      st="$(cb_ssh "systemctl is-active cloud-backup-mirror.service" || true)"
-      echo "[$(date +%H:%M:%S)] $st | $(cb_ssh "L=\$($latest_log); [ -n \"\$L\" ] && tail -1 \"\$L\" | cut -c1-160" || true)"
+      st="$(cb_ssh "systemctl is-active $unit" || true)"
+      last="$(cb_ssh "L=\$(ls -t $CB_REPORT_DIR/mirror-logs/mirror-$t-*.log 2>/dev/null | head -1); [ -n \"\$L\" ] && tail -1 \"\$L\" | cut -c1-160" || true)"
+      echo "[$(date +%H:%M:%S)] $st | $last"
       [[ "$st" == activating || "$st" == active ]] || break
     done
-    cb_ssh "cat $CB_REPORT_DIR/mirror-last-run.json"
-    cb_ssh "grep -q '\"status\": \"ok\"' $CB_REPORT_DIR/mirror-last-run.json"
+    cb_ssh "cat $CB_REPORT_DIR/mirror-$t-last-run.json"
+    cb_ssh "grep -q '\"status\": \"ok\"' $CB_REPORT_DIR/mirror-$t-last-run.json"
     ;;
   status)
-    cb_ssh "echo '== Last run'; cat $CB_REPORT_DIR/mirror-last-run.json 2>/dev/null || echo '(none yet)'
-            echo; echo '== Timer'; systemctl list-timers cloud-backup-mirror.timer --no-pager | head -2
-            echo; echo '== SSK'; lsblk -no NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT \$(lsblk -dnro NAME,SERIAL | awk '\$2==\"$CB_SSK_SERIAL\" {print \"/dev/\"\$1}') 2>/dev/null || echo 'SSK not attached'"
+    for t in $TARGETS; do
+      echo "== $t"; cb_ssh "cat $CB_REPORT_DIR/mirror-$t-last-run.json 2>/dev/null || echo '(no run yet)'"
+    done
+    echo; echo "== Timers"; cb_ssh "systemctl list-timers 'cloud-backup-mirror@*' --no-pager | head -4" || true
+    echo; echo "== Disks"
+    cb_ssh "for s in $CB_SSK_SERIAL $CB_WD25_SERIAL; do d=\$(lsblk -dnro NAME,SERIAL | awk -v s=\$s '\$2==s {print \"/dev/\"\$1}'); \
+            if [ -n \"\$d\" ]; then lsblk -no NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT \$d; else echo \"serial \$s: not attached\"; fi; done"
     ;;
   log)
-    cb_ssh "L=\$($latest_log); [ -n \"\$L\" ] && { echo \"== \$L\"; tail -40 \"\$L\"; } || echo '(no mirror log yet)'"
+    need_target "${2:-}"
+    cb_ssh "L=\$(ls -t $CB_REPORT_DIR/mirror-logs/mirror-$2-*.log 2>/dev/null | head -1); [ -n \"\$L\" ] && { echo \"== \$L\"; tail -40 \"\$L\"; } || echo '(no log yet)'"
     ;;
-  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+  -h|--help) usage;;
+  *) usage; exit 1;;
 esac

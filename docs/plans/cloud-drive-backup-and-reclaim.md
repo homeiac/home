@@ -208,6 +208,7 @@ These are hard rules. Each is enforced in code, not just documented.
   The CronJob mounts the hostPath `/var/lib/cloud-backup/rclone/rclone.conf` (VM 105, dir 0700,
   file 0600) and rclone persists refreshed tokens there. That path is **outside** the SMB share,
   so tokens are never browseable.
+- **Google Drive client:** own OAuth client (see §12 Q5), set by `cloud-backup-gdrive-own-client.sh`.
 - **Getting the config there:** `cloud-backup-seed-k8s-config.sh` copies the host's rclone config
   into the VM with `qm guest exec --pass-stdin`. The tokens go host → VM only: they never pass
   through the workstation and are **not committed at all** (not even SOPS-encrypted). This
@@ -259,9 +260,11 @@ scope to what fits. The gate is evaluated in Phase 0, before any download.
 2. ~~**First Takeout delivery target.**~~ *Answered 2026-11-15:* neither cloud has room (Google
    10.6 GiB free vs ~80 GiB of Photos; OneDrive is a 5 GiB plan). Use **download links fetched on the
    host** (§5.4). Fallback: one month of 2 TB Google storage.
-5. **Own Google OAuth client_id.** rclone's shared client_id is being retired during 2026. Create a
-   personal Google Cloud OAuth client (Drive API, "Desktop app") and re-authorize `gdrive-backup` before
-   Phase 2. This also fixes the existing `postgres-gdrive-sync` remote.
+5. ~~**Own Google OAuth client_id.**~~ *Done 2026-11-15:* Google Cloud project `homelab-rclone`
+   (Drive API, consent screen External + **In production** so refresh tokens don't expire after 7 days,
+   Desktop client `rclone-gdrive-backup`). `cloud-backup-gdrive-own-client.sh <client JSON>` switches
+   `gdrive-backup` on the host and in the K3s VM (`seed-k8s-config.sh --only`). Still open: the
+   separate `postgres-gdrive-sync` SOPS secret uses the shared client too.
 3. **Schedule.** Nightly is the default. Once reclaim is done the cloud stops growing as fast; weekly may be enough.
 4. **Retention of `.versions/`.** Default 90 days, then prune. OK?
 
@@ -315,8 +318,9 @@ Each phase ends with a check that has to pass before the next one starts.
 - sanoid policy for `local-3TB-backup/vm-105-disk-0` (daily×14, monthly×6).
 - **Gate:** `zfs list -t snapshot` shows the policy taking snapshots.
 
-### Phase 4 — Secondary copy (SSK)
+### Phase 4 — Secondary (SSK) and tertiary (WD 2.5TB) copies
 - `cloud-backup-install-mirror.sh` installs `host/cloud-backup-mirror.sh` and its systemd service and timer (daily 18:00 UTC) on pumped-piglet. Each run: find the SSK by serial and mount it, snapshot and clone the share's zvol read-only, `rclone copy` → SSK (`.versions/<date>/` for changed files), clean up, unmount. First run 2026-11-15.
+- Tertiary copy `wd25`: old WD 2.5TB USB HDD, exFAT partition 2 (label RASPBMC, shared with other folders that are left alone; ~27 GB free). Google Photos excluded (does not fit). The disk has SMART pending/uncorrectable sectors, so `VERIFY=1` re-reads every file with `rclone check` after each copy. Same script via `cloud-backup-mirror@<target>` systemd templates.
 - **Gate:** `rclone check` primary↔SSK reports 0 differences.
 
 ### Phase 5 — Reclaim report (read-only)
