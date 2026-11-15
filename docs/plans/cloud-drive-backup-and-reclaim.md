@@ -238,8 +238,15 @@ These are hard rules. Each is enforced in code, not just documented.
 
 | Copy | Space |
 |------|------|
-| Primary (SMB zvol) | 170G free now. Can be grown online: `qm resize 105 scsi1 +<N>G` + `resize2fs` in the VM. The pool has 752G free but is shared with PBS (1.80T and growing). |
-| Secondary (SSK) | 238G total. |
+| Primary (SMB zvol) | **Grown 2026-11-15 to 600G** (590G ext4, 537G free) with `cloud-backup-grow-smb-disk.sh 600` (online, idempotent, thin-zvol aware). Pool `local-3TB-backup` is shared with PBS (1.77T): a full 600G disk would leave ~230G free there. |
+| Secondary (SSK) | 238G total: holds Drive + OneDrive, **not** the 306G Photos library. |
+| Tertiary (WD 2.5TB p2) | ~9G headroom: Drive + OneDrive only. |
+
+**Gate result (2026-11-15): Google Photos Takeout is 306 GB** (8 archives), far more than the 70.5 GB
+Google counts against quota (pre-2021 "High quality" uploads don't count but are exported). Primary
+fits after the grow. **No second copy of Photos exists yet**: before any Photos reclaim (Phase 6) a
+second disk ≥ ~1 TB is needed for the Photos library. Deleting pre-2021 "High quality" items frees no
+quota, so Photos reclaim only targets the ~70 GB of original-quality items.
 
 **Hard gate:** if `gdrive + onedrive + gphotos` (owned, excluding native Docs) > ~220G, the SSK can't
 hold a full second copy and G2 fails. Photos libraries are often the largest of the three.
