@@ -39,7 +39,8 @@ data:
     }
     # Drive is slow with many small files: shorter pacer sleep (default 100ms); rclone backs off on 403 rate limits
     pull gdrive-backup gdrive --drive-acknowledge-abuse --drive-pacer-min-sleep 20ms --drive-pacer-burst 200
-    pull onedrive onedrive --exclude "/Personal Vault/**"
+    # OneNote notebooks are "packages" rclone skips by default (~0.7 GB); expose them as .one section files
+    pull onedrive onedrive --exclude "/Personal Vault/**" --onedrive-expose-onenote-files
     printf '{"finished": "%s", "exit": %d, "remotes": {%s}, "log": "%s"}\n' \
       "$(date -Iseconds)" "$rc_all" "${summary%, }" "$LOG" > "$STATUS/last-run.json"
     cat "$STATUS/last-run.json"

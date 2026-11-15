@@ -28,6 +28,15 @@ CB_REPORT_DIR="${CB_REPORT_DIR:-/var/lib/cloud-backup/reports}"
 # SSK USB disk (secondary copy). Verified by serial before any destructive step.
 CB_SSK_SERIAL="${CB_SSK_SERIAL:-DD56419883935}"
 CB_SSK_LABEL="${CB_SSK_LABEL:-SSK}"
+# Third copy: old WD 2.5TB USB disk, exFAT partition 2 (label RASPBMC, ~27 GB free; other folders on it
+# are left alone). Has bad sectors (SMART pending/uncorrectable), so its mirror re-reads and verifies.
+# Google Photos is excluded there (does not fit).
+CB_WD25_SERIAL="${CB_WD25_SERIAL:-WD-WCAWZ0311353}"
+CB_WD25_LABEL="${CB_WD25_LABEL:-RASPBMC}"
+
+# Primary backup disk: the zvol behind the SMB share (ext4 inside, used by the K3s VM). The SSK mirror
+# reads a read-only clone of a snapshot of it.
+CB_ZVOL="${CB_ZVOL:-local-3TB-backup/vm-105-disk-0}"
 
 # SOPS-encrypted secret that already holds the Google Drive remote (used by postgres-gdrive-sync)
 CB_GDRIVE_SOPS_SECRET="${CB_GDRIVE_SOPS_SECRET:-gitops/clusters/homelab/apps/postgres/rclone-secret.yaml}"

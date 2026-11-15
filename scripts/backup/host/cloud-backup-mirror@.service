@@ -1,0 +1,14 @@
+# Mirror the primary cloud backup to USB disk <instance> (scripts/backup/host/cloud-backup-mirror.sh)
+# Instances: ssk (secondary), wd25 (tertiary). Per-instance settings: /etc/default/cloud-backup-mirror-%i
+# Installed by scripts/backup/cloud-backup-install-mirror.sh
+[Unit]
+Description=Cloud backup: mirror primary (ZFS snapshot) to USB disk %i
+After=zfs.target local-fs.target
+Wants=zfs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloud-backup-mirror.sh %i
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=18h
