@@ -13,7 +13,8 @@
 # Migrates the earlier single-target units (cloud-backup-mirror.service/.timer) by removing them.
 #
 # Targets:
-#   ssk   secondary copy, SSK USB SSD (exFAT, label SSK), everything in cloud-backup/
+#   ssk   secondary copy, SSK USB SSD (exFAT, label SSK): Drive + OneDrive + the Google Photos items
+#         that count against Google quota (GPHOTOS_MODE=quota, ~70 GB)
 #   wd25  tertiary copy, old WD 2.5TB USB HDD partition 2 (exFAT, label RASPBMC), Google Photos
 #         excluded (does not fit), VERIFY=1 because the disk has bad sectors
 #
@@ -58,6 +59,9 @@ DEST_MNT=/mnt/ssk-cloud
 DEST_VERSIONS=.versions
 EXCLUDES=""
 VERIFY=0
+# Google Photos: only items that count against Google quota (uploaded >= 2021-06-01): the full
+# library (~306 GB) does not fit the 238 GB SSK; these are the items a later Photos reclaim deletes.
+GPHOTOS_MODE=quota
 CONF
     ;;
     wd25) cat <<CONF
@@ -68,8 +72,9 @@ DEST_SERIAL=$CB_WD25_SERIAL
 DEST_LABEL=$CB_WD25_LABEL
 DEST_MNT=/mnt/wd25-cloud
 DEST_VERSIONS=cloud-backup-versions
-EXCLUDES="gphotos/**"
+EXCLUDES=""
 VERIFY=1
+GPHOTOS_MODE=exclude
 CONF
     ;;
   esac
@@ -88,6 +93,7 @@ if cb_ssh "test -e /etc/systemd/system/cloud-backup-mirror.timer -o -e /etc/syst
 fi
 
 install_file "$HOST_DIR/cloud-backup-mirror.sh"        /usr/local/sbin/cloud-backup-mirror.sh           0755
+install_file "$HOST_DIR/gphotos-quota-list.py"         /usr/local/sbin/gphotos-quota-list.py            0755
 install_file "$HOST_DIR/cloud-backup-mirror@.service"  /etc/systemd/system/cloud-backup-mirror@.service 0644
 install_file "$HOST_DIR/cloud-backup-mirror@.timer"    /etc/systemd/system/cloud-backup-mirror@.timer   0644
 install_file - /etc/default/cloud-backup-mirror 0644 <<CONF

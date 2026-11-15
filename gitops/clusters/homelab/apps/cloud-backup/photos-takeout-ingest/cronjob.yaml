@@ -1,5 +1,5 @@
 # Google Photos Takeout ingest (design §5.4). Every 2 hours: unpack finished archives from
-# gphotos/_incoming into gphotos/library. Scripts and safety checks: configmap.yaml.
+# /var/lib/cloud-backup/downloads (NVMe) and gphotos/_incoming into gphotos/library. Scripts and safety checks: configmap.yaml.
 #   /data   = /mnt/samba-storage/cloud-backup   (SMB share)
 #   /status = /var/lib/cloud-backup/status      (photos-ingest-last-run.json + logs)
 # Manual run: scripts/backup/cloud-backup-run-now.sh --job photos-takeout-ingest
@@ -35,6 +35,7 @@ spec:
               limits: {cpu: "2", memory: 1Gi}
             volumeMounts:
             - {name: data, mountPath: /data}
+            - {name: downloads, mountPath: /downloads}
             - {name: scripts, mountPath: /scripts, readOnly: true}
           containers:
           - name: finalize
@@ -45,11 +46,14 @@ spec:
               limits: {cpu: "2", memory: 1Gi}
             volumeMounts:
             - {name: data, mountPath: /data}
+            - {name: downloads, mountPath: /downloads}
             - {name: status, mountPath: /status}
             - {name: scripts, mountPath: /scripts, readOnly: true}
           volumes:
           - name: data
             hostPath: {path: /mnt/samba-storage/cloud-backup, type: Directory}
+          - name: downloads
+            hostPath: {path: /var/lib/cloud-backup/downloads, type: DirectoryOrCreate}   # NVMe (VM root disk)
           - name: status
             hostPath: {path: /var/lib/cloud-backup/status, type: DirectoryOrCreate}
           - name: scripts

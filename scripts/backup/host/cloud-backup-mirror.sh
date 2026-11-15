@@ -7,7 +7,11 @@
 # cloud-backup-mirror@<target>.timer. Settings:
 #   /etc/default/cloud-backup-mirror            shared: ZVOL, SRC_SUBDIR, REPORT_DIR
 #   /etc/default/cloud-backup-mirror-<target>   DEST_SERIAL, DEST_LABEL, DEST_MNT, DEST_VERSIONS,
-#                                               EXCLUDES (space-separated rclone patterns), VERIFY (0/1)
+#                                               EXCLUDES (space-separated rclone patterns), VERIFY (0/1),
+#                                               GPHOTOS_MODE: all | exclude | quota (default all)
+#   GPHOTOS_MODE=quota: Google Photos is limited to items that count against Google quota (uploaded
+#   on/after 2021-06-01, selected by gphotos-quota-list.py from the Takeout sidecars), copied in a
+#   second rclone pass with --files-from. Album copies of the same photo are skipped.
 #
 # Each run, for consistency without credentials or network:
 #   1. find the target disk by USB serial, the partition by filesystem label (must be exFAT), mount it
@@ -39,6 +43,8 @@ REPORT_DIR="${REPORT_DIR:-/var/lib/cloud-backup/reports}"
 DEST_VERSIONS="${DEST_VERSIONS:-.versions}"
 EXCLUDES="${EXCLUDES:-}"
 VERIFY="${VERIFY:-0}"
+GPHOTOS_MODE="${GPHOTOS_MODE:-all}"
+[[ "$GPHOTOS_MODE" =~ ^(all|exclude|quota)$ ]] || { echo "bad GPHOTOS_MODE: $GPHOTOS_MODE"; exit 2; }
 RCLONE_FLAGS="${RCLONE_FLAGS:---transfers 8 --checkers 16}"
 
 readonly STAMP="$(date +%Y%m%d-%H%M%S)" DAY="$(date +%Y-%m-%d)"
@@ -61,6 +67,8 @@ write_status() {
 # Filters shared by size, copy and check
 FILTERS=(--exclude '*.part')
 for p in $EXCLUDES; do FILTERS+=(--exclude "$p"); done
+[[ "$GPHOTOS_MODE" == all ]] || FILTERS+=(--exclude 'gphotos/**')
+readonly LIST="/run/cloud-backup-mirror-$TARGET.gphotos-files"
 
 # One mirror at a time (any target); wait up to 6h for another run to finish
 exec 9>/run/cloud-backup-mirror.lock
@@ -79,10 +87,11 @@ cleanup() {
   write_status
   log "done: target=$TARGET status=$STATUS step=$STEP exit=$rc ${DETAIL}"
   find "$LOG_DIR" -name "mirror-$TARGET-*.log" -mtime +60 -delete
+  rm -f "$LIST"
 }
 trap cleanup EXIT
 
-log "cloud-backup-mirror $TARGET start (zvol=$ZVOL serial=$DEST_SERIAL label=$DEST_LABEL excludes='$EXCLUDES' verify=$VERIFY)"
+log "cloud-backup-mirror $TARGET start (zvol=$ZVOL serial=$DEST_SERIAL label=$DEST_LABEL excludes='$EXCLUDES' verify=$VERIFY gphotos=$GPHOTOS_MODE)"
 
 # --- 1. target disk: by serial, partition by label, exFAT only
 STEP="find-disk"
@@ -120,6 +129,15 @@ DST="DEST:$DEST_MNT/$SRC_SUBDIR"
 # --- 3. capacity (same filters as the copy)
 STEP="capacity"
 need=$(rclone size "$SRC" "${FILTERS[@]}" --json --config /dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
+if [[ "$GPHOTOS_MODE" == quota ]]; then
+  python3 /usr/local/sbin/gphotos-quota-list.py "$SRC" > "$LIST"
+  log "gphotos quota selection: $(wc -l < "$LIST") paths (files + sidecars)"
+  if [[ -s "$LIST" ]]; then
+    gneed=$(rclone size "$SRC" --files-from "$LIST" --json --config /dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
+    log "gphotos quota selection size: $((gneed / 1000000)) MB"
+    need=$((need + gneed))
+  fi
+fi
 have=$(( $(df -B1 --output=avail "$DEST_MNT" | tail -1) + $(du -sb "$DEST_MNT/$SRC_SUBDIR" 2>/dev/null | cut -f1 || echo 0) ))
 log "to mirror $((need / 1000000)) MB, usable on target $((have / 1000000)) MB"
 (( need < have )) || { DETAIL="target too small: need $((need/1000000)) MB, have $((have/1000000)) MB"; log "ERROR: $DETAIL"; exit 1; }
@@ -133,6 +151,16 @@ rclone copy "$SRC" "$DST" "${FILTERS[@]}" \
   --modify-window 2s \
   --stats 1m --stats-one-line --log-level INFO \
   $RCLONE_FLAGS
+if [[ "$GPHOTOS_MODE" == quota && -s "$LIST" ]]; then
+  STEP="copy-gphotos"
+  # shellcheck disable=SC2086
+  rclone copy "$SRC" "$DST" --files-from "$LIST" \
+    --config /dev/null \
+    --backup-dir "DEST:$DEST_MNT/$DEST_VERSIONS/$DAY" \
+    --modify-window 2s \
+    --stats 1m --stats-one-line --log-level INFO \
+    $RCLONE_FLAGS
+fi
 sync
 
 # --- 5. optional read-back verification
@@ -141,6 +169,10 @@ if [[ "$VERIFY" == 1 ]]; then
   echo 3 > /proc/sys/vm/drop_caches   # make the check read from the disk, not the page cache
   if ! rclone check "$SRC" "$DST" "${FILTERS[@]}" --one-way --config /dev/null --log-level NOTICE; then
     DETAIL="verify found differences (possible bad sectors) - see log"; log "ERROR: $DETAIL"; exit 1
+  fi
+  if [[ "$GPHOTOS_MODE" == quota && -s "$LIST" ]] && \
+     ! rclone check "$SRC" "$DST" --files-from "$LIST" --one-way --config /dev/null --log-level NOTICE; then
+    DETAIL="verify found differences in gphotos - see log"; log "ERROR: $DETAIL"; exit 1
   fi
   log "verify: every file reads back identical"
 fi
