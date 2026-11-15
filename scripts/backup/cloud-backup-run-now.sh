@@ -1,7 +1,9 @@
 #!/bin/bash
 # Start the cloud-drive-pull backup job now (instead of waiting for 02:30) and follow it
 #
-# Usage: ./cloud-backup-run-now.sh [--no-follow]
+# Usage: ./cloud-backup-run-now.sh [--restart] [--no-follow]
+#   --restart   stop a running pull Job first (e.g. to pick up new settings). Safe: rclone copy is
+#               resumable, files already copied are skipped on the next run.
 #
 # Creates Job cloud-drive-pull-manual-<timestamp> from the CronJob. Refuses if a pull Job is
 # already running (same rule as the CronJob's concurrencyPolicy: Forbid). Then prints the
@@ -12,13 +14,26 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/cloud-backup-common.sh"
 readonly NS=cloud-backup
 
+RESTART=0 FOLLOW=1
+for a in "$@"; do
+  case "$a" in
+    --restart) RESTART=1;;
+    --no-follow) FOLLOW=0;;
+    *) echo "ERROR: unknown option $a"; exit 1;;
+  esac
+done
+
 running="$(cb_kubectl -n "$NS" get jobs -o jsonpath='{range .items[?(@.status.active)]}{.metadata.name}{" "}{end}' 2>/dev/null | tr ' ' '\n' | grep '^cloud-drive-pull' || true)"
-if [[ -n "$running" ]]; then echo "Already running: $running"; JOB="${running%%$'\n'*}"
+if [[ -n "$running" && $RESTART -eq 1 ]]; then
+  for j in $running; do echo "Stopping $j"; cb_kubectl -n "$NS" delete job "$j" --wait=true; done
+  running=""
+fi
+if [[ -n "$running" ]]; then echo "Already running: $running (use --restart to replace it)"; JOB="${running%%$'\n'*}"
 else
   JOB="cloud-drive-pull-manual-$(date +%Y%m%d-%H%M%S)"
   cb_kubectl -n "$NS" create job "$JOB" --from=cronjob/cloud-drive-pull
 fi
-[[ "${1:-}" == "--no-follow" ]] && exit 0
+[[ $FOLLOW -eq 1 ]] || exit 0
 
 echo "[$(date +%H:%M:%S)] following $JOB"
 while true; do

@@ -29,6 +29,10 @@ CB_REPORT_DIR="${CB_REPORT_DIR:-/var/lib/cloud-backup/reports}"
 CB_SSK_SERIAL="${CB_SSK_SERIAL:-DD56419883935}"
 CB_SSK_LABEL="${CB_SSK_LABEL:-SSK}"
 
+# Primary backup disk: the zvol behind the SMB share (ext4 inside, used by the K3s VM). The SSK mirror
+# reads a read-only clone of a snapshot of it.
+CB_ZVOL="${CB_ZVOL:-local-3TB-backup/vm-105-disk-0}"
+
 # SOPS-encrypted secret that already holds the Google Drive remote (used by postgres-gdrive-sync)
 CB_GDRIVE_SOPS_SECRET="${CB_GDRIVE_SOPS_SECRET:-gitops/clusters/homelab/apps/postgres/rclone-secret.yaml}"
 

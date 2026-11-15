@@ -84,7 +84,7 @@ before anything is removed from the cloud.
         zvol local-3TB-backup/vm-105-disk-0     (ZFS snapshots: daily×14, monthly×6)
                            │
                            │  host systemd timer  cloud-backup-mirror.timer
-                           │  (mount SMB read-only → rclone copy → SSK)
+                           │  (ZFS snapshot → read-only clone → rclone copy → SSK)
                            ▼
         SSK exFAT  /mnt/ssk-cloud/cloud-backup   SECONDARY COPY (separate disk)
 ```
@@ -105,9 +105,18 @@ double the space).
 ### 5.3 Why a host timer for the secondary copy
 
 The SSK disk is plugged into the pumped-piglet host. Passing a USB disk into the VM to
-reach a pod adds moving parts. The host instead mounts the SMB share **read-only** and
-copies to the SSK. The secondary copy therefore depends only on Samba being up, and
-the copy job can never modify the primary.
+reach a pod adds moving parts. The SMB share's disk is a zvol on the **same host**, so the host
+takes a **ZFS snapshot** of it, clones the snapshot `readonly=on`, mounts the clone `ro,noload`,
+and copies `cloud-backup/` to the SSK. Then it destroys the clone and snapshot.
+
+Compared with mounting the SMB share over CIFS (the first idea), this:
+- gives a **point-in-time** copy (files can't change halfway through the mirror)
+- needs **no Samba credentials** on the host (the share's accounts are personal passwords)
+- doesn't depend on Samba or the K3s VM being up, and can never modify the primary
+- works with the Phase 3 sanoid snapshots of the same zvol.
+
+The SSK stays **exFAT** (readable on any OS). exFAT can't store `: ? * " < > | \` in names, so
+the SSK side uses rclone's Windows-style encoding (look-alike characters, restored by rclone).
 
 ### 5.4 Google Photos via scheduled Takeout
 
@@ -165,7 +174,7 @@ to Photos Trash for 60 days.
 | Writable rclone config | hostPath `/var/lib/cloud-backup/rclone/` in VM 105 | Copied from the Proxmox host by `cloud-backup-seed-k8s-config.sh` (host → VM, `qm guest exec --pass-stdin`); see §8 |
 | Status marker | `/mnt/samba-storage/cloud-backup/_status/<remote>.json` | last success time, bytes, file count, errors |
 | ZFS snapshots | sanoid policy for `local-3TB-backup/vm-105-disk-0` | via existing `scripts/backup/setup-zfs-snapshots.sh` |
-| `cloud-backup-mirror.{service,timer}` | `scripts/backup/systemd/` | host-side, installed by `scripts/backup/install-cloud-backup-mirror.sh` |
+| `cloud-backup-mirror.{sh,service,timer}` | `scripts/backup/host/` | host-side, installed by `scripts/backup/cloud-backup-install-mirror.sh`; controlled with `cloud-backup-mirror-ctl.sh run|status|log` |
 | CronJob `photos-takeout-ingest` | `apps/cloud-backup/` | Daily. Verifies and extracts new Takeout archives into `gphotos/`, maintains `_ingested.tsv`, and alerts if no archive has arrived in 70 days |
 | `cloud-backup-measure.sh` | `scripts/backup/` | Phase 0 sizing (Drive, OneDrive, and Google storage split Drive vs. Photos via `rclone about`) |
 | `cloud-reclaim-report.sh` | `scripts/backup/` | Largest-items report + dual-copy verification |
@@ -307,7 +316,7 @@ Each phase ends with a check that has to pass before the next one starts.
 - **Gate:** `zfs list -t snapshot` shows the policy taking snapshots.
 
 ### Phase 4 — Secondary copy (SSK)
-- `install-cloud-backup-mirror.sh` installs systemd units on pumped-piglet: fstab entry by UUID (`nofail`), read-only CIFS mount of the share, `rclone copy` → SSK.
+- `cloud-backup-install-mirror.sh` installs `host/cloud-backup-mirror.sh` and its systemd service and timer (daily 18:00 UTC) on pumped-piglet. Each run: find the SSK by serial and mount it, snapshot and clone the share's zvol read-only, `rclone copy` → SSK (`.versions/<date>/` for changed files), clean up, unmount. First run 2026-11-15.
 - **Gate:** `rclone check` primary↔SSK reports 0 differences.
 
 ### Phase 5 — Reclaim report (read-only)
