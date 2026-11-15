@@ -1,7 +1,7 @@
 # Google Photos Takeout ingest (design §5.4): turn downloaded .tgz archives into a browseable library.
 #
-#   _incoming/   archives saved by the download browser (Firefox writes <name>.tgz + <name>.tgz.part
-#                while downloading)
+#   _incoming/   archives saved by the download browser (while downloading Firefox writes a 0-byte
+#                <name>.tgz placeholder plus <name>.<random>.tgz.part, renamed onto <name>.tgz at the end)
 #   _staging/    extraction area (same filesystem, so the final move is a rename)
 #   library/     the kept copy: library/Google Photos/<album or year>/... + Takeout .json sidecars
 #   _ingested.tsv  one line per ingested archive: name, bytes, md5, files, date
@@ -35,7 +35,9 @@ data:
     now=$(date +%s)
     for f in "$IN"/*.tgz; do
       base=$(basename "$f"); name=${base%.tgz}
-      if [[ -e "$f.part" ]]; then echo "skip $base: still downloading"; continue; fi
+      # in progress: <name>.tgz.part, or Firefox's <name>.<random>.tgz.part (while the .tgz is a 0-byte placeholder)
+      parts=("$f.part" "$IN/$name".*.part)
+      if [[ -e "${parts[0]}" || ${#parts[@]} -gt 1 ]]; then echo "skip $base: still downloading"; continue; fi
       if [[ ! -s "$f" ]]; then echo "skip $base: empty"; continue; fi
       if (( now - $(stat -c %Y "$f") < 600 )); then echo "skip $base: modified in the last 10 min"; continue; fi
       if cut -f1 "$LEDGER" | grep -qxF "$base"; then echo "skip $base: already in _ingested.tsv (duplicate download? remove it by hand)"; continue; fi

@@ -65,6 +65,12 @@ run_ingest >/dev/null 2>&1 || true
 [[ -e "$W/data/gphotos/_incoming/takeout-002.tgz" ]] && ok "skipped, left in _incoming" || bad "was ingested while downloading"
 dx "rm -f /data/gphotos/_incoming/takeout-002.tgz /data/gphotos/_incoming/takeout-002.tgz.part"
 
+echo "== 2b. still downloading, Firefox naming (<name>.<random>.tgz.part, archive already has data)"
+make_archive takeout-002b v1; dx "touch /data/gphotos/_incoming/takeout-002b.S6Uy6z6Y.tgz.part"
+run_ingest >/dev/null 2>&1 || true
+[[ -e "$W/data/gphotos/_incoming/takeout-002b.tgz" ]] && ok "skipped, left in _incoming" || bad "was ingested while downloading"
+dx "rm -f /data/gphotos/_incoming/takeout-002b.tgz /data/gphotos/_incoming/takeout-002b.S6Uy6z6Y.tgz.part"
+
 echo "== 3. later export changes a.jpg"
 make_archive takeout-003 v2
 run_ingest >/dev/null 2>&1 && ok "run succeeded" || bad "run failed"
