@@ -25,6 +25,18 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu   # the node with /mnt/samba-storage
+      # Default is eviction 300s after the node goes NotReady/unreachable. On 2026-11-15 a disk stall made
+      # the node NotReady for a few minutes and the eviction killed 7 in-flight Takeout downloads. The pod
+      # can only run on this node anyway, so ride out stalls of up to an hour instead of being evicted.
+      tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 3600
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 3600
       initContainers:
       - name: init-dirs
         image: busybox:1.37.0
@@ -69,13 +81,11 @@ spec:
         ports:
         - containerPort: 3000
           name: http
+        # No CPU/memory limits (single-user browser; several 50 GB downloads at once must not be capped).
         resources:
           requests:
             cpu: 250m
             memory: 1Gi
-          limits:
-            cpu: "2"
-            memory: 3Gi
         readinessProbe:
           tcpSocket:
             port: 3000
