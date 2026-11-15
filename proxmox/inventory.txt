@@ -99,6 +99,9 @@
                 # Retention: keep-all=1
                 # Content: backup
                 # Fingerprint: 54:52:3A:D2:...
+                # Network: DHCP from MAAS. dhcp-ipv4-watchdog.timer inside the CT
+                #   re-requests IPv4 every 2 min if lost (boot race after power cut).
+                #   Repair/install: scripts/backup/fix-pbs-network.sh
                 #
                 # All nodes mount as "homelab-backup" (pbs type) in pvesm.
                 # Total backup data: ~631G across VMs and LXCs.

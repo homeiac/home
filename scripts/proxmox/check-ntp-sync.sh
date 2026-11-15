@@ -1,11 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Check NTP sync status across all Proxmox nodes
-# Usage: ./check-ntp-sync.sh
+# Usage: ./check-ntp-sync.sh          # report
+#        ./check-ntp-sync.sh --fix    # force chronyc makestep on nodes with issues
+#
+# Needs bash 4+ (assoc arrays) - /usr/bin/env picks up Homebrew bash on macOS.
 #
 # Alerts if:
 # - Stratum is 0 (not syncing)
 # - Time offset > 5 seconds
 # - Nodes differ by > 30 seconds
+# - Node clock differs from this workstation by > 5 seconds
+#   (catches the whole cluster being wrong together, e.g. after a power cut
+#   when MAAS NTP at 192.168.4.53 was down while hosts booted)
 
 set -e
 
@@ -13,12 +19,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INVENTORY="$SCRIPT_DIR/../../proxmox/inventory.txt"
 
 # Node IPs - update if inventory changes
+# (rapid-civet 192.168.4.11 is intentionally offline - not checked)
 declare -A NODES=(
+    ["pve"]="192.168.4.122"
     ["chief-horse"]="192.168.4.19"
     ["still-fawn"]="192.168.4.17"
-    ["pumped-piglet"]="192.168.4.18"
+    ["pumped-piglet"]="192.168.4.175"
     ["fun-bedbug"]="192.168.4.172"
 )
+
+FIX=0
+[[ "${1:-}" == "--fix" ]] && FIX=1
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,7 +53,7 @@ for node in "${!NODES[@]}"; do
         chronyc tracking 2>/dev/null | grep -E '^(Stratum|System time)' || echo 'CHRONY:not running'
     " 2>/dev/null) || {
         echo -e "${RED}UNREACHABLE${NC}"
-        ((ISSUES++))
+        ISSUES=$((ISSUES+1))
         continue
     }
 
@@ -56,9 +67,15 @@ for node in "${!NODES[@]}"; do
     # Check for issues
     node_issues=""
 
+    local_skew=$((timestamp - $(date +%s)))
+    if (( ${local_skew#-} > 5 )); then
+        node_issues+=" ${RED}Clock ${local_skew}s off vs workstation${NC}"
+        ISSUES=$((ISSUES+1))
+    fi
+
     if [[ "$stratum" == "0" ]]; then
         node_issues+=" ${RED}Stratum 0 (NOT SYNCING)${NC}"
-        ((ISSUES++))
+        ISSUES=$((ISSUES+1))
     fi
 
     if [[ -n "$offset" ]]; then
@@ -66,14 +83,18 @@ for node in "${!NODES[@]}"; do
         offset_abs=${offset#-}
         if (( $(echo "$offset_abs > 5" | bc -l 2>/dev/null || echo 0) )); then
             node_issues+=" ${YELLOW}Offset: ${offset}s${NC}"
-            ((ISSUES++))
+            ISSUES=$((ISSUES+1))
         fi
     fi
 
     if [[ -z "$node_issues" ]]; then
-        echo -e "${GREEN}OK${NC} - $date_str (Stratum: $stratum)"
+        echo -e "${GREEN}OK${NC} - $date_str (Stratum: $stratum, offset: ${offset:-?}s)"
     else
         echo -e "$node_issues - $date_str"
+        if (( FIX )); then
+            echo "    -> chronyc makestep on $node"
+            ssh -o ConnectTimeout=5 root@$ip "chronyc -a makestep >/dev/null && sleep 2 && date" | sed 's/^/       /'
+        fi
     fi
 done
 
@@ -95,7 +116,7 @@ for ((i=0; i<${#nodes_array[@]}; i++)); do
 
             if (( diff_abs > 30 )); then
                 echo -e "${RED}$node1 <-> $node2: ${diff}s drift - CRITICAL${NC}"
-                ((ISSUES++))
+                ISSUES=$((ISSUES+1))
             elif (( diff_abs > 5 )); then
                 echo -e "${YELLOW}$node1 <-> $node2: ${diff}s drift - WARNING${NC}"
             else
