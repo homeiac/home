@@ -33,9 +33,14 @@ This will:
 
 **⚠ CRITICAL**: Backup your age private key securely!
 
+The key has three copies: Google Drive + OneDrive (passphrase-encrypted escrow), the K8s secret
+`flux-system/sops-age`, and Crucible on pve. Recovery: `docs/runbooks/sops-age-key-recovery.md`.
+
 ```bash
-# Copy to secure location (password manager, encrypted USB, etc.)
-cp ~/.config/sops/age/keys.txt /path/to/secure/backup/
+# Offsite escrow to Google Drive + OneDrive (interactive passphrase; --verify to check later)
+./scripts/sops/escrow-age-key-to-cloud.sh
+# Homelab copy on Crucible
+./scripts/crucible/sync-secrets-to-crucible.sh
 
 # Get public key for sharing/documentation
 grep "# public key:" ~/.config/sops/age/keys.txt

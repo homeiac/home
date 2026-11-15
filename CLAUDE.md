@@ -20,6 +20,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 🔑 SOPS AGE KEY MISSING / NEW LAPTOP
+
+`sops -d` fails ("failed to get the data key", "no identity matched") or `~/.config/sops/age/keys.txt` is missing:
+**follow `docs/runbooks/sops-age-key-recovery.md`.** One script restores from any copy and verifies it:
+```bash
+scripts/sops/restore-age-key.sh --from-cluster          # homelab reachable over SSH
+scripts/sops/restore-age-key.sh --from-file <download>  # no homelab access: Google Drive/OneDrive homelab-recovery/sops-age-key.txt.age
+```
+Never generate a new key to "fix" this: that orphans every committed secret.
+
+---
+
 ## 🛑 SSH RULES - READ BEFORE ANY SSH COMMAND
 
 **K3s VMs: SSH DOES NOT WORK. STOP TRYING.**
