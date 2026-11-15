@@ -47,7 +47,7 @@ before anything is removed from the cloud.
 | Existing Google Drive remote | `gdrive-backup` (scope=`drive`, full access) in SOPS secret `database/rclone-gdrive-config` — used by `postgres-gdrive-sync`. **Token still valid** (Phase 0). It uses rclone's **shared Google client_id, which rclone says is being retired during 2026**. |
 | **Google quota (Phase 0, 2026-11-15)** | 100 GiB plan: Drive **9.2 GiB**, Other (**Photos + Gmail**) **80.2 GiB**, free **10.6 GiB** |
 | **Google Drive contents (Phase 0)** | **8.25 GB** in 23,360 files, plus 114 native Docs/Sheets/Slides. The three largest top-level folders are 3.4, 2.1 and 1.9 GB (names kept out of this public repo). Full report on the host: `/var/lib/cloud-backup/reports/measure-20261115-031305.txt` |
-| OneDrive | No existing remote |
+| **OneDrive (Phase 0, 2026-11-15)** | Personal account, **free 5 GiB plan**: used **3.9 GiB**, free **1.1 GiB**. Listable files **2.46 GB** in 4,549 files. The rest of "used" is Personal Vault, which the Graph API can't list ("ObjectHandle is Invalid"), plus version history. Personal Vault is **excluded** (`CB_ONEDRIVE_EXCLUDE`); copy anything in it into a normal folder by hand. Report on the host: `/var/lib/cloud-backup/reports/measure-20261115-065326.txt` |
 | Google Photos API | Since **2025-03-31** the Library API only exposes media the calling app uploaded itself. rclone's `googlephotos` backend (and every other third-party tool) **can't list or download an existing library**. Old tokens don't keep full access. |
 | Google Takeout | Only complete Photos export. Since **June 2026** supports **scheduled, incremental** Photos-only exports: every 2 months for 1 year, delivered to Drive / OneDrive / Dropbox / Box or as download links. |
 
@@ -60,7 +60,8 @@ before anything is removed from the cloud.
  ┌───────────────┐
  │ Google Photos │  scheduled Takeout (Photos only, every 2 months, incremental)
  └──────┬────────┘
-        │ archives delivered to  Drive:/Takeout/
+        │ download links → clicked in in-homelab browser (download-browser pod)
+        │ → .tgz saved straight to gphotos/_incoming/ on the primary disk
         ▼
    ┌──────────────┐      ┌──────────────┐
    │ Google Drive │      │   OneDrive   │
@@ -74,7 +75,7 @@ before anything is removed from the cloud.
 │ replaced/removed-upstream files → .versions/<date>/       │
 │                                                           │
 │ K8s CronJob  cloud-backup/photos-takeout-ingest (daily)   │
-│ new gdrive/Takeout/*.tgz → verify → extract →             │
+│ new gphotos/_incoming/*.tgz → verify → extract →          │
 │   /mnt/samba-storage/cloud-backup/gphotos/                │
 └──────────────────────────┬────────────────────────────────┘
                            │  PRIMARY COPY (browseable)
@@ -115,26 +116,36 @@ and rides the Drive pipeline:
 
 1. **Set up once (in a browser, by the user):** takeout.google.com → select **Google Photos only**
    → *Export every 2 months for 1 year* → file type **.tgz**, size **50 GB** →
-   delivery **Add to Drive**. The first export is a full library. Later ones should be incremental
+   delivery **Send download link via email**. The first export is a full library. Later ones should be incremental
    (new and changed items) per Google's June 2026 change. Older guides say every export is a
    full library, so this is **verified on the second run** before relying on it. If they turn out to be
    full, ingest de-duplicates by path and hash, and old archives are deleted from Drive sooner.
-2. **Pull:** the archives land in `Drive:/Takeout/`, and the nightly `cloud-drive-pull` copies them
-   like any other Drive file.
+2. **Fetch with an in-homelab browser:** a Firefox container (`apps/cloud-backup/download-browser`,
+   linuxserver Firefox image with a web-based desktop, pinned tag) runs on pumped-piglet. Its
+   Downloads folder is the hostPath `/mnt/samba-storage/cloud-backup/gphotos/_incoming/`, so
+   archives land on the primary disk and are visible on the SMB share as they arrive. When
+   Google's "export is ready" email arrives, the user opens `download-browser` (Traefik Ingress,
+   LAN/Tailscale only), signs in to Google once (the profile persists), and clicks the download
+   links. The Mac only displays the remote browser; archive bytes go Google → homelab disk (G4).
+   The browser profile lives in `/var/lib/cloud-backup/browser/`, outside the share, so cookies
+   are never browseable. Scaled to 0 replicas when not in use. Links expire after 7 days.
+   *Later (optional):* a Playwright job reuses that same signed-in profile to open the Takeout
+   "manage exports" page and click every part, so each export is one command. Fully headless
+   sign-in isn't used: Google blocks automated sign-ins and often re-asks for the password before
+   Takeout downloads. When that happens the job stops and the user clicks in the browser instead.
 3. **Ingest:** `photos-takeout-ingest` finds archives it hasn't processed yet, checks each one
-   (`tar -tzf` completes; size matches Drive), extracts into `cloud-backup/gphotos/`
+   (download complete, no `.part` file; `tar -tzf` completes), extracts into `cloud-backup/gphotos/`
    (`Google Photos/<album or year>/…` plus Takeout's `.json` metadata sidecars), and records each archive in
    `gphotos/_ingested.tsv` (archive name, size, MD5, file count, date).
-4. **Archive cleanup:** once an archive is extracted *and* present on the SSK, its `.tgz` is
-   a reclaim candidate. Deleting it from Drive frees the quota it used. The local `.tgz` is
-   deleted after extraction; the extracted tree is the copy that's kept.
+4. **Archive cleanup:** the local `.tgz` is deleted once it is extracted and the extracted tree is
+   on the SSK; the extracted tree is the copy that's kept. Nothing is stored in cloud quota.
 
-**Why deliver to Drive (not OneDrive or download links):** download links need a browser to
-fetch (the Mac would be in the data path, G4) and expire after a week. Drive is already pulled
-nightly. The catch is that the archives **temporarily use Google quota**. If Google storage is
-nearly full, the first full export can fail. In that case either reclaim some Drive space first,
-or point the *first* export at **OneDrive** (if it has room) and switch to Drive afterwards. The
-ingest job reads Takeout archives from either remote.
+**Why download links (not Add to Drive / OneDrive):** delivering into a cloud drive costs that
+drive's quota. Google has 10.6 GiB free and the export is ~80 GiB; OneDrive is a 5 GiB plan. Links
+cost no cloud space and, clicked in the in-homelab browser, land directly on the homelab disks. The
+trade-off is a few clicks per export, every 2 months, within 7 days. The same browser handles any
+other click-to-download export (e.g. OneDrive Personal Vault contents). Alternative if that becomes
+annoying: buy one month of 2 TB Google storage, deliver to Drive, and let the nightly pull fetch it.
 
 **Recurrence ends after a year.** The Takeout schedule has to be renewed by hand every
 12 months. The ingest job warns (status marker plus alert) if no new archive has arrived in 70 days.
@@ -179,9 +190,11 @@ These are hard rules. Each is enforced in code, not just documented.
 
 - **Google Drive:** reuse the existing `gdrive-backup` OAuth token (scope `drive`) if it still
   refreshes; otherwise re-authorize. Verified in Phase 1 with `rclone about`.
-- **OneDrive:** new remote. One-time sign-in: run `rclone config` on pumped-piglet in headless
-  mode and complete the OAuth redirect from any browser (via an SSH tunnel to `localhost:53682`).
-  The token lands on the server; it is never pasted into chat or committed in plain text.
+- **OneDrive:** `cloud-backup-auth-onedrive.sh`. `rclone authorize` runs on the host, and the
+  browser redirect comes back through an SSH tunnel to `localhost:53682`. The drive is taken from
+  Graph `GET /me/drive`, not rclone's drive picker: the picker can pick Personal Vault, which loops
+  on "ObjectHandle is Invalid". `--repair` re-detects the drive from the stored token without
+  signing in again. The token lands on the server; it is never pasted into chat or committed in plain text.
 - **Token refresh:** OneDrive rotates refresh tokens. A read-only Secret mount would eventually
   strand rclone on an expired token. So the Secret is only a **seed**: an initContainer copies it to
   the writable hostPath `/var/lib/cloud-backup/rclone/rclone.conf` if that file doesn't exist, and
@@ -231,11 +244,9 @@ scope to what fits. The gate is evaluated in Phase 0, before any download.
 ## 12. Open questions
 
 1. **Offsite.** After reclaim, should a third copy go somewhere off-premises (e.g. a friend's NAS, cold-storage bucket)?
-2. **First Takeout delivery target.** *Partly answered by Phase 0:* Google has only 10.6 GiB free and
-   Photos/Gmail is ~80 GiB, so the **first full export can't be delivered to Drive**. Use OneDrive if it
-   has ~80 GiB free (measured once OneDrive is signed in). Otherwise free Google space first (e.g. a
-   1.9 GB model cache folder on Drive plus any large Gmail attachments), or use smaller archives
-   and process them in batches. Incremental exports after the first can go to Drive.
+2. ~~**First Takeout delivery target.**~~ *Answered 2026-11-15:* neither cloud has room (Google
+   10.6 GiB free vs ~80 GiB of Photos; OneDrive is a 5 GiB plan). Use **download links fetched on the
+   host** (§5.4). Fallback: one month of 2 TB Google storage.
 5. **Own Google OAuth client_id.** rclone's shared client_id is being retired during 2026. Create a
    personal Google Cloud OAuth client (Drive API, "Desktop app") and re-authorize `gdrive-backup` before
    Phase 2. This also fixes the existing `postgres-gdrive-sync` remote.
@@ -259,20 +270,19 @@ scope to what fits. The gate is evaluated in Phase 0, before any download.
 
 Each phase ends with a check that has to pass before the next one starts.
 
-### Phase 0 — Measure (read-only) — *Google Drive done 2026-11-15; OneDrive pending sign-in*
+### Phase 0 — Measure (read-only) — *done 2026-11-15*
 - Scripts (all in `scripts/backup/`, shared settings in `cloud-backup-common.sh`):
   - `cloud-backup-install-rclone.sh`: pinned rclone v1.76.0 on the host, SHA256-verified, idempotent.
   - `cloud-backup-seed-gdrive-config.sh`: decrypts the existing SOPS rclone config and streams it to the host (never printed or written locally); merges by remote section.
-  - `cloud-backup-auth-onedrive.sh`: interactive one-time OneDrive OAuth. rclone runs on the host and the browser redirect is tunnelled over SSH.
+  - `cloud-backup-auth-onedrive.sh`: interactive one-time OneDrive OAuth. rclone runs on the host and the browser redirect is tunnelled over SSH; default drive from Graph `/me/drive`; `--repair` mode.
   - `cloud-backup-measure.sh`: `rclone about` plus one recursive listing per remote, giving totals, native-Docs count, per-folder sizes, largest files and the capacity gate.
   - `cloud-backup-format-ssk.sh --yes`: (re)format the SSK, located by USB serial. Already run 2026-11-14.
-- **Gate:** sizes recorded in §4 (Drive ✔, OneDrive pending); capacity gate (§10) evaluated (Drive 8.25 GB fits both copies); user confirms scope.
+- **Gate:** sizes recorded in §4 (Drive ✔ 8.25 GB, OneDrive ✔ 2.46 GB); capacity gate (§10) evaluated (10.7 GB fits both copies, Photos measured at first Takeout); user confirms scope.
 
 ### Phase 1 — Auth & secrets
 - Verify the existing `gdrive-backup` token, or re-authorize. Create the `onedrive:` remote via headless OAuth.
 - Commit `apps/cloud-backup/secrets/rclone-cloud-seed.sops.yaml`.
-- **User (browser):** set up the scheduled Google Takeout for Photos (§5.4) with the delivery target
-  chosen in §12 Q2.
+- **User (browser):** set up the scheduled Google Takeout for Photos (§5.4), delivery by download link.
 - **Gate:** `rclone about gdrive:` and `rclone about onedrive:` succeed from inside the pod; Takeout
   confirmation email received.
 
@@ -283,6 +293,7 @@ Each phase ends with a check that has to pass before the next one starts.
 - **Gate:** status marker shows exit 0; `rclone check --one-way` cloud→primary reports 0 differences; files visible at `\\192.168.4.120\secure\cloud-backup`.
 
 ### Phase 2b — Google Photos ingest
+- `apps/cloud-backup/download-browser`: Firefox web desktop, Downloads = `gphotos/_incoming/`, Ingress on the wildcard domain, replicas 0 by default; `scripts/backup/download-browser.sh up|down` scales it (§5.4).
 - `photos-takeout-ingest` CronJob (§5.4).
 - **Gate:** the first full export is ingested; `_ingested.tsv` file counts match `tar -tzf` for every
   archive; the item count in `gphotos/` is within a few percent of the library count shown in Google

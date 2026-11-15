@@ -18,6 +18,9 @@ CB_RCLONE_CONF="${CB_RCLONE_CONF:-/root/.config/rclone/rclone.conf}"
 # rclone remote names
 CB_GDRIVE_REMOTE="${CB_GDRIVE_REMOTE:-gdrive-backup}"
 CB_ONEDRIVE_REMOTE="${CB_ONEDRIVE_REMOTE:-onedrive}"
+# OneDrive Personal Vault is locked and the Graph API cannot list it ("ObjectHandle is Invalid").
+# Excluded from listings and backups; copy anything in it manually if needed.
+CB_ONEDRIVE_EXCLUDE="${CB_ONEDRIVE_EXCLUDE:-/Personal Vault/**}"
 
 # Where reports are written on the host
 CB_REPORT_DIR="${CB_REPORT_DIR:-/var/lib/cloud-backup/reports}"

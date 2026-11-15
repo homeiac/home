@@ -27,7 +27,7 @@ if [[ ${#REMOTES[@]} -eq 0 ]]; then
 fi
 [[ ${#REMOTES[@]} -gt 0 ]] || { echo "ERROR: no remotes to measure"; exit 1; }
 
-cb_ssh "CONF='$CB_RCLONE_CONF' OUT='$CB_REPORT_DIR' REMOTES='${REMOTES[*]}' bash -s" <<'EOF'
+cb_ssh "CONF='$CB_RCLONE_CONF' OUT='$CB_REPORT_DIR' REMOTES='${REMOTES[*]}' OD='$CB_ONEDRIVE_REMOTE' OD_EXCLUDE='$CB_ONEDRIVE_EXCLUDE' bash -s" <<'EOF'
 set -euo pipefail
 mkdir -p "$OUT"
 REPORT="$OUT/measure-$(date +%Y%m%d-%H%M%S).txt"
@@ -38,7 +38,8 @@ for r in $REMOTES; do
   rclone about "$r:" --config "$CONF" || echo "(about failed)"
   echo
   echo "Listing $r: (recursive, may take a few minutes)..." >&2
-  rclone lsjson -R --files-only --fast-list "$r:" --config "$CONF" \
+  EXCL=(); [[ "$r" == "$OD" ]] && EXCL=(--exclude "$OD_EXCLUDE")
+  rclone lsjson -R --files-only --fast-list "${EXCL[@]}" "$r:" --config "$CONF" \
     | R="$r" TOTAL_FILE="$TOTAL_FILE" python3 -c '
 import json, os, sys, collections
 items = json.load(sys.stdin)
