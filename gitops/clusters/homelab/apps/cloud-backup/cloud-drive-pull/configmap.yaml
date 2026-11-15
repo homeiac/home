@@ -1,0 +1,47 @@
+# Nightly pull script (design §5, §7). POSIX sh: the rclone image is Alpine (no bash).
+# Safety invariants:
+#   S1 `rclone copy` only, never `sync`: nothing in the backup is deleted because it vanished upstream.
+#   S2 files changed upstream: the old local version is moved to .versions/<date>/<remote>/ (--backup-dir).
+#   Personal Vault (OneDrive) can't be read through the API and is excluded.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloud-drive-pull
+  namespace: cloud-backup
+data:
+  pull.sh: |
+    #!/bin/sh
+    set -u
+    CONF=/config/rclone.conf
+    DATA=/data
+    STATUS=/status
+    DAY=$(date +%Y-%m-%d)
+    STAMP=$(date +%Y%m%d-%H%M%S)
+    mkdir -p "$STATUS/logs"
+    LOG="$STATUS/logs/pull-$STAMP.log"
+    [ -s "$CONF" ] || { echo "ERROR: $CONF missing - run scripts/backup/cloud-backup-seed-k8s-config.sh"; exit 2; }
+    umask 022
+    rc_all=0
+    summary=""
+    pull() {  # pull <remote> <dest dir> [extra rclone flags...]
+      remote=$1; dest=$2; shift 2
+      echo "=== $(date -Iseconds) $remote: -> $DATA/$dest" | tee -a "$LOG"
+      rclone copy "$remote:" "$DATA/$dest" \
+        --config "$CONF" \
+        --backup-dir "$DATA/.versions/$DAY/$dest" \
+        --fast-list --transfers 4 --checkers 8 \
+        --stats 1m --stats-one-line --log-level INFO --log-file "$LOG" \
+        "$@"
+      rc=$?
+      echo "=== $(date -Iseconds) $remote: exit $rc" | tee -a "$LOG"
+      [ $rc -eq 0 ] || rc_all=$rc
+      summary="$summary\"$remote\": $rc, "
+    }
+    pull gdrive-backup gdrive --drive-acknowledge-abuse
+    pull onedrive onedrive --exclude "/Personal Vault/**"
+    printf '{"finished": "%s", "exit": %d, "remotes": {%s}, "log": "%s"}\n' \
+      "$(date -Iseconds)" "$rc_all" "${summary%, }" "$LOG" > "$STATUS/last-run.json"
+    cat "$STATUS/last-run.json"
+    # keep 60 days of logs
+    find "$STATUS/logs" -name 'pull-*.log' -mtime +60 -delete
+    exit $rc_all

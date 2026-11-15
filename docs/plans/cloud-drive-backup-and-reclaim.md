@@ -161,9 +161,8 @@ to Photos Trash for 60 days.
 | Component | Location | Notes |
 |-----------|----------|-------|
 | Namespace `cloud-backup` | `gitops/clusters/homelab/apps/cloud-backup/` | New Flux app |
-| SOPS secret `rclone-cloud-seed` | same dir, `secrets/` | Initial `rclone.conf` with `gdrive:` and `onedrive:` remotes |
 | CronJob `cloud-drive-pull` | same dir | `rclone/rclone:1.76.0` (tag to be verified before merge), `concurrencyPolicy: Forbid`, nightly 01:30 |
-| Writable rclone config | hostPath `/var/lib/cloud-backup/rclone/` in VM 105 | Seeded from secret by initContainer **only if absent**; see §8 |
+| Writable rclone config | hostPath `/var/lib/cloud-backup/rclone/` in VM 105 | Copied from the Proxmox host by `cloud-backup-seed-k8s-config.sh` (host → VM, `qm guest exec --pass-stdin`); see §8 |
 | Status marker | `/mnt/samba-storage/cloud-backup/_status/<remote>.json` | last success time, bytes, file count, errors |
 | ZFS snapshots | sanoid policy for `local-3TB-backup/vm-105-disk-0` | via existing `scripts/backup/setup-zfs-snapshots.sh` |
 | `cloud-backup-mirror.{service,timer}` | `scripts/backup/systemd/` | host-side, installed by `scripts/backup/install-cloud-backup-mirror.sh` |
@@ -196,13 +195,16 @@ These are hard rules. Each is enforced in code, not just documented.
   Graph `GET /me/drive`, not rclone's drive picker: the picker can pick Personal Vault, which loops
   on "ObjectHandle is Invalid". `--repair` re-detects the drive from the stored token without
   signing in again. The token lands on the server; it is never pasted into chat or committed in plain text.
-- **Token refresh:** OneDrive rotates refresh tokens. A read-only Secret mount would eventually
-  strand rclone on an expired token. So the Secret is only a **seed**: an initContainer copies it to
-  the writable hostPath `/var/lib/cloud-backup/rclone/rclone.conf` if that file doesn't exist, and
-  rclone persists refreshed tokens there. That path is **outside** the SMB share, so tokens are
-  never browseable.
-- Committed form: `secrets/rclone-cloud-seed.sops.yaml`, encrypted with the repo's age recipient.
-  The PRIME DIRECTIVE pre-commit secret check applies.
+- **Token refresh:** OneDrive rotates refresh tokens, so rclone needs a **writable** config.
+  The CronJob mounts the hostPath `/var/lib/cloud-backup/rclone/rclone.conf` (VM 105, dir 0700,
+  file 0600) and rclone persists refreshed tokens there. That path is **outside** the SMB share,
+  so tokens are never browseable.
+- **Getting the config there:** `cloud-backup-seed-k8s-config.sh` copies the host's rclone config
+  into the VM with `qm guest exec --pass-stdin`. The tokens go host → VM only: they never pass
+  through the workstation and are **not committed at all** (not even SOPS-encrypted). This
+  replaces the earlier idea of a SOPS seed Secret plus an initContainer. Idempotent; `--force` to
+  re-seed after re-authorizing a remote on the host. Trade-off: rebuilding VM 105 needs a re-seed,
+  which is one command.
 
 ## 9. Data-format notes
 
@@ -282,15 +284,15 @@ Each phase ends with a check that has to pass before the next one starts.
 
 ### Phase 1 — Auth & secrets
 - Verify the existing `gdrive-backup` token, or re-authorize. Create the `onedrive:` remote via headless OAuth.
-- Commit `apps/cloud-backup/secrets/rclone-cloud-seed.sops.yaml`.
+- Seed the K3s VM with `cloud-backup-seed-k8s-config.sh` (done 2026-11-15).
 - **User (browser):** set up the scheduled Google Takeout for Photos (§5.4), delivery by download link.
 - **Gate:** `rclone about gdrive:` and `rclone about onedrive:` succeed from inside the pod; Takeout
   confirmation email received.
 
 ### Phase 2 — Primary pull (Flux)
-- `apps/cloud-backup/` namespace, CronJob, initContainer seed, status marker. Verify the image tag exists.
+- `apps/cloud-backup/cloud-drive-pull`: CronJob (02:30 nightly, `rclone/rclone:1.76.0`, `copy` + `--backup-dir .versions/<date>/`), status in `/var/lib/cloud-backup/status/last-run.json`. Scripts: `cloud-backup-run-now.sh`, `cloud-backup-status.sh`.
 - Grow the SMB zvol if Phase 0 shows a need.
-- First run triggered manually (`kubectl create job --from=cronjob/...`).
+- First run triggered manually: `cloud-backup-run-now.sh`.
 - **Gate:** status marker shows exit 0; `rclone check --one-way` cloud→primary reports 0 differences; files visible at `\\192.168.4.120\secure\cloud-backup`.
 
 ### Phase 2b — Google Photos ingest

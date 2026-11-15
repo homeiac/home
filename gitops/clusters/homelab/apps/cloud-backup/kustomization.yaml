@@ -9,3 +9,6 @@ resources:
   - download-browser/deployment.yaml
   - download-browser/service.yaml
   - download-browser/ingress.yaml
+  # Nightly Google Drive + OneDrive pull (rclone config seeded by scripts/backup/cloud-backup-seed-k8s-config.sh)
+  - cloud-drive-pull/configmap.yaml
+  - cloud-drive-pull/cronjob.yaml
