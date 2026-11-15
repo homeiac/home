@@ -1,0 +1,56 @@
+# Google Photos Takeout ingest (design §5.4). Every 2 hours: unpack finished archives from
+# gphotos/_incoming into gphotos/library. Scripts and safety checks: configmap.yaml.
+#   /data   = /mnt/samba-storage/cloud-backup   (SMB share)
+#   /status = /var/lib/cloud-backup/status      (photos-ingest-last-run.json + logs)
+# Manual run: scripts/backup/cloud-backup-run-now.sh --job photos-takeout-ingest
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: photos-takeout-ingest
+  namespace: cloud-backup
+spec:
+  schedule: "15 */2 * * *"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0             # a failed run is retried by the next schedule, not immediately
+      activeDeadlineSeconds: 43200
+      template:
+        metadata:
+          labels:
+            app: photos-takeout-ingest
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu   # the node with /mnt/samba-storage
+          initContainers:
+          - name: extract
+            image: debian:bookworm-20251103-slim   # GNU tar (members > 8 GiB), coreutils
+            command: ["/bin/bash", "/scripts/extract.sh"]
+            resources:
+              requests: {cpu: 200m, memory: 128Mi}
+              limits: {cpu: "2", memory: 1Gi}
+            volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+          containers:
+          - name: finalize
+            image: rclone/rclone:1.76.0
+            command: ["/bin/sh", "/scripts/finalize.sh"]
+            resources:
+              requests: {cpu: 100m, memory: 128Mi}
+              limits: {cpu: "2", memory: 1Gi}
+            volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: status, mountPath: /status}
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+          volumes:
+          - name: data
+            hostPath: {path: /mnt/samba-storage/cloud-backup, type: Directory}
+          - name: status
+            hostPath: {path: /var/lib/cloud-backup/status, type: DirectoryOrCreate}
+          - name: scripts
+            configMap: {name: photos-takeout-ingest}

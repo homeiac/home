@@ -143,12 +143,18 @@ and rides the Drive pipeline:
    "manage exports" page and click every part, so each export is one command. Fully headless
    sign-in isn't used: Google blocks automated sign-ins and often re-asks for the password before
    Takeout downloads. When that happens the job stops and the user clicks in the browser instead.
-3. **Ingest:** `photos-takeout-ingest` finds archives it hasn't processed yet, checks each one
-   (download complete, no `.part` file; `tar -tzf` completes), extracts into `cloud-backup/gphotos/`
-   (`Google Photos/<album or year>/…` plus Takeout's `.json` metadata sidecars), and records each archive in
-   `gphotos/_ingested.tsv` (archive name, size, MD5, file count, date).
-4. **Archive cleanup:** the local `.tgz` is deleted once it is extracted and the extracted tree is
-   on the SSK; the extracted tree is the copy that's kept. Nothing is stored in cloud quota.
+3. **Ingest:** `photos-takeout-ingest` CronJob, every 2 hours. An archive is picked up only when
+   finished: no `.part`, non-empty, unchanged for 10 minutes, and not already in `gphotos/_ingested.tsv`.
+   - Extract (Debian initContainer; GNU tar handles video members over 8 GiB): one read pass computes
+     the md5, gunzips (CRC checked) and extracts into `gphotos/_staging/`. The extracted file count must
+     equal the archive's member count. If it fails part-way, the partial staging dir is removed.
+   - Finalize (rclone container): `rclone move` staging → `gphotos/library/Google Photos/` (a rename on
+     the same filesystem). A library file that changed in a later export keeps its old version in
+     `gphotos/.versions/<date>/`. Records name, bytes, md5, file count, date in `_ingested.tsv`.
+   - Tested locally by `scripts/backup/test-photos-takeout-ingest.sh` (same images; 5 scenarios).
+4. **Archive cleanup:** the `.tgz` is deleted right after a verified ingest. The extracted library
+   is the kept copy (mirrored to the SSK daily) and Google keeps the originals until Phase 6. Peak disk
+   use is all downloaded archives plus one extracted archive (~120 GB for a ~70 GB library; 160 GB free).
 
 **Why download links (not Add to Drive / OneDrive):** delivering into a cloud drive costs that
 drive's quota. Google has 10.6 GiB free and the export is ~80 GiB; OneDrive is a 5 GiB plan. Links
@@ -309,7 +315,7 @@ Each phase ends with a check that has to pass before the next one starts.
 
 ### Phase 2b — Google Photos ingest
 - `apps/cloud-backup/download-browser`: Firefox web desktop, Downloads = `gphotos/_incoming/`, Ingress on the wildcard domain, basic auth (§5.4). Scripts: `download-browser-create-secret.sh`, `download-browser-password.sh` (clipboard), `download-browser-status.sh`.
-- `photos-takeout-ingest` CronJob (§5.4).
+- `photos-takeout-ingest` CronJob (§5.4); manual run `cloud-backup-run-now.sh --job photos-takeout-ingest`; test `test-photos-takeout-ingest.sh`. First scheduled Takeout export (Photos only, every 2 months, incremental, .tgz 50 GB, email links) created 2026-11-15.
 - **Gate:** the first full export is ingested; `_ingested.tsv` file counts match `tar -tzf` for every
   archive; the item count in `gphotos/` is within a few percent of the library count shown in Google
   Photos. After the **second** scheduled export, confirm whether it was incremental and update §5.4.

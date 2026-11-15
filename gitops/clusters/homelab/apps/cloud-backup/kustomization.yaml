@@ -12,3 +12,6 @@ resources:
   # Nightly Google Drive + OneDrive pull (rclone config seeded by scripts/backup/cloud-backup-seed-k8s-config.sh)
   - cloud-drive-pull/configmap.yaml
   - cloud-drive-pull/cronjob.yaml
+  # Google Photos Takeout: unpack downloaded archives into gphotos/library (every 2h)
+  - photos-takeout-ingest/configmap.yaml
+  - photos-takeout-ingest/cronjob.yaml
