@@ -1,0 +1,14 @@
+# Cloud backup: Google Drive / OneDrive / Google Photos -> homelab
+# Design: docs/plans/cloud-drive-backup-and-reclaim.md
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  # Basic-auth login for the download browser (create with: scripts/backup/download-browser-create-secret.sh)
+  - secrets/download-browser-auth.sops.yaml
+  - download-browser/deployment.yaml
+  - download-browser/service.yaml
+  - download-browser/ingress.yaml
+  # Nightly Google Drive + OneDrive pull (rclone config seeded by scripts/backup/cloud-backup-seed-k8s-config.sh)
+  - cloud-drive-pull/configmap.yaml
+  - cloud-drive-pull/cronjob.yaml

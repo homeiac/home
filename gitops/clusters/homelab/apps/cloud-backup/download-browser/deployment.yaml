@@ -1,0 +1,112 @@
+# Firefox in a web page, running in the homelab (design §5.4).
+# Used to click Google Takeout download links: downloads go straight to the primary
+# backup disk (SMB share), never through the machine displaying the browser.
+#   Downloads (~/Downloads) -> /mnt/samba-storage/cloud-backup/gphotos/_incoming  (on the SMB share)
+#   Profile   (/config)     -> /var/lib/cloud-backup/browser                     (NOT on the share: holds sign-in cookies)
+# Runs as uid/gid 65534 (nobody) so files match the Samba share's `force user = nobody`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: download-browser
+  namespace: cloud-backup
+  labels:
+    app: download-browser
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # single profile directory; never two Firefox instances on it
+  selector:
+    matchLabels:
+      app: download-browser
+  template:
+    metadata:
+      labels:
+        app: download-browser
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu   # the node with /mnt/samba-storage
+      initContainers:
+      - name: init-dirs
+        image: busybox:1.37.0
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          mkdir -p /share/cloud-backup/gphotos/_incoming
+          chown 65534:65534 /share/cloud-backup /share/cloud-backup/gphotos /share/cloud-backup/gphotos/_incoming
+          chmod 0770 /share/cloud-backup /share/cloud-backup/gphotos /share/cloud-backup/gphotos/_incoming
+          chown 65534:65534 /profile
+          chmod 0700 /profile
+        volumeMounts:
+        - name: share
+          mountPath: /share
+        - name: profile
+          mountPath: /profile
+      containers:
+      - name: firefox
+        image: lscr.io/linuxserver/firefox:1160.0build1-1xtradeb1.2404.1-ls136
+        env:
+        - name: PUID
+          value: "65534"
+        - name: PGID
+          value: "65534"
+        - name: TZ
+          value: "America/Los_Angeles"
+        - name: TITLE
+          value: "Download Browser"
+        # HTTP basic auth in front of the browser (it holds a Google session)
+        - name: CUSTOM_USER
+          valueFrom:
+            secretKeyRef:
+              name: download-browser-auth
+              key: username
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: download-browser-auth
+              key: password
+        ports:
+        - containerPort: 3000
+          name: http
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 3Gi
+        readinessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        livenessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        volumeMounts:
+        - name: profile
+          mountPath: /config
+        - name: downloads
+          mountPath: /config/Downloads
+        - name: dev-shm
+          mountPath: /dev/shm
+      volumes:
+      - name: share
+        hostPath:
+          path: /mnt/samba-storage
+          type: Directory
+      - name: downloads
+        hostPath:
+          path: /mnt/samba-storage/cloud-backup/gphotos/_incoming
+          type: DirectoryOrCreate
+      - name: profile
+        hostPath:
+          path: /var/lib/cloud-backup/browser
+          type: DirectoryOrCreate
+      - name: dev-shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi

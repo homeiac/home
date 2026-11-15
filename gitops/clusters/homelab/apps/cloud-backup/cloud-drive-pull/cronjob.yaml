@@ -1,0 +1,66 @@
+# Nightly copy of Google Drive + OneDrive onto the primary backup disk (the SMB share).
+#   /data   = /mnt/samba-storage/cloud-backup     (browseable at \\<smb-host>\secure\cloud-backup)
+#   /config = /var/lib/cloud-backup/rclone        (rclone.conf with OAuth tokens; NOT on the share;
+#             writable so refreshed tokens persist. Seeded by scripts/backup/cloud-backup-seed-k8s-config.sh)
+#   /status = /var/lib/cloud-backup/status        (last-run.json + logs; read by cloud-backup-status.sh)
+# Manual run: scripts/backup/cloud-backup-run-now.sh
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cloud-drive-pull
+  namespace: cloud-backup
+spec:
+  schedule: "30 2 * * *"
+  timeZone: America/Los_Angeles
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 21600   # 6h
+      template:
+        metadata:
+          labels:
+            app: cloud-drive-pull
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu   # the node with /mnt/samba-storage
+          containers:
+          - name: rclone
+            image: rclone/rclone:1.76.0
+            command: ["/bin/sh", "/scripts/pull.sh"]
+            resources:
+              requests:
+                cpu: 200m
+                memory: 256Mi
+              limits:
+                cpu: "2"
+                memory: 2Gi
+            volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /config
+            - name: status
+              mountPath: /status
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          volumes:
+          - name: data
+            hostPath:
+              path: /mnt/samba-storage/cloud-backup
+              type: DirectoryOrCreate
+          - name: config
+            hostPath:
+              path: /var/lib/cloud-backup/rclone
+              type: Directory   # must be seeded first; fail fast if not
+          - name: status
+            hostPath:
+              path: /var/lib/cloud-backup/status
+              type: DirectoryOrCreate
+          - name: scripts
+            configMap:
+              name: cloud-drive-pull
