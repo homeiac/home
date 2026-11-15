@@ -1,0 +1,91 @@
+# Google Photos Takeout ingest (design §5.4): turn downloaded .tgz archives into a browseable library.
+#
+#   _incoming/   archives saved by the download browser (Firefox writes <name>.tgz + <name>.tgz.part
+#                while downloading)
+#   _staging/    extraction area (same filesystem, so the final move is a rename)
+#   library/     the kept copy: library/Google Photos/<album or year>/... + Takeout .json sidecars
+#   _ingested.tsv  one line per ingested archive: name, bytes, md5, files, date
+#
+# Two steps, two pinned images:
+#   extract.sh  (initContainer, Debian: GNU tar handles >8 GiB video members) for each FINISHED archive
+#               (no .part, non-empty, unchanged for 10 min, not already ingested): one read pass that
+#               computes the md5, gunzips (CRC checked) and extracts; then checks the extracted file
+#               count equals the archive's member count; writes _staging/<name>/.extracted.
+#   finalize.sh (rclone image): rclone move _staging/<name>/Takeout/Google Photos -> library/Google Photos;
+#               a file already in the library that differs is moved to gphotos/.versions/<date>/ (S2);
+#               verifies staging is empty, records the archive in _ingested.tsv, deletes the .tgz.
+# Deleting the .tgz is safe: the extracted library is the kept copy (mirrored to the SSK daily) and
+# Google still has the originals until Phase 6. A failed run leaves the archive; the next run retries.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photos-takeout-ingest
+  namespace: cloud-backup
+data:
+  extract.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    G=/data/gphotos; IN=$G/_incoming; STAGE=$G/_staging; LEDGER=$G/_ingested.tsv
+    mkdir -p "$STAGE" "$G/library"
+    touch "$LEDGER"
+    shopt -s nullglob
+    # if extraction fails part-way (corrupt archive, disk full), remove the partial staging dir
+    cur=""
+    trap 'rc=$?; if [[ -n "$cur" ]]; then rm -rf "$STAGE/$cur" "$STAGE/$cur.md5" "$STAGE/$cur.list"; echo "cleaned partial staging for $cur"; fi; exit $rc' EXIT
+    now=$(date +%s)
+    for f in "$IN"/*.tgz; do
+      base=$(basename "$f"); name=${base%.tgz}
+      if [[ -e "$f.part" ]]; then echo "skip $base: still downloading"; continue; fi
+      if [[ ! -s "$f" ]]; then echo "skip $base: empty"; continue; fi
+      if (( now - $(stat -c %Y "$f") < 600 )); then echo "skip $base: modified in the last 10 min"; continue; fi
+      if cut -f1 "$LEDGER" | grep -qxF "$base"; then echo "skip $base: already in _ingested.tsv (duplicate download? remove it by hand)"; continue; fi
+      if [[ -f "$STAGE/$name/.extracted" ]]; then echo "skip $base: extracted, waiting for finalize"; continue; fi
+      size=$(stat -c %s "$f")
+      free=$(df -B1 --output=avail "$STAGE" | tail -1)
+      if (( free < size + size / 20 )); then echo "ERROR $base: not enough space ($free free, need ~$size)"; exit 1; fi
+      echo "=== $(date -Iseconds) extracting $base ($((size / 1000000)) MB)"
+      cur="$name"
+      rm -rf "$STAGE/$name"; mkdir -p "$STAGE/$name"
+      # one read of the archive: md5 + gunzip (CRC) + extract + member list
+      tee >(md5sum | cut -c1-32 > "$STAGE/$name.md5") < "$f" \
+        | tar -xzvf - -C "$STAGE/$name" --no-same-owner --no-same-permissions > "$STAGE/$name.list"
+      wait
+      members=$(grep -vc '/$' "$STAGE/$name.list" || true)
+      files=$(find "$STAGE/$name" -type f | wc -l)
+      if (( members != files )); then echo "ERROR $base: archive has $members files, extracted $files"; rm -rf "$STAGE/$name"; exit 1; fi
+      printf '%s\t%s\t%s\t%s\t%s\n' "$base" "$size" "$(cat "$STAGE/$name.md5")" "$files" "$(date -Iseconds)" > "$STAGE/$name/.extracted"
+      rm -f "$STAGE/$name.md5" "$STAGE/$name.list"
+      cur=""
+      echo "=== extracted $files files from $base"
+    done
+  finalize.sh: |
+    #!/bin/sh
+    set -eu
+    G=/data/gphotos; IN=$G/_incoming; STAGE=$G/_staging; LIB="$G/library"; LEDGER=$G/_ingested.tsv
+    DAY=$(date +%Y-%m-%d)
+    mkdir -p /status/logs
+    LOG=/status/logs/photos-ingest-$(date +%Y%m%d-%H%M%S).log
+    done_n=0; result=ok
+    for mark in "$STAGE"/*/.extracted; do
+      [ -f "$mark" ] || continue
+      d=$(dirname "$mark"); name=$(basename "$d"); base="$name.tgz"
+      src="$d/Takeout/Google Photos"
+      [ -d "$src" ] || src="$d/Takeout"
+      echo "=== $(date -Iseconds) moving $base into the library" | tee -a "$LOG"
+      if ! rclone move "$src" "$LIB/Google Photos" --config /dev/null \
+            --backup-dir "$G/.versions/$DAY" --log-level INFO --log-file "$LOG" --transfers 8; then
+        echo "ERROR $base: rclone move failed" | tee -a "$LOG"; result=failed; continue
+      fi
+      left=$(find "$src" -type f | wc -l)
+      if [ "$left" -ne 0 ]; then echo "ERROR $base: $left files left in staging" | tee -a "$LOG"; result=failed; continue; fi
+      cat "$mark" >> "$LEDGER"
+      rm -f "$IN/$base"
+      rm -rf "$d"
+      done_n=$((done_n + 1))
+      echo "=== $(date -Iseconds) ingested $base; archive deleted" | tee -a "$LOG"
+    done
+    printf '{"finished": "%s", "status": "%s", "ingested_this_run": %d, "ingested_total": %d, "waiting": %d}\n' \
+      "$(date -Iseconds)" "$result" "$done_n" "$(wc -l < "$LEDGER")" "$(ls "$IN"/*.tgz 2>/dev/null | wc -l)" \
+      | tee /status/photos-ingest-last-run.json
+    find /status/logs -name 'photos-ingest-*.log' -mtime +60 -delete
+    [ "$result" = ok ]
