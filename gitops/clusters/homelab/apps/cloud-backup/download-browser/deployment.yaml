@@ -1,7 +1,10 @@
 # Firefox in a web page, running in the homelab (design §5.4).
 # Used to click Google Takeout download links: downloads go straight to the primary
 # backup disk (SMB share), never through the machine displaying the browser.
-#   Downloads (~/Downloads) -> /mnt/samba-storage/cloud-backup/gphotos/_incoming  (on the SMB share)
+#   Downloads (~/Downloads) -> /var/lib/cloud-backup/downloads  (VM root disk = NVMe pool, NOT the USB HDD)
+#     2026-11-15: downloading onto the USB-HDD SMB disk saturated it (node outage), made Firefox's
+#     resume re-read take 30-45 min and resumes then failed. The ingest job moves finished archives
+#     onto the SMB disk one at a time (sequential), which the HDD handles well.
 #   Profile   (/config)     -> /var/lib/cloud-backup/browser                     (NOT on the share: holds sign-in cookies)
 # Runs as uid/gid 65534 (nobody) so files match the Samba share's `force user = nobody`.
 apiVersion: apps/v1
@@ -50,11 +53,15 @@ spec:
           chmod 0770 /share/cloud-backup /share/cloud-backup/gphotos /share/cloud-backup/gphotos/_incoming
           chown 65534:65534 /profile
           chmod 0700 /profile
+          chown 65534:65534 /downloads
+          chmod 0770 /downloads
         volumeMounts:
         - name: share
           mountPath: /share
         - name: profile
           mountPath: /profile
+        - name: downloads
+          mountPath: /downloads
       containers:
       - name: firefox
         image: lscr.io/linuxserver/firefox:1160.0build1-1xtradeb1.2404.1-ls136
@@ -110,7 +117,7 @@ spec:
           type: Directory
       - name: downloads
         hostPath:
-          path: /mnt/samba-storage/cloud-backup/gphotos/_incoming
+          path: /var/lib/cloud-backup/downloads
           type: DirectoryOrCreate
       - name: profile
         hostPath:

@@ -21,8 +21,8 @@ DEBIAN_IMG="$(grep -o 'debian:[^ ]*' "$CJ" | head -1)"
 RCLONE_IMG="$(grep -o 'rclone/rclone:[^ ]*' "$CJ" | head -1)"
 
 W="$(mktemp -d "$HOME/.cache/photos-ingest-test.XXXXXX")"
-trap 'docker run --rm -v "$W:/w" "$DEBIAN_IMG" rm -rf /w/data /w/status >/dev/null 2>&1; rm -rf "$W"' EXIT
-mkdir -p "$W/scripts" "$W/data/gphotos/_incoming" "$W/status"
+trap 'docker run --rm -v "$W:/w" "$DEBIAN_IMG" rm -rf /w/data /w/status /w/downloads >/dev/null 2>&1; rm -rf "$W"' EXIT
+mkdir -p "$W/scripts" "$W/data/gphotos/_incoming" "$W/status" "$W/downloads"
 python3 - "$CM" "$W/scripts" <<'PY'
 import sys, yaml
 d = yaml.safe_load(open(sys.argv[1]))["data"]
@@ -33,10 +33,10 @@ PY
 PASS=0 FAIL=0
 ok()   { echo "  PASS: $*"; PASS=$((PASS + 1)); }
 bad()  { echo "  FAIL: $*"; FAIL=$((FAIL + 1)); }
-dx()   { docker run --rm -v "$W/data:/data" -v "$W/scripts:/scripts:ro" "$DEBIAN_IMG" bash -c "$1"; }
+dx()   { docker run --rm -v "$W/data:/data" -v "$W/downloads:/downloads" -v "$W/scripts:/scripts:ro" "$DEBIAN_IMG" bash -c "$1"; }
 run_ingest() {   # returns 0 if both steps succeeded (like the Job)
-  docker run --rm -v "$W/data:/data" -v "$W/scripts:/scripts:ro" "$DEBIAN_IMG" bash /scripts/extract.sh || return 1
-  docker run --rm --entrypoint /bin/sh -v "$W/data:/data" -v "$W/status:/status" -v "$W/scripts:/scripts:ro" \
+  docker run --rm -v "$W/data:/data" -v "$W/downloads:/downloads" -v "$W/scripts:/scripts:ro" "$DEBIAN_IMG" bash /scripts/extract.sh || return 1
+  docker run --rm --entrypoint /bin/sh -v "$W/data:/data" -v "$W/downloads:/downloads" -v "$W/status:/status" -v "$W/scripts:/scripts:ro" \
     "$RCLONE_IMG" /scripts/finalize.sh
 }
 # make_archive <name> <content-of-a.jpg>: Takeout layout, mtime 1h ago so it counts as finished
@@ -92,6 +92,16 @@ make_archive takeout-001 v9
 run_ingest >/dev/null 2>&1 || true
 [[ "$(cat "$lib/Album A/a.jpg")" == v2 ]] && ok "not ingested twice" || bad "duplicate was ingested"
 [[ "$(grep -c '^takeout-001.tgz' "$W/data/gphotos/_ingested.tsv")" == 1 ]] && ok "ledger has one entry" || bad "ledger duplicated"
+
+echo "== 6. archive downloaded to /downloads (NVMe), with its own still-downloading sibling"
+dx "set -e; t=\$(mktemp -d); mkdir -p \"\$t/Takeout/Google Photos/Photos from 2024\"
+    echo c > \"\$t/Takeout/Google Photos/Photos from 2024/c.jpg\"
+    tar -czf /downloads/takeout-006.tgz -C \"\$t\" Takeout; touch -d '1 hour ago' /downloads/takeout-006.tgz
+    : > /downloads/takeout-007.tgz; touch /downloads/takeout-007.Xy12.tgz.part"
+run_ingest >/dev/null 2>&1 && ok "run succeeded" || bad "run failed"
+[[ -f "$lib/Photos from 2024/c.jpg" ]] && ok "c.jpg in library" || bad "c.jpg missing"
+[[ ! -e "$W/downloads/takeout-006.tgz" ]] && ok "archive deleted from /downloads" || bad "archive not deleted from /downloads"
+[[ -e "$W/downloads/takeout-007.Xy12.tgz.part" ]] && ok "in-progress sibling untouched" || bad "in-progress sibling touched"
 
 echo
 echo "passed $PASS, failed $FAIL"
