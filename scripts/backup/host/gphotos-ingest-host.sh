@@ -9,7 +9,7 @@
 # and the K3s node went NotReady. Here tar writes straight into a host ZFS dataset.
 #
 # Sources (read-only): the archives live inside VM 105's disks. For each zvol in SOURCES the script takes
-# a ZFS snapshot, clones it readonly=on, mounts the given partition -o ro,noload, and reads *.tgz from the
+# a ZFS snapshot, clones it (writable throwaway; journal replay), mounts the given partition, reads *.tgz from the
 # given directory. Archives are complete files, so a snapshot of the running VM is safe for them.
 # Target: dataset $DATASET (created if missing, recordsize=1M), mounted at $LIB_ROOT:
 #   $LIB_ROOT/library/Google Photos/...   the kept library (+ Takeout .json sidecars)
@@ -46,7 +46,7 @@ LIB_ROOT="$(zfs get -H -o value mountpoint "$DATASET")"
 mkdir -p "$LIB_ROOT/library/Google Photos" "$LIB_ROOT/_staging"
 LEDGER="$LIB_ROOT/_ingested.tsv"; touch "$LEDGER"
 
-CLONES=() MOUNTS=() SNAPS=() CUR=""
+CLONES=() MOUNTS=() SNAPS=() FAILED=() CUR=""
 DONE_N=0 RESULT=failed
 cleanup() {
   local rc=$?; set +e
@@ -68,13 +68,17 @@ for src in $SOURCES; do
   IFS=: read -r zvol part dir <<<"$src"
   pool="${zvol%%/*}"; snap="$zvol@gphotos-ingest-$STAMP"; clone="$pool/gphotos-ingest-src-$i"
   zfs list -H "$clone" >/dev/null 2>&1 && zfs destroy "$clone"
+  # flush the guest first, then snapshot. The snapshot of a RUNNING VM is crash-consistent: recent metadata can still be
+  # in the ext4 journal, so the clone is mounted WRITABLE (throwaway copy, destroyed below) to let ext4 replay it.
+  # "noload" (ignore the journal) gave stale block maps: 1-002 read back as "invalid compressed data" on 2026-11-16.
+  qm guest exec "${VMID:-105}" --timeout 60 -- sync >/dev/null 2>&1 || log "WARN: guest sync failed (VM down? fine)"
   zfs snapshot "$snap"; SNAPS+=("$snap")
-  zfs clone -o readonly=on -o volmode=full "$snap" "$clone"; CLONES+=("$clone")
+  zfs clone -o volmode=full "$snap" "$clone"; CLONES+=("$clone")
   dev="/dev/zvol/$clone$part"
   for _ in $(seq 1 30); do [[ -b "$dev" ]] && break; udevadm settle; sleep 1; done
   [[ -b "$dev" ]] || { log "ERROR: $dev did not appear"; exit 1; }
   mnt="/mnt/gphotos-ingest-src-$i"; mkdir -p "$mnt"
-  mount -t ext4 -o ro,noload "$dev" "$mnt"; MOUNTS+=("$mnt")
+  mount -t ext4 -o rw,noatime "$dev" "$mnt"; MOUNTS+=("$mnt")
   log "source $zvol$part mounted read-only at $mnt"
   for f in "$mnt$dir"/*.tgz; do [[ -s "$f" ]] || continue; [[ -z "$ARCHIVE_FILTER" || "$(basename "$f")" == *"$ARCHIVE_FILTER"* ]] && ARCHIVES+=("$f"); done
   i=$((i + 1))
@@ -93,10 +97,16 @@ for f in "${ARCHIVES[@]}"; do
   log "extracting $base ($((size / 1000000000)) GB)"
   md5=$( { tee >(tar -xzvf - -C "$st" --no-same-owner > "$st.list"; echo $? > "$st.rc") < "$f" | md5sum | cut -c1-32; } )
   for _ in $(seq 1 600); do [[ -s "$st.rc" ]] && break; sleep 1; done   # process substitution finishes async
-  [[ "$(cat "$st.rc" 2>/dev/null)" == 0 ]] || { log "ERROR $base: tar/gunzip failed (exit $(cat "$st.rc" 2>/dev/null)) - corrupt archive?"; exit 1; }
+  if [[ "$(cat "$st.rc" 2>/dev/null)" != 0 ]]; then   # a corrupt archive must not stop the others: skip, report at the end
+    log "ERROR $base: tar/gunzip failed (exit $(cat "$st.rc" 2>/dev/null)) - corrupt archive, needs re-download"
+    FAILED+=("$base"); rm -rf "$st" "$st.list" "$st.rc"; CUR=""; continue
+  fi
   members=$(grep -vc '/$' "$st.list" || true)
   files=$(find "$st" -type f | wc -l)
-  (( members == files )) || { log "ERROR $base: archive has $members files, extracted $files"; exit 1; }
+  if (( members != files )); then
+    log "ERROR $base: archive has $members files, extracted $files"
+    FAILED+=("$base"); rm -rf "$st" "$st.list" "$st.rc"; CUR=""; continue
+  fi
   # rename every file into the library (same dataset: instant); keep a replaced, different file
   python3 - "$st" "$LIB_ROOT" "$DAY" <<'PY'
 import filecmp, os, sys
@@ -124,3 +134,7 @@ PY
   DONE_N=$((DONE_N + 1))
   log "ingested $base ($files files)"
 done
+if (( ${#FAILED[@]} )); then
+  log "FAILED archives (re-download these from the Takeout page): ${FAILED[*]}"
+  exit 1
+fi
