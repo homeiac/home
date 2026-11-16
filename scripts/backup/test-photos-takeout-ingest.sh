@@ -83,7 +83,7 @@ make_archive takeout-004 v3
 dx "f=/data/gphotos/_incoming/takeout-004.tgz; head -c \$(( \$(stat -c %s \$f) / 2 )) \$f > \$f.cut && mv \$f.cut \$f && touch -d '1 hour ago' \$f"
 if run_ingest >/dev/null 2>&1; then bad "corrupt archive did not fail the run"; else ok "run failed"; fi
 [[ -e "$W/data/gphotos/_incoming/takeout-004.tgz" ]] && ok "archive left for retry" || bad "archive removed"
-[[ ! -d "$W/data/gphotos/_staging/takeout-004" ]] && ok "no staging left" || bad "staging left behind"
+[[ ! -d "$W/downloads/_staging/takeout-004" ]] && ok "no staging left" || bad "staging left behind"
 [[ "$(cat "$lib/Album A/a.jpg")" == v2 ]] && ok "library untouched" || bad "library changed"
 dx "rm -f /data/gphotos/_incoming/takeout-004.tgz"
 

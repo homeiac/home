@@ -4,7 +4,9 @@
 #   _incoming/   legacy location on the SMB disk (archives downloaded before 2026-11-15 evening)
 #                (in both: while downloading Firefox writes a 0-byte
 #                <name>.tgz placeholder plus <name>.<random>.tgz.part, renamed onto <name>.tgz at the end)
-#   _staging/    extraction area (same filesystem, so the final move is a rename)
+#   /downloads/_staging/  extraction area on NVMe (2026-11-16: extracting onto the USB-HDD SMB disk
+#                blocked its ext4 journal for minutes; the kubelet stats that filesystem, hung, and the
+#                K3s node went NotReady). Nothing is extracted on the HDD any more.
 #   library/     the kept copy: library/Google Photos/<album or year>/... + Takeout .json sidecars
 #   _ingested.tsv  one line per ingested archive: name, bytes, md5, files, date
 #
@@ -13,7 +15,8 @@
 #               (no .part, non-empty, unchanged for 10 min, not already ingested): one read pass that
 #               computes the md5, gunzips (CRC checked) and extracts; then checks the extracted file
 #               count equals the archive's member count; writes _staging/<name>/.extracted.
-#   finalize.sh (rclone image): rclone move _staging/<name>/Takeout/Google Photos -> library/Google Photos;
+#   finalize.sh (rclone image): rclone move /downloads/_staging/<name>/Takeout/Google Photos -> library/Google
+#               Photos at a capped rate (BWLIMIT, default 20M; 2 transfers) so the HDD sees a steady stream;
 #               a file already in the library that differs is moved to gphotos/.versions/<date>/ (S2);
 #               verifies staging is empty, records the archive in _ingested.tsv, deletes the .tgz.
 # Deleting the .tgz is safe: the extracted library is the kept copy (mirrored to the SSK daily) and
@@ -27,7 +30,8 @@ data:
   extract.sh: |
     #!/bin/bash
     set -euo pipefail
-    G=/data/gphotos; STAGE=$G/_staging; LEDGER=$G/_ingested.tsv
+    G=/data/gphotos; STAGE=/downloads/_staging; LEDGER=$G/_ingested.tsv
+    rm -rf "$G/_staging"   # legacy staging location on the HDD (pre 2026-11-16); only ever partial leftovers
     INS=(/downloads "$G/_incoming")
     mkdir -p "$STAGE" "$G/library"
     touch "$LEDGER"
@@ -67,7 +71,8 @@ data:
   finalize.sh: |
     #!/bin/sh
     set -eu
-    G=/data/gphotos; STAGE=$G/_staging; LIB="$G/library"; LEDGER=$G/_ingested.tsv
+    G=/data/gphotos; STAGE=/downloads/_staging; LIB="$G/library"; LEDGER=$G/_ingested.tsv
+    BWLIMIT="${BWLIMIT:-20M}"
     DAY=$(date +%Y-%m-%d)
     mkdir -p /status/logs
     LOG=/status/logs/photos-ingest-$(date +%Y%m%d-%H%M%S).log
@@ -79,7 +84,8 @@ data:
       [ -d "$src" ] || src="$d/Takeout"
       echo "=== $(date -Iseconds) moving $base into the library" | tee -a "$LOG"
       if ! rclone move "$src" "$LIB/Google Photos" --config /dev/null \
-            --backup-dir "$G/.versions/$DAY" --log-level INFO --log-file "$LOG" --transfers 8; then
+            --backup-dir "$G/.versions/$DAY" --log-level INFO --log-file "$LOG" \
+            --bwlimit "$BWLIMIT" --transfers 2 --checkers 4; then
         echo "ERROR $base: rclone move failed" | tee -a "$LOG"; result=failed; continue
       fi
       left=$(find "$src" -type f | wc -l)
