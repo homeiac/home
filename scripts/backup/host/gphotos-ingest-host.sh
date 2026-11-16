@@ -19,6 +19,9 @@
 # Per archive: one read pass (md5 + gunzip CRC + extract), extracted file count == archive member count,
 # then every file is renamed into the library (albums split across parts merge). Archives are NOT deleted.
 # Cleanup (always, via trap): unmount clones, destroy clones + snapshots, remove partial staging.
+# Knowledge index (#212): right after the rename step the paths this archive delivered ($st.moved, library-relative)
+# are indexed by /opt/knowledge-index/index-unit.sh BEFORE the ledger line is written. If that step fails the ingest
+# carries on and the unit is listed in $LIB_ROOT/_index_pending.tsv (fix: scripts/knowledge-index/knowledge-index-ctl.sh backfill start).
 # Log: /var/lib/cloud-backup/reports/gphotos-ingest-<time>.log; status: $LIB_ROOT/_last-run.json
 
 set -euo pipefail
@@ -45,12 +48,16 @@ LIB_ROOT="$(zfs get -H -o value mountpoint "$DATASET")"
 [[ -d "$LIB_ROOT" ]] || { log "ERROR: $DATASET not mounted"; exit 1; }
 mkdir -p "$LIB_ROOT/library/Google Photos" "$LIB_ROOT/_staging"
 LEDGER="$LIB_ROOT/_ingested.tsv"; touch "$LEDGER"
+# knowledge index dataset (#212), created like the photos dataset; failure here only means every unit is index_pending
+IDX_DATASET="${IDX_DATASET:-local-3TB-backup/knowledge-index}"
+zfs list -H "$IDX_DATASET" >/dev/null 2>&1 || zfs create -o recordsize=1M -o compression=lz4 -o atime=off "$IDX_DATASET" || log "WARN: cannot create $IDX_DATASET"
+IDX_ROOT="$(zfs get -H -o value mountpoint "$IDX_DATASET" 2>/dev/null || echo /nonexistent)"
 
 CLONES=() MOUNTS=() SNAPS=() FAILED=() CUR=""
 DONE_N=0 RESULT=failed
 cleanup() {
   local rc=$?; set +e
-  [[ -n "$CUR" ]] && rm -rf "$LIB_ROOT/_staging/$CUR" "$LIB_ROOT/_staging/$CUR.list" "$LIB_ROOT/_staging/$CUR.rc" && log "removed partial staging $CUR"
+  [[ -n "$CUR" ]] && rm -rf "$LIB_ROOT/_staging/$CUR" "$LIB_ROOT/_staging/$CUR.list" "$LIB_ROOT/_staging/$CUR.rc" "$LIB_ROOT/_staging/$CUR.moved" && log "removed partial staging $CUR"
   for m in "${MOUNTS[@]}"; do mountpoint -q "$m" && umount "$m"; rmdir "$m" 2>/dev/null; done
   for c in "${CLONES[@]}"; do zfs destroy "$c"; done
   for s in "${SNAPS[@]}"; do zfs destroy "$s"; done
@@ -108,14 +115,16 @@ for f in "${ARCHIVES[@]}"; do
     FAILED+=("$base"); rm -rf "$st" "$st.list" "$st.rc"; CUR=""; continue
   fi
   # rename every file into the library (same dataset: instant); keep a replaced, different file
-  python3 - "$st" "$LIB_ROOT" "$DAY" <<'PY'
+  python3 - "$st" "$LIB_ROOT" "$DAY" "$st.moved" <<'PY'
 import filecmp, os, sys
-st, root, day = sys.argv[1:4]
+st, root, day, moved_list = sys.argv[1:5]
 src_root = os.path.join(st, "Takeout", "Google Photos")
 if not os.path.isdir(src_root):
     src_root = os.path.join(st, "Takeout")
 lib = os.path.join(root, "library", "Google Photos")
 moved = same = versioned = 0
+moved_paths = []
+lib_root = os.path.join(root, "library")
 for d, _, files in os.walk(src_root):
     rel = os.path.relpath(d, src_root)
     for fn in files:
@@ -127,10 +136,19 @@ for d, _, files in os.walk(src_root):
             v = os.path.normpath(os.path.join(root, ".versions", day, rel, fn))
             os.makedirs(os.path.dirname(v), exist_ok=True); os.rename(t, v); versioned += 1
         os.rename(s, t); moved += 1
+        moved_paths.append(os.path.relpath(t, lib_root))
+with open(moved_list, "w", encoding="utf-8") as fh:
+    fh.write("".join(p + "\n" for p in moved_paths))
 print("moved %d, identical %d, previous versions kept %d" % (moved, same, versioned))
 PY
+  # index what this archive delivered; a failure must not lose data or stop the ingest (exit 3 = unit marked index_pending)
+  if [[ -x /opt/knowledge-index/index-unit.sh ]]; then
+    /opt/knowledge-index/index-unit.sh "$name" "$st.moved" "$LIB_ROOT" "$IDX_ROOT" || log "WARN: index step failed for $name: marked index_pending"
+  else
+    printf '%s\t%s\n' "$name" "$(date -Iseconds)" >> "$LIB_ROOT/_index_pending.tsv"; log "WARN: knowledge-index not installed: $name marked index_pending"
+  fi
   printf '%s\t%s\t%s\t%s\t%s\n' "$base" "$size" "$md5" "$files" "$(date -Iseconds)" >> "$LEDGER"
-  rm -rf "$st" "$st.list" "$st.rc"; CUR=""
+  rm -rf "$st" "$st.list" "$st.rc" "$st.moved"; CUR=""
   DONE_N=$((DONE_N + 1))
   log "ingested $base ($files files)"
 done
