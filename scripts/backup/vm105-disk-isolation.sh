@@ -36,8 +36,12 @@ grep -q "^virtiofs1: $MAP" "$CONF" || { qm set $VMID --virtiofs1 "$MAP,cache=aut
 echo "--- config now (pending until restart if shown under [pending]):"
 qm config $VMID --current 0 | grep -E '^(scsihw|scsi[01]|virtiofs[0-9])'
 [[ $REBOOT == 1 ]] || exit 0
-echo "--- $(date -u +%T) clean shutdown"
-qm shutdown $VMID --timeout 300 --forceStop 1
+if [[ "$(qm status $VMID | awk '{print $2}')" == running ]]; then
+  echo "--- $(date -u +%T) clean shutdown"
+  qm shutdown $VMID --timeout 300 --forceStop 1
+else
+  echo "--- VM already stopped"
+fi
 echo "--- $(date -u +%T) start (timeout 600 s)"
 qm start $VMID --timeout 600
 qm status $VMID; date -u +%T
