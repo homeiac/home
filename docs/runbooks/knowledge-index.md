@@ -84,6 +84,32 @@ and ledger are untouched, and the unit is appended to `<photos dataset>/_index_p
 re-walks the whole library (latest unit wins, no duplicates) and clears the list. `gphotos-ingest-ctl.sh start` installs the
 index files first.
 
+## AI enrichment: photo/video summaries on the local GPU (extension point, runner not built yet)
+
+The index is ready for model-generated summaries without changing any fact table. An **enricher** is a job that reads
+files from the primary (read-only), runs a vision-language model on the GPU, and writes
+`summaries/<enricher>/<batch>.parquet` (atomic tmp + rename, like adapters). Schema of `media_summaries`:
+
+| column | meaning |
+|---|---|
+| source, path | the file, as in `files` |
+| size_bytes | bytes that were summarized; a changed file re-enters the queue |
+| enricher, model, prompt_version | what produced it (bump `enricher` or `prompt_version` to re-run with a better model/prompt; old rows stay) |
+| summary, tags[] | the text and keywords |
+| frames_sampled, duration_s | video: how many frames were sampled, clip length |
+| status, error | `ok` or a failure that keeps the file in the queue |
+| created_at | latest row per (source, path, enricher) wins |
+
+Work queue: `SELECT path FROM gphotos_to_summarize WHERE enricher = 'vlm-v1' LIMIT 500` (media with no `ok` summary for its
+current bytes; `ORDER BY taken_ts DESC` to do recent photos first). Results are SQL-searchable alongside the facts, e.g.
+`SELECT f.path FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`; semantic search or
+DuckDB full-text search over `summary` can follow (Phase 3 machinery).
+
+Constraints for the future runner: it reads photos from the host dataset (never write bulk data inside K3s VM 105); batch in
+a few hundred files per Parquet so a crash loses little; it must not touch the cloud. **Which GPU:** this repo's
+docs record an RTX 3070 on the Proxmox host that runs Frigate, while the request was for an RTX 3090. Confirm the card, which
+machine hosts it, and how it is reached (passthrough to a VM vs. a host service such as Ollama) before building the runner.
+
 ## Example queries (these double as checks)
 
 ```sql

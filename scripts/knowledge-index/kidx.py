@@ -16,6 +16,9 @@ import duckdb
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SQL = os.path.join(HERE, "knowledge.sql")
+SUMMARIES_SCHEMA = ("source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR, prompt_version VARCHAR, "
+                    "summary VARCHAR, tags VARCHAR[], frames_sampled INTEGER, duration_s DOUBLE, status VARCHAR, error VARCHAR, "
+                    "created_at TIMESTAMP")
 COPIES_SCHEMA = "source VARCHAR, path VARCHAR, location VARCHAR, size_bytes BIGINT, verified_at TIMESTAMP, verify_method VARCHAR"
 
 
@@ -34,6 +37,11 @@ def rebuild(index):
         c = duckdb.connect()
         c.execute("CREATE TABLE c (%s)" % COPIES_SCHEMA)
         c.execute("COPY c TO '%s' (FORMAT parquet)" % os.path.join(index, "copies", "_empty.parquet"))
+    if not glob.glob(os.path.join(index, "summaries", "*", "*.parquet")):   # enrichers fill it; keep the view typed
+        os.makedirs(os.path.join(index, "summaries", "_empty"), exist_ok=True)
+        c = duckdb.connect()
+        c.execute("CREATE TABLE c (%s)" % SUMMARIES_SCHEMA)
+        c.execute("COPY c TO '%s' (FORMAT parquet)" % os.path.join(index, "summaries", "_empty", "_empty.parquet"))
     target = os.path.join(index, "knowledge.duckdb")
     tmp = target + ".tmp"
     for p in (tmp, tmp + ".wal"):
@@ -62,7 +70,7 @@ def query(index, sql):
 def status(index):
     con = _con(index)
     for name in ("files", "gphotos_sidecars", "copies", "gphotos_files", "gphotos_versions", "gphotos_media",
-                 "gphotos_album_dup", "gphotos_quota"):
+                 "gphotos_album_dup", "gphotos_quota", "media_summaries", "gphotos_to_summarize"):
         print("%-18s %d" % (name, con.execute("SELECT count(*) FROM %s" % name).fetchone()[0]))
     for d in ("files/*", "gphotos_sidecars", "copies"):
         print("parquet %-18s %d" % (d, len(glob.glob(os.path.join(index, d, "*.parquet")))))

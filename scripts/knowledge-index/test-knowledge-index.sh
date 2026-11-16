@@ -90,6 +90,24 @@ echo "Google Photos/Photos from 2023/new.jpg" > "$W/paths-c"
 check "one row per path"                    "$(q "SELECT count(*) FROM files WHERE path='Google Photos/Photos from 2023/new.jpg'")" 1
 check "latest unit"                         "$(q "SELECT unit FROM files WHERE path='Google Photos/Photos from 2023/new.jpg'")" takeout-c
 
+echo "-- enrichment hook: GPU summaries slot in without touching the facts"
+check "summaries view empty and typed"     "$(q "SELECT count(*) FROM media_summaries")" 0
+Q0="$(q "SELECT count(*) FROM gphotos_to_summarize")"
+check "queue = all media (kind media)"     "$Q0" "$(q "SELECT count(*) FROM gphotos_media WHERE kind='media'")"
+"$PYTHON" - "$IDX" <<'PY'
+import duckdb, sys
+idx = sys.argv[1]
+import os; os.makedirs(idx + "/summaries/vlm-v1", exist_ok=True)
+c = duckdb.connect()
+c.execute("""CREATE TABLE s AS SELECT 'gphotos' AS source, 'Google Photos/Photos from 2023/new.jpg' AS path, size_bytes, 'vlm-v1' AS enricher,
+  'test-model' AS model, 'p1' AS prompt_version, 'a red car' AS summary, ['car'] AS tags, 1 AS frames_sampled, NULL::DOUBLE AS duration_s,
+  'ok' AS status, NULL::VARCHAR AS error, now()::TIMESTAMP AS created_at FROM read_parquet('%s/files/gphotos/takeout-c.parquet')""" % idx)
+c.execute("COPY s TO '%s/summaries/vlm-v1/batch1.parquet' (FORMAT parquet)" % idx)
+PY
+"$PYTHON" "$HERE/kidx.py" rebuild "$IDX" >/dev/null
+check "summary stored and readable"        "$(q "SELECT summary FROM media_summaries")" "a red car"
+check "summarized file leaves the queue"   "$(q "SELECT count(*) FROM gphotos_to_summarize WHERE enricher='vlm-v1'")" "$((Q0 - 1))"
+
 echo "-- ingest hook (index-unit.sh): success clears pending, failure never touches library/ledger"
 H="$W/hook"; mkdir -p "$H/ds" "$H/idx" "$H/ki/adapters"
 cp -R "$LIB" "$H/ds/library"; echo "ledger-line" > "$H/ds/_ingested.tsv"

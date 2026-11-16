@@ -80,3 +80,20 @@ UNION
 SELECT s.path, f.name, 'sidecar', f.size_bytes, NULL, NULL, s.quota_reason
 FROM (SELECT DISTINCT sidecar_path AS path, quota_reason FROM sel WHERE sidecar_path IS NOT NULL) s
 JOIN gphotos_files f ON f.path = s.path;
+
+-- ---- AI enrichment (photo/video summaries from a local GPU model): written by enrichers, one Parquet per
+-- ---- (enricher, batch) under summaries/<enricher>/; typed and empty until the first enricher runs.
+-- ---- Latest row wins per (source, path, enricher); `size_bytes` records which bytes were summarized.
+CREATE OR REPLACE VIEW media_summaries AS
+SELECT * FROM read_parquet('@INDEX@/summaries/*/*.parquet', union_by_name = true)
+QUALIFY row_number() OVER (PARTITION BY source, path, enricher ORDER BY created_at DESC) = 1;
+
+-- ---- work queue for an enricher: media with no successful summary for the current bytes. Filter by enricher:
+-- ----   SELECT path FROM gphotos_to_summarize WHERE enricher = 'vlm-v1' LIMIT 500
+CREATE OR REPLACE VIEW gphotos_to_summarize AS
+SELECT e.enricher, m.path, m.name, m.ext, m.size_bytes, m.taken_ts
+FROM gphotos_media m
+CROSS JOIN (SELECT DISTINCT enricher FROM media_summaries UNION SELECT 'vlm-v1') e
+LEFT JOIN media_summaries s
+  ON s.source = 'gphotos' AND s.path = m.path AND s.enricher = e.enricher AND s.size_bytes = m.size_bytes AND s.status = 'ok'
+WHERE m.kind = 'media' AND s.path IS NULL;
