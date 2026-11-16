@@ -52,6 +52,9 @@ readonly POOL="${ZVOL%%/*}"
 readonly SNAP="$ZVOL@cloudmirror-$TARGET-$STAMP"
 readonly CLONE="$POOL/cloudmirror-clone-$TARGET"
 readonly SNAP_MNT="/mnt/cloud-backup-snap-$TARGET"
+# Google Photos library: since 2026-11-16 it lives in a host ZFS dataset (not on the VM's SMB disk). The quota/all pass
+# reads it from there, bind-mounted read-only at $PHOTOS_ROOT/gphotos so paths stay gphotos/library/... (same layout on the target).
+readonly PHOTOS_DATASET="${PHOTOS_DATASET:-local-3TB-backup/gphotos}" PHOTOS_ROOT="/run/cloud-backup-mirror-$TARGET.photos-root"
 readonly LOG_DIR="$REPORT_DIR/mirror-logs"
 readonly LOG="$LOG_DIR/mirror-$TARGET-$STAMP.log"
 mkdir -p "$LOG_DIR"
@@ -79,6 +82,7 @@ DEST_MOUNTED_BY_US=0
 cleanup() {
   local rc=$?
   set +e
+  mountpoint -q "$PHOTOS_ROOT/gphotos" && umount "$PHOTOS_ROOT/gphotos"; rmdir "$PHOTOS_ROOT/gphotos" "$PHOTOS_ROOT" 2>/dev/null
   mountpoint -q "$SNAP_MNT" && umount "$SNAP_MNT"
   zfs list -H "$CLONE" >/dev/null 2>&1 && zfs destroy "$CLONE"
   zfs list -H "$SNAP" >/dev/null 2>&1 && zfs destroy "$SNAP"
@@ -121,6 +125,13 @@ mount -t ext4 -o ro,noload "$DEV" "$SNAP_MNT"
 SRC="$SNAP_MNT/$SRC_SUBDIR"
 [[ -d "$SRC" ]] || { DETAIL="$SRC_SUBDIR missing in snapshot"; log "ERROR: $DETAIL"; exit 1; }
 log "snapshot $SNAP mounted read-only at $SNAP_MNT"
+PSRC="$SRC"   # where the Photos pass reads from
+if [[ "$GPHOTOS_MODE" != exclude ]] && PH_MNT="$(zfs get -H -o value mountpoint "$PHOTOS_DATASET" 2>/dev/null)" && [[ -d "$PH_MNT/library" ]]; then
+  mkdir -p "$PHOTOS_ROOT/gphotos"
+  mount --bind "$PH_MNT" "$PHOTOS_ROOT/gphotos" && mount -o remount,bind,ro "$PHOTOS_ROOT/gphotos"
+  PSRC="$PHOTOS_ROOT"
+  log "photos library read from host dataset $PHOTOS_DATASET (read-only bind at $PHOTOS_ROOT/gphotos)"
+fi
 
 export RCLONE_CONFIG_DEST_TYPE=local
 export RCLONE_CONFIG_DEST_ENCODING="Slash,LtGt,DoubleQuote,Colon,Question,Asterisk,Pipe,BackSlash,Ctl,RightSpace,RightPeriod,InvalidUtf8,Dot"
@@ -130,10 +141,10 @@ DST="DEST:$DEST_MNT/$SRC_SUBDIR"
 STEP="capacity"
 need=$(rclone size "$SRC" "${FILTERS[@]}" --json --config /dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
 if [[ "$GPHOTOS_MODE" == quota ]]; then
-  python3 /usr/local/sbin/gphotos-quota-list.py "$SRC" > "$LIST"
+  python3 /usr/local/sbin/gphotos-quota-list.py "$PSRC" > "$LIST"
   log "gphotos quota selection: $(wc -l < "$LIST") paths (files + sidecars)"
   if [[ -s "$LIST" ]]; then
-    gneed=$(rclone size "$SRC" --files-from "$LIST" --json --config /dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
+    gneed=$(rclone size "$PSRC" --files-from "$LIST" --json --config /dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
     log "gphotos quota selection size: $((gneed / 1000000)) MB"
     need=$((need + gneed))
   fi
@@ -154,7 +165,7 @@ rclone copy "$SRC" "$DST" "${FILTERS[@]}" \
 if [[ "$GPHOTOS_MODE" == quota && -s "$LIST" ]]; then
   STEP="copy-gphotos"
   # shellcheck disable=SC2086
-  rclone copy "$SRC" "$DST" --files-from "$LIST" \
+  rclone copy "$PSRC" "$DST" --files-from "$LIST" \
     --config /dev/null \
     --backup-dir "DEST:$DEST_MNT/$DEST_VERSIONS/$DAY" \
     --modify-window 2s \
@@ -171,7 +182,7 @@ if [[ "$VERIFY" == 1 ]]; then
     DETAIL="verify found differences (possible bad sectors) - see log"; log "ERROR: $DETAIL"; exit 1
   fi
   if [[ "$GPHOTOS_MODE" == quota && -s "$LIST" ]] && \
-     ! rclone check "$SRC" "$DST" --files-from "$LIST" --one-way --config /dev/null --log-level NOTICE; then
+     ! rclone check "$PSRC" "$DST" --files-from "$LIST" --one-way --config /dev/null --log-level NOTICE; then
     DETAIL="verify found differences in gphotos - see log"; log "ERROR: $DETAIL"; exit 1
   fi
   log "verify: every file reads back identical"
