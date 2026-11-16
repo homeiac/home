@@ -16,6 +16,8 @@ HOST_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/host/gphotos-ingest-host.sh"
 case "${1:-}" in
   start)
     cb_ssh "install -m 0755 /dev/stdin /usr/local/sbin/gphotos-ingest-host.sh" < "$HOST_SCRIPT"
+    # knowledge index (#212): the ingest calls /opt/knowledge-index/index-unit.sh; install it (and the adapter) first
+    "$(dirname "${BASH_SOURCE[0]}")/../knowledge-index/knowledge-index-ctl.sh" install
     cb_ssh "systemctl is-active -q gphotos-ingest && { echo 'already running'; exit 0; }; systemctl reset-failed gphotos-ingest 2>/dev/null; \
             systemd-run --unit=gphotos-ingest --collect -p Nice=10 -p IOSchedulingClass=idle \
               --setenv=ARCHIVE_FILTER='${2:-}' /usr/local/sbin/gphotos-ingest-host.sh && echo started"
