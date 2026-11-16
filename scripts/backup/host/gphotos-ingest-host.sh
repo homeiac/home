@@ -69,7 +69,7 @@ for src in $SOURCES; do
   pool="${zvol%%/*}"; snap="$zvol@gphotos-ingest-$STAMP"; clone="$pool/gphotos-ingest-src-$i"
   zfs list -H "$clone" >/dev/null 2>&1 && zfs destroy "$clone"
   zfs snapshot "$snap"; SNAPS+=("$snap")
-  zfs clone -o readonly=on -o volmode=dev "$snap" "$clone"; CLONES+=("$clone")
+  zfs clone -o readonly=on -o volmode=full "$snap" "$clone"; CLONES+=("$clone")
   dev="/dev/zvol/$clone$part"
   for _ in $(seq 1 30); do [[ -b "$dev" ]] && break; udevadm settle; sleep 1; done
   [[ -b "$dev" ]] || { log "ERROR: $dev did not appear"; exit 1; }
