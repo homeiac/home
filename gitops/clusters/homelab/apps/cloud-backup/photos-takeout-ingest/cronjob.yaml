@@ -9,6 +9,11 @@ metadata:
   name: photos-takeout-ingest
   namespace: cloud-backup
 spec:
+  # PAUSED (2026-11-16): any bulk write to the USB-HDD SMB disk from inside VM 105 stalls etcd's fsyncs
+  # on the root disk (shared virtio-scsi controller; scripts/k3s/io-isolation-test.sh: p99 4.2 s, max
+  # 13.9 s) and the K3s node goes NotReady. The ingest is moving to the Proxmox host. Unpause only
+  # after that, or after VM 105 has per-disk iothreads (virtio-scsi-single) and the test passes.
+  suspend: true
   schedule: "15 */2 * * *"
   timeZone: America/Los_Angeles
   concurrencyPolicy: Forbid
