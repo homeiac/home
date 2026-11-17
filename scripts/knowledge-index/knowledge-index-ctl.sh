@@ -36,6 +36,9 @@ install_files() {
   for u in knowledge-index-metrics.service knowledge-index-metrics.timer; do
     cb_ssh "install -m 0644 /dev/stdin /etc/systemd/system/$u" < "$HERE/host/$u"
   done
+  # Ollama base URL for the exporter: looked up from the cluster here and kept ON THE HOST only (no addresses in Git)
+  OLL="$(KUBECONFIG="${KUBECONFIG:-$HOME/kubeconfig}" kubectl get svc ollama-lb -n ollama -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+  if [[ -n "$OLL" ]]; then cb_ssh "echo 'KI_OLLAMA_URL=http://$OLL' > /etc/default/knowledge-index"; else echo "note: no kubeconfig/ollama service: Ollama metrics skipped (set KI_OLLAMA_URL in /etc/default/knowledge-index on the host)"; fi
   cb_ssh "systemctl daemon-reload && systemctl enable --now knowledge-index-metrics.timer >/dev/null 2>&1"
 }
 

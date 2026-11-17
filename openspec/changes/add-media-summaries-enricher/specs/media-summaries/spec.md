@@ -99,6 +99,13 @@ The dashboard SHALL lead with value measures: files indexed and items summarized
 - **WHEN** the operator changes the per-photo or per-video-minute price variable
 - **THEN** the cost panel recomputes from the unchanged counts of described photos and video minutes
 
+### Requirement: GPU sharing and the model server are visible
+The dashboard SHALL show GPU utilization, memory, power, temperature and driver errors, which workload uses the GPU, the model loaded in the model server and the share of it held in GPU memory, GPU energy and its illustrative electricity cost, and whether Frigate, Stable Diffusion and the model server are running.
+
+#### Scenario: Frigate paused for GPU work
+- **WHEN** Frigate is scaled to zero on purpose
+- **THEN** the dashboard shows it as stopped, so a deliberate pause is not mistaken for a normal state
+
 ### Requirement: Dashboard and alerts are stored in Git
 The system SHALL provide a dashboard and alert rules for these metrics, both stored in Git and applied by the GitOps controller. An alert SHALL fire when metrics go stale, when ingested units are not indexed, when enrichment stalls or mostly fails, when a data disk reports pending sectors, and when a host reboots.
 

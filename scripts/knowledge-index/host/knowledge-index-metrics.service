@@ -7,4 +7,5 @@ Type=oneshot
 Nice=15
 IOSchedulingClass=idle
 Environment=KI_ENRICHERS=gemma4-e2b-p1
+EnvironmentFile=-/etc/default/knowledge-index
 ExecStart=/opt/knowledge-index/venv/bin/python /opt/knowledge-index/export-metrics.py

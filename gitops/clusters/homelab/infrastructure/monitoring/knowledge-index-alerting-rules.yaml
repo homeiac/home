@@ -70,6 +70,48 @@ spec:
             summary: "More than 20% of summaries by {{ $labels.enricher }} failed"
             description: "Errors keep their files in the queue (retried next run). Look at the error column of media_summaries for the pattern (decode failures vs model server)."
 
+    - name: gpu-and-ollama
+      rules:
+        - alert: GpuXidErrors
+          expr: sum by (gpu) (DCGM_FI_DEV_XID_ERRORS) > 0
+          for: 1m
+          labels:
+            severity: critical
+            service: gpu
+          annotations:
+            summary: "NVIDIA driver reported a GPU error (Xid {{ $value }}) on GPU {{ $labels.gpu }}"
+            description: "Check dmesg on the Proxmox host and the GPU VM; a GPU fault can hang the host (see the 2026-11-17 pumped-piglet outage)."
+
+        - alert: GpuHot
+          expr: max(DCGM_FI_DEV_GPU_TEMP) > 85
+          for: 10m
+          labels:
+            severity: warning
+            service: gpu
+          annotations:
+            summary: "GPU at {{ $value }} C for 10 minutes"
+            description: "Check fans and airflow; sustained summary runs keep the GPU busy for days."
+
+        - alert: OllamaDown
+          expr: ollama_up == 0
+          for: 10m
+          labels:
+            severity: warning
+            service: gpu
+          annotations:
+            summary: "Ollama API on the GPU node is not answering"
+            description: "Summaries cannot run. Check the ollama-gpu pod and the GPU operator (kubectl get pods -n ollama, -n gpu-operator)."
+
+        - alert: OllamaModelMostlyOnCpu
+          expr: ollama_model_gpu_fraction < 0.5
+          for: 15m
+          labels:
+            severity: warning
+            service: gpu
+          annotations:
+            summary: "Ollama model {{ $labels.model }} is only {{ $value | humanizePercentage }} in GPU memory"
+            description: "Part of the model runs on the CPU, which is several times slower. Another workload may hold GPU memory; check the GPU memory panel and scripts/k3s/gpu-tenants.sh status."
+
     - name: proxmox-host-health
       rules:
         - alert: DiskSmartPendingSectors

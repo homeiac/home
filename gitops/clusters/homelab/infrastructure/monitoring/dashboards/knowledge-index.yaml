@@ -1485,7 +1485,7 @@ data:
         {
           "id": 31,
           "type": "row",
-          "title": "Index health",
+          "title": "GPU and Ollama (RTX 3070, shared)",
           "collapsed": false,
           "gridPos": {
             "h": 1,
@@ -1498,7 +1498,7 @@ data:
         {
           "id": 32,
           "type": "stat",
-          "title": "Exporter",
+          "title": "GPU utilization",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1508,6 +1508,1231 @@ data:
             "w": 4,
             "x": 0,
             "y": 33
+          },
+          "targets": [
+            {
+              "expr": "avg(DCGM_FI_DEV_GPU_UTIL)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 85
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 33,
+          "type": "stat",
+          "title": "GPU memory used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_FB_USED)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "mbytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 34,
+          "type": "stat",
+          "title": "GPU memory free",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_FB_FREE)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "mbytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 2000
+                  },
+                  {
+                    "color": "green",
+                    "value": 4000
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 35,
+          "type": "stat",
+          "title": "Power",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_POWER_USAGE)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 36,
+          "type": "stat",
+          "title": "Temperature",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "max(DCGM_FI_DEV_GPU_TEMP)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 75
+                  },
+                  {
+                    "color": "red",
+                    "value": 85
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 37,
+          "type": "stat",
+          "title": "GPU errors (Xid)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_XID_ERRORS)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Non-zero means the NVIDIA driver logged a GPU fault."
+        },
+        {
+          "id": 38,
+          "type": "stat",
+          "title": "Ollama API",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "ollama_up{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "DOWN",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "OK",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 39,
+          "type": "stat",
+          "title": "Model loaded",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "ollama_model_loaded{instance=~\"$instance\"} == 1",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "name"
+          }
+        },
+        {
+          "id": 40,
+          "type": "stat",
+          "title": "Model on GPU",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "ollama_model_gpu_fraction{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.5
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.9
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Share of the loaded model in GPU memory. Low means part runs on the CPU and is much slower (qwen2.5vl:3b was 0% on this card)."
+        },
+        {
+          "id": 41,
+          "type": "stat",
+          "title": "Model size",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "ollama_model_size_bytes{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 42,
+          "type": "stat",
+          "title": "Unloads in",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "ollama_model_expires_timestamp_seconds{instance=~\"$instance\"} - time()",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 43,
+          "type": "stat",
+          "title": "Models stored",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "ollama_models_pulled{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 44,
+          "type": "stat",
+          "title": "Frigate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 41
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_spec_replicas{namespace=\"frigate\",deployment=\"frigate\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "STOPPED",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "running",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "0 = paused on purpose for GPU work (scripts/k3s/gpu-tenants.sh); cameras are not recording."
+        },
+        {
+          "id": 45,
+          "type": "stat",
+          "title": "Stable Diffusion",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 41
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_spec_replicas{namespace=\"stable-diffusion\",deployment=\"stable-diffusion-webui\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "STOPPED",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "running",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 46,
+          "type": "stat",
+          "title": "Ollama pod",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 41
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"ollama\",deployment=\"ollama-gpu\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "STOPPED",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "running",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 47,
+          "type": "stat",
+          "title": "GPU energy (selected range)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 41
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[$__range])) / 3.6e9",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: kWh",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Whole-GPU energy over the dashboard time range."
+        },
+        {
+          "id": 48,
+          "type": "stat",
+          "title": "Electricity cost (range)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 41
+          },
+          "targets": [
+            {
+              "expr": "(sum(increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[$__range])) / 3.6e9) * $kwh_price",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Illustrative: kWh x the kwh_price variable. Compare with the cloud-equivalent cost in the Value row."
+        },
+        {
+          "id": 49,
+          "type": "stat",
+          "title": "GPU hours busy (range)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 41
+          },
+          "targets": [
+            {
+              "expr": "sum_over_time((max(DCGM_FI_DEV_GPU_UTIL) > bool 50)[$__range:1m]) / 60",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: h",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 50,
+          "type": "timeseries",
+          "title": "GPU utilization by pod",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 45
+          },
+          "targets": [
+            {
+              "expr": "DCGM_FI_DEV_GPU_UTIL",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 51,
+          "type": "timeseries",
+          "title": "GPU memory by pod (MiB)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 45
+          },
+          "targets": [
+            {
+              "expr": "DCGM_FI_DEV_FB_USED",
+              "legendFormat": "{{pod}} used",
+              "refId": "A"
+            },
+            {
+              "expr": "DCGM_FI_DEV_FB_FREE",
+              "legendFormat": "free",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "mbytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 52,
+          "type": "timeseries",
+          "title": "Power and temperature",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 52
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_POWER_USAGE)",
+              "legendFormat": "power W",
+              "refId": "A"
+            },
+            {
+              "expr": "max(DCGM_FI_DEV_GPU_TEMP)",
+              "legendFormat": "temp C",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 53,
+          "type": "timeseries",
+          "title": "Ollama model on GPU",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 52
+          },
+          "targets": [
+            {
+              "expr": "ollama_model_gpu_fraction{instance=~\"$instance\"}",
+              "legendFormat": "{{model}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 54,
+          "type": "row",
+          "title": "Index health",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 59
+          },
+          "panels": []
+        },
+        {
+          "id": 55,
+          "type": "stat",
+          "title": "Exporter",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 60
           },
           "targets": [
             {
@@ -1564,7 +2789,7 @@ data:
           }
         },
         {
-          "id": 33,
+          "id": 56,
           "type": "stat",
           "title": "Last export age",
           "datasource": {
@@ -1575,7 +2800,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 33
+            "y": 60
           },
           "targets": [
             {
@@ -1621,7 +2846,7 @@ data:
           }
         },
         {
-          "id": 34,
+          "id": 57,
           "type": "stat",
           "title": "Library files",
           "datasource": {
@@ -1632,7 +2857,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 33
+            "y": 60
           },
           "targets": [
             {
@@ -1670,7 +2895,7 @@ data:
           }
         },
         {
-          "id": 35,
+          "id": 58,
           "type": "stat",
           "title": "Media files",
           "datasource": {
@@ -1681,7 +2906,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 33
+            "y": 60
           },
           "targets": [
             {
@@ -1719,7 +2944,7 @@ data:
           }
         },
         {
-          "id": 36,
+          "id": 59,
           "type": "stat",
           "title": "Sidecars",
           "datasource": {
@@ -1730,7 +2955,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 33
+            "y": 60
           },
           "targets": [
             {
@@ -1768,7 +2993,7 @@ data:
           }
         },
         {
-          "id": 37,
+          "id": 60,
           "type": "stat",
           "title": "Units not indexed",
           "datasource": {
@@ -1779,7 +3004,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 33
+            "y": 60
           },
           "targets": [
             {
@@ -1821,7 +3046,7 @@ data:
           }
         },
         {
-          "id": 38,
+          "id": 61,
           "type": "row",
           "title": "Photos and Google quota",
           "collapsed": false,
@@ -1829,12 +3054,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 37
+            "y": 64
           },
           "panels": []
         },
         {
-          "id": 39,
+          "id": 62,
           "type": "stat",
           "title": "Counts against quota",
           "datasource": {
@@ -1845,7 +3070,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 38
+            "y": 65
           },
           "targets": [
             {
@@ -1884,7 +3109,7 @@ data:
           }
         },
         {
-          "id": 40,
+          "id": 63,
           "type": "stat",
           "title": "Media without sidecar",
           "datasource": {
@@ -1895,7 +3120,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 38
+            "y": 65
           },
           "targets": [
             {
@@ -1933,7 +3158,7 @@ data:
           }
         },
         {
-          "id": 41,
+          "id": 64,
           "type": "stat",
           "title": "Album duplicates skipped",
           "datasource": {
@@ -1944,7 +3169,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 38
+            "y": 65
           },
           "targets": [
             {
@@ -1982,7 +3207,7 @@ data:
           }
         },
         {
-          "id": 42,
+          "id": 65,
           "type": "stat",
           "title": "Sidecar parse errors",
           "datasource": {
@@ -1993,7 +3218,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 38
+            "y": 65
           },
           "targets": [
             {
@@ -2035,7 +3260,7 @@ data:
           }
         },
         {
-          "id": 43,
+          "id": 66,
           "type": "stat",
           "title": "Older versions kept",
           "datasource": {
@@ -2046,7 +3271,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 38
+            "y": 65
           },
           "targets": [
             {
@@ -2084,7 +3309,7 @@ data:
           }
         },
         {
-          "id": 44,
+          "id": 67,
           "type": "stat",
           "title": "Index size",
           "datasource": {
@@ -2095,7 +3320,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 38
+            "y": 65
           },
           "targets": [
             {
@@ -2134,7 +3359,7 @@ data:
           }
         },
         {
-          "id": 45,
+          "id": 68,
           "type": "bargauge",
           "title": "Counted by 'Photos from' year",
           "datasource": {
@@ -2145,7 +3370,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 42
+            "y": 69
           },
           "targets": [
             {
@@ -2184,7 +3409,7 @@ data:
           }
         },
         {
-          "id": 46,
+          "id": 69,
           "type": "bargauge",
           "title": "Library files by kind",
           "datasource": {
@@ -2195,7 +3420,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 42
+            "y": 69
           },
           "targets": [
             {
@@ -2233,7 +3458,7 @@ data:
           }
         },
         {
-          "id": 47,
+          "id": 70,
           "type": "row",
           "title": "Summaries (local GPU model)",
           "collapsed": false,
@@ -2241,12 +3466,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 50
+            "y": 77
           },
           "panels": []
         },
         {
-          "id": 48,
+          "id": 71,
           "type": "stat",
           "title": "Summarized",
           "datasource": {
@@ -2257,7 +3482,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 51
+            "y": 78
           },
           "targets": [
             {
@@ -2295,7 +3520,7 @@ data:
           }
         },
         {
-          "id": 49,
+          "id": 72,
           "type": "stat",
           "title": "Errors",
           "datasource": {
@@ -2306,7 +3531,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 51
+            "y": 78
           },
           "targets": [
             {
@@ -2348,7 +3573,7 @@ data:
           }
         },
         {
-          "id": 50,
+          "id": 73,
           "type": "stat",
           "title": "Still to do",
           "datasource": {
@@ -2359,7 +3584,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 51
+            "y": 78
           },
           "targets": [
             {
@@ -2397,7 +3622,7 @@ data:
           }
         },
         {
-          "id": 51,
+          "id": 74,
           "type": "stat",
           "title": "Progress",
           "datasource": {
@@ -2408,7 +3633,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 51
+            "y": 78
           },
           "targets": [
             {
@@ -2447,7 +3672,7 @@ data:
           }
         },
         {
-          "id": 52,
+          "id": 75,
           "type": "stat",
           "title": "Enricher running",
           "datasource": {
@@ -2458,7 +3683,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 51
+            "y": 78
           },
           "targets": [
             {
@@ -2511,7 +3736,7 @@ data:
           }
         },
         {
-          "id": 53,
+          "id": 76,
           "type": "stat",
           "title": "Last batch",
           "datasource": {
@@ -2522,7 +3747,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 51
+            "y": 78
           },
           "targets": [
             {
@@ -2560,7 +3785,7 @@ data:
           }
         },
         {
-          "id": 54,
+          "id": 77,
           "type": "timeseries",
           "title": "Throughput (summaries per hour)",
           "datasource": {
@@ -2571,7 +3796,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 55
+            "y": 82
           },
           "targets": [
             {
@@ -2614,7 +3839,7 @@ data:
           }
         },
         {
-          "id": 55,
+          "id": 78,
           "type": "timeseries",
           "title": "Rows and queue",
           "datasource": {
@@ -2625,7 +3850,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 82
           },
           "targets": [
             {
@@ -2668,7 +3893,7 @@ data:
           }
         },
         {
-          "id": 56,
+          "id": 79,
           "type": "row",
           "title": "Ingest and index pipeline",
           "collapsed": false,
@@ -2676,12 +3901,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 63
+            "y": 90
           },
           "panels": []
         },
         {
-          "id": 57,
+          "id": 80,
           "type": "stat",
           "title": "Backfill running",
           "datasource": {
@@ -2692,7 +3917,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 64
+            "y": 91
           },
           "targets": [
             {
@@ -2745,7 +3970,7 @@ data:
           }
         },
         {
-          "id": 58,
+          "id": 81,
           "type": "stat",
           "title": "Takeout archives ingested",
           "datasource": {
@@ -2756,7 +3981,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 64
+            "y": 91
           },
           "targets": [
             {
@@ -2794,7 +4019,7 @@ data:
           }
         },
         {
-          "id": 59,
+          "id": 82,
           "type": "stat",
           "title": "Last ingest",
           "datasource": {
@@ -2805,7 +4030,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 64
+            "y": 91
           },
           "targets": [
             {
@@ -2862,7 +4087,7 @@ data:
           }
         },
         {
-          "id": 60,
+          "id": 83,
           "type": "stat",
           "title": "Last ingest age",
           "datasource": {
@@ -2873,7 +4098,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 64
+            "y": 91
           },
           "targets": [
             {
@@ -2911,7 +4136,7 @@ data:
           }
         },
         {
-          "id": 61,
+          "id": 84,
           "type": "stat",
           "title": "Units in index",
           "datasource": {
@@ -2922,7 +4147,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 64
+            "y": 91
           },
           "targets": [
             {
@@ -2960,7 +4185,7 @@ data:
           }
         },
         {
-          "id": 62,
+          "id": 85,
           "type": "stat",
           "title": "Export time",
           "datasource": {
@@ -2971,7 +4196,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 64
+            "y": 91
           },
           "targets": [
             {
@@ -3010,7 +4235,7 @@ data:
           }
         },
         {
-          "id": 63,
+          "id": 86,
           "type": "timeseries",
           "title": "Parquet files per table",
           "datasource": {
@@ -3021,7 +4246,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 68
+            "y": 95
           },
           "targets": [
             {
@@ -3059,7 +4284,7 @@ data:
           }
         },
         {
-          "id": 64,
+          "id": 87,
           "type": "row",
           "title": "Host and disks (the 2026-11-17 outage)",
           "collapsed": false,
@@ -3067,12 +4292,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 74
+            "y": 101
           },
           "panels": []
         },
         {
-          "id": 65,
+          "id": 88,
           "type": "stat",
           "title": "Disk SMART",
           "datasource": {
@@ -3083,7 +4308,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 75
+            "y": 102
           },
           "targets": [
             {
@@ -3140,7 +4365,7 @@ data:
           }
         },
         {
-          "id": 66,
+          "id": 89,
           "type": "stat",
           "title": "Host uptime",
           "datasource": {
@@ -3151,7 +4376,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 75
+            "y": 102
           },
           "targets": [
             {
@@ -3189,7 +4414,7 @@ data:
           }
         },
         {
-          "id": 67,
+          "id": 90,
           "type": "timeseries",
           "title": "Pending sectors per disk",
           "datasource": {
@@ -3200,7 +4425,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 75
+            "y": 102
           },
           "targets": [
             {
@@ -3248,7 +4473,7 @@ data:
           }
         },
         {
-          "id": 68,
+          "id": 91,
           "type": "timeseries",
           "title": "Reboots (boot time changes per hour)",
           "datasource": {
@@ -3259,7 +4484,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 79
+            "y": 106
           },
           "targets": [
             {
@@ -3297,7 +4522,7 @@ data:
           }
         },
         {
-          "id": 69,
+          "id": 92,
           "type": "timeseries",
           "title": "NVMe power cycles",
           "datasource": {
@@ -3308,7 +4533,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 85
+            "y": 112
           },
           "targets": [
             {
@@ -3380,6 +4605,25 @@ data:
             "sort": 1,
             "type": "query",
             "allValue": ".*"
+          },
+          {
+            "type": "textbox",
+            "name": "kwh_price",
+            "label": "Electricity $/kWh (assumption)",
+            "query": "0.35",
+            "current": {
+              "text": "0.35",
+              "value": "0.35"
+            },
+            "options": [
+              {
+                "selected": true,
+                "text": "0.35",
+                "value": "0.35"
+              }
+            ],
+            "hide": 0,
+            "skipUrlSync": false
           },
           {
             "type": "textbox",

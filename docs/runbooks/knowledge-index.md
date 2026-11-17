@@ -129,7 +129,12 @@ and SMART health per USB/SATA disk (labelled by model: Linux device letters chan
 - **Backfill progress**: `ctl backfill start` passes `--prom` and `--expected` (ledger file count) to the adapter, which writes live phase, files
   listed/read, rate and ETA every ~2 s (`progress.py`); process stats (elapsed, bytes read, CPU) work for any backfill, instrumented or not.
   `ctl backfill status` prints the same numbers. `scripts/knowledge-index/check-promql.sh` runs every dashboard/alert expression against the live Prometheus.
-- Alerts: `infrastructure/monitoring/knowledge-index-alerting-rules.yaml` (exporter stale, units pending, enrichment stalled / >20% errors,
+- **GPU and Ollama** section: DCGM exporter metrics (utilization, memory, power, temperature, Xid errors, energy; the `pod` label shows which workload
+  holds the GPU), the exporter's reading of Ollama's `/api/ps` (model loaded, share in GPU memory, time until unload: Ollama has no `/metrics`),
+  and whether Frigate, Stable Diffusion and `ollama-gpu` are running (a deliberate pause shows as STOPPED). GPU energy x the `kwh_price` variable is an
+  illustrative electricity cost to set against the cloud-equivalent cost. The exporter finds Ollama via `KI_OLLAMA_URL` in `/etc/default/knowledge-index` on the host
+  (written by `ctl install` from the cluster; not stored in Git).
+- Alerts: `infrastructure/monitoring/knowledge-index-alerting-rules.yaml` (exporter stale, units pending, backfill stuck/failed, enrichment stalled / >20% errors, GPU Xid errors / hot GPU, Ollama down / model mostly on CPU,
   disk pending sectors or SMART failed, Proxmox host rebooted).
 - `scripts/knowledge-index/test-metrics.sh` checks the exposition format, the numbers, that the committed dashboard equals the generated one,
   and that every metric used by the dashboard and alerts exists. Flux applies dashboard and rules after the change is merged to master.
@@ -154,7 +159,7 @@ Per-year uses the "Photos from YYYY" folder and every non-sidecar file, the same
 Library 243,088 files + `.versions` 6,753 = ledger 249,841; media 118,987; `.json` 119,670. Quota selection 18,264 paths / 88,693 MB;
 2023 counted media 1,940 files / 26.55 GB.
 
-**Verified on the real library 2026-11-17** (backfill `backfill-20261117`, 249,841 rows in 41 min = the ledger total; index 8.7 MB for 331 GB): library 243,088 + `.versions` 6,753; media 118,987; sidecars 119,670 (0 parse errors); quota 18,264 paths / 88,693 MB; year-folder files 10,633 / 83.35 GB; 2017 1.71, 2018 1.34, 2019 2.20, 2021 2.81, 2022 1.19, 2023 26.55 (1,940 files), 2024 15.07, 2025 18.59, 2026 13.46 GB, all equal to the table above; `SELECT path FROM gphotos_quota` runs in 3.6 s. Path-for-path diff against `gphotos-quota-list.py`: `ctl quota-diff`.
+**Verified on the real library 2026-11-17** (backfill `backfill-20261117`, 249,841 rows in 41 min = the ledger total; index 8.7 MB for 331 GB): library 243,088 + `.versions` 6,753; media 118,987; sidecars 119,670 (0 parse errors); quota 18,264 paths / 88,693 MB; year-folder files 10,633 / 83.35 GB; 2017 1.71, 2018 1.34, 2019 2.20, 2021 2.81, 2022 1.19, 2023 26.55 (1,940 files), 2024 15.07, 2025 18.59, 2026 13.46 GB, all equal to the table above; `SELECT path FROM gphotos_quota` runs in 3.6 s. Path-for-path diff against `gphotos-quota-list.py` (`ctl quota-diff`): **empty, 18,264 paths each**.
 
 ## Tests
 

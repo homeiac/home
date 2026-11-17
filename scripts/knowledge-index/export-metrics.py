@@ -8,7 +8,7 @@ Usage: export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers 
   --enrichers  extra enricher ids to report queue size for (also KI_ENRICHERS env, comma separated); enrichers that already have rows are always reported
   --list-metrics  print the metric names this exporter can emit and exit (used by the dashboard/alert consistency test)
 
-Metrics: knowledge_index_* (files, bytes, sidecars, units, parquet, pending units, exporter health), gphotos_* (quota, ingest ledger),
+Metrics: ollama_* (loaded model, GPU share), knowledge_index_* (files, bytes, sidecars, units, parquet, pending units, exporter health), gphotos_* (quota, ingest ledger),
 media_summaries_* (rows by status, queue, last batch time), knowledge_index_{backfill,enrich}_active, smart_* (USB/SATA disks: pending
 sectors etc., since a failing disk showed up on 2026-11-17). Missing tools (zfs, systemctl, smartctl) only omit their metrics.
 """
@@ -57,6 +57,13 @@ HELP = {
     "gphotos_ingest_last_finished_timestamp_seconds": ("gauge", "unix time the last ingest run finished"),
     "media_summaries_rows": ("gauge", "summary rows by enricher and status (ok/error)"),
     "media_summaries_queue": ("gauge", "media files still to summarize per enricher"),
+    "ollama_up": ("gauge", "1 if the Ollama API answered"),
+    "ollama_models_pulled": ("gauge", "models stored in Ollama (/api/tags)"),
+    "ollama_model_loaded": ("gauge", "1 for each model currently loaded (/api/ps)"),
+    "ollama_model_size_bytes": ("gauge", "memory a loaded model uses in total"),
+    "ollama_model_vram_bytes": ("gauge", "part of a loaded model that sits in GPU memory"),
+    "ollama_model_gpu_fraction": ("gauge", "share of a loaded model in GPU memory (1 = fully on GPU; low = slow, runs on CPU)"),
+    "ollama_model_expires_timestamp_seconds": ("gauge", "unix time Ollama will unload the model"),
     "knowledge_index_query_seconds": ("gauge", "seconds a representative question took against the index (quota = the Google-quota selection)"),
     "media_summaries_ok_items": ("gauge", "successfully summarized items by enricher and kind (photo/video)"),
     "media_summaries_video_seconds": ("gauge", "total duration of summarized videos by enricher"),
@@ -198,6 +205,30 @@ def collect_backfill_process(o):
         return
 
 
+def collect_ollama(o, url):
+    """Ollama has no /metrics: read /api/ps (loaded models, GPU share) and /api/tags (pulled models)."""
+    import urllib.request
+    get = lambda path: json.load(urllib.request.urlopen(url.rstrip("/") + path, timeout=5))
+    try:
+        ps, tags = get("/api/ps"), get("/api/tags")
+    except Exception:
+        o.add("ollama_up", 0)
+        return
+    o.add("ollama_up", 1)
+    o.add("ollama_models_pulled", len(tags.get("models", [])))
+    for m in ps.get("models", []):
+        name, size, vram = m.get("name", "?"), int(m.get("size", 0)), int(m.get("size_vram", 0))
+        o.add("ollama_model_loaded", 1, model=name)
+        o.add("ollama_model_size_bytes", size, model=name)
+        o.add("ollama_model_vram_bytes", vram, model=name)
+        o.add("ollama_model_gpu_fraction", round(vram / size, 4) if size else 0, model=name)
+        exp = m.get("expires_at", "")
+        try:
+            o.add("ollama_model_expires_timestamp_seconds", time.mktime(time.strptime(exp[:19], "%Y-%m-%dT%H:%M:%S")) if exp else 0, model=name)
+        except ValueError:
+            pass
+
+
 def collect_smart(o):
     scan = run(["smartctl", "--scan", "-j"])
     try:
@@ -222,6 +253,7 @@ def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--index"); ap.add_argument("--photos"); ap.add_argument("--out", default=OUT_DEFAULT)
     ap.add_argument("--enrichers", default=os.environ.get("KI_ENRICHERS", ""))
+    ap.add_argument("--ollama-url", default=os.environ.get("KI_OLLAMA_URL", ""), help="Ollama base URL (env KI_OLLAMA_URL); empty = skip Ollama metrics")
     ap.add_argument("--list-metrics", action="store_true")
     a = ap.parse_args(argv)
     if a.list_metrics:
@@ -243,6 +275,8 @@ def main(argv):
         collect_files(o, index, photos)
     collect_units(o)
     collect_backfill_process(o)
+    if a.ollama_url:
+        collect_ollama(o, a.ollama_url)
     collect_smart(o)
     o.add("knowledge_index_exporter_success", ok)
     o.add("knowledge_index_exporter_duration_seconds", round(time.time() - t0, 2))

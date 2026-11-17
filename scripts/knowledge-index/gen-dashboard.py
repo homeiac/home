@@ -53,7 +53,8 @@ YN = {"0": {"text": "no", "color": "text"}, "1": {"text": "yes", "color": "blue"
 RED_IF_POS = [("green", None), ("red", 1)]
 
 
-TEXTBOXES = [("price_photo", "Cloud $/photo (assumption)", "0.002"), ("price_video_min", "Cloud $/video minute (assumption)", "0.02"),
+TEXTBOXES = [("kwh_price", "Electricity $/kWh (assumption)", "0.35"),
+             ("price_photo", "Cloud $/photo (assumption)", "0.002"), ("price_video_min", "Cloud $/video minute (assumption)", "0.02"),
              ("baseline_s", "Baseline: sidecar scan seconds", "2280")]
 
 
@@ -115,10 +116,44 @@ def value_panels():
     return p
 
 
+def gpu_panels():
+    """GPU (DCGM exporter) and Ollama (exporter's /api/ps reader). GPU series are not filtered by $instance: the DCGM exporter has its own instance label."""
+    pods = 'DCGM_FI_DEV_GPU_UTIL'
+    KWH = "sum(increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[$__range])) / 3.6e9"   # sum: the pod label changes as different pods use the GPU
+    PAUSED = {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "running", "color": "green"}}
+    p = [row("GPU and Ollama (RTX 3070, shared)", 0)]
+    p += [stat("GPU utilization", "avg(DCGM_FI_DEV_GPU_UTIL)", 0, 1, w=4, unit="percent", decimals=0, thresholds=[("green", None), ("orange", 85)]),
+          stat("GPU memory used", "sum(DCGM_FI_DEV_FB_USED)", 4, 1, w=4, unit="mbytes", decimals=0),
+          stat("GPU memory free", "sum(DCGM_FI_DEV_FB_FREE)", 8, 1, w=4, unit="mbytes", decimals=0, thresholds=[("red", None), ("orange", 2000), ("green", 4000)]),
+          stat("Power", "sum(DCGM_FI_DEV_POWER_USAGE)", 12, 1, w=4, unit="watt", decimals=0),
+          stat("Temperature", "max(DCGM_FI_DEV_GPU_TEMP)", 16, 1, w=4, unit="celsius", decimals=0, thresholds=[("green", None), ("orange", 75), ("red", 85)]),
+          stat("GPU errors (Xid)", "sum(DCGM_FI_DEV_XID_ERRORS)", 20, 1, w=4, thresholds=RED_IF_POS, description="Non-zero means the NVIDIA driver logged a GPU fault.")]
+    p += [stat("Ollama API", "ollama_up" + INST, 0, 5, w=4, mappings=OK, thresholds=[("red", None), ("green", 1)]),
+          stat("Model loaded", "ollama_model_loaded" + INST + " == 1", 4, 5, w=4, legend="{{model}}", extra_opts={"textMode": "name"}),
+          stat("Model on GPU", "ollama_model_gpu_fraction" + INST, 8, 5, w=4, unit="percentunit", decimals=0, thresholds=[("red", None), ("orange", 0.5), ("green", 0.9)],
+               description="Share of the loaded model in GPU memory. Low means part runs on the CPU and is much slower (qwen2.5vl:3b was 0% on this card)."),
+          stat("Model size", "ollama_model_size_bytes" + INST, 12, 5, w=4, unit="bytes", decimals=1),
+          stat("Unloads in", "ollama_model_expires_timestamp_seconds" + INST + " - time()", 16, 5, w=4, unit="s"),
+          stat("Models stored", "ollama_models_pulled" + INST, 20, 5, w=4)]
+    p += [stat("Frigate", 'kube_deployment_spec_replicas{namespace="frigate",deployment="frigate"}', 0, 9, w=4, mappings=PAUSED, thresholds=[("red", None), ("green", 1)],
+               description="0 = paused on purpose for GPU work (scripts/k3s/gpu-tenants.sh); cameras are not recording."),
+          stat("Stable Diffusion", 'kube_deployment_spec_replicas{namespace="stable-diffusion",deployment="stable-diffusion-webui"}', 4, 9, w=4, mappings=PAUSED, thresholds=[("red", None), ("green", 1)]),
+          stat("Ollama pod", 'kube_deployment_status_replicas_available{namespace="ollama",deployment="ollama-gpu"}', 8, 9, w=4, mappings=PAUSED, thresholds=[("red", None), ("green", 1)]),
+          stat("GPU energy (selected range)", KWH, 12, 9, w=4, unit="suffix: kWh", decimals=2, description="Whole-GPU energy over the dashboard time range."),
+          stat("Electricity cost (range)", "(" + KWH + ") * $kwh_price", 16, 9, w=4, unit="currencyUSD", decimals=2, description="Illustrative: kWh x the kwh_price variable. Compare with the cloud-equivalent cost in the Value row."),
+          stat("GPU hours busy (range)", "sum_over_time((max(DCGM_FI_DEV_GPU_UTIL) > bool 50)[$__range:1m]) / 60", 20, 9, w=4, unit="suffix: h", decimals=1)]
+    p += [series("GPU utilization by pod", [("DCGM_FI_DEV_GPU_UTIL", "{{pod}}")], 0, 13, 12, 7, unit="percent"),
+          series("GPU memory by pod (MiB)", [("DCGM_FI_DEV_FB_USED", "{{pod}} used"), ("DCGM_FI_DEV_FB_FREE", "free")], 12, 13, 12, 7, unit="mbytes"),
+          series("Power and temperature", [("sum(DCGM_FI_DEV_POWER_USAGE)", "power W"), ("max(DCGM_FI_DEV_GPU_TEMP)", "temp C")], 0, 20, 12, 7),
+          series("Ollama model on GPU", [("ollama_model_gpu_fraction" + INST, "{{model}}")], 12, 20, 12, 7, unit="percentunit")]
+    return p
+
+
 def panels():
     p = list(value_panels())
     p += shift(backfill_panels(), 16)
-    p += shift(core_panels(), 16 + 16)
+    p += shift(gpu_panels(), 16 + 16)
+    p += shift(core_panels(), 16 + 16 + 27)
     return p
 
 

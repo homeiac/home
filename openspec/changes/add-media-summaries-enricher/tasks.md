@@ -38,6 +38,8 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 - [x] 4b.3 `knowledge-index-alerting-rules.yaml` (exporter stale, units pending, enrichment stalled/high errors, SMART pending sectors/failed, host rebooted)
 - [x] 4b.4 `test-metrics.sh`: format, numbers, dashboard==generated, every dashboard/alert metric exists
 - [x] 4b.6 Backfill progress metrics (`progress.py`, adapter `--prom`; phase, files done/total, rate, ETA, process stats) + 'Value delivered' row (throughput/min, quota-query speedup, index vs library size, illustrative cloud cost with editable prices); `check-promql.sh` validates all expressions against live Prometheus (79 valid)
+- [x] 4b.7 GPU and Ollama section (DCGM metrics by pod, loaded model and its GPU share via exporter reading /api/ps, tenant replica states, energy and illustrative electricity cost) + alerts (Xid errors, hot GPU, Ollama down, model mostly on CPU); 107 expressions valid against live Prometheus
+- [x] 4b.8 Real-library acceptance: path-for-path diff of `SELECT path FROM gphotos_quota` vs gphotos-quota-list.py is EMPTY (18,264 paths each)
 - [ ] 4b.5 After merge: confirm Flux applied the ConfigMap and rule, the dashboard renders data in Grafana, and the alert rules load in Prometheus
 
 ## 5. Rollout

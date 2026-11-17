@@ -77,6 +77,31 @@ check "ok items by kind (photo)"         "$(ml 'media_summaries_ok_items{enriche
 check "query seconds measured"           "$([[ "$(ml 'knowledge_index_query_seconds{query="quota"')" != "" ]] && echo yes)" yes
 check "last batch time present"          "$(grep -c '^media_summaries_last_batch_timestamp_seconds' "$W/out.prom")" 1
 
+echo "-- Ollama metrics from a stub /api/ps"
+cat > "$W/ollama_stub.py" <<'PY'
+import http.server, json, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = {"/api/ps": {"models": [{"name": "gemma4:e2b", "size": 7800000000, "size_vram": 2000000000, "expires_at": "2026-11-17T21:00:00-08:00"}]},
+                "/api/tags": {"models": [{"name": "a"}, {"name": "gemma4:e2b"}]}}.get(self.path, {})
+        out = json.dumps(body).encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H)
+open(sys.argv[1], "w").write(str(s.server_port)); s.serve_forever()
+PY
+"$PYTHON" "$W/ollama_stub.py" "$W/oport" & echo $! >> "$W/ollama.pid"
+for _ in $(seq 1 50); do [[ -s "$W/oport" ]] && break; sleep 0.1; done
+"$PYTHON" "$HERE/export-metrics.py" --index "$IDX" --photos "$PH" --out "$W/oll.prom" --ollama-url "http://127.0.0.1:$(cat "$W/oport")"
+og() { grep -E "^$1(\{| )" "$W/oll.prom" | head -1 | sed -E 's/^[^ ]+ //'; }
+check "ollama up"                        "$(og ollama_up)" 1
+check "models pulled"                    "$(og ollama_models_pulled)" 2
+check "loaded model present"             "$(og ollama_model_loaded)" 1
+check "gpu fraction = vram/size"         "$(og ollama_model_gpu_fraction)" 0.2564
+"$PYTHON" "$HERE/export-metrics.py" --index "$IDX" --photos "$PH" --out "$W/oll2.prom" --ollama-url "http://127.0.0.1:1"
+check "unreachable ollama -> up 0"       "$(grep '^ollama_up ' "$W/oll2.prom" | cut -d' ' -f2)" 0
+kill "$(cat "$W/ollama.pid")" 2>/dev/null || true
+
 echo "-- backfill progress metrics (progress.py via adapter --prom)"
 PROM="$W/backfill.prom"
 "$PYTHON" "$HERE/adapters/gphotos.py" emit bf1 "$LIB" "$W/idx2" --prom "$PROM" --expected 20 >/dev/null
@@ -119,7 +144,7 @@ diff -q "$W/dash.yaml" "$D" >/dev/null && ok "committed dashboard == generated" 
 import json, re, subprocess, sys, yaml
 here, repo, w = sys.argv[1:4]
 have = set(subprocess.check_output([sys.executable, here + "/export-metrics.py", "--list-metrics"], text=True).split())
-external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up"}
+external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
 mon = repo + "/gitops/clusters/homelab/infrastructure/monitoring/"
 exprs = []
 d = yaml.safe_load(open(mon + "dashboards/knowledge-index.yaml"))
@@ -129,8 +154,8 @@ for p in j["panels"]:
 r = yaml.safe_load(open(mon + "knowledge-index-alerting-rules.yaml"))
 exprs += [x["expr"] for g in r["spec"]["groups"] for x in g["rules"]]
 names = {n for e in exprs for n in re.findall(r"[a-zA-Z_:][a-zA-Z0-9_:]*(?=\s*[{\[(]|\s|$|\)|,)", e)}
-metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|smart_|node_|nvme_|up$)", n)}
-missing = metrics - have - external
+metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
+missing = {m for m in metrics - have - external if not m.startswith("DCGM_FI_DEV_")}   # DCGM names come from the NVIDIA exporter (checked live by check-promql.sh)
 if missing:
     print("  missing:", sorted(missing)); sys.exit(1)
 PY
