@@ -11,7 +11,11 @@ User decisions: Frigate may be stopped while analysis runs; the switch must be a
 - One GPU node: `k3s-vm-pumped-piglet-gpu`, RTX 3070 **time-sliced into 4 shared slots** (`nvidia.com/gpu.product=...-SHARED`, replicas 4). Frigate and `ollama-gpu` (ollama/ollama:0.20.2,
   `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_NUM_PARALLEL=1`, 1 GiB overhead) already run on it at the same time, so GPU *slots* are not the constraint: **VRAM is** (time-slicing does not partition memory).
 - VRAM now: 3.2 GiB used / **4.7 GiB free** of 8 GiB (Frigate process ~2.8 GiB, two small ones ~0.2 GiB each; no Ollama model loaded). Ollama holds text models only (qwen3:4b, qwen3.5:4b, gemma4:e2b, ...); no vision model pulled yet.
-- Implication: a 3B vision model (Q4, ~3-4 GB with the image encoder) may fit **beside Frigate**, so the Frigate stop is only needed for a 7B-class model. The existing `ollama-gpu` can be the model server (no new model-server pod).
+- **Test with Frigate UP (qwen2.5vl:3b via `scripts/ollama/measure-vlm-vram.sh`):** 1 image, num_ctx 4096: peak 5,012 MiB of 8,192, request took **3 min** (model load included) because Ollama saw only 3.2 GiB
+  usable (after its 1 GiB overhead) and loaded **35 of 37 layers on the GPU** (rest on CPU). 8 frames at num_ctx 16384: no answer in 15 min (HTTP 500). **Conclusion: with Frigate running, the 3B model is not
+  viable for ~119k items (minutes per item); the Frigate stop/handoff IS required**, and even then frames/context must be kept small (about 4 frames at <=640 px) until measured.
+- Not yet measured: speed with Frigate stopped (whole 8 GiB), warm-model latency, 7B Q4.
+- (Original implication, now contradicted for throughput) a 3B vision model (Q4, ~3-4 GB with the image encoder) may fit **beside Frigate**, so the Frigate stop is only needed for a 7B-class model. The existing `ollama-gpu` can be the model server (no new model-server pod).
 
 ## Goals / Non-Goals
 - Goals: summaries + tags for all photos and videos, searchable in SQL; restartable; automatic; Frigate always restored; no cloud; GitOps-managed.

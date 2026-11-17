@@ -16,7 +16,8 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 - [x] 2.5 Runbook section; `knowledge-index-ctl.sh enrich sample|start|status|stop` (manual path)
 
 ## 3. Container image
-- [ ] 3.0 Pull a vision model into `ollama-gpu` (e.g. qwen2.5vl:3b) and measure VRAM: if it fits beside Frigate, the handoff (section 4) becomes optional and the first release ships without stopping Frigate
+- [x] 3.0 qwen2.5vl:3b pulled (GitOps Job `ollama/job-pull-qwen25vl-3b.yaml`, model already present); measured beside Frigate: too slow (3 min/photo, 8 frames timeout): the handoff in section 4 is REQUIRED
+- [ ] 3.0b Re-measure with Frigate paused for a few minutes (warm model, 1 photo, 4 frames at 640 px, then 7B Q4): sec/item decides the backfill duration; fix the existing `ollama-model-update-gemma4` Job (it points at nonexistent svc `ollama-gpu`, correct name `ollama-lb`)
 - [ ] 3.1 Dockerfile (pinned base, python deps, ffmpeg, duckdb, faster-whisper); verify tags exist, no `latest`, bash present if scripts need it (CLAUDE.md image hygiene)
 - [ ] 3.2 Build/publish route (registry used by this repo, e.g. ghcr; check `ollama/secrets/ghcr-creds.sops.yaml` pattern); image tag pinned in the manifest
 - [ ] 3.3 Replace the VRAM guard with the handoff (guard stays only as a sanity check that the GPU is free after Frigate is down)

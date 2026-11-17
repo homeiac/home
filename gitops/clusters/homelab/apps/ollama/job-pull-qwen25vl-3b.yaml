@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-pull-qwen25vl-3b
+  namespace: ollama
+  annotations:
+    description: "Pull the vision model used by the media-summaries enricher (#212). Pull only: OLD_MODEL == NEW_MODEL makes update-model.sh skip removal."
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app: ollama-model-update
+    spec:
+      restartPolicy: OnFailure
+      imagePullSecrets:
+        - name: ghcr-creds
+      containers:
+        - name: model-update
+          image: ghcr.io/homeiac/ollama-scripts:0835164 # {"$imagepolicy": "flux-system:ollama-scripts"}
+          env:
+            - name: NEW_MODEL
+              value: "qwen2.5vl:3b"
+            - name: OLD_MODEL
+              value: "qwen2.5vl:3b"
+            - name: OLLAMA_URL
+              value: "http://ollama-lb.ollama.svc:80"
