@@ -7,6 +7,12 @@ describes every video of a library.
 
 User decisions: Frigate may be stopped while analysis runs; the switch must be automatic when new photos arrive (rare); the enricher is a pod built from a Dockerfile.
 
+## Measured 2026-11-16 (read-only, live cluster)
+- One GPU node: `k3s-vm-pumped-piglet-gpu`, RTX 3070 **time-sliced into 4 shared slots** (`nvidia.com/gpu.product=...-SHARED`, replicas 4). Frigate and `ollama-gpu` (ollama/ollama:0.20.2,
+  `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_NUM_PARALLEL=1`, 1 GiB overhead) already run on it at the same time, so GPU *slots* are not the constraint: **VRAM is** (time-slicing does not partition memory).
+- VRAM now: 3.2 GiB used / **4.7 GiB free** of 8 GiB (Frigate process ~2.8 GiB, two small ones ~0.2 GiB each; no Ollama model loaded). Ollama holds text models only (qwen3:4b, qwen3.5:4b, gemma4:e2b, ...); no vision model pulled yet.
+- Implication: a 3B vision model (Q4, ~3-4 GB with the image encoder) may fit **beside Frigate**, so the Frigate stop is only needed for a 7B-class model. The existing `ollama-gpu` can be the model server (no new model-server pod).
+
 ## Goals / Non-Goals
 - Goals: summaries + tags for all photos and videos, searchable in SQL; restartable; automatic; Frigate always restored; no cloud; GitOps-managed.
 - Non-Goals: Immich integration, face recognition, embeddings, Drive/OneDrive media, a web UI.
@@ -15,7 +21,7 @@ User decisions: Frigate may be stopped while analysis runs; the switch must be a
 1. **Packaging:** a container image (Dockerfile in `scripts/knowledge-index/enrichers/`, python + ffmpeg + duckdb + faster-whisper, pinned versions, no `latest`) run as a
    Kubernetes **Job** (Flux-managed template, one run per trigger). It carries `media_summary.py` as-is; the model server is a sidecar/second container (Ollama,
    Qwen2.5-VL) or the existing `ollama-gpu` Deployment if that one can hold the GPU instead of Frigate (to verify: node, GPU count/time-slicing).
-2. **GPU handoff (Frigate down only while running):** the Job's controller step (a small `handoff` entrypoint in the same image, with a ServiceAccount allowed to patch
+2. **GPU handoff (Frigate down only while running; only needed for the 7B tier, see Measured):** the Job's controller step (a small `handoff` entrypoint in the same image, with a ServiceAccount allowed to patch
    `deployment/frigate` and nothing else) does: annotate Frigate `kustomize.toolkit.fluxcd.io/reconcile: disabled` (so Flux does not revert the scale-down, and Git is
    untouched) -> scale to 0 and wait for the GPU to free -> run the enricher -> scale to 1, remove the annotation. Restore runs in a `finally` AND a separate watchdog CronJob
    (every few minutes: if Frigate is scaled down by this mechanism and no enrich Job is active, or a max-duration deadline passed, restore it). Max run duration default 2 h,

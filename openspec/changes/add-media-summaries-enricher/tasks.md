@@ -2,8 +2,8 @@
 Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitOps), Frigate is stopped during a run (handoff + watchdog), new photos trigger runs automatically.
 `media_summary.py`, its ctl commands and tests are done and are reused inside the image; the host-run `enrich start` stays as a manual/debug path.
 
-## 1. Measure and decide (needs the cluster; laptop kubeconfig was unreachable on 2026-11-16)
-- [ ] 1.1 Which node/GPU each of Frigate and `ollama-gpu` use today; GPU count / time-slicing; free VRAM with Frigate down; pick model size (3B vs 7B Q4)
+## 1. Measure and decide (cluster access: `scripts/k3s/get-kubeconfig.sh`, falls back to the host address in proxmox/inventory.txt)
+- [x] 1.1 (partly) Measured: both on the one 3070, time-sliced x4; 4.7 GiB VRAM free with Frigate up (see design.md). Still to measure: peak VRAM of Qwen2.5-VL 3B / 7B Q4 under load, and free VRAM with Frigate down
 - [ ] 1.2 How the pod reads the photos dataset (read-only) and writes the index dataset (NFS export vs virtiofs); confirm VM 105 is not involved
 - [ ] 1.3 Count photos, videos and total GB (`knowledge-index-ctl.sh query` on `gphotos_media`, after the Phase 1 backfill)
 - [ ] 1.4 Frigate recovery time after scale-up; what else depends on Frigate (Home Assistant automations, health CronJobs are suspended)
@@ -16,6 +16,7 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 - [x] 2.5 Runbook section; `knowledge-index-ctl.sh enrich sample|start|status|stop` (manual path)
 
 ## 3. Container image
+- [ ] 3.0 Pull a vision model into `ollama-gpu` (e.g. qwen2.5vl:3b) and measure VRAM: if it fits beside Frigate, the handoff (section 4) becomes optional and the first release ships without stopping Frigate
 - [ ] 3.1 Dockerfile (pinned base, python deps, ffmpeg, duckdb, faster-whisper); verify tags exist, no `latest`, bash present if scripts need it (CLAUDE.md image hygiene)
 - [ ] 3.2 Build/publish route (registry used by this repo, e.g. ghcr; check `ollama/secrets/ghcr-creds.sops.yaml` pattern); image tag pinned in the manifest
 - [ ] 3.3 Replace the VRAM guard with the handoff (guard stays only as a sanity check that the GPU is free after Frigate is down)
