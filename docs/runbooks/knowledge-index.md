@@ -84,31 +84,33 @@ and ledger are untouched, and the unit is appended to `<photos dataset>/_index_p
 re-walks the whole library (latest unit wins, no duplicates) and clears the list. `gphotos-ingest-ctl.sh start` installs the
 index files first.
 
-## AI enrichment: photo/video summaries on the local GPU (extension point, runner not built yet)
+## AI enrichment: photo/video summaries from a local vision model
 
-The index is ready for model-generated summaries without changing any fact table. An **enricher** is a job that reads
-files from the primary (read-only), runs a vision-language model on the GPU, and writes
-`summaries/<enricher>/<batch>.parquet` (atomic tmp + rename, like adapters). Schema of `media_summaries`:
+Spec and design: `openspec/changes/add-media-summaries-enricher/` (OpenSpec; `npx @fission-ai/openspec@1.16.0 validate --strict`).
+`scripts/knowledge-index/enrichers/media_summary.py` reads photos and videos read-only on the Proxmox host, asks an
+OpenAI-compatible vision server on the LAN (Ollama / llama.cpp serving Qwen2.5-VL on the RTX 3070 in the GPU VM) for a summary
+and tags, and writes `summaries/<enricher>/<batch>.parquet` (tmp + rename; ~200 files per batch, so a stop loses little).
+Photo = one image (long edge 1024) + context (date, album, people, has-GPS). Video = up to 8 frames across the clip + a
+faster-whisper transcript when that package is installed and the clip has audio. A file that cannot be decoded or answered gets
+a `status='error'` row and stays queued.
 
-| column | meaning |
-|---|---|
-| source, path | the file, as in `files` |
-| size_bytes | bytes that were summarized; a changed file re-enters the queue |
-| enricher, model, prompt_version | what produced it (bump `enricher` or `prompt_version` to re-run with a better model/prompt; old rows stay) |
-| summary, tags[] | the text and keywords |
-| frames_sampled, duration_s | video: how many frames were sampled, clip length |
-| status, error | `ok` or a failure that keeps the file in the queue |
-| created_at | latest row per (source, path, enricher) wins |
+```bash
+export CB_HOST=root@<host> KI_ENDPOINT=http://<gpu-vm>:11434     # model server on the LAN (no IPs in the repo)
+scripts/knowledge-index/knowledge-index-ctl.sh enrich sample 20   # print 20 summaries, write nothing: judge quality first
+scripts/knowledge-index/knowledge-index-ctl.sh enrich start       # background unit knowledge-index-enrich (nice, idle I/O)
+scripts/knowledge-index/knowledge-index-ctl.sh enrich status      # unit state, last log lines, rows per enricher/status
+scripts/knowledge-index/knowledge-index-ctl.sh enrich stop
+```
+Prerequisites: `ffmpeg` on the host (`apt-get install ffmpeg`: not installed by the scripts), the model pulled on the GPU VM.
+Re-run with a better model or prompt by changing `KI_ENRICHER` (e.g. `qwen25vl-7b-p2`): the whole library is queued again and the old
+summaries stay under their own id. **GPU sharing with Frigate:** the 3070 (8 GB) also runs Frigate's detector. The guard
+(`--min-free-mib`, via `nvidia-smi`) only works where `nvidia-smi` exists; the host has no driver access (GPU is passed to the VM), so it warns and
+continues. Measure Frigate's VRAM first (task 1.1 in the OpenSpec change) and decide how to guard before the full run.
 
-Work queue: `SELECT path FROM gphotos_to_summarize WHERE enricher = 'vlm-v1' LIMIT 500` (media with no `ok` summary for its
-current bytes; `ORDER BY taken_ts DESC` to do recent photos first). Results are SQL-searchable alongside the facts, e.g.
-`SELECT f.path FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`; semantic search or
-DuckDB full-text search over `summary` can follow (Phase 3 machinery).
-
-Constraints for the future runner: it reads photos from the host dataset (never write bulk data inside K3s VM 105); batch in
-a few hundred files per Parquet so a crash loses little; it must not touch the cloud. **Which GPU:** this repo's
-docs record an RTX 3070 on the Proxmox host that runs Frigate, while the request was for an RTX 3090. Confirm the card, which
-machine hosts it, and how it is reached (passthrough to a VM vs. a host service such as Ollama) before building the runner.
+`media_summaries` columns: source, path, `size_bytes` (bytes that were summarized: a changed file re-queues), enricher, model, prompt_version,
+summary, tags[], frames_sampled, duration_s, status (`ok`/`error`), error, created_at; latest row per (source, path, enricher) wins.
+Queue: `SELECT path FROM gphotos_to_summarize('qwen25vl-3b-p1') LIMIT 500` (a table macro, so a brand-new enricher id works).
+Search: `SELECT f.path, s.summary FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`.
 
 ## Example queries (these double as checks)
 
@@ -133,5 +135,6 @@ Library 243,088 files + `.versions` 6,753 = ledger 249,841; media 118,987; `.jso
 
 ## Tests
 
+`scripts/knowledge-index/test-enricher.sh` (stub model server + ffmpeg fixtures, 21 checks) and
 `scripts/knowledge-index/test-knowledge-index.sh` (local, python3 + duckdb): same fixture as `test-gphotos-quota-list.sh`
 plus cross-archive sidecars, corrupt sidecar, re-run idempotency, later-unit-wins, and the hook's forced-failure path.

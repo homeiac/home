@@ -8,6 +8,10 @@
 #   ./knowledge-index-ctl.sh status                  row counts, parquet files, units waiting in _index_pending.tsv
 #   ./knowledge-index-ctl.sh backfill start|status   index the whole existing Photos library as unit backfill-<date>
 #                                                    (systemd unit knowledge-index-backfill, nice + idle I/O); clears _index_pending.tsv
+#   ./knowledge-index-ctl.sh enrich sample [N]       summarize N (default 10) queued photos/videos, print them, write nothing
+#   ./knowledge-index-ctl.sh enrich start|status|stop   run the summary enricher as systemd unit knowledge-index-enrich
+#                                                    needs KI_ENDPOINT (OpenAI-compatible vision server on the LAN, e.g. http://<gpu-vm>:11434);
+#                                                    KI_MODEL (default qwen2.5vl:3b), KI_ENRICHER id (default qwen25vl-3b-p1), KI_MIN_FREE_MIB (default 3000)
 #   ./knowledge-index-ctl.sh quota-diff              diff `SELECT path FROM gphotos_quota` against gphotos-quota-list.py on the real library
 # Prerequisite: scripts/knowledge-index/install-duckdb.sh (pinned DuckDB venv).
 # Layout on the host: /opt/knowledge-index/{venv,adapters/gphotos.py,kidx.py,knowledge.sql,index-unit.sh}; data in the dataset
@@ -23,8 +27,8 @@ KI=/opt/knowledge-index
 MOUNTS="IDX=\$(zfs get -H -o value mountpoint $IDX_DATASET); PH=\$(zfs get -H -o value mountpoint $PHOTOS_DATASET)"
 
 install_files() {
-  cb_ssh "mkdir -p $KI/adapters $KI/oracle"
-  ( cd "$HERE" && tar -cf - adapters/gphotos.py kidx.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/adapters/gphotos.py"
+  cb_ssh "mkdir -p $KI/adapters $KI/enrichers $KI/oracle"
+  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py kidx.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/adapters/gphotos.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"
 }
 
@@ -51,7 +55,25 @@ case "${1:-}" in
                     && $KI/venv/bin/python $KI/kidx.py rebuild \$IDX && rm -f \$PH/_index_pending.tsv\" && echo \"started \$UNIT\""
         ;;
       status) cb_ssh "systemctl is-active knowledge-index-backfill 2>/dev/null || true; journalctl -u knowledge-index-backfill --no-pager -n 8 2>/dev/null || true";;
-      *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+      *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+    esac
+    ;;
+  enrich)
+    KI_MODEL="${KI_MODEL:-qwen2.5vl:3b}"; KI_ENRICHER="${KI_ENRICHER:-qwen25vl-3b-p1}"; KI_MIN_FREE_MIB="${KI_MIN_FREE_MIB:-3000}"
+    run_cmd() {   # runs on the host: reads the photos dataset read-only, calls the model server over the LAN
+      echo "$KI/venv/bin/python $KI/enrichers/media_summary.py run --index \"\$IDX\" --library \"\$PH/library\" --endpoint '${KI_ENDPOINT:?set KI_ENDPOINT}' \
+            --model '$KI_MODEL' --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB $*"; }
+    case "${2:-}" in
+      sample) install_files
+              cb_ssh "command -v ffmpeg >/dev/null || { echo 'ffmpeg missing on the host: apt-get install ffmpeg (ask first)'; exit 1; }; $MOUNTS; $(run_cmd --dry-run --limit "${3:-10}")";;
+      start)  install_files
+              cb_ssh "command -v ffmpeg >/dev/null || { echo 'ffmpeg missing on the host: apt-get install ffmpeg (ask first)'; exit 1; }; \
+                      systemctl is-active -q knowledge-index-enrich && { echo 'already running'; exit 0; }; systemctl reset-failed knowledge-index-enrich 2>/dev/null; \
+                      $MOUNTS; systemd-run --unit=knowledge-index-enrich --collect -p Nice=10 -p IOSchedulingClass=idle bash -c \"$(run_cmd | sed 's/"/\\"/g')\" && echo started";;
+      status) cb_ssh "systemctl is-active knowledge-index-enrich 2>/dev/null || true; journalctl -u knowledge-index-enrich --no-pager -n 6 2>/dev/null || true; \
+                      $MOUNTS; $KI/venv/bin/python $KI/kidx.py query \"\$IDX\" \"SELECT enricher, status, count(*) n FROM media_summaries GROUP BY ALL ORDER BY 1,2\"";;
+      stop)   cb_ssh "systemctl stop knowledge-index-enrich && echo stopped";;
+      *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
     esac
     ;;
   quota-diff)
@@ -61,5 +83,5 @@ case "${1:-}" in
             time $KI/venv/bin/python $KI/kidx.py query \"\$IDX\" 'SELECT path FROM gphotos_quota ORDER BY path' | tail -n +2 | sort > \$T/got; \
             echo \"oracle \$(wc -l < \$T/want) paths, index \$(wc -l < \$T/got) paths\"; diff \$T/want \$T/got | head -20 && echo 'diff: empty (equal)'"
     ;;
-  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
 esac
