@@ -24,6 +24,7 @@ class H(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         content = body["messages"][0]["content"]
         n = sum(1 for c in content if c["type"] == "image_url")
+        open(log.replace("requests.log", "extra.log"), "w").write(str(body.get("think")) + "\n")
         open(log, "a").write("%d\n" % n)
         out = json.dumps({"choices": [{"message": {"content": 'Sure!\n```json\n{"summary": "stub summary", "tags": ["a", "b"]}\n```'}}]}).encode()
         self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
@@ -79,6 +80,12 @@ check "latest row per file (3 files)"    "$(q "SELECT count(*) FROM media_summar
 echo "-- a new enricher id re-queues everything; the old results stay"
 check "new id: queue is full again"      "$(q "SELECT count(*) FROM gphotos_to_summarize('e2')")" 3
 check "old enricher rows remain"         "$(q "SELECT count(*) FROM media_summaries WHERE enricher='e1' AND status='ok'")" 2
+
+echo "-- extra request fields reach the model server"
+: > "$W/requests.log"
+"$PYTHON" "$HERE/enrichers/media_summary.py" run --index "$IDX" --library "$LIB" --endpoint "$EP" --model m --enricher e4 --min-free-mib 0 \
+  --extra-json '{"think": false}' --dry-run --limit 3 >/dev/null
+check "stub saw think=false"             "$(cat "$W/extra.log" 2>/dev/null | head -1)" "False"
 
 echo "-- GPU memory guard"
 printf '#!/bin/sh\necho 1000\n' > "$W/fake-smi"; chmod +x "$W/fake-smi"

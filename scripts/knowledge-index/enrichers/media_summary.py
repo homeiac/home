@@ -9,6 +9,7 @@ Usage:
   --library    photos library root, read-only: the folder that holds "Google Photos/" (<dataset>/library)
   --endpoint   OpenAI-compatible server on the home network, e.g. http://<gpu-vm>:11434 (Ollama) or a llama.cpp server
   --enricher   id of this model+prompt combination, e.g. qwen25vl-3b-p1 (bump it to re-summarize with a new model/prompt)
+  --extra-json JSON  extra chat-request fields, e.g. '{"think": false}' (thinking models: 10x slower and wasteful otherwise)
   --dry-run    summarize --limit files, print them, write nothing (the "sample" mode)
   --min-free-mib  refuse to start when the GPU has less free memory (nvidia-smi); 0 disables; --smi-cmd overrides the binary
 
@@ -117,10 +118,10 @@ def parse_answer(text):
     return summary, tags
 
 
-def ask_model(endpoint, model, prompt, jpegs, timeout=600):
+def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None):
     content = [{"type": "text", "text": prompt}] + [
         {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(j).decode()}} for j in jpegs]
-    body = json.dumps({"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2}).encode()
+    body = json.dumps({"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2, **(extra or {})}).encode()
     req = urllib.request.Request(endpoint.rstrip("/") + "/v1/chat/completions", body, {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.load(resp)["choices"][0]["message"]["content"]
@@ -143,7 +144,7 @@ def summarize(row, library, a):
         else:
             jpegs = [jpeg_frame(ap)]
             prompt = build_prompt(row, False, 1, "")
-        summary, tags = parse_answer(ask_model(a.endpoint, a.model, prompt, jpegs))
+        summary, tags = parse_answer(ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra))
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
@@ -222,8 +223,11 @@ def main(argv):
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
+    ap.add_argument("--extra-json", default="{}", help='extra request fields merged into the chat body, e.g. \'{"think": false}\' to stop reasoning models burning tokens')
     ap.add_argument("--dry-run", action="store_true")
-    return run(ap.parse_args(argv))
+    args = ap.parse_args(argv)
+    args.extra = json.loads(args.extra_json)
+    return run(args)
 
 
 if __name__ == "__main__":

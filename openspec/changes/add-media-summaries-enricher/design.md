@@ -14,7 +14,15 @@ User decisions: Frigate may be stopped while analysis runs; the switch must be a
 - **Test with Frigate UP (qwen2.5vl:3b via `scripts/ollama/measure-vlm-vram.sh`):** 1 image, num_ctx 4096: peak 5,012 MiB of 8,192, request took **3 min** (model load included) because Ollama saw only 3.2 GiB
   usable (after its 1 GiB overhead) and loaded **35 of 37 layers on the GPU** (rest on CPU). 8 frames at num_ctx 16384: no answer in 15 min (HTTP 500). **Conclusion: with Frigate running, the 3B model is not
   viable for ~119k items (minutes per item); the Frigate stop/handoff IS required**, and even then frames/context must be kept small (about 4 frames at <=640 px) until measured.
-- Not yet measured: speed with Frigate stopped (whole 8 GiB), warm-model latency, 7B Q4.
+- **qwen2.5vl:3b is a dead end on this card via Ollama:** its vision compute graph is reserved at 6.7 GiB whatever the image size or `num_batch` (448 px and batch 128 tried): 0/37 layers on the GPU, ~160 s/photo on CPU, even with Frigate paused.
+  A third tenant, `stable-diffusion-webui`, holds ~2.8 GiB; Frigate itself only ~0.4 GiB (pausing it frees little VRAM; the gain below is GPU time, not memory).
+- **gemma4:e2b (already in `ollama-gpu`) works:** 35/36 layers on the GPU, ~2.1 GiB added, compute graph 28-174 MiB. With `think:false` and Frigate PAUSED: 1 photo 1024 px: 3 s of work (18.6 s with its 15 s model load),
+  4 frames at 640 px: ~6 s, 8 frames at 640 px (2,167 prompt tokens): ~11 s; peak VRAM 5.0 GiB of 8. With Frigate UP (think:false): 1 photo timed out at 200 s, 4 frames 112 s (65 s load): **the pause is required** (GPU time-slicing contention).
+  With thinking ON the same call spent 535 tokens (140 s): always send `think:false` (`--extra-json '{"think": false}'`).
+- Decision: model = `gemma4:e2b`, thinking off, <= 8 frames at 640 px, Frigate paused for the run; keep the model loaded between items (the measurements unloaded it every call: ~12-16 s each).
+  Rough backfill: ~5-10 s/item warm -> 119k items ~7-14 days of pause: needs bounded windows (and/or photos first, videos later). Quality on real photos is still unmeasured (test frames were synthetic).
+- Not yet measured: real-photo quality, warm throughput over a batch, 7B-class models, stable-diffusion pod scale-down (needs user OK)
+- (superseded) speed with Frigate stopped (whole 8 GiB), warm-model latency, 7B Q4.
 - (Original implication, now contradicted for throughput) a 3B vision model (Q4, ~3-4 GB with the image encoder) may fit **beside Frigate**, so the Frigate stop is only needed for a 7B-class model. The existing `ollama-gpu` can be the model server (no new model-server pod).
 
 ## Goals / Non-Goals

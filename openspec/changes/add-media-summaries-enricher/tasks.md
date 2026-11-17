@@ -17,10 +17,13 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 
 ## 3. Container image
 - [x] 3.0 qwen2.5vl:3b pulled (GitOps Job `ollama/job-pull-qwen25vl-3b.yaml`, model already present); measured beside Frigate: too slow (3 min/photo, 8 frames timeout): the handoff in section 4 is REQUIRED
-- [ ] 3.0b Re-measure with Frigate paused for a few minutes (warm model, 1 photo, 4 frames at 640 px, then 7B Q4): sec/item decides the backfill duration; fix the existing `ollama-model-update-gemma4` Job (it points at nonexistent svc `ollama-gpu`, correct name `ollama-lb`)
+- [x] 3.0b (done 2026-11-16: gemma4:e2b think:false, Frigate paused = ~3-11 s/item; qwen2.5vl:3b rejected) Re-measure with Frigate paused for a few minutes (warm model, 1 photo, 4 frames at 640 px, then 7B Q4): sec/item decides the backfill duration; fix the existing `ollama-model-update-gemma4` Job (it points at nonexistent svc `ollama-gpu`, correct name `ollama-lb`)
 - [ ] 3.1 Dockerfile (pinned base, python deps, ffmpeg, duckdb, faster-whisper); verify tags exist, no `latest`, bash present if scripts need it (CLAUDE.md image hygiene)
 - [ ] 3.2 Build/publish route (registry used by this repo, e.g. ghcr; check `ollama/secrets/ghcr-creds.sops.yaml` pattern); image tag pinned in the manifest
 - [ ] 3.3 Replace the VRAM guard with the handoff (guard stays only as a sanity check that the GPU is free after Frigate is down)
+
+- [ ] 3.4 Default model gemma4:e2b + `--extra-json '{"think": false}'` in the Job; keep model loaded (keep_alive) during a run; unload at the end
+- [ ] 3.5 Pilot on REAL photos/videos (task 5.1) before any bulk run
 
 ## 4. GPU handoff and automation (GitOps)
 - [ ] 4.1 `handoff` entrypoint: annotate + scale Frigate to 0, wait for GPU free, run, restore in `finally`; max duration
