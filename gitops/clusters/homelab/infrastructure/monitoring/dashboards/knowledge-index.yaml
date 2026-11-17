@@ -2136,7 +2136,7 @@ data:
         {
           "id": 45,
           "type": "bargauge",
-          "title": "Counted media by year taken",
+          "title": "Counted by 'Photos from' year",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

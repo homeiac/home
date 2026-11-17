@@ -48,8 +48,8 @@ HELP = {
     "gphotos_media_without_sidecar": ("gauge", "media files with no usable Takeout sidecar"),
     "gphotos_quota_files": ("gauge", "files counting against Google quota by kind"),
     "gphotos_quota_bytes": ("gauge", "bytes counting against Google quota by kind"),
-    "gphotos_quota_media_files_by_year": ("gauge", "counted media files by taken year"),
-    "gphotos_quota_media_bytes_by_year": ("gauge", "counted media bytes by taken year"),
+    "gphotos_quota_media_files_by_year": ("gauge", "counted files (non-sidecar) per Photos-from-YYYY folder"),
+    "gphotos_quota_media_bytes_by_year": ("gauge", "counted bytes (non-sidecar) per Photos-from-YYYY folder"),
     "gphotos_album_dup_files": ("gauge", "album copies skipped as duplicates"),
     "gphotos_album_dup_bytes": ("gauge", "bytes of skipped album duplicates"),
     "gphotos_ingest_archives": ("gauge", "Takeout archives in the ingest ledger"),
@@ -121,7 +121,9 @@ def collect_index(o, index, enrichers):
     o.add("gphotos_media_without_sidecar", q("SELECT count(*) FROM gphotos_media WHERE kind = 'media' AND upload_ts IS NULL")[0][0])
     for kind, n, b in q("SELECT kind, count(*), coalesce(sum(size_bytes),0) FROM gphotos_quota GROUP BY 1"):
         o.add("gphotos_quota_files", n, kind=kind); o.add("gphotos_quota_bytes", b, kind=kind)
-    for y, n, b in q("SELECT coalesce(strftime(make_timestamp(taken_ts * 1000000), '%Y'), 'unknown'), count(*), sum(size_bytes) FROM gphotos_quota WHERE kind = 'media' GROUP BY 1"):
+    # per "Photos from YYYY" folder, every non-sidecar file (same definition as the owner's per-year table / gphotos-quota-by-year.sh)
+    for y, n, b in q("SELECT regexp_extract(path, 'Photos from ([0-9]{4})', 1), count(*), sum(size_bytes) FROM gphotos_quota "
+                     "WHERE kind <> 'sidecar' AND regexp_matches(path, '/Photos from [0-9]{4}/') GROUP BY 1"):
         o.add("gphotos_quota_media_files_by_year", n, year=y); o.add("gphotos_quota_media_bytes_by_year", b, year=y)
     t = time.time()   # value metric: how long the "what counts against Google quota" question takes now (it took ~38 min of reading sidecars before the index)
     q("SELECT count(*) FROM gphotos_quota")

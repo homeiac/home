@@ -138,7 +138,7 @@ def core_panels():
           stat("Sidecar parse errors", "knowledge_index_sidecar_parse_errors" + INST, 12, 6, thresholds=[("green", None), ("orange", 1)]),
           stat("Older versions kept", "knowledge_index_versions_files" + INST, 16, 6),
           stat("Index size", "knowledge_index_dataset_bytes" + INST, 20, 6, unit="bytes", decimals=1),
-          bars("Counted media by year taken", "gphotos_quota_media_bytes_by_year" + INST, "{{year}}", 0, 10, unit="bytes", decimals=1),
+          bars("Counted by 'Photos from' year", "gphotos_quota_media_bytes_by_year" + INST, "{{year}}", 0, 10, unit="bytes", decimals=1),
           bars("Library files by kind", "knowledge_index_files" + INST, "{{kind}}", 12, 10)]
     p.append(row("Summaries (local GPU model)", 18))
     p += [stat("Summarized", 'sum(media_summaries_rows{status="ok",instance=~"$instance"})', 0, 19),

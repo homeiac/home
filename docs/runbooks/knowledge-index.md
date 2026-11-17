@@ -140,20 +140,21 @@ and SMART health per USB/SATA disk (labelled by model: Linux device letters chan
 -- quota set, same as gphotos-quota-list.py (library-relative paths: the oracle prints them with a "gphotos/library/" prefix)
 SELECT path FROM gphotos_quota ORDER BY path;
 -- what would deleting a year free (counted media, GB)
-SELECT strftime(make_timestamp(taken_ts*1000000),'%Y') y, count(*) n, round(sum(size_bytes)/1e9,2) gb FROM gphotos_quota WHERE kind='media' GROUP BY 1 ORDER BY 1;
+SELECT regexp_extract(path,'Photos from ([0-9]{4})',1) y, count(*) n, round(sum(size_bytes)/1e9,2) gb FROM gphotos_quota WHERE kind<>'sidecar' AND regexp_matches(path,'/Photos from [0-9]{4}/') GROUP BY 1 ORDER BY 1;
 -- media without a sidecar
 SELECT count(*) FROM gphotos_media WHERE upload_ts IS NULL;
 -- counted by Google but missing on the SSK (the pre-delete safety check; needs Phase 2 copies)
 SELECT q.path FROM gphotos_quota q LEFT JOIN copies c ON c.source='gphotos' AND c.path=q.path AND c.location='ssk' WHERE c.path IS NULL;
 ```
 
-Note: the per-year query groups by `taken_ts`; the issue's "Photos from YYYY" year table (`scripts/backup/gphotos-quota-by-year.sh`)
-groups by folder. To reproduce that table: `GROUP BY regexp_extract(path, 'Photos from ([0-9]{4})', 1)`.
+Per-year uses the "Photos from YYYY" folder and every non-sidecar file, the same definition as `scripts/backup/gphotos-quota-by-year.sh`.
 
-## Golden numbers (2026-11-16, for the real-library acceptance run)
+## Golden numbers (2026-11-16) and their verification (2026-11-17)
 
 Library 243,088 files + `.versions` 6,753 = ledger 249,841; media 118,987; `.json` 119,670. Quota selection 18,264 paths / 88,693 MB;
 2023 counted media 1,940 files / 26.55 GB.
+
+**Verified on the real library 2026-11-17** (backfill `backfill-20261117`, 249,841 rows in 41 min = the ledger total; index 8.7 MB for 331 GB): library 243,088 + `.versions` 6,753; media 118,987; sidecars 119,670 (0 parse errors); quota 18,264 paths / 88,693 MB; year-folder files 10,633 / 83.35 GB; 2017 1.71, 2018 1.34, 2019 2.20, 2021 2.81, 2022 1.19, 2023 26.55 (1,940 files), 2024 15.07, 2025 18.59, 2026 13.46 GB, all equal to the table above; `SELECT path FROM gphotos_quota` runs in 3.6 s. Path-for-path diff against `gphotos-quota-list.py`: `ctl quota-diff`.
 
 ## Tests
 
