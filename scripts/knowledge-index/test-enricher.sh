@@ -22,11 +22,13 @@ log = sys.argv[1]
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        content = body["messages"][0]["content"]
-        n = sum(1 for c in content if c["type"] == "image_url")
+        msg = body["messages"][0]
+        n = len(msg["images"]) if self.path == "/api/chat" else sum(1 for c in msg["content"] if c["type"] == "image_url")
+        open(log.replace("requests.log", "path.log"), "a").write(self.path + "\n")
         open(log.replace("requests.log", "extra.log"), "w").write(str(body.get("think")) + "\n")
         open(log, "a").write("%d\n" % n)
-        out = json.dumps({"choices": [{"message": {"content": 'Sure!\n```json\n{"summary": "stub summary", "tags": ["a", "b"]}\n```'}}]}).encode()
+        reply = 'Sure!\n```json\n{"summary": "stub summary", "tags": ["a", "b"]}\n```'
+        out = json.dumps({"message": {"content": reply}} if self.path == "/api/chat" else {"choices": [{"message": {"content": reply}}]}).encode()
         self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
     def log_message(self, *a): pass
 s = http.server.HTTPServer(("127.0.0.1", 0), H)
@@ -86,6 +88,14 @@ echo "-- extra request fields reach the model server"
 "$PYTHON" "$HERE/enrichers/media_summary.py" run --index "$IDX" --library "$LIB" --endpoint "$EP" --model m --enricher e4 --min-free-mib 0 \
   --extra-json '{"think": false}' --dry-run --limit 3 >/dev/null
 check "stub saw think=false"             "$(cat "$W/extra.log" 2>/dev/null | head -1)" "False"
+
+echo "-- native Ollama API mode"
+: > "$W/requests.log"; : > "$W/path.log"
+"$PYTHON" "$HERE/enrichers/media_summary.py" run --index "$IDX" --library "$LIB" --endpoint "$EP" --model m --enricher e5 --min-free-mib 0 \
+  --api ollama --extra-json '{"think": false}' --dry-run --limit 3 | grep -c "^ok" | sed 's/^/  ok rows: /'
+check "used /api/chat"                   "$(sort -u "$W/path.log")" "/api/chat"
+check "think=false sent at top level"    "$(cat "$W/extra.log")" "False"
+check "video sent 3 frames natively"     "$(grep -c '^3$' "$W/requests.log")" 1
 
 echo "-- GPU memory guard"
 printf '#!/bin/sh\necho 1000\n' > "$W/fake-smi"; chmod +x "$W/fake-smi"

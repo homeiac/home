@@ -9,6 +9,7 @@ Usage:
   --library    photos library root, read-only: the folder that holds "Google Photos/" (<dataset>/library)
   --endpoint   OpenAI-compatible server on the home network, e.g. http://<gpu-vm>:11434 (Ollama) or a llama.cpp server
   --enricher   id of this model+prompt combination, e.g. qwen25vl-3b-p1 (bump it to re-summarize with a new model/prompt)
+  --api ollama       use Ollama native /api/chat (recommended with Ollama: honors think:false; --num-ctx sets the context)
   --extra-json JSON  extra chat-request fields, e.g. '{"think": false}' (thinking models: 10x slower and wasteful otherwise)
   --dry-run    summarize --limit files, print them, write nothing (the "sample" mode)
   --min-free-mib  refuse to start when the GPU has less free memory (nvidia-smi); 0 disables; --smi-cmd overrides the binary
@@ -118,13 +119,23 @@ def parse_answer(text):
     return summary, tags
 
 
-def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None):
-    content = [{"type": "text", "text": prompt}] + [
-        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(j).decode()}} for j in jpegs]
-    body = json.dumps({"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2, **(extra or {})}).encode()
-    req = urllib.request.Request(endpoint.rstrip("/") + "/v1/chat/completions", body, {"Content-Type": "application/json"})
+def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m"):
+    """One chat request with all images. api="ollama" uses Ollama's native /api/chat: it honors `think: false`
+    (the OpenAI-compatible /v1 endpoint did not on 2026-11-16: reasoning models then spent ~500 hidden tokens, 18-45 s/item instead of ~2-5 s)."""
+    b64 = [base64.b64encode(j).decode() for j in jpegs]
+    if api == "ollama":
+        body = {"model": model, "stream": False, "keep_alive": keep_alive, "options": {"num_ctx": num_ctx, "temperature": 0.2},
+                "messages": [{"role": "user", "content": prompt, "images": b64}]}
+        body.update(extra or {})
+        url = endpoint.rstrip("/") + "/api/chat"
+    else:
+        content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + x}} for x in b64]
+        body = {"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2, **(extra or {})}
+        url = endpoint.rstrip("/") + "/v1/chat/completions"
+    req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.load(resp)["choices"][0]["message"]["content"]
+        out = json.load(resp)
+    return out["message"]["content"] if api == "ollama" else out["choices"][0]["message"]["content"]
 
 
 def summarize(row, library, a):
@@ -144,7 +155,7 @@ def summarize(row, library, a):
         else:
             jpegs = [jpeg_frame(ap)]
             prompt = build_prompt(row, False, 1, "")
-        summary, tags = parse_answer(ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra))
+        summary, tags = parse_answer(ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api, num_ctx=a.num_ctx))
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
@@ -223,6 +234,8 @@ def main(argv):
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
+    ap.add_argument("--api", choices=["openai", "ollama"], default="openai", help="openai = /v1/chat/completions; ollama = native /api/chat (honors think:false)")
+    ap.add_argument("--num-ctx", type=int, default=8192, help="context length for --api ollama (8 frames x ~300 tokens + transcript)")
     ap.add_argument("--extra-json", default="{}", help='extra request fields merged into the chat body, e.g. \'{"think": false}\' to stop reasoning models burning tokens')
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)

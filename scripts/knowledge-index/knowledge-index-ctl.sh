@@ -62,7 +62,7 @@ case "${1:-}" in
     KI_MODEL="${KI_MODEL:-gemma4:e2b}"; KI_ENRICHER="${KI_ENRICHER:-gemma4-e2b-p1}"; KI_MIN_FREE_MIB="${KI_MIN_FREE_MIB:-3000}"
     run_cmd() {   # runs on the host: reads the photos dataset read-only, calls the model server over the LAN
       echo "$KI/venv/bin/python $KI/enrichers/media_summary.py run --index \"\$IDX\" --library \"\$PH/library\" --endpoint '${KI_ENDPOINT:?set KI_ENDPOINT}' \
-            --model '$KI_MODEL' --extra-json '{\"think\": false}' --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB $*"; }
+            --model '$KI_MODEL' --api ollama --extra-json '{\"think\": false}' --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB $*"; }
     case "${2:-}" in
       sample) install_files
               cb_ssh "command -v ffmpeg >/dev/null || { echo 'ffmpeg missing on the host: apt-get install ffmpeg (ask first)'; exit 1; }; $MOUNTS; $(run_cmd --dry-run --limit "${3:-10}")";;

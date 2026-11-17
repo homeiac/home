@@ -22,8 +22,9 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 - [ ] 3.2 Build/publish route (registry used by this repo, e.g. ghcr; check `ollama/secrets/ghcr-creds.sops.yaml` pattern); image tag pinned in the manifest
 - [ ] 3.3 Replace the VRAM guard with the handoff (guard stays only as a sanity check that the GPU is free after Frigate is down)
 
+- [x] 3.4a `--api ollama` native mode (honors think:false), ctl uses it; pilot 20 items: 10.1 s/item
 - [ ] 3.4 Default model gemma4:e2b + `--extra-json '{"think": false}'` in the Job; keep model loaded (keep_alive) during a run; unload at the end
-- [ ] 3.5 Pilot on REAL photos/videos (task 5.1) before any bulk run
+- [~] 3.5 (20-item sample done, quality good; user review of ~50 more + video accuracy pending) Pilot on REAL photos/videos (task 5.1) before any bulk run
 
 ## 4. GPU handoff and automation (GitOps)
 - [ ] 4.1 `handoff` entrypoint: annotate + scale Frigate to 0, wait for GPU free, run, restore in `finally`; max duration
