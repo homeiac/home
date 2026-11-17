@@ -7,7 +7,8 @@
 #   ./knowledge-index-ctl.sh rebuild                 recreate knowledge.duckdb (views only) from knowledge.sql
 #   ./knowledge-index-ctl.sh query "<sql>"           run SQL on the host, TSV output (never run queries inside VM 105)
 #   ./knowledge-index-ctl.sh status                  row counts, parquet files, units waiting in _index_pending.tsv
-#   ./knowledge-index-ctl.sh backfill start|status   index the whole existing Photos library as unit backfill-<date>
+#   ./knowledge-index-ctl.sh backfill start|status   index the whole existing Photos library as unit backfill-<date>; status shows phase, files done/total, rate, ETA
+#                                                    (also live in Grafana > Knowledge Index > Backfill progress)
 #                                                    (systemd unit knowledge-index-backfill, nice + idle I/O); clears _index_pending.tsv
 #   ./knowledge-index-ctl.sh enrich sample [N]       summarize N (default 10) queued photos/videos, print them, write nothing
 #   ./knowledge-index-ctl.sh enrich start|status|stop   run the summary enricher as systemd unit knowledge-index-enrich
@@ -29,7 +30,7 @@ MOUNTS="IDX=\$(zfs get -H -o value mountpoint $IDX_DATASET); PH=\$(zfs get -H -o
 
 install_files() {
   cb_ssh "mkdir -p $KI/adapters $KI/enrichers $KI/oracle"
-  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py kidx.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
+  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"
   # Prometheus textfile exporter: systemd timer every 5 min (node-exporter on the host already reads /var/lib/prometheus/node-exporter)
   for u in knowledge-index-metrics.service knowledge-index-metrics.timer; do
@@ -56,12 +57,14 @@ case "${1:-}" in
       start)
         install_files
         cb_ssh "systemctl is-active -q knowledge-index-backfill && { echo 'already running'; exit 0; }; systemctl reset-failed knowledge-index-backfill 2>/dev/null; \
-                $MOUNTS; UNIT=backfill-\$(date +%Y%m%d); \
+                $MOUNTS; UNIT=backfill-\$(date +%Y%m%d); EXP=\$(awk -F'\\t' '{s+=\$4} END {print s+0}' \$PH/_ingested.tsv); \
                 systemd-run --unit=knowledge-index-backfill --collect -p Nice=10 -p IOSchedulingClass=idle bash -c \
                   \"set -e; $KI/venv/bin/python $KI/adapters/gphotos.py emit \$UNIT \$PH/library \$IDX --versions \$PH/.versions \
+                    --prom /var/lib/prometheus/node-exporter/knowledge_index_backfill.prom --expected \$EXP \
                     && $KI/venv/bin/python $KI/kidx.py rebuild \$IDX && rm -f \$PH/_index_pending.tsv\" && echo \"started \$UNIT\""
         ;;
-      status) cb_ssh "systemctl is-active knowledge-index-backfill 2>/dev/null || true; journalctl -u knowledge-index-backfill --no-pager -n 8 2>/dev/null || true";;
+      status) cb_ssh "systemctl is-active knowledge-index-backfill 2>/dev/null || true; journalctl -u knowledge-index-backfill --no-pager -n 4 2>/dev/null || true; \
+                      grep -hE '^knowledge_index_backfill_(phase\{.*\} 1|progress_ratio|files_(listed|total|done)|rate_files|eta_seconds|parse_errors|running)' /var/lib/prometheus/node-exporter/knowledge_index_backfill.prom 2>/dev/null || echo '(no progress file: run started by an older version)'";;
       *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
     esac
     ;;

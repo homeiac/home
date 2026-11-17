@@ -111,7 +111,7 @@ check "summarized file leaves the queue"   "$(q "SELECT count(*) FROM gphotos_to
 echo "-- ingest hook (index-unit.sh): success clears pending, failure never touches library/ledger"
 H="$W/hook"; mkdir -p "$H/ds" "$H/idx" "$H/ki/adapters"
 cp -R "$LIB" "$H/ds/library"; echo "ledger-line" > "$H/ds/_ingested.tsv"
-cp "$HERE/kidx.py" "$HERE/knowledge.sql" "$H/ki/"; cp "$HERE/adapters/gphotos.py" "$H/ki/adapters/"
+cp "$HERE/kidx.py" "$HERE/knowledge.sql" "$HERE/progress.py" "$H/ki/"; cp "$HERE/adapters/gphotos.py" "$H/ki/adapters/"
 printf 'takeout-x\told\n' > "$H/ds/_index_pending.tsv"
 ( cd "$H/ds/library" && find . -type f | sed 's|^\./||' ) > "$H/moved"
 before_lib="$(find "$H/ds/library" -type f | wc -l | tr -d ' ')"

@@ -92,6 +92,13 @@ The system SHALL publish metrics at least every 10 minutes for the index (file c
 - **WHEN** the index cannot be opened
 - **THEN** the exporter still writes its health metric with value 0
 
+### Requirement: The dashboard shows the value delivered
+The dashboard SHALL lead with value measures: files indexed and items summarized per minute, how long the quota question takes against how long it took before the index, index size against library size, and an equivalent cloud cost. The cloud cost SHALL be labelled illustrative and SHALL use prices the operator can edit, because no cloud service performs this work.
+
+#### Scenario: Cloud comparison assumptions
+- **WHEN** the operator changes the per-photo or per-video-minute price variable
+- **THEN** the cost panel recomputes from the unchanged counts of described photos and video minutes
+
 ### Requirement: Dashboard and alerts are stored in Git
 The system SHALL provide a dashboard and alert rules for these metrics, both stored in Git and applied by the GitOps controller. An alert SHALL fire when metrics go stale, when ingested units are not indexed, when enrichment stalls or mostly fails, when a data disk reports pending sectors, and when a host reboots.
 

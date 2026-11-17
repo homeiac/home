@@ -73,7 +73,43 @@ PY
 "$PYTHON" "$HERE/export-metrics.py" --index "$IDX" --photos "$PH" --out "$W/out.prom"
 check "ok rows"                          "$(ml 'media_summaries_rows{enricher="e1",status="ok"')" 1
 check "queue shrinks"                    "$(ml 'media_summaries_queue{enricher="e1"')" 3
+check "ok items by kind (photo)"         "$(ml 'media_summaries_ok_items{enricher="e1",kind="photo"')" 1
+check "query seconds measured"           "$([[ "$(ml 'knowledge_index_query_seconds{query="quota"')" != "" ]] && echo yes)" yes
 check "last batch time present"          "$(grep -c '^media_summaries_last_batch_timestamp_seconds' "$W/out.prom")" 1
+
+echo "-- backfill progress metrics (progress.py via adapter --prom)"
+PROM="$W/backfill.prom"
+"$PYTHON" "$HERE/adapters/gphotos.py" emit bf1 "$LIB" "$W/idx2" --prom "$PROM" --expected 20 >/dev/null
+pm() { grep -E "^$1(\{| )" "$PROM" | grep -F "$2" | head -1 | sed -E 's/^[^ ]+ //'; }
+check "finished: phase done"             "$(pm knowledge_index_backfill_phase 'phase="done"')" 1
+check "finished: not running"            "$(pm knowledge_index_backfill_running '')" 0
+check "finished: files done = total"     "$(pm knowledge_index_backfill_files_done '')" "$(pm knowledge_index_backfill_files_total '')"
+check "files total matches library"      "$(pm knowledge_index_backfill_files_total '')" "$(find "$LIB" -type f | wc -l | tr -d ' ')"
+check "progress ratio 1"                 "$(pm knowledge_index_backfill_progress_ratio '')" 1.0
+check "parse errors counted"             "$(pm knowledge_index_backfill_parse_errors '')" 1
+check "expected passed through"          "$(pm knowledge_index_backfill_expected_files '')" 20
+check "finished timestamp set"           "$([[ "$(pm knowledge_index_backfill_finished_timestamp_seconds '')" -gt 0 ]] && echo yes)" yes
+check "progress file format valid"       "$(grep -vE '^(#|[a-z_]+(\{[^}]*\})? -?[0-9.e+-]+$)' "$PROM" | wc -l | tr -d ' ')" 0
+mkdir -p "$W/ro"; chmod 555 "$W/ro"
+"$PYTHON" "$HERE/adapters/gphotos.py" emit bf2 "$LIB" "$W/ro/idx" --prom "$W/fail.prom" >/dev/null 2>&1 || true
+chmod 755 "$W/ro"
+check "failed run: phase failed"         "$(grep -E '^knowledge_index_backfill_phase.*phase="failed"' "$W/fail.prom" | sed -E 's/^[^ ]+ //')" 1
+check "failed run: not running"          "$(grep -E '^knowledge_index_backfill_running' "$W/fail.prom" | sed -E 's/^[^ ]+ //')" 0
+"$PYTHON" - "$HERE" "$W" <<'PY' && ok "live render: reading phase, ratio, rate, eta" || bad "live render wrong"
+import sys, time
+sys.path.insert(0, sys.argv[1])
+from progress import Progress
+p = Progress("u", sys.argv[2] + "/live.prom", expected=1000, every=0)
+p.update(phase="reading", total=100, done=0)
+p.s["read_start"] = time.time() - 10
+p.update(done=50)
+txt = p.render()
+g = lambda k: float([l for l in txt.splitlines() if l.startswith("knowledge_index_backfill_" + k + "{")][0].split()[-1])
+assert g("progress_ratio") == 0.5 and g("running") == 1 and 4.5 < g("rate_files_per_second") < 5.5 and 8 <= g("eta_seconds") <= 12, txt
+assert 'phase="reading"} 1' in txt and 'phase="listing"} 0' in txt
+q = Progress("u", None)   # no file: must not raise
+q.update(phase="reading", total=1, done=1); q.finish()
+PY
 
 echo "-- dashboard and alerts (as code)"
 "$PYTHON" "$HERE/gen-dashboard.py" > "$W/dash.yaml"

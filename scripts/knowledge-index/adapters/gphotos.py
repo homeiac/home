@@ -2,7 +2,7 @@
 """Google Photos adapter for the knowledge index (issue #212).
 
 Usage:
-  gphotos.py emit <unit> <root> <out_dir> [--paths-from FILE] [--versions DIR]
+  gphotos.py emit <unit> <root> <out_dir> [--paths-from FILE] [--versions DIR] [--prom FILE] [--expected N]
 
   root       library root, read-only: the folder that holds "Google Photos/" (<dataset>/library)
   out_dir    the knowledge-index dataset; this adapter writes only below it:
@@ -11,6 +11,8 @@ Usage:
                files/gphotos/<unit>.versions.parquet    only with --versions (rows under ".versions/")
   --paths-from FILE   index only these library-relative paths (one per line) instead of walking root
                       (the ingest hook passes the files an archive just delivered)
+  --prom FILE         write live progress metrics (Prometheus textfile, updated every ~2 s; see progress.py)
+  --expected N        files the ledger says exist (progress ratio while listing)
   --versions DIR      also index DIR (<dataset>/.versions); paths are stored as ".versions/<rel>"
 
 Adapter contract (docs/runbooks/knowledge-index.md): emit(unit, root, out_dir) is idempotent (parquet is
@@ -27,6 +29,9 @@ import os
 import re
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from progress import Progress  # noqa: E402
 
 MEDIA_EXTS = {"jpg", "jpeg", "heic", "png", "gif", "webp", "mp4", "mov", "3gp", "avi", "mpg", "m4v"}
 DUP = re.compile(r"\((\d+)\)\.json$")
@@ -98,9 +103,13 @@ def parse_sidecar(abs_path, rel_path):
     )
 
 
-def _walk(base):
+def _walk(base, on_count=None):
+    n = 0
     for d, _, files in os.walk(base):
         for f in files:
+            n += 1
+            if on_count and n % 500 == 0:
+                on_count(n)
             yield os.path.relpath(os.path.join(d, f), base)
 
 
@@ -125,31 +134,50 @@ def _write_parquet(con, schema, rows, target):
     os.replace(tmp, target)
 
 
-def emit(unit, root, out_dir, paths=None, versions=None):
+def emit(unit, root, out_dir, paths=None, versions=None, prom=None, expected=0):
     """Index `root` (or only `paths`, library-relative) as `unit`. Returns (rows, bytes)."""
-    import duckdb
     t0 = time.time()
     root = root.rstrip("/")
     now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-    rels = sorted(set(paths)) if paths is not None else sorted(_walk(root))
-    files, sidecars = [], []
-    for rel in rels:
+    prog = Progress(unit, prom, expected)
+    try:
+        return _emit(unit, root, out_dir, paths, versions, prog, now, t0)
+    except BaseException:
+        prog.finish(ok=False)
+        raise
+
+
+def _emit(unit, root, out_dir, paths, versions, prog, now, t0):
+    import duckdb
+    rels = sorted(set(paths)) if paths is not None else sorted(_walk(root, lambda n: prog.update(listed=n)))
+    prog.update(force=True, phase="reading", listed=len(rels), total=len(rels))
+    files, sidecars, nbytes_seen, nerr = [], [], 0, 0
+    for i, rel in enumerate(rels, 1):
         ap = os.path.join(root, rel)
         if not os.path.isfile(ap):
             continue  # listed but gone (replaced later): skip, never fail the unit
-        files.append(_file_row("gphotos", unit, rel, ap, now))
+        row = _file_row("gphotos", unit, rel, ap, now)
+        files.append(row)
+        nbytes_seen += row[5]
         if rel.endswith(".json"):
-            sidecars.append(parse_sidecar(ap, rel))
+            sc = parse_sidecar(ap, rel)
+            sidecars.append(sc)
+            nerr += 1 if sc[-1] else 0
+        if i % 200 == 0:
+            prog.update(done=i, sidecars=len(sidecars), bytes=nbytes_seen, errors=nerr)
+    prog.update(force=True, phase="writing", done=len(rels), sidecars=len(sidecars), bytes=nbytes_seen, errors=nerr)
     con = duckdb.connect()
     _write_parquet(con, FILES_SCHEMA, files, os.path.join(out_dir, "files", "gphotos", unit + ".parquet"))
     _write_parquet(con, SIDECAR_SCHEMA, sidecars, os.path.join(out_dir, "gphotos_sidecars", unit + ".parquet"))
     nrows, nbytes = len(files), sum(r[5] for r in files)
     if versions:
+        prog.update(force=True, phase="versions")
         vers = [_file_row("gphotos", unit, ".versions/" + rel, os.path.join(versions, rel), now)
                 for rel in sorted(_walk(versions.rstrip("/")))]
         _write_parquet(con, FILES_SCHEMA, vers, os.path.join(out_dir, "files", "gphotos", unit + ".versions.parquet"))
         nrows += len(vers)
         nbytes += sum(r[5] for r in vers)
+    prog.finish(ok=True)
     print("rows=%d bytes=%d seconds=%.1f" % (nrows, nbytes, time.time() - t0))
     return nrows, nbytes
 
@@ -159,13 +187,18 @@ def main(argv):
         sys.exit(__doc__)
     unit, root, out_dir = argv[2:5]
     opts = argv[5:]
-    paths = versions = None
+    paths = versions = prom = None
+    expected = 0
+    if "--prom" in opts:
+        prom = opts[opts.index("--prom") + 1]
+    if "--expected" in opts:
+        expected = int(opts[opts.index("--expected") + 1])
     if "--paths-from" in opts:
         with open(opts[opts.index("--paths-from") + 1], encoding="utf-8") as fh:
             paths = [ln.rstrip("\n") for ln in fh if ln.strip()]
     if "--versions" in opts:
         versions = opts[opts.index("--versions") + 1]
-    emit(unit, root, out_dir, paths, versions)
+    emit(unit, root, out_dir, paths, versions, prom, expected)
 
 
 if __name__ == "__main__":

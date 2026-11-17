@@ -22,7 +22,7 @@ data:
         {
           "id": 1,
           "type": "row",
-          "title": "Index health",
+          "title": "Value delivered",
           "collapsed": false,
           "gridPos": {
             "h": 1,
@@ -35,7 +35,7 @@ data:
         {
           "id": 2,
           "type": "stat",
-          "title": "Exporter",
+          "title": "Files indexed per minute",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -45,6 +45,1469 @@ data:
             "w": 4,
             "x": 0,
             "y": 1
+          },
+          "targets": [
+            {
+              "expr": "clamp_min(deriv(knowledge_index_backfill_files_done{instance=~\"$instance\"}[5m]) * 60, 0)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Backfill speed: files read per minute (5 min window). Only while a run publishes progress."
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Summaries per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "clamp_min(sum(deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\"}[10m])) * 60, 0)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Photos and videos described by the local model per minute (10 min window)."
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Quota question answered in",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_query_seconds{query=\"quota\",instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "How long 'what counts against Google quota?' takes against the index right now."
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Faster than before",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "$baseline_s / knowledge_index_query_seconds{query=\"quota\",instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix:x",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Baseline: reading ~120k Takeout sidecars from the USB disk took about 38 min (2026-11-16). Edit the baseline_s variable to change it."
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Index size",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_dataset_bytes{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Parquet files plus the DuckDB view file."
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Index vs library",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_dataset_bytes{instance=~\"$instance\"} / sum(knowledge_index_bytes{source=\"gphotos\",instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 3
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Index size as a share of the photo library it describes."
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Library size",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_bytes{source=\"gphotos\",instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 9,
+          "type": "stat",
+          "title": "Photos described",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(media_summaries_ok_items{kind=\"photo\",instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 10,
+          "type": "stat",
+          "title": "Video minutes described",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(media_summaries_video_seconds{instance=~\"$instance\"}) / 60",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 11,
+          "type": "stat",
+          "title": "Cloud-equivalent cost avoided",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 12,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(media_summaries_ok_items{kind=\"photo\",instance=~\"$instance\"}) * $price_photo + sum(media_summaries_video_seconds{instance=~\"$instance\"}) / 60 * $price_video_min",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "ILLUSTRATIVE. No cloud service describes a Google Photos library like this. Priced as if a multimodal AI API charged per photo and per video minute; set the two price variables at the top to your own assumptions. Not a quote."
+        },
+        {
+          "id": 12,
+          "type": "stat",
+          "title": "Counts against Google quota",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(gphotos_quota_bytes{kind=\"media\",instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 13,
+          "type": "timeseries",
+          "title": "Throughput per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 9
+          },
+          "targets": [
+            {
+              "expr": "clamp_min(deriv(knowledge_index_backfill_files_done{instance=~\"$instance\"}[5m]) * 60, 0)",
+              "legendFormat": "files indexed / min",
+              "refId": "A"
+            },
+            {
+              "expr": "clamp_min(sum(deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\"}[10m])) * 60, 0)",
+              "legendFormat": "summaries / min",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 14,
+          "type": "timeseries",
+          "title": "Index size vs library size",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 9
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_dataset_bytes{instance=~\"$instance\"}",
+              "legendFormat": "index",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(knowledge_index_bytes{source=\"gphotos\",instance=~\"$instance\"})",
+              "legendFormat": "library",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 15,
+          "type": "row",
+          "title": "Backfill progress",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "panels": []
+        },
+        {
+          "id": 16,
+          "type": "stat",
+          "title": "Phase",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_phase{instance=~\"$instance\"} == 1",
+              "legendFormat": "{{phase}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "name"
+          }
+        },
+        {
+          "id": 17,
+          "type": "stat",
+          "title": "Progress",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_progress_ratio{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "orange",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.999
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 18,
+          "type": "stat",
+          "title": "Files read",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_files_done{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 19,
+          "type": "stat",
+          "title": "Files total",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_files_total{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 20,
+          "type": "stat",
+          "title": "Speed (files/s)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_rate_files_per_second{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 21,
+          "type": "stat",
+          "title": "Time left",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_eta_seconds{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 22,
+          "type": "stat",
+          "title": "Running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 21
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_active{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "no",
+                      "color": "text"
+                    },
+                    "1": {
+                      "text": "yes",
+                      "color": "blue"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 23,
+          "type": "stat",
+          "title": "Elapsed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 21
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_process_elapsed_seconds{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 24,
+          "type": "stat",
+          "title": "Read from disk",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 21
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_process_read_bytes{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 25,
+          "type": "stat",
+          "title": "CPU used",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 21
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_process_cpu_seconds{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 26,
+          "type": "stat",
+          "title": "Sidecars parsed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 21
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_sidecars_done{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 27,
+          "type": "stat",
+          "title": "Parse errors",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 21
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_parse_errors{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 28,
+          "type": "timeseries",
+          "title": "Files listed / read over time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 25
+          },
+          "targets": [
+            {
+              "expr": "knowledge_index_backfill_files_listed{instance=~\"$instance\"}",
+              "legendFormat": "listed",
+              "refId": "A"
+            },
+            {
+              "expr": "knowledge_index_backfill_files_done{instance=~\"$instance\"}",
+              "legendFormat": "read",
+              "refId": "B"
+            },
+            {
+              "expr": "knowledge_index_backfill_expected_files{instance=~\"$instance\"}",
+              "legendFormat": "expected (ledger)",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 29,
+          "type": "timeseries",
+          "title": "Disk read throughput",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 25
+          },
+          "targets": [
+            {
+              "expr": "rate(knowledge_index_backfill_process_read_bytes{instance=~\"$instance\"}[5m])",
+              "legendFormat": "read B/s",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 30,
+          "type": "timeseries",
+          "title": "CPU",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 25
+          },
+          "targets": [
+            {
+              "expr": "rate(knowledge_index_backfill_process_cpu_seconds{instance=~\"$instance\"}[5m])",
+              "legendFormat": "cores",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 31,
+          "type": "row",
+          "title": "Index health",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 32
+          },
+          "panels": []
+        },
+        {
+          "id": 32,
+          "type": "stat",
+          "title": "Exporter",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 33
           },
           "targets": [
             {
@@ -101,7 +1564,7 @@ data:
           }
         },
         {
-          "id": 3,
+          "id": 33,
           "type": "stat",
           "title": "Last export age",
           "datasource": {
@@ -112,7 +1575,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 1
+            "y": 33
           },
           "targets": [
             {
@@ -158,7 +1621,7 @@ data:
           }
         },
         {
-          "id": 4,
+          "id": 34,
           "type": "stat",
           "title": "Library files",
           "datasource": {
@@ -169,7 +1632,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 1
+            "y": 33
           },
           "targets": [
             {
@@ -207,7 +1670,7 @@ data:
           }
         },
         {
-          "id": 5,
+          "id": 35,
           "type": "stat",
           "title": "Media files",
           "datasource": {
@@ -218,7 +1681,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 1
+            "y": 33
           },
           "targets": [
             {
@@ -256,7 +1719,7 @@ data:
           }
         },
         {
-          "id": 6,
+          "id": 36,
           "type": "stat",
           "title": "Sidecars",
           "datasource": {
@@ -267,7 +1730,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 1
+            "y": 33
           },
           "targets": [
             {
@@ -305,7 +1768,7 @@ data:
           }
         },
         {
-          "id": 7,
+          "id": 37,
           "type": "stat",
           "title": "Units not indexed",
           "datasource": {
@@ -316,7 +1779,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 1
+            "y": 33
           },
           "targets": [
             {
@@ -358,7 +1821,7 @@ data:
           }
         },
         {
-          "id": 8,
+          "id": 38,
           "type": "row",
           "title": "Photos and Google quota",
           "collapsed": false,
@@ -366,12 +1829,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 5
+            "y": 37
           },
           "panels": []
         },
         {
-          "id": 9,
+          "id": 39,
           "type": "stat",
           "title": "Counts against quota",
           "datasource": {
@@ -382,7 +1845,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 6
+            "y": 38
           },
           "targets": [
             {
@@ -421,7 +1884,7 @@ data:
           }
         },
         {
-          "id": 10,
+          "id": 40,
           "type": "stat",
           "title": "Media without sidecar",
           "datasource": {
@@ -432,7 +1895,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 6
+            "y": 38
           },
           "targets": [
             {
@@ -470,7 +1933,7 @@ data:
           }
         },
         {
-          "id": 11,
+          "id": 41,
           "type": "stat",
           "title": "Album duplicates skipped",
           "datasource": {
@@ -481,7 +1944,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 6
+            "y": 38
           },
           "targets": [
             {
@@ -519,7 +1982,7 @@ data:
           }
         },
         {
-          "id": 12,
+          "id": 42,
           "type": "stat",
           "title": "Sidecar parse errors",
           "datasource": {
@@ -530,7 +1993,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 6
+            "y": 38
           },
           "targets": [
             {
@@ -572,7 +2035,7 @@ data:
           }
         },
         {
-          "id": 13,
+          "id": 43,
           "type": "stat",
           "title": "Older versions kept",
           "datasource": {
@@ -583,7 +2046,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 6
+            "y": 38
           },
           "targets": [
             {
@@ -621,7 +2084,7 @@ data:
           }
         },
         {
-          "id": 14,
+          "id": 44,
           "type": "stat",
           "title": "Index size",
           "datasource": {
@@ -632,7 +2095,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 6
+            "y": 38
           },
           "targets": [
             {
@@ -671,7 +2134,7 @@ data:
           }
         },
         {
-          "id": 15,
+          "id": 45,
           "type": "bargauge",
           "title": "Counted media by year taken",
           "datasource": {
@@ -682,7 +2145,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 10
+            "y": 42
           },
           "targets": [
             {
@@ -721,7 +2184,7 @@ data:
           }
         },
         {
-          "id": 16,
+          "id": 46,
           "type": "bargauge",
           "title": "Library files by kind",
           "datasource": {
@@ -732,7 +2195,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 10
+            "y": 42
           },
           "targets": [
             {
@@ -770,7 +2233,7 @@ data:
           }
         },
         {
-          "id": 17,
+          "id": 47,
           "type": "row",
           "title": "Summaries (local GPU model)",
           "collapsed": false,
@@ -778,12 +2241,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 18
+            "y": 50
           },
           "panels": []
         },
         {
-          "id": 18,
+          "id": 48,
           "type": "stat",
           "title": "Summarized",
           "datasource": {
@@ -794,7 +2257,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 19
+            "y": 51
           },
           "targets": [
             {
@@ -832,7 +2295,7 @@ data:
           }
         },
         {
-          "id": 19,
+          "id": 49,
           "type": "stat",
           "title": "Errors",
           "datasource": {
@@ -843,7 +2306,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 19
+            "y": 51
           },
           "targets": [
             {
@@ -885,7 +2348,7 @@ data:
           }
         },
         {
-          "id": 20,
+          "id": 50,
           "type": "stat",
           "title": "Still to do",
           "datasource": {
@@ -896,7 +2359,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 19
+            "y": 51
           },
           "targets": [
             {
@@ -934,7 +2397,7 @@ data:
           }
         },
         {
-          "id": 21,
+          "id": 51,
           "type": "stat",
           "title": "Progress",
           "datasource": {
@@ -945,7 +2408,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 19
+            "y": 51
           },
           "targets": [
             {
@@ -984,7 +2447,7 @@ data:
           }
         },
         {
-          "id": 22,
+          "id": 52,
           "type": "stat",
           "title": "Enricher running",
           "datasource": {
@@ -995,7 +2458,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 19
+            "y": 51
           },
           "targets": [
             {
@@ -1048,7 +2511,7 @@ data:
           }
         },
         {
-          "id": 23,
+          "id": 53,
           "type": "stat",
           "title": "Last batch",
           "datasource": {
@@ -1059,7 +2522,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 19
+            "y": 51
           },
           "targets": [
             {
@@ -1097,7 +2560,7 @@ data:
           }
         },
         {
-          "id": 24,
+          "id": 54,
           "type": "timeseries",
           "title": "Throughput (summaries per hour)",
           "datasource": {
@@ -1108,7 +2571,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 23
+            "y": 55
           },
           "targets": [
             {
@@ -1151,7 +2614,7 @@ data:
           }
         },
         {
-          "id": 25,
+          "id": 55,
           "type": "timeseries",
           "title": "Rows and queue",
           "datasource": {
@@ -1162,7 +2625,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 23
+            "y": 55
           },
           "targets": [
             {
@@ -1205,7 +2668,7 @@ data:
           }
         },
         {
-          "id": 26,
+          "id": 56,
           "type": "row",
           "title": "Ingest and index pipeline",
           "collapsed": false,
@@ -1213,12 +2676,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 31
+            "y": 63
           },
           "panels": []
         },
         {
-          "id": 27,
+          "id": 57,
           "type": "stat",
           "title": "Backfill running",
           "datasource": {
@@ -1229,7 +2692,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 32
+            "y": 64
           },
           "targets": [
             {
@@ -1282,7 +2745,7 @@ data:
           }
         },
         {
-          "id": 28,
+          "id": 58,
           "type": "stat",
           "title": "Takeout archives ingested",
           "datasource": {
@@ -1293,7 +2756,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 32
+            "y": 64
           },
           "targets": [
             {
@@ -1331,7 +2794,7 @@ data:
           }
         },
         {
-          "id": 29,
+          "id": 59,
           "type": "stat",
           "title": "Last ingest",
           "datasource": {
@@ -1342,7 +2805,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 32
+            "y": 64
           },
           "targets": [
             {
@@ -1399,7 +2862,7 @@ data:
           }
         },
         {
-          "id": 30,
+          "id": 60,
           "type": "stat",
           "title": "Last ingest age",
           "datasource": {
@@ -1410,7 +2873,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 32
+            "y": 64
           },
           "targets": [
             {
@@ -1448,7 +2911,7 @@ data:
           }
         },
         {
-          "id": 31,
+          "id": 61,
           "type": "stat",
           "title": "Units in index",
           "datasource": {
@@ -1459,7 +2922,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 32
+            "y": 64
           },
           "targets": [
             {
@@ -1497,7 +2960,7 @@ data:
           }
         },
         {
-          "id": 32,
+          "id": 62,
           "type": "stat",
           "title": "Export time",
           "datasource": {
@@ -1508,7 +2971,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 32
+            "y": 64
           },
           "targets": [
             {
@@ -1547,7 +3010,7 @@ data:
           }
         },
         {
-          "id": 33,
+          "id": 63,
           "type": "timeseries",
           "title": "Parquet files per table",
           "datasource": {
@@ -1558,7 +3021,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 36
+            "y": 68
           },
           "targets": [
             {
@@ -1596,7 +3059,7 @@ data:
           }
         },
         {
-          "id": 34,
+          "id": 64,
           "type": "row",
           "title": "Host and disks (the 2026-11-17 outage)",
           "collapsed": false,
@@ -1604,12 +3067,12 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 42
+            "y": 74
           },
           "panels": []
         },
         {
-          "id": 35,
+          "id": 65,
           "type": "stat",
           "title": "Disk SMART",
           "datasource": {
@@ -1620,7 +3083,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 43
+            "y": 75
           },
           "targets": [
             {
@@ -1677,7 +3140,7 @@ data:
           }
         },
         {
-          "id": 36,
+          "id": 66,
           "type": "stat",
           "title": "Host uptime",
           "datasource": {
@@ -1688,7 +3151,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 43
+            "y": 75
           },
           "targets": [
             {
@@ -1726,7 +3189,7 @@ data:
           }
         },
         {
-          "id": 37,
+          "id": 67,
           "type": "timeseries",
           "title": "Pending sectors per disk",
           "datasource": {
@@ -1737,7 +3200,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 43
+            "y": 75
           },
           "targets": [
             {
@@ -1785,7 +3248,7 @@ data:
           }
         },
         {
-          "id": 38,
+          "id": 68,
           "type": "timeseries",
           "title": "Reboots (boot time changes per hour)",
           "datasource": {
@@ -1796,7 +3259,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 47
+            "y": 79
           },
           "targets": [
             {
@@ -1834,7 +3297,7 @@ data:
           }
         },
         {
-          "id": 39,
+          "id": 69,
           "type": "timeseries",
           "title": "NVMe power cycles",
           "datasource": {
@@ -1845,7 +3308,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 53
+            "y": 85
           },
           "targets": [
             {
@@ -1917,6 +3380,63 @@ data:
             "sort": 1,
             "type": "query",
             "allValue": ".*"
+          },
+          {
+            "type": "textbox",
+            "name": "price_photo",
+            "label": "Cloud $/photo (assumption)",
+            "query": "0.002",
+            "current": {
+              "text": "0.002",
+              "value": "0.002"
+            },
+            "options": [
+              {
+                "selected": true,
+                "text": "0.002",
+                "value": "0.002"
+              }
+            ],
+            "hide": 0,
+            "skipUrlSync": false
+          },
+          {
+            "type": "textbox",
+            "name": "price_video_min",
+            "label": "Cloud $/video minute (assumption)",
+            "query": "0.02",
+            "current": {
+              "text": "0.02",
+              "value": "0.02"
+            },
+            "options": [
+              {
+                "selected": true,
+                "text": "0.02",
+                "value": "0.02"
+              }
+            ],
+            "hide": 0,
+            "skipUrlSync": false
+          },
+          {
+            "type": "textbox",
+            "name": "baseline_s",
+            "label": "Baseline: sidecar scan seconds",
+            "query": "2280",
+            "current": {
+              "text": "2280",
+              "value": "2280"
+            },
+            "options": [
+              {
+                "selected": true,
+                "text": "2280",
+                "value": "2280"
+              }
+            ],
+            "hide": 0,
+            "skipUrlSync": false
           }
         ]
       },

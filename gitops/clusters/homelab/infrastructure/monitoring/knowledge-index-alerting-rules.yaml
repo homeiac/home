@@ -30,6 +30,26 @@ spec:
             summary: "{{ $value }} ingested Takeout unit(s) are not in the knowledge index"
             description: "Indexing failed after an ingest (index_pending). Photos are safe; fix with: scripts/knowledge-index/knowledge-index-ctl.sh backfill start"
 
+        - alert: KnowledgeIndexBackfillStuck
+          expr: (knowledge_index_backfill_running == 1 and (time() - knowledge_index_backfill_updated_timestamp_seconds) > 600) or (knowledge_index_backfill_active == 1 and increase(knowledge_index_backfill_process_read_bytes[15m]) == 0)
+          for: 10m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Knowledge index backfill on {{ $labels.instance }} has made no progress for 10+ minutes"
+            description: "The backfill unit is active but its progress file is stale or it reads nothing from disk. A failing or hung USB disk is a likely cause. Check: scripts/knowledge-index/knowledge-index-ctl.sh backfill status and dmesg on the host."
+
+        - alert: KnowledgeIndexBackfillFailed
+          expr: knowledge_index_backfill_phase{phase="failed"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Knowledge index backfill {{ $labels.unit }} failed"
+            description: "Nothing was lost (it is idempotent). See journalctl -u knowledge-index-backfill on the host, then re-run: scripts/knowledge-index/knowledge-index-ctl.sh backfill start"
+
         - alert: MediaSummariesStalled
           expr: knowledge_index_enrich_active == 1 and increase(media_summaries_rows[30m]) == 0
           for: 30m

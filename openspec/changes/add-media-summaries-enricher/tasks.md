@@ -37,6 +37,7 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 - [x] 4b.2 Dashboard generated from `gen-dashboard.py` into `infrastructure/monitoring/dashboards/knowledge-index.yaml` (ConfigMap, grafana_dashboard=1)
 - [x] 4b.3 `knowledge-index-alerting-rules.yaml` (exporter stale, units pending, enrichment stalled/high errors, SMART pending sectors/failed, host rebooted)
 - [x] 4b.4 `test-metrics.sh`: format, numbers, dashboard==generated, every dashboard/alert metric exists
+- [x] 4b.6 Backfill progress metrics (`progress.py`, adapter `--prom`; phase, files done/total, rate, ETA, process stats) + 'Value delivered' row (throughput/min, quota-query speedup, index vs library size, illustrative cloud cost with editable prices); `check-promql.sh` validates all expressions against live Prometheus (79 valid)
 - [ ] 4b.5 After merge: confirm Flux applied the ConfigMap and rule, the dashboard renders data in Grafana, and the alert rules load in Prometheus
 
 ## 5. Rollout

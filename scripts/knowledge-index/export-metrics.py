@@ -22,6 +22,9 @@ import time
 
 import duckdb
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from progress import BACKFILL_HELP  # noqa: E402
+
 OUT_DEFAULT = "/var/lib/prometheus/node-exporter/knowledge_index.prom"
 INDEX_DATASET = "local-3TB-backup/knowledge-index"
 PHOTOS_DATASET = "local-3TB-backup/gphotos"
@@ -54,6 +57,9 @@ HELP = {
     "gphotos_ingest_last_finished_timestamp_seconds": ("gauge", "unix time the last ingest run finished"),
     "media_summaries_rows": ("gauge", "summary rows by enricher and status (ok/error)"),
     "media_summaries_queue": ("gauge", "media files still to summarize per enricher"),
+    "knowledge_index_query_seconds": ("gauge", "seconds a representative question took against the index (quota = the Google-quota selection)"),
+    "media_summaries_ok_items": ("gauge", "successfully summarized items by enricher and kind (photo/video)"),
+    "media_summaries_video_seconds": ("gauge", "total duration of summarized videos by enricher"),
     "media_summaries_last_batch_timestamp_seconds": ("gauge", "unix time of the newest summary batch per enricher"),
     "smart_pending_sectors": ("gauge", "SMART Current_Pending_Sector per disk"),
     "smart_offline_uncorrectable": ("gauge", "SMART Offline_Uncorrectable per disk"),
@@ -61,6 +67,9 @@ HELP = {
     "smart_power_cycles": ("gauge", "SMART Power_Cycle_Count per disk"),
     "smart_passed": ("gauge", "1 if the SMART overall health assessment passed"),
 }
+
+HELP.update({k: v for k, v in BACKFILL_HELP.items() if k.startswith("knowledge_index_backfill_process_")})
+PROGRESS_HELP = BACKFILL_HELP   # written live by adapters/gphotos.py --prom (progress.py); listed here so --list-metrics covers them
 
 
 class Out:
@@ -114,8 +123,17 @@ def collect_index(o, index, enrichers):
         o.add("gphotos_quota_files", n, kind=kind); o.add("gphotos_quota_bytes", b, kind=kind)
     for y, n, b in q("SELECT coalesce(strftime(make_timestamp(taken_ts * 1000000), '%Y'), 'unknown'), count(*), sum(size_bytes) FROM gphotos_quota WHERE kind = 'media' GROUP BY 1"):
         o.add("gphotos_quota_media_files_by_year", n, year=y); o.add("gphotos_quota_media_bytes_by_year", b, year=y)
+    t = time.time()   # value metric: how long the "what counts against Google quota" question takes now (it took ~38 min of reading sidecars before the index)
+    q("SELECT count(*) FROM gphotos_quota")
+    o.add("knowledge_index_query_seconds", round(time.time() - t, 3), query="quota")
     n, b = q("SELECT count(*), coalesce(sum(size_bytes),0) FROM gphotos_album_dup")[0]
     o.add("gphotos_album_dup_files", n); o.add("gphotos_album_dup_bytes", b)
+    vids = "('mp4','mov','3gp','avi','mpg','m4v')"
+    for enr, kind, n, secs in q("SELECT s.enricher, CASE WHEN f.ext IN %s THEN 'video' ELSE 'photo' END, count(*), coalesce(sum(s.duration_s), 0) "
+                                "FROM media_summaries s JOIN gphotos_files f ON f.path = s.path WHERE s.status = 'ok' GROUP BY 1, 2" % vids):
+        o.add("media_summaries_ok_items", n, enricher=enr, kind=kind)
+        if kind == "video":
+            o.add("media_summaries_video_seconds", secs, enricher=enr)
     seen = set()
     for enr, status, n in q("SELECT enricher, status, count(*) FROM media_summaries GROUP BY ALL"):
         o.add("media_summaries_rows", n, enricher=enr, status=status); seen.add(enr)
@@ -156,6 +174,28 @@ def collect_units(o):
             o.add(metric, 1 if state == "active" else 0)
 
 
+def collect_backfill_process(o):
+    """Process-level stats of the running backfill (works for any run, instrumented or not): elapsed, bytes read from disk, CPU."""
+    cg = run(["systemctl", "show", "-p", "ControlGroup", "--value", "knowledge-index-backfill"]).strip()
+    procs = os.path.join("/sys/fs/cgroup", cg.lstrip("/"), "cgroup.procs") if cg else ""
+    if not procs or not os.path.exists(procs):
+        return
+    tck = os.sysconf("SC_CLK_TCK")
+    uptime = float(open("/proc/uptime").read().split()[0])
+    for pid in open(procs).read().split():
+        try:
+            if b"gphotos.py" not in open("/proc/%s/cmdline" % pid, "rb").read():
+                continue
+            st = open("/proc/%s/stat" % pid).read().rsplit(")", 1)[1].split()
+            io = dict(ln.split(": ") for ln in open("/proc/%s/io" % pid).read().splitlines())
+        except OSError:
+            continue
+        o.add("knowledge_index_backfill_process_elapsed_seconds", round(uptime - int(st[19]) / tck))
+        o.add("knowledge_index_backfill_process_read_bytes", int(io["read_bytes"]))
+        o.add("knowledge_index_backfill_process_cpu_seconds", round((int(st[11]) + int(st[12])) / tck, 1))
+        return
+
+
 def collect_smart(o):
     scan = run(["smartctl", "--scan", "-j"])
     try:
@@ -183,7 +223,7 @@ def main(argv):
     ap.add_argument("--list-metrics", action="store_true")
     a = ap.parse_args(argv)
     if a.list_metrics:
-        print("\n".join(sorted(HELP)))
+        print("\n".join(sorted(set(HELP) | set(PROGRESS_HELP))))
         return 0
     t0 = time.time()
     index = a.index or mountpoint(INDEX_DATASET)
@@ -200,6 +240,7 @@ def main(argv):
     if index and os.path.isdir(index):
         collect_files(o, index, photos)
     collect_units(o)
+    collect_backfill_process(o)
     collect_smart(o)
     o.add("knowledge_index_exporter_success", ok)
     o.add("knowledge_index_exporter_duration_seconds", round(time.time() - t0, 2))

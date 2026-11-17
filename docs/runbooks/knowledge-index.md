@@ -122,6 +122,13 @@ and SMART health per USB/SATA disk (labelled by model: Linux device letters chan
 
 - Dashboard: Grafana > Homelab > **Knowledge Index** (ConfigMap `infrastructure/monitoring/dashboards/knowledge-index.yaml`).
   It is GENERATED: edit `scripts/knowledge-index/gen-dashboard.py`, then `python3 scripts/knowledge-index/gen-dashboard.py > <that yaml>`.
+- **Value delivered** (top row): files indexed per minute, summaries per minute, how long the quota question takes now versus the ~38 min
+  sidecar scan it replaced (`baseline_s`), index size versus library size, photos and video minutes described, and an **illustrative**
+  cloud-equivalent cost. No cloud service does this for a Google Photos library, so the cost prices the same work per photo and per video
+  minute with editable assumptions (`price_photo`, `price_video_min` dashboard variables: not quotes).
+- **Backfill progress**: `ctl backfill start` passes `--prom` and `--expected` (ledger file count) to the adapter, which writes live phase, files
+  listed/read, rate and ETA every ~2 s (`progress.py`); process stats (elapsed, bytes read, CPU) work for any backfill, instrumented or not.
+  `ctl backfill status` prints the same numbers. `scripts/knowledge-index/check-promql.sh` runs every dashboard/alert expression against the live Prometheus.
 - Alerts: `infrastructure/monitoring/knowledge-index-alerting-rules.yaml` (exporter stale, units pending, enrichment stalled / >20% errors,
   disk pending sectors or SMART failed, Proxmox host rebooted).
 - `scripts/knowledge-index/test-metrics.sh` checks the exposition format, the numbers, that the committed dashboard equals the generated one,

@@ -12,7 +12,7 @@ INST = '{instance=~"$instance"}'
 _id = [0]
 
 
-def _panel(kind, title, exprs, x, y, w, h, unit="none", thresholds=None, mappings=None, decimals=None, extra=None):
+def _panel(kind, title, exprs, x, y, w, h, unit="none", thresholds=None, mappings=None, decimals=None, extra=None, description=None):
     _id[0] += 1
     steps = [{"color": c, "value": v} for c, v in (thresholds or [("green", None)])]
     defaults = {"unit": unit, "thresholds": {"mode": "absolute", "steps": steps}, "color": {"mode": "thresholds" if thresholds else "palette-classic"}}
@@ -24,11 +24,15 @@ def _panel(kind, title, exprs, x, y, w, h, unit="none", thresholds=None, mapping
          "targets": [{"expr": e, "legendFormat": legend, "refId": chr(65 + i)} for i, (e, legend) in enumerate(exprs)],
          "fieldConfig": {"defaults": defaults, "overrides": []}}
     p.update(extra or {})
+    if description:
+        p["description"] = description
     return p
 
 
-def stat(title, expr, x, y, w=4, h=4, legend="", **kw):
-    return _panel("stat", title, [(expr, legend)], x, y, w, h, extra={"options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"}}, **kw)
+def stat(title, expr, x, y, w=4, h=4, legend="", extra_opts=None, description=None, **kw):
+    opts = {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "value", "graphMode": "none"}
+    opts.update(extra_opts or {})
+    return _panel("stat", title, [(expr, legend)], x, y, w, h, extra={"options": opts}, description=description, **kw)
 
 
 def series(title, exprs, x, y, w=12, h=8, **kw):
@@ -49,7 +53,76 @@ YN = {"0": {"text": "no", "color": "text"}, "1": {"text": "yes", "color": "blue"
 RED_IF_POS = [("green", None), ("red", 1)]
 
 
+TEXTBOXES = [("price_photo", "Cloud $/photo (assumption)", "0.002"), ("price_video_min", "Cloud $/video minute (assumption)", "0.02"),
+             ("baseline_s", "Baseline: sidecar scan seconds", "2280")]
+
+
+def _textbox(name, label, default):
+    return {"type": "textbox", "name": name, "label": label, "query": default, "current": {"text": default, "value": default},
+            "options": [{"selected": True, "text": default, "value": default}], "hide": 0, "skipUrlSync": False}
+
+
+def shift(items, dy):
+    for it in items:
+        it["gridPos"]["y"] += dy
+    return items
+
+
+def backfill_panels():
+    """Top section: live progress of the (re)index run. Needs the adapter's --prom file; the process_* panels work for any run."""
+    p = [row("Backfill progress", 0)]
+    p += [stat("Phase", "knowledge_index_backfill_phase{instance=~\"$instance\"} == 1", 0, 1, w=4, legend="{{phase}}", extra_opts={"textMode": "name"}),
+          stat("Progress", "knowledge_index_backfill_progress_ratio" + INST, 4, 1, w=4, unit="percentunit", decimals=1, thresholds=[("orange", None), ("green", 0.999)]),
+          stat("Files read", "knowledge_index_backfill_files_done" + INST, 8, 1, w=4),
+          stat("Files total", "knowledge_index_backfill_files_total" + INST, 12, 1, w=4),
+          stat("Speed (files/s)", "knowledge_index_backfill_rate_files_per_second" + INST, 16, 1, w=4, decimals=1),
+          stat("Time left", "knowledge_index_backfill_eta_seconds" + INST, 20, 1, w=4, unit="s")]
+    p += [stat("Running", "knowledge_index_backfill_active" + INST, 0, 5, w=4, mappings=YN),
+          stat("Elapsed", "knowledge_index_backfill_process_elapsed_seconds" + INST, 4, 5, w=4, unit="s"),
+          stat("Read from disk", "knowledge_index_backfill_process_read_bytes" + INST, 8, 5, w=4, unit="bytes", decimals=1),
+          stat("CPU used", "knowledge_index_backfill_process_cpu_seconds" + INST, 12, 5, w=4, unit="s"),
+          stat("Sidecars parsed", "knowledge_index_backfill_sidecars_done" + INST, 16, 5, w=4),
+          stat("Parse errors", "knowledge_index_backfill_parse_errors" + INST, 20, 5, w=4, thresholds=[("green", None), ("orange", 1)])]
+    p += [series("Files listed / read over time", [("knowledge_index_backfill_files_listed" + INST, "listed"), ("knowledge_index_backfill_files_done" + INST, "read"),
+                                                   ("knowledge_index_backfill_expected_files" + INST, "expected (ledger)")], 0, 9, 12, 7),
+          series("Disk read throughput", [("rate(knowledge_index_backfill_process_read_bytes" + INST + "[5m])", "read B/s")], 12, 9, 6, 7, unit="Bps"),
+          series("CPU", [("rate(knowledge_index_backfill_process_cpu_seconds" + INST + "[5m])", "cores")], 18, 9, 6, 7, decimals=2)]
+    return p
+
+
+def value_panels():
+    """Top section: what the index and the local GPU deliver, in numbers that matter (speed, size, cost avoided)."""
+    FILES = "deriv(knowledge_index_backfill_files_done" + INST + "[5m]) * 60"
+    SUMM = 'sum(deriv(media_summaries_rows{status="ok",instance=~"$instance"}[10m])) * 60'
+    QS = 'knowledge_index_query_seconds{query="quota",instance=~"$instance"}'
+    COST = ('sum(media_summaries_ok_items{kind="photo",instance=~"$instance"}) * $price_photo'
+            ' + sum(media_summaries_video_seconds' + INST + ') / 60 * $price_video_min')
+    p = [row("Value delivered", 0)]
+    p += [stat("Files indexed per minute", "clamp_min(" + FILES + ", 0)", 0, 1, w=4, decimals=0, description="Backfill speed: files read per minute (5 min window). Only while a run publishes progress."),
+          stat("Summaries per minute", "clamp_min(" + SUMM + ", 0)", 4, 1, w=4, decimals=1, description="Photos and videos described by the local model per minute (10 min window)."),
+          stat("Quota question answered in", QS, 8, 1, w=4, unit="s", decimals=2, description="How long 'what counts against Google quota?' takes against the index right now."),
+          stat("Faster than before", "$baseline_s / " + QS, 12, 1, w=4, unit="suffix:x", decimals=0, description="Baseline: reading ~120k Takeout sidecars from the USB disk took about 38 min (2026-11-16). Edit the baseline_s variable to change it."),
+          stat("Index size", "knowledge_index_dataset_bytes" + INST, 16, 1, w=4, unit="bytes", decimals=1, description="Parquet files plus the DuckDB view file."),
+          stat("Index vs library", "knowledge_index_dataset_bytes" + INST + ' / sum(knowledge_index_bytes{source="gphotos",instance=~"$instance"})', 20, 1, w=4, unit="percentunit", decimals=3, description="Index size as a share of the photo library it describes.")]
+    p += [stat("Library size", 'sum(knowledge_index_bytes{source="gphotos",instance=~"$instance"})', 0, 5, w=4, unit="bytes", decimals=1),
+          stat("Photos described", 'sum(media_summaries_ok_items{kind="photo",instance=~"$instance"})', 4, 5, w=4),
+          stat("Video minutes described", "sum(media_summaries_video_seconds" + INST + ") / 60", 8, 5, w=4, decimals=0),
+          stat("Cloud-equivalent cost avoided", COST, 12, 5, w=8, unit="currencyUSD", decimals=2,
+               description="ILLUSTRATIVE. No cloud service describes a Google Photos library like this. Priced as if a multimodal AI API charged per photo and per video minute; set the two price variables at the top to your own assumptions. Not a quote."),
+          stat("Counts against Google quota", 'sum(gphotos_quota_bytes{kind="media",instance=~"$instance"})', 20, 5, w=4, unit="bytes", decimals=1)]
+    p += [series("Throughput per minute", [("clamp_min(" + FILES + ", 0)", "files indexed / min"), ("clamp_min(" + SUMM + ", 0)", "summaries / min")], 0, 9, 12, 7),
+          series("Index size vs library size", [("knowledge_index_dataset_bytes" + INST, "index"), ('sum(knowledge_index_bytes{source="gphotos",instance=~"$instance"})', "library")], 12, 9, 12, 7, unit="bytes")]
+    return p
+
+
 def panels():
+    p = list(value_panels())
+    p += shift(backfill_panels(), 16)
+    p += shift(core_panels(), 16 + 16)
+    return p
+
+
+def core_panels():
     p = []
     p.append(row("Index health", 0))
     p += [stat("Exporter", "knowledge_index_exporter_success" + INST, 0, 1, mappings=OK, thresholds=[("red", None), ("green", 1)]),
@@ -103,7 +176,8 @@ def dashboard():
         "tags": ["knowledge-index", "photos", "homelab"], "time": {"from": "now-24h", "to": "now"}, "timezone": "browser",
         "templating": {"list": [{"current": {}, "datasource": DS, "definition": "label_values(knowledge_index_exporter_success, instance)", "hide": 0, "includeAll": True,
                                  "label": "Host", "multi": True, "name": "instance", "options": [], "query": "label_values(knowledge_index_exporter_success, instance)",
-                                 "refresh": 2, "regex": "", "skipUrlSync": False, "sort": 1, "type": "query", "allValue": ".*"}]},
+                                 "refresh": 2, "regex": "", "skipUrlSync": False, "sort": 1, "type": "query", "allValue": ".*"},
+                                *[_textbox(n, l, v) for n, l, v in TEXTBOXES]]},
         "title": "Knowledge Index", "uid": "knowledge-index", "version": 1,
     }
 
