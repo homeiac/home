@@ -32,6 +32,13 @@ Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitO
 - [ ] 4.3 Test the handoff against a fake Deployment in a scratch namespace (restore on success, on crash, on timeout; Flux does not revert mid-run)
 - [ ] 4.4 Ingest trigger: after a successful `index-unit.sh`, if the queue is non-empty create the Job (guard against a running one); test with a fake kubectl
 
+## 4b. Observability (Prometheus textfile + Grafana as code)
+- [x] 4b.1 `export-metrics.py` (index, quota, ingest, enrichment, SMART per disk) -> node-exporter textfile, systemd timer every 5 min, installed by `ctl install`
+- [x] 4b.2 Dashboard generated from `gen-dashboard.py` into `infrastructure/monitoring/dashboards/knowledge-index.yaml` (ConfigMap, grafana_dashboard=1)
+- [x] 4b.3 `knowledge-index-alerting-rules.yaml` (exporter stale, units pending, enrichment stalled/high errors, SMART pending sectors/failed, host rebooted)
+- [x] 4b.4 `test-metrics.sh`: format, numbers, dashboard==generated, every dashboard/alert metric exists
+- [ ] 4b.5 After merge: confirm Flux applied the ConfigMap and rule, the dashboard renders data in Grafana, and the alert rules load in Prometheus
+
 ## 5. Rollout
 - [ ] 5.1 Pilot: ~20 videos + ~50 photos, human quality review, tune frames and prompt, record seconds per item
 - [ ] 5.2 Backfill window policy (e.g. nights), then full run

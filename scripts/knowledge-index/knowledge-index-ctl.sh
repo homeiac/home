@@ -2,7 +2,8 @@
 # Install / rebuild / query / backfill the knowledge index on the Proxmox host (issue #212)
 #
 # Usage (needs CB_HOST like the other backup scripts, e.g. CB_HOST=root@<host> from the laptop):
-#   ./knowledge-index-ctl.sh install                 copy adapter + SQL + helpers to the host, create the dataset (idempotent)
+#   ./knowledge-index-ctl.sh install                 copy adapter + SQL + helpers to the host, create the dataset, enable the metrics timer (idempotent)
+#   ./knowledge-index-ctl.sh metrics                 run the metrics export now and print what Prometheus will scrape (dashboard: Grafana > Homelab > Knowledge Index)
 #   ./knowledge-index-ctl.sh rebuild                 recreate knowledge.duckdb (views only) from knowledge.sql
 #   ./knowledge-index-ctl.sh query "<sql>"           run SQL on the host, TSV output (never run queries inside VM 105)
 #   ./knowledge-index-ctl.sh status                  row counts, parquet files, units waiting in _index_pending.tsv
@@ -28,8 +29,13 @@ MOUNTS="IDX=\$(zfs get -H -o value mountpoint $IDX_DATASET); PH=\$(zfs get -H -o
 
 install_files() {
   cb_ssh "mkdir -p $KI/adapters $KI/enrichers $KI/oracle"
-  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py kidx.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/adapters/gphotos.py"
+  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py kidx.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"
+  # Prometheus textfile exporter: systemd timer every 5 min (node-exporter on the host already reads /var/lib/prometheus/node-exporter)
+  for u in knowledge-index-metrics.service knowledge-index-metrics.timer; do
+    cb_ssh "install -m 0644 /dev/stdin /etc/systemd/system/$u" < "$HERE/host/$u"
+  done
+  cb_ssh "systemctl daemon-reload && systemctl enable --now knowledge-index-metrics.timer >/dev/null 2>&1"
 }
 
 case "${1:-}" in
@@ -38,6 +44,7 @@ case "${1:-}" in
     cb_ssh "zfs list -H $IDX_DATASET >/dev/null 2>&1 || zfs create -o recordsize=1M -o compression=lz4 -o atime=off $IDX_DATASET; \
             $MOUNTS; echo \"installed in $KI; index dataset at \$IDX\"; $KI/venv/bin/python -c 'import duckdb; print(\"duckdb\", duckdb.__version__)'"
     ;;
+  metrics) install_files; cb_ssh "systemctl start knowledge-index-metrics.service; grep -E '^(knowledge_index_exporter_success|knowledge_index_files|gphotos_quota_bytes|media_summaries|smart_pending)' /var/lib/prometheus/node-exporter/knowledge_index.prom";;
   rebuild) install_files; cb_ssh "$MOUNTS; $KI/venv/bin/python $KI/kidx.py rebuild \"\$IDX\"";;
   query)   [[ -n "${2:-}" ]] || { echo 'usage: query "<sql>"'; exit 1; }
            cb_ssh "$MOUNTS; $KI/venv/bin/python $KI/kidx.py query \"\$IDX\" $(printf '%q' "$2")";;

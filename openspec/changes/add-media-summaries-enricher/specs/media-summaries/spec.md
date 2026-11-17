@@ -84,3 +84,21 @@ status command that reports queue size, completed count, errors, and seconds per
 #### Scenario: Dry run
 - **WHEN** an operator runs a sample of 20 files
 - **THEN** 20 summaries are printed and `media_summaries` is unchanged
+
+### Requirement: Index, enrichment and disk health are published as metrics
+The system SHALL publish metrics at least every 10 minutes for the index (file counts and bytes by kind, sidecars, units, files that failed to index), the Google quota selection (counts and bytes, by year taken), the ingest pipeline (archives, last run status and time), the enrichment (rows by status, queue size, last batch time, run active) and the SMART health of the host's data disks. Collection SHALL NOT fail when the index cannot be read: it SHALL report an unhealthy status instead.
+
+#### Scenario: Index unreadable
+- **WHEN** the index cannot be opened
+- **THEN** the exporter still writes its health metric with value 0
+
+### Requirement: Dashboard and alerts are stored in Git
+The system SHALL provide a dashboard and alert rules for these metrics, both stored in Git and applied by the GitOps controller. An alert SHALL fire when metrics go stale, when ingested units are not indexed, when enrichment stalls or mostly fails, when a data disk reports pending sectors, and when a host reboots.
+
+#### Scenario: Failing disk
+- **WHEN** a data disk reports pending or uncorrectable sectors
+- **THEN** a warning alert names the disk by model
+
+#### Scenario: Dashboard matches the code
+- **WHEN** the dashboard generator is run
+- **THEN** its output equals the committed dashboard, and every metric used by the dashboard and alerts is one the exporter provides

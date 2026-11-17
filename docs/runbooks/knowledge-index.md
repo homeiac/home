@@ -112,13 +112,28 @@ summary, tags[], frames_sampled, duration_s, status (`ok`/`error`), error, creat
 Queue: `SELECT path FROM gphotos_to_summarize('qwen25vl-3b-p1') LIMIT 500` (a table macro, so a brand-new enricher id works).
 Search: `SELECT f.path, s.summary FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`.
 
+## Metrics, dashboard and alerts (as code)
+
+`export-metrics.py` runs on the host every 5 minutes (systemd timer `knowledge-index-metrics`, installed by `ctl install`) and writes
+`/var/lib/prometheus/node-exporter/knowledge_index.prom`; the host's node-exporter (already scraped by Prometheus, job
+`proxmox-node-exporter`) serves it. `ctl metrics` runs it now and prints the key series. It exports index counts and bytes, the quota
+selection (also by year taken, UTC), pending units, ingest ledger/last run, enrichment rows/queue/last batch, backfill/enricher unit state,
+and SMART health per USB/SATA disk (labelled by model: Linux device letters change between boots).
+
+- Dashboard: Grafana > Homelab > **Knowledge Index** (ConfigMap `infrastructure/monitoring/dashboards/knowledge-index.yaml`).
+  It is GENERATED: edit `scripts/knowledge-index/gen-dashboard.py`, then `python3 scripts/knowledge-index/gen-dashboard.py > <that yaml>`.
+- Alerts: `infrastructure/monitoring/knowledge-index-alerting-rules.yaml` (exporter stale, units pending, enrichment stalled / >20% errors,
+  disk pending sectors or SMART failed, Proxmox host rebooted).
+- `scripts/knowledge-index/test-metrics.sh` checks the exposition format, the numbers, that the committed dashboard equals the generated one,
+  and that every metric used by the dashboard and alerts exists. Flux applies dashboard and rules after the change is merged to master.
+
 ## Example queries (these double as checks)
 
 ```sql
 -- quota set, same as gphotos-quota-list.py (library-relative paths: the oracle prints them with a "gphotos/library/" prefix)
 SELECT path FROM gphotos_quota ORDER BY path;
 -- what would deleting a year free (counted media, GB)
-SELECT strftime(to_timestamp(taken_ts),'%Y') y, count(*) n, round(sum(size_bytes)/1e9,2) gb FROM gphotos_quota WHERE kind='media' GROUP BY 1 ORDER BY 1;
+SELECT strftime(make_timestamp(taken_ts*1000000),'%Y') y, count(*) n, round(sum(size_bytes)/1e9,2) gb FROM gphotos_quota WHERE kind='media' GROUP BY 1 ORDER BY 1;
 -- media without a sidecar
 SELECT count(*) FROM gphotos_media WHERE upload_ts IS NULL;
 -- counted by Google but missing on the SSK (the pre-delete safety check; needs Phase 2 copies)

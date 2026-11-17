@@ -1,0 +1,82 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: knowledge-index-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: knowledge-index
+      rules:
+        - alert: KnowledgeIndexExporterStale
+          expr: (time() - knowledge_index_last_run_timestamp_seconds) > 1800 or knowledge_index_exporter_success == 0
+          for: 15m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Knowledge index metrics on {{ $labels.instance }} are stale or the index cannot be read"
+            description: "export-metrics.py has not produced fresh metrics (or reported success=0) for 15 minutes. Check: systemctl status knowledge-index-metrics.service, scripts/knowledge-index/knowledge-index-ctl.sh status"
+
+        - alert: KnowledgeIndexUnitsPending
+          expr: knowledge_index_pending_units > 0
+          for: 10m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "{{ $value }} ingested Takeout unit(s) are not in the knowledge index"
+            description: "Indexing failed after an ingest (index_pending). Photos are safe; fix with: scripts/knowledge-index/knowledge-index-ctl.sh backfill start"
+
+        - alert: MediaSummariesStalled
+          expr: knowledge_index_enrich_active == 1 and increase(media_summaries_rows[30m]) == 0
+          for: 30m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Summary enricher is running but produced no rows for 30 minutes"
+            description: "The model server may be down or the GPU taken. Check: scripts/knowledge-index/knowledge-index-ctl.sh enrich status and the ollama-gpu pod."
+
+        - alert: MediaSummariesHighErrorRate
+          expr: sum by (instance, enricher) (media_summaries_rows{status="error"}) / sum by (instance, enricher) (media_summaries_rows) > 0.2 and sum by (instance, enricher) (media_summaries_rows) > 50
+          for: 30m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "More than 20% of summaries by {{ $labels.enricher }} failed"
+            description: "Errors keep their files in the queue (retried next run). Look at the error column of media_summaries for the pattern (decode failures vs model server)."
+
+    - name: proxmox-host-health
+      rules:
+        - alert: DiskSmartPendingSectors
+          expr: smart_pending_sectors > 0 or smart_offline_uncorrectable > 0
+          for: 10m
+          labels:
+            severity: warning
+            service: proxmox-storage
+          annotations:
+            summary: "Disk {{ $labels.device }} ({{ $labels.model }}) on {{ $labels.instance }} has pending or uncorrectable sectors"
+            description: "SMART shows {{ $value }} bad sectors. The disk is starting to fail: verify the data on it is copied elsewhere (the SSK is the secondary photo copy)."
+
+        - alert: DiskSmartFailed
+          expr: smart_passed == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: proxmox-storage
+          annotations:
+            summary: "SMART overall health FAILED on {{ $labels.device }} ({{ $labels.model }}) on {{ $labels.instance }}"
+            description: "Replace the disk; copy data off it first."
+
+        - alert: ProxmoxHostRebooted
+          expr: changes(node_boot_time_seconds{job="proxmox-node-exporter"}[15m]) > 0
+          labels:
+            severity: warning
+            service: proxmox-host
+          annotations:
+            summary: "{{ $labels.instance }} rebooted in the last 15 minutes"
+            description: "Unexpected reboot or power loss (pumped-piglet went down abruptly on 2026-11-17, see openspec/changes/add-media-summaries-enricher). Check journalctl -b -1 on the host."
