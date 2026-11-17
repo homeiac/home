@@ -40,14 +40,38 @@ present, and the same context. A video without audio SHALL still be summarized f
 - **WHEN** a file cannot be decoded
 - **THEN** a row with status `error` and the error text is written and the run continues with the next file
 
-### Requirement: Runs are safe for the shared GPU and the data
-The system SHALL read media read-only and write only below the index dataset. It SHALL check free GPU memory before loading a model
-and SHALL stop or wait instead of starving the Frigate detector. It SHALL process in bounded batches so stopping a run loses at most
-one batch. It SHALL NOT send any media, metadata or summaries to a service outside the home network.
+### Requirement: The GPU is handed over from Frigate and always handed back
+While a summary run is active the system SHALL stop Frigate to free the GPU, and SHALL restore Frigate when the run ends for any
+reason (queue empty, failure, stop request, or time limit). A run SHALL have a maximum duration after which it hands the GPU back
+and resumes later. Frigate's desired state in Git SHALL NOT be modified by a run, and the GitOps controller SHALL NOT undo the stop mid-run.
 
-#### Scenario: Not enough GPU memory
-- **WHEN** free GPU memory is below the configured minimum
-- **THEN** the run does not start the model and reports why
+#### Scenario: Normal run
+- **WHEN** a run starts with a non-empty queue
+- **THEN** Frigate is scaled down before the model loads and scaled back up after the last batch
+
+#### Scenario: Run crashes
+- **WHEN** the run process fails or is killed
+- **THEN** Frigate is restored automatically (no operator action) and the failure is reported
+
+#### Scenario: Time limit
+- **WHEN** a run reaches its maximum duration with files still queued
+- **THEN** it finishes the current batch, restores Frigate, and leaves the rest for the next trigger
+
+### Requirement: New photos trigger a run automatically
+The system SHALL start a summary run after an ingest adds media files that have no `ok` summary, and SHALL NOT start one when the
+queue is empty. Triggers arriving while a run is active SHALL NOT start a second concurrent run.
+
+#### Scenario: Ingest delivers new media
+- **WHEN** an archive ingest finishes indexing and the queue is non-empty
+- **THEN** a summary run is started without operator action
+
+#### Scenario: Nothing new
+- **WHEN** an ingest delivers no new media
+- **THEN** Frigate is not stopped
+
+### Requirement: Runs are safe for the data
+The system SHALL read media read-only and write only below the index dataset. It SHALL process in bounded batches so stopping a run
+loses at most one batch. It SHALL NOT send any media, metadata or summaries to a service outside the home network.
 
 #### Scenario: Stopped mid-run
 - **WHEN** a run is stopped

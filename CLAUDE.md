@@ -32,6 +32,26 @@ Never generate a new key to "fix" this: that orphans every committed secret.
 
 ---
 
+## 🔌 CLUSTER ACCESS (kubectl / flux) AND WORKTREES
+
+**The kubeconfig is `~/kubeconfig` (outside the repo). If `kubectl` says `localhost:8080 connection refused`, you have no kubeconfig: get one, do not guess.**
+```bash
+scripts/k3s/get-kubeconfig.sh              # reads k3s.yaml from K3s VM 105 via `qm guest exec` (SSH to VMs does not work), points it at the kube-vip VIP, chmod 600
+export KUBECONFIG=~/kubeconfig && kubectl get nodes     # (use --force to refetch; existing file is kept)
+```
+- **You must be on the home LAN or Tailscale.** `*.maas` names do not resolve elsewhere (corporate/VPN DNS hijack; this laptop failed with "Could not resolve hostname pumped-piglet.maas" on 2026-11-16). Off the LAN: `K3S_HOST=root@<host address> scripts/k3s/get-kubeconfig.sh`, same `CB_HOST=root@<host address>` override for the `scripts/backup/` and `scripts/knowledge-index/` scripts. If neither works, STOP and tell the user (needs input: connect to the home network/Tailscale); do not invent workarounds.
+- **kubeconfig is a credential**: never commit or paste it; it is not in the repo so every worktree shares one file. Fallback for kubectl without a kubeconfig: `scripts/k3s/exec.sh pumped-piglet "k3s kubectl get nodes"` (VM 105).
+- Cluster state is read with kubectl, changed through Git + Flux (see GitOps below). Read-only `kubectl get/describe/logs` is always fine.
+- Flux per-object pause (for temporary operational changes that must not be reverted): annotate `kustomize.toolkit.fluxcd.io/reconcile=disabled` and remove it afterwards.
+
+### Worktrees (background/parallel sessions)
+- Sessions often run in a **git worktree** under `.claude/worktrees/<name>/` (a full checkout on its own branch). Work and run scripts **from the worktree**, never `cd` to the main checkout; use paths relative to the worktree root.
+- Check `git branch --show-current` before committing: the worktree may sit on an unrelated branch (e.g. a leftover fix branch). Create the right branch (`git checkout -b <new> <base>`); stacked work uses the earlier PR's branch as base.
+- Files that live outside the repo are shared by all worktrees (`~/kubeconfig`, `~/.claude`, SOPS age key); the git stash stack is shared too: avoid bare `git stash`.
+- Untracked/generated state does not follow you between worktrees; commit and push before a worktree is deleted.
+
+---
+
 ## 🛑 SSH RULES - READ BEFORE ANY SSH COMMAND
 
 **K3s VMs: SSH DOES NOT WORK. STOP TRYING.**
@@ -185,7 +205,7 @@ Homelab infrastructure management repository following Infrastructure as Code pr
 - **K3s VMs**: Use `scripts/k3s/exec-*.sh` (see SSH Rules above - direct SSH fails)
 
 ### Kubernetes/GitOps
-- **Cluster Access**: `export KUBECONFIG=~/kubeconfig`
+- **Cluster Access**: see "CLUSTER ACCESS" at the top (`scripts/k3s/get-kubeconfig.sh`, then `export KUBECONFIG=~/kubeconfig`)
 - All K8s manifests managed via Flux GitOps
 - Main config: `gitops/clusters/homelab/kustomization.yaml`
 

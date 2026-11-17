@@ -1,28 +1,32 @@
 ## Notes
-Runner executes on the Proxmox host (reads the photos dataset directly); only the model server runs in the GPU VM. This resolves 1.2 unless the pilot shows a problem.
+Revised 2026-11-16 after review: enricher is a Dockerfile + Kubernetes Job (GitOps), Frigate is stopped during a run (handoff + watchdog), new photos trigger runs automatically.
+`media_summary.py`, its ctl commands and tests are done and are reused inside the image; the host-run `enrich start` stays as a manual/debug path.
 
-## 1. Measure and decide
-- [ ] 1.1 Free VRAM on the 3070 beside Frigate (idle and busy); pick model size
-- [ ] 1.2 How the GPU VM reads the photos dataset read-only; how it reaches the index dataset
+## 1. Measure and decide (needs the cluster; laptop kubeconfig was unreachable on 2026-11-16)
+- [ ] 1.1 Which node/GPU each of Frigate and `ollama-gpu` use today; GPU count / time-slicing; free VRAM with Frigate down; pick model size (3B vs 7B Q4)
+- [ ] 1.2 How the pod reads the photos dataset (read-only) and writes the index dataset (NFS export vs virtiofs); confirm VM 105 is not involved
 - [ ] 1.3 Count photos, videos and total GB (`knowledge-index-ctl.sh query` on `gphotos_media`, after the Phase 1 backfill)
+- [ ] 1.4 Frigate recovery time after scale-up; what else depends on Frigate (Home Assistant automations, health CronJobs are suspended)
 
-## 2. Model server
-- [ ] 2.1 Install the model server on the GPU VM by script/GitOps (verify image tags exist, no `latest`)
-- [ ] 2.2 Pull Qwen2.5-VL 3B (and 7B Q4 if it fits); smoke test one image and one frame set
+## 2. Enricher code (done, reused in the image)
+- [x] 2.1 Stub OpenAI-compatible test server and ffmpeg fixtures
+- [x] 2.2 `enrichers/media_summary.py`: queue, photo path, video path (frames + Whisper), JSON parse, error rows
+- [x] 2.3 Batch Parquet writer (tmp + rename), schema equal to `SUMMARIES_SCHEMA`
+- [x] 2.4 `test-enricher.sh`: schema, idempotent re-run, failed file stays queued, summarized file leaves queue, dry run writes nothing
+- [x] 2.5 Runbook section; `knowledge-index-ctl.sh enrich sample|start|status|stop` (manual path)
 
-## 3. Enricher
-- [x] 3.1 Stub OpenAI-compatible test server and an ffmpeg-made fixture photo and video
-- [x] 3.2 `scripts/knowledge-index/enrichers/media_summary.py`: queue fetch, photo path, video path (frames + Whisper), JSON parse, error rows
-- [x] 3.3 Batch Parquet writer (tmp + rename), schema equal to `SUMMARIES_SCHEMA`
-- [x] 3.4 VRAM guard (nvidia-smi, where available) and bounded batches; host has no nvidia-smi: guard source still to decide (1.1)
-- [x] 3.5 `test-enricher.sh`: schema, idempotent re-run, failed file stays queued, summarized file leaves queue, dry run writes nothing
+## 3. Container image
+- [ ] 3.1 Dockerfile (pinned base, python deps, ffmpeg, duckdb, faster-whisper); verify tags exist, no `latest`, bash present if scripts need it (CLAUDE.md image hygiene)
+- [ ] 3.2 Build/publish route (registry used by this repo, e.g. ghcr; check `ollama/secrets/ghcr-creds.sops.yaml` pattern); image tag pinned in the manifest
+- [ ] 3.3 Replace the VRAM guard with the handoff (guard stays only as a sanity check that the GPU is free after Frigate is down)
 
-## 4. Operations
-- [x] 4.1 `knowledge-index-ctl.sh enrich sample N | start | stop | status`
-- [ ] 4.2 Pilot: ~20 videos + ~50 photos, human quality review, tune frames and prompt, record seconds per item
-- [ ] 4.3 Check Frigate detection latency is unaffected during a run (USE method)
-- [ ] 4.4 Full run as a background systemd unit
+## 4. GPU handoff and automation (GitOps)
+- [ ] 4.1 `handoff` entrypoint: annotate + scale Frigate to 0, wait for GPU free, run, restore in `finally`; max duration
+- [ ] 4.2 Manifests under `gitops/clusters/homelab/apps/media-summaries/`: namespace, ServiceAccount + Role (patch/scale `deployment/frigate` only), suspended CronJob template, model server, PVC/NFS mounts, watchdog CronJob
+- [ ] 4.3 Test the handoff against a fake Deployment in a scratch namespace (restore on success, on crash, on timeout; Flux does not revert mid-run)
+- [ ] 4.4 Ingest trigger: after a successful `index-unit.sh`, if the queue is non-empty create the Job (guard against a running one); test with a fake kubectl
 
-## 5. Docs
-- [x] 5.1 Runbook section (operations, new prompt version re-run, search examples); regenerate README
-- [ ] 5.2 Secret grep, commit with #212 reference, PR; `openspec archive` after merge
+## 5. Rollout
+- [ ] 5.1 Pilot: ~20 videos + ~50 photos, human quality review, tune frames and prompt, record seconds per item
+- [ ] 5.2 Backfill window policy (e.g. nights), then full run
+- [ ] 5.3 Runbook update (handoff, watchdog, how to force-restore Frigate), regenerate README, secret grep, commit with #212 reference, PR; `openspec archive` after merge
