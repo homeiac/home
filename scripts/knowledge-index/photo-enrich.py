@@ -3,11 +3,13 @@
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 
 from photo_enrichment.faces import MODEL_ID, FaceEngine, download_models
 from photo_enrichment.server import make_server
 from photo_enrichment.store import Store
+from photo_enrichment.metrics import Metrics
 
 
 def main() -> None:
@@ -16,6 +18,7 @@ def main() -> None:
     parser.add_argument("--library", type=Path, help="Read-only photo library root containing Google Photos/")
     parser.add_argument("--state", type=Path, required=True, help="Separate writable enrichment directory")
     parser.add_argument("--models", type=Path, help="Model directory (default STATE/models)")
+    parser.add_argument("--prom", type=Path, help="Node-exporter textfile path for live value-stream telemetry")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("models", help="Download and checksum official YuNet + SFace CPU models")
     serve = commands.add_parser("serve")
@@ -40,8 +43,11 @@ def main() -> None:
         return
     if not args.index or not args.library:
         parser.error("--index and --library are required")
-    store = Store(args.index, args.library, args.state)
+    metrics = Metrics(args.prom)
+    store = Store(args.index, args.library, args.state, metrics)
+    metrics.__enter__()
     try:
+        store.refresh_metrics()
         if args.command == "serve":
             server = make_server(store, models, args.bind, args.port, args.public_origin)
             logging.info("Photo enrichment: http://%s:%s", args.bind, server.server_port)
@@ -78,6 +84,7 @@ def main() -> None:
                 parser.error("query accepts one SELECT statement only")
             print(json.dumps(store.rows(args.sql), default=str, indent=2))
     finally:
+        metrics.__exit__(*sys.exc_info())
         store.close()
 
 

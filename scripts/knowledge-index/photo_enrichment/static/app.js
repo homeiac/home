@@ -81,7 +81,8 @@ async function showPhoto(path) {
         item.append(button('Reject',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:match.reference_id});item.remove();status('Suggestion rejected.');}));suggestions.append(item);}
     }));
     if(state.frigate)card.append(button('Ask Frigate',async()=>{const match=await api('/api/faces/frigate',{id:face.id});suggestions.replaceChildren();
-      const item=element('div',undefined,'suggestion');item.append(element('p',match.name?'Frigate suggests '+match.name+' · score '+match.score:'Frigate returned no match.'));
+      const empty={no_face:'Frigate could not detect a face in this crop.',below_threshold:'Frigate found no confident identity match.',no_match:'Frigate returned no match. After startup, its face library may still be warming up.'};
+      const item=element('div',undefined,'suggestion');item.append(element('p',match.name?'Frigate suggests '+match.name+' · score '+match.score:(empty[match.reason]||'Frigate returned no match.')));
       if(match.name)item.append(button('Confirm Frigate suggestion',async()=>{await api('/api/faces/label',{id:face.id,person:match.name});await showPhoto(path);status('You confirmed the Frigate suggestion.');}));suggestions.append(item);
     }));
     card.append(suggestions);$('faces').append(card);

@@ -106,8 +106,9 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 store.reject(body["id"], body["reference_id"])
                 return self.send({"rejected": True})
             if parsed.path == "/api/faces/frigate":
-                face = store.face(body["id"])
-                return self.send(frigate_candidate(store.thumbnail(face["path"], face["id"])))
+                with store.lock, store.metrics.measure("frigate"):
+                    face = store.face(body["id"])
+                    return self.send(frigate_candidate(store.thumbnail(face["path"], face["id"])))
             if parsed.path == "/api/export":
                 return self.send(store.export())
             self.send({"error": "Not found"}, 404)

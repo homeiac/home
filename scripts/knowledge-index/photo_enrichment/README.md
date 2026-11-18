@@ -60,9 +60,42 @@ Name a detected face to create a confirmed reference. Other faces can show ranke
 
 Frigate's object detector and identity recognizer perform different jobs. [Frigate+ models](https://docs.frigate.video/plus/) can locate objects/faces; [face recognition](https://docs.frigate.video/configuration/face_recognition/) uses FaceNet (small/CPU) or ArcFace (large/GPU). A Coral detector therefore does not itself supply person identities. The checked-in Frigate configuration currently specifies a CPU detector plus large face recognition, while a backup has Coral enabled. Live runtime and paid-model compatibility must be verified before choosing to reuse the object detector. No Frigate or Coral configuration is changed here.
 
-An optional **Ask Frigate** action reuses its existing face library through [POST /api/faces/recognize](https://docs.frigate.video/integrations/api/recognize-face-faces-recognize-post/). Set `PHOTO_FRIGATE_URL` to the trusted internal Frigate origin and `PHOTO_FRIGATE_TOKEN` to an authenticated admin bearer token when required, sourced from your existing protected environment. Never put credentials in source or command-line arguments. This action sends only the selected face crop to that configured service; it does not train Frigate. Redirects are refused. Its candidate still requires confirmation. Live Frigate integration has not been validated by this change.
+An optional **Ask Frigate** action reuses its existing face library through [POST /api/faces/recognize](https://docs.frigate.video/integrations/api/recognize-face-faces-recognize-post/). Set `PHOTO_FRIGATE_URL` to the trusted internal Frigate origin and `PHOTO_FRIGATE_TOKEN` to an authenticated admin bearer token when required, sourced from your existing protected environment. Never put credentials in source or command-line arguments. This action sends only the selected face crop to that configured service; it does not train Frigate. Redirects are refused. Its candidate still requires confirmation. Live validation on 2026-11-18 passed API reachability, blank-image handling and three expected-identity matches from five sampled reference crops after a several-minute cold reference build (scores 0.82–0.93). Two crops had no detected face. This is an integration smoke test using existing references, not independent photo-library accuracy validation.
 
 The summary worker and this enrichment process can run independently: GPU captions and CPU metadata/faces join by photo identity. They do not share the writable enrichment database. There is no automatic scheduler in this change. Frigate GPU lookups could compete with summary inference; benchmark a representative photo sample before enabling bulk integration. Security-camera-trained Frigate+ object models also need evaluation on personal photos before replacing YuNet.
+
+### Live validation
+
+Run `check-frigate-enrichment.py --recognize-reference` with the same virtualenv. It reads runtime configuration and aggregate library counts, checks a blank image, then recognizes at most five existing training crops. It never registers or modifies faces, and logs no names, image paths or credentials. It requires at least one expected reference match; this smoke test is not a library accuracy benchmark. Frigate's HTTP 400 negative results are handled explicitly; `unknown` is treated as no identity. Authentication, disabled recognition and server errors remain errors.
+
+When Frigate is intentionally scaled to zero, the API returns HTTP 503. The operator-approved helper `validate-frigate-temporarily.py --allow-temporary-start` backs up replica/pause settings, starts only Frigate, runs the probe, then restores replicas even on failure. Adding `--keep-running` explicitly retains one replica once the deployment is ready, including after a failed recognition probe for diagnosis. Existing Flux pause annotations are preserved in either case; other GPU tenants are untouched.
+
+## Value stream dashboard
+
+The existing Knowledge Index dashboard from PR #216 is extended, with **Pipeline bottlenecks / Value stream map** immediately after **Value delivered**. It preserves existing panel IDs and summary progress line graphs. The map shows the independently measured summary and photo branches, followed by backlog, durable output, stage-operation throughput, error and duration charts.
+
+Enable the photo branch by adding a writable node-exporter textfile path before the CLI command:
+
+```bash
+/tmp/photo-enrichment-venv/bin/python scripts/knowledge-index/photo-enrich.py \
+  --index /path/to/knowledge-index --library /path/to/library \
+  --state /path/to/photo-enrichment \
+  --prom /var/lib/prometheus/node-exporter/photo_enrichment.prom serve
+```
+
+Use a dedicated `.prom` file per process, never the summary worker's file. The containing directory must already exist and be scraped by node-exporter. Instrumentation publishes every five seconds, including in-flight stage time, independently of the DB lock. Stage measurements cover catalog/queue queries, EXIF reads, CPU face inference, DuckDB writes, annotation saves, optional Frigate requests and Parquet export. Counters reset per process; rate queries handle resets. Metrics use only fixed stage/status labels and aggregate counts, never paths, names, GPS or embeddings.
+
+Backlogs are snapshots of indexed photos missing successful EXIF or a current face scan, plus unnamed detected faces. They refresh at startup and after mutations; restart the reader after a source-catalog rebuild. A successful scan containing zero faces still leaves the scan queue. Recoverable EXIF errors appear in an inventory gauge; thrown operation errors have a separate counter. Telemetry output failures do not fail committed annotations or enrichment.
+
+Map percentages are normalized separately for each worker. Frigate service nodes use explicitly labeled milliseconds and API reachability (1/0), not worker percentages. Review time measures saving annotations, not human thought/waiting time. Idle time, queue residence time and full end-to-end lead time are not measured; the dashboard does not claim flow efficiency from these partial timings. Uninstrumented photo stages are absent from the map and the photo stat tiles display **Not instrumented**; missing metrics are not evidence that a stage is idle. The CPU branch becomes visible after its worker is deployed with `--prom`; publishing the dashboard alone does not deploy it.
+
+### Native Frigate service telemetry
+
+The standalone `export-frigate-metrics.py` polls only aggregate `/api/stats` every five seconds. It emits API reachability, poll age, detector/face processing milliseconds and available frame rates. Missing fields remain absent; a reported face time of zero means no native face processing recorded, not that the identity classifier is ready. These are camera-service measurements, not uploaded-photo enrichment throughput.
+
+Install the backed-up systemd poller with `CB_HOST=root@<inventory-address> python3 scripts/knowledge-index/deploy-frigate-metrics.py`. It uses the existing node-exporter textfile directory. An optional protected `/opt/knowledge-index/frigate-metrics.env` supplies `PHOTO_FRIGATE_URL` and `PHOTO_FRIGATE_TOKEN`; neither belongs in git. Dashboard nodes and processing series are suppressed after 60 seconds without polling. The dashboard includes processing-time and frame-rate line graphs.
+
+The live 0.16.0 instance reports a CPU object detector and large face recognition. Available ONNX providers are OpenVINO and CPU, with no CUDA provider. Starting this instance therefore does not demonstrate GPU-accelerated face recognition. It was left running at the user's request with its existing per-object Flux pause retained. The CPU photo enrichment worker remains undeployed.
 
 ## Storage and DuckDB
 

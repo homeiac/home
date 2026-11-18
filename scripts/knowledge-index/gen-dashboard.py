@@ -155,10 +155,12 @@ def panels():
     p += shift(gpu_panels(), 16 + 16)
     p += shift(core_panels(), 16 + 16 + 27)
     # Build new panels after the existing ones to preserve their IDs and links.
-    insert_at = next(i for i, panel in enumerate(p) if panel["title"] == "Ingest and index pipeline")
+    insert_at = next(i for i, panel in enumerate(p) if panel["title"] == "Backfill progress")
     offset = p[insert_at]["gridPos"]["y"]
-    shift(p[insert_at:], 42)
-    p[insert_at:insert_at] = shift(pipeline_panels(), offset)
+    pipeline = pipeline_panels()
+    enrichment = photo_enrichment_panels()
+    shift(p[insert_at:], 80)
+    p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 42)
     return p
 
 
@@ -186,6 +188,17 @@ def pipeline_panels():
     graph["targets"] = [
         {"refId": "nodes", "expr": '(100 * sum by (id, title) (' + stage_rate + ') / scalar(sum(' + stage_rate + ')) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total' + sel + ') * 0)', "format": "table", "instant": True, "range": False},
         {"refId": "edges", "expr": 'max by (id, source, target) (media_pipeline_edge_info' + sel + ')', "format": "table", "instant": True, "range": False}]
+    photo_rate = 'rate(photo_enrichment_stage_seconds_total' + INST + '[$__rate_interval])'
+    graph["targets"][0]["expr"] += ' or (100 * sum by (id, title) (' + photo_rate + ') / scalar(sum(' + photo_rate + ')) >= 0) or (sum by (id, title) (photo_enrichment_stage_seconds_total' + INST + ') * 0)'
+    graph["targets"][1]["expr"] += ' or max by (id, source, target) (photo_enrichment_edge_info' + INST + ')'
+    # The shared Frigate service reports milliseconds, not a share of caption-worker time.
+    # Keep units explicit in each node title instead of formatting every value as percent.
+    fresh = ' and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds' + INST + ' < 60)'
+    graph["targets"][0]["expr"] = ('label_replace((' + graph["targets"][0]["expr"] + '), "title", "$1 (%)", "title", "(.+)")'
+        ' or max by (id,title) (photo_frigate_processing_milliseconds' + INST + fresh + ')'
+        ' or max by (id,title) (photo_frigate_service_up' + INST + fresh + ')')
+    graph["targets"][1]["expr"] += ' or max by (id,source,target) (photo_frigate_edge_info' + INST + fresh + ')'
+    graph["description"] += " Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; no end-to-end lead time or queue residence time is measured."
     # Node Graph reads field.name, not Organize's display-name override.
     # Copy the sole numeric value into an actual mainstat field.
     graph["transformations"] = [
@@ -195,7 +208,8 @@ def pipeline_panels():
          "options": {"excludeByName": {"Time": True, "Value": True, "Value #nodes": True}}},
         {"id": "organize", "filter": {"id": "byRefId", "options": "edges"},
          "options": {"excludeByName": {"Time": True, "Value": True, "Value #edges": True}}}]
-    graph["options"] = {"nodes": {"mainStatUnit": "percent"}}
+    graph["options"] = {"nodes": {"mainStatUnit": ""}}
+    graph["description"] += " Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling."
     p += [graph, bars("Time spent by stage", share, "{{stage}}", 0, 15, 8, 6, unit="percent", decimals=1,
                       description="Includes in-flight operations, so a stalled decode or model request is visible before it completes. This is wall time, not CPU or GPU utilization.")]
     timeline = _panel("state-timeline", "Worker activity (sampled)", [(current, "{{instance}} / {{enricher}}")], 8, 15, 16, 6, mappings=states)
@@ -232,6 +246,55 @@ def pipeline_panels():
             elif panel["type"] != "nodeGraph":
                 target.update({"instant": False, "range": True})
     graph["description"] += " Nodes show zero during the first two scrapes while rate samples accumulate."
+    return p
+
+
+def photo_enrichment_panels():
+    """Show real CPU branch timing, backlogs and output alongside the GPU branch."""
+    age = 'time() - photo_enrichment_heartbeat_timestamp_seconds' + INST
+    current = '(photo_enrichment_worker_stage' + INST + ' and (' + age + ' < 60)) or (photo_enrichment_worker_stage' + INST + ' * 0 - 1)'
+    states = {str(i): {"text": name} for i, name in [(-1, "Stale telemetry"), (0, "Idle / waiting for selection"),
+        (1, "Catalog / queue"), (2, "Read EXIF"), (3, "CPU faces"), (4, "Save DuckDB"),
+        (5, "Save human labels"), (6, "Optional Frigate"), (7, "Export Parquet"), (8, "Finished"), (9, "Failed")]}
+    inventory = lambda kind: 'sum(photo_enrichment_inventory{instance=~"$instance",kind="' + kind + '"})'
+    p = [row("Photo enrichment — parallel CPU branch", 0),
+         stat("Photo worker stage", current, 0, 1, w=6, mappings=states),
+         stat("Photo telemetry age", age, 6, 1, w=6, unit="s", thresholds=[("green", None), ("orange", 30), ("red", 60)]),
+         stat("Faces awaiting names", 'sum(photo_enrichment_queue{instance=~"$instance",stage="review"})', 12, 1, w=6),
+         stat("Photos with GPS", inventory("gps"), 18, 1, w=6)]
+    p += [series("Enrichment work remaining", [('sum by (stage) (photo_enrichment_queue' + INST + ')', '{{stage}} pending'), ('max(media_summaries_queue{instance=~"$instance",enricher=~"$pipeline_enricher"})', 'captions pending')], 0, 5, 12, 7,
+                 description="EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source reindex requires a worker restart."),
+          series("Enrichment facts over time", [(inventory(kind), name) for kind, name in
+                 (("exif", "EXIF extracted"), ("gps", "GPS available"), ("faces", "faces detected"), ("named_faces", "faces named"), ("groups", "annotated groups"))], 12, 5, 12, 7,
+                 description="Durable DuckDB facts. Counts can decrease after edits; these are gauges, not cumulative counters. Parquet export is a separate explicit operation.")]
+    average = 'sum by (stage) (rate(photo_enrichment_stage_completed_seconds_total' + INST + '[$__rate_interval])) / (sum by (stage) (rate(photo_enrichment_stage_operations_total' + INST + '[$__rate_interval])) > 0)'
+    p += [series("Photo stages: seconds per operation", [(average, '{{stage}}')], 0, 12, 12, 7, unit="s", decimals=3,
+                 description="EXIF and CPU faces operate on photos; persistence operates on transactions; review measures annotation saves only; export covers a set of tables. Failed operations are included. Optional Frigate includes HTTP and server time."),
+          series("Photo stage operations per minute", [('sum by (stage, status) (rate(photo_enrichment_stage_operations_total' + INST + '[$__rate_interval])) * 60', '{{stage}} / {{status}}')], 12, 12, 12, 7)]
+    share = '100 * sum by (stage) (rate(photo_enrichment_stage_seconds_total' + INST + '[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total' + INST + '[$__rate_interval])))'
+    p += [series("CPU branch time by stage", [(share, '{{stage}}')], 0, 19, 12, 7, unit="percent",
+                 description="Share of measured operation time, including in-flight work. Idle human time and queue residence are unmeasured. A dominant stage indicates where elapsed work occurs, not hardware saturation."),
+          series("Photo extraction errors", [(inventory("exif_errors"), 'EXIF files with errors')], 12, 19, 6, 7),
+          series("Photo current operation age", [('(time() - photo_enrichment_stage_started_timestamp_seconds' + INST + ') and (photo_enrichment_worker_stage' + INST + ' > 0) and (photo_enrichment_worker_stage' + INST + ' < 8) and (' + age + ' < 60)', 'current operation seconds')], 18, 19, 6, 7, unit="s")]
+    frigate_age = 'time() - photo_frigate_last_poll_timestamp_seconds' + INST
+    fresh = ' and on(instance) (' + frigate_age + ' < 60)'
+    p += [row("Frigate processing — shared service", 26),
+          stat("Frigate API reachable", 'photo_frigate_service_up' + INST + fresh, 0, 27, w=6,
+               mappings={"0": {"text": "Unreachable", "color": "red"}, "1": {"text": "Up", "color": "green"}},
+               description="Endpoint reachability is not face-classifier readiness."),
+          stat("Frigate telemetry age", frigate_age, 6, 27, w=6, unit="s"),
+          stat("Frigate object processing", 'photo_frigate_frames_per_second{instance=~"$instance",kind="objects"}' + fresh, 12, 27, w=6, unit="fps"),
+          stat("Frigate face processing", 'photo_frigate_processing_milliseconds{instance=~"$instance",kind="faces"}' + fresh, 18, 27, w=6, unit="ms",
+               description="Native rolling processing time. Zero means no native face processing recorded; this is not an identity-readiness check."),
+          series("Frigate processing time", [('photo_frigate_processing_milliseconds' + INST + fresh, '{{kind}}')], 0, 31, 12, 7, unit="ms",
+                 description="Native camera-service processing. Uploaded-photo requests are timed separately in the optional photo worker."),
+          series("Frigate processing rate", [('photo_frigate_frames_per_second' + INST + fresh, '{{kind}}')], 12, 31, 12, 7, unit="fps")]
+    # Missing instrumentation is deliberately distinct from idle (zero) or no backlog.
+    for panel in p:
+        if "fieldConfig" in panel:
+            panel["fieldConfig"]["defaults"]["noValue"] = "Not instrumented"
+        for target in panel.get("targets", []):
+            target.update({"interval": "30s", "instant": panel["type"] == "stat", "range": panel["type"] != "stat"})
     return p
 
 

@@ -34,7 +34,9 @@ def main() -> None:
                       "time() - media_pipeline_heartbeat_timestamp_seconds", "sum by(stage)(media_pipeline_stage_seconds_total)",
                       "sum by(kind,status)(media_pipeline_persisted_items_total)",
                       "sum by(stage)(rate(media_pipeline_stage_seconds_total[5m]))",
-                      "sum by(phase)(media_pipeline_ollama_seconds_total)"):
+                      "sum by(phase)(media_pipeline_ollama_seconds_total)",
+                      "photo_frigate_service_up", "time() - photo_frigate_last_poll_timestamp_seconds",
+                      "photo_frigate_processing_milliseconds", "photo_frigate_frames_per_second"):
             result = get("/api/v1/query?" + urllib.parse.urlencode({"query": query}))["data"]["result"]
             print(query)
             for item in result:

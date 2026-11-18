@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import urllib.request
+import urllib.error
 import uuid
 
 from .metadata import oriented_image
@@ -103,7 +104,21 @@ def frigate_candidate(jpeg: bytes) -> dict:
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs):
             return None
-    with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
-        result = json.load(response)
-    return {"name": result.get("face_name") if result.get("success") else None,
-            "score": result.get("score"), "source": "frigate", "confirmed": False}
+    try:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 400:
+            raise
+        result = json.load(exc)
+        # Frigate 0.16 uses HTTP 400 for valid negative recognition results too.
+        if result.get("success") is not False or result.get("message") not in (
+                "No face was detected.", "No face was recognized."):
+            raise
+    name = result.get("face_name") if result.get("success") else None
+    reason = {"No face was detected.": "no_face", "No face was recognized.": "no_match"}.get(result.get("message"))
+    if name == "unknown":
+        name = None  # This is Frigate's below-threshold sentinel, not a person name.
+        reason = "below_threshold"
+    return {"name": name,
+            "score": result.get("score"), "source": "frigate", "confirmed": False, "reason": reason}

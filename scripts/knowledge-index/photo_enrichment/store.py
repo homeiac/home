@@ -6,12 +6,31 @@ import math
 from pathlib import Path
 import threading
 import uuid
+from functools import wraps
 from zoneinfo import ZoneInfo
 
 import duckdb
 
 from .faces import MODEL_ID, similarity
 from .metadata import VERSION, PHOTO_EXTENSIONS, contained, oriented_image, read_metadata
+from .metrics import Metrics
+
+
+def observed(stage: str | None = None):
+    """Serialize mutations and refresh aggregate telemetry after the transaction."""
+    def decorate(function):
+        @wraps(function)
+        def wrapped(self, *args, **kwargs):
+            with self.lock:
+                try:
+                    if stage:
+                        with self.metrics.measure(stage):
+                            return function(self, *args, **kwargs)
+                    return function(self, *args, **kwargs)
+                finally:
+                    self.refresh_metrics()
+        return wrapped
+    return decorate
 
 
 def sql_path(path: Path) -> str:
@@ -20,13 +39,14 @@ def sql_path(path: Path) -> str:
 
 class Store:
     """Serialize local writes; keep original media and source DuckDB untouched."""
-    def __init__(self, index: Path, library: Path, state: Path):
+    def __init__(self, index: Path, library: Path, state: Path, metrics: Metrics | None = None):
         self.library = library.resolve()
         self.state = state.resolve()
         if self.state.is_relative_to(index.resolve()) or self.state.is_relative_to(self.library):
             raise ValueError("Use a separate state directory outside the source library and index root")
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.metrics = metrics or Metrics()
         self.db = duckdb.connect(str(self.state / "enrichment.duckdb"))
         self.db.execute(f"ATTACH {sql_path(index / 'knowledge.duckdb')} AS catalog (READ_ONLY)")
         self.db.execute("""
@@ -51,6 +71,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS annotation_history (
                 id VARCHAR, action VARCHAR, payload VARCHAR, created_at TIMESTAMP DEFAULT current_timestamp);
         """)
+
         self.db.execute("""
             CREATE OR REPLACE TEMP VIEW enriched_media AS
             SELECT m.*, coalesce(e.capture_ts, m.taken_ts) AS capture_ts,
@@ -75,6 +96,35 @@ class Store:
             ) summary ON summary.path=m.path AND summary.size_bytes=m.size_bytes
             WHERE m.kind='media' AND m.ext IN ('jpg','jpeg','heic','png','gif','webp');
         """)
+
+    def refresh_metrics(self) -> None:
+        """Count current indexed facts without reading every original file."""
+        if not self.metrics.path:
+            return
+        try:
+            with self.lock, self.metrics.measure("queue"):
+                counts = self.rows("""WITH photos AS (
+                    SELECT * FROM enriched_media m WHERE NOT EXISTS
+                    (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=m.path))
+                    SELECT count(*) AS photos,
+                    count(*) FILTER (WHERE e.path IS NOT NULL) AS exif,
+                    count(*) FILTER (WHERE m.latitude IS NOT NULL) AS gps,
+                    count(*) FILTER (WHERE e.error IS NOT NULL) AS exif_errors,
+                    count(*) FILTER (WHERE e.path IS NULL OR e.error IS NOT NULL OR e.version<>?) AS pending_exif,
+                    count(*) FILTER (WHERE fs.path IS NULL) AS pending_faces
+                    FROM photos m LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes
+                    LEFT JOIN face_scans fs ON fs.path=m.path AND fs.size_bytes=m.size_bytes AND fs.model=?""", [VERSION, MODEL_ID])[0]
+                faces = self.rows("""SELECT count(*) AS faces, count(f.person) AS named_faces
+                    FROM faces f JOIN face_scans s ON s.path=f.path AND s.size_bytes=f.size_bytes
+                    AND s.mtime_ns=f.mtime_ns AND s.model=f.model JOIN enriched_media m
+                    ON m.path=f.path AND m.size_bytes=f.size_bytes""")[0]
+                groups = self.rows("SELECT count(*) AS n FROM photo_groups")[0]["n"]
+                self.metrics.snapshot({"exif": counts["pending_exif"], "faces": counts["pending_faces"],
+                    "review": faces["faces"]-faces["named_faces"]}, {**counts, **faces, "groups": groups})
+        except Exception:
+            # Metrics must never turn a committed annotation into a failed request.
+            import logging
+            logging.warning("Photo telemetry inventory refresh failed")
 
     def rows(self, sql: str, parameters=()) -> list[dict]:
         with self.lock:
@@ -130,6 +180,7 @@ class Store:
         self.db.execute("INSERT INTO annotation_history(id,action,payload) VALUES (?,?,?)",
                         [uuid.uuid4().hex, action, json.dumps(payload)])
 
+    @observed("review")
     def save_group(self, data: dict) -> dict:
         paths = list(dict.fromkeys(data.get("paths", [])))
         if not paths or len(paths) > 1000 or not all(isinstance(p, str) for p in paths):
@@ -175,6 +226,7 @@ class Store:
         groups[0]["paths"] = [r["path"] for r in self.rows("SELECT path FROM group_members WHERE group_id=? ORDER BY path", [group_id])]
         return groups[0]
 
+    @observed("review")
     def delete_group(self, group_id: str) -> None:
         with self.lock:
             original = self.group(group_id)
@@ -188,6 +240,7 @@ class Store:
                 self.db.execute("ROLLBACK")
                 raise
 
+    @observed()
     def extract(self, paths: list[str], timezone: str, engine=None, force: bool = False) -> dict:
         ZoneInfo(timezone)
         if not paths or len(paths) > 1000:
@@ -205,11 +258,12 @@ class Store:
                     unchanged = previous[0]["capture_source"] == "exif.assumed:" + timezone
                 if not unchanged or force:
                     sidecar = contained(self.library, row["sidecar_path"]) if row["sidecar_path"] else None
-                    meta = read_metadata(file, sidecar, timezone)
+                    with self.metrics.measure("exif"):
+                        meta = read_metadata(file, sidecar, timezone)
                     after = file.stat()
                     if (after.st_size, after.st_mtime_ns) != (st.st_size, st.st_mtime_ns):
                         raise ValueError("Photo changed during extraction")
-                    with self.lock:
+                    with self.lock, self.metrics.measure("persist"):
                         self.db.execute("INSERT OR REPLACE INTO extracted VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,current_timestamp)",
                                         [path, st.st_size, st.st_mtime_ns] + list(meta.values()))
                     results["processed"] += 1
@@ -221,11 +275,12 @@ class Store:
                     scan = self.rows("SELECT * FROM face_scans WHERE path=?", [path])
                     if scan and (scan[0]["size_bytes"], scan[0]["mtime_ns"], scan[0]["model"]) == (st.st_size, st.st_mtime_ns, MODEL_ID):
                         continue  # Never discard existing confirmed labels on a rerun.
-                    detected = engine.detect(file)
+                    with self.metrics.measure("faces"):
+                        detected = engine.detect(file)
                     after = file.stat()
                     if (after.st_size, after.st_mtime_ns) != (st.st_size, st.st_mtime_ns):
                         raise ValueError("Photo changed during face detection")
-                    with self.lock:
+                    with self.lock, self.metrics.measure("persist"):
                         self.db.execute("BEGIN")
                         try:
                             # Keep older face records as history, but only expose matching file identities.
@@ -252,6 +307,7 @@ class Store:
             raise ValueError("Face belongs to an older version of this photo")
         return face
 
+    @observed("review")
     def label_face(self, face_id: str, person: str) -> None:
         if not isinstance(person, str) or len(person) > 200:
             raise ValueError("Invalid person name")
@@ -302,6 +358,7 @@ class Store:
         image.save(buffer, "JPEG", quality=85)  # Preview only; no EXIF copied into browser thumbnails.
         return buffer.getvalue()
 
+    @observed("export")
     def export(self) -> dict:
         """Publish atomic Parquet snapshots for downstream DuckDB readers."""
         output = self.state / "parquet"

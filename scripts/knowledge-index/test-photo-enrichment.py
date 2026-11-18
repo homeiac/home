@@ -2,18 +2,21 @@
 """Behavior tests using synthetic images, a real DuckDB fixture and a mock recognizer."""
 import copy
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch, MagicMock
 import urllib.error
 import urllib.request
 
 from PIL import Image, TiffImagePlugin
 
 from photo_enrichment.demo import build_demo
-from photo_enrichment.faces import MODEL_ID, similarity
+from photo_enrichment.faces import MODEL_ID, similarity, frigate_candidate
+from photo_enrichment.metrics import Metrics
 from photo_enrichment.metadata import capture_time, contained, coordinates, exif_coordinates, read_metadata
 from photo_enrichment.server import make_server
 from photo_enrichment.store import Store
@@ -59,6 +62,64 @@ class MetadataTests(unittest.TestCase):
             (root/'escape').symlink_to(Path(directory))
             for path in ('../other','/etc/passwd','escape/other'):
                 with self.assertRaises(ValueError):contained(root,path)
+
+
+class IntegrationTests(unittest.TestCase):
+    def test_frigate_negative_and_unknown_results_are_not_person_names(self):
+        for payload, status in [({'success': False, 'message': 'No face was detected.'}, 400),
+                                ({'success': False, 'message': 'No face was recognized.'}, 400),
+                                ({'success': True, 'face_name': 'unknown', 'score': .2}, 200),
+                                ({'success': True, 'face_name': 'Test Person', 'score': .9}, 200)]:
+            with self.subTest(payload=payload), patch.dict('os.environ', {'PHOTO_FRIGATE_URL': 'https://frigate.example'}), \
+                    patch('photo_enrichment.faces.urllib.request.build_opener') as factory:
+                response = io.BytesIO(json.dumps(payload).encode())
+                if status == 400:
+                    factory.return_value.open.side_effect = urllib.error.HTTPError('https://frigate.example',400,'bad',{},response)
+                else:
+                    factory.return_value.open.return_value = response
+                result = frigate_candidate(b'jpeg')
+                self.assertEqual(result['name'], 'Test Person' if payload.get('face_name') == 'Test Person' else None)
+                self.assertFalse(result['confirmed'])
+                request = factory.return_value.open.call_args.args[0]
+                self.assertIn(b'name="file"', request.data)
+                self.assertEqual(request.full_url, 'https://frigate.example/api/faces/recognize')
+
+    def test_frigate_operational_errors_and_redirects_remain_errors(self):
+        for status in (302, 400, 401, 503):
+            with self.subTest(status=status), patch.dict('os.environ', {'PHOTO_FRIGATE_URL': 'https://frigate.example'}), \
+                    patch('photo_enrichment.faces.urllib.request.build_opener') as factory:
+                payload = io.BytesIO(b'{"success":false,"message":"Face recognition is not enabled."}')
+                factory.return_value.open.side_effect = urllib.error.HTTPError('https://frigate.example',status,'failed',{},payload)
+                with self.assertRaises(urllib.error.HTTPError):
+                    frigate_candidate(b'jpeg')
+                handler = factory.call_args.args[0]
+                self.assertIsNone(handler.redirect_request(None,None,None,None,None,None))
+
+    def test_live_timing_and_failure_counted_once(self):
+        metrics = Metrics()
+        with patch('photo_enrichment.metrics.time.monotonic', side_effect=[10,12,15]):
+            with self.assertRaises(ValueError):
+                with metrics.measure('faces'):
+                    self.assertIn('stage="faces",title="Photo: CPU faces"} 2.0', metrics.render())
+                    raise ValueError('private path must not enter telemetry')
+        self.assertEqual(metrics.seconds['faces'], 5)
+        self.assertEqual(metrics.operations['faces','error'], 1)
+        self.assertNotIn('private path', metrics.render())
+
+    def test_metrics_atomic_terminal_state_and_output_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'test.prom'
+            with Metrics(path) as metrics:
+                with metrics.measure('export'):
+                    pass
+            self.assertIn('photo_enrichment_running 0', path.read_text())
+            self.assertIn('photo_enrichment_worker_stage 8', path.read_text())
+            self.assertFalse(path.with_suffix('.prom.tmp').exists())
+            with self.assertLogs(level='WARNING'):
+                with Metrics(Path(directory)/'missing'/'test.prom') as broken:
+                    with broken.measure('persist'):
+                        pass
+            self.assertEqual(broken.operations['persist','ok'], 1)
 
 
 class StoreTests(unittest.TestCase):
@@ -112,6 +173,25 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(self.store.photo(self.paths[0])['camera_make'],'Demo camera')
         exported=self.store.export();self.assertEqual(len(exported['tables']),6)
         self.assertEqual(self.store.rows("SELECT count(*) AS n FROM read_parquet(?)",[str(self.state/'parquet/extracted.parquet')])[0]['n'],2)
+
+    def test_metrics_backlogs_follow_durable_facts(self):
+        self.store.metrics = Metrics(self.state/'photo.prom')
+        self.store.refresh_metrics()
+        self.assertEqual(self.store.metrics.queues, {'exif':8,'faces':8,'review':0})
+        class NoFaces:
+            def detect(self, path):
+                return []
+        self.store.extract(self.paths[:2], 'UTC', NoFaces())
+        self.assertEqual(self.store.metrics.queues, {'exif':6,'faces':6,'review':0})
+        self.assertEqual(self.store.metrics.inventory['exif'],2)
+        self.store.save_group({'paths':self.paths[:1],'event':'Private event'})
+        self.assertEqual(self.store.metrics.inventory['groups'],1)
+        self.assertEqual(self.store.metrics.operations['review','ok'],1)
+        self.store.export()
+        self.assertEqual(self.store.metrics.operations['export','ok'],1)
+        exposition=(self.state/'photo.prom').read_text()
+        self.assertNotIn('Private event',exposition)
+        self.assertNotIn(self.paths[0],exposition)
 
     def test_face_labels_require_confirmation_and_survive_rerun(self):
         class FakeEngine:
