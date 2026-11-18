@@ -12,11 +12,13 @@ Usage:
   --api ollama       use Ollama native /api/chat (recommended with Ollama: honors think:false; --num-ctx sets the context)
   --extra-json JSON  extra chat-request fields, e.g. '{"think": false}' (thinking models: 10x slower and wasteful otherwise)
   --dry-run    summarize --limit files, print them, write nothing (the "sample" mode)
+  --prom FILE  publish live stage / Ollama timings for node-exporter (ignored in sample mode)
   --min-free-mib  refuse to start when the GPU has less free memory (nvidia-smi); 0 disables; --smi-cmd overrides the binary
 
 Queue: SELECT ... FROM gphotos_to_summarize(<enricher>): media with no `ok` row for their current bytes (errors are retried).
 Photo: one image (long edge 1024). Video: --frames frames across the clip + audio transcript (faster-whisper, if installed).
-Reads media read-only, writes only below <index>/summaries, sends nothing outside the given endpoint.
+Reads media read-only, writes summaries below <index>/summaries and optional telemetry to --prom,
+sends nothing outside the given endpoint. Telemetry never contains media paths or contents.
 """
 import argparse
 import base64
@@ -30,6 +32,7 @@ import time
 import urllib.request
 
 import duckdb
+from pipeline_metrics import PipelineMetrics
 
 VIDEO_EXTS = {"mp4", "mov", "3gp", "avi", "mpg", "m4v"}
 SCHEMA = ("source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR, prompt_version VARCHAR, "
@@ -119,7 +122,7 @@ def parse_answer(text):
     return summary, tags
 
 
-def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m"):
+def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m", metrics=None, kind="photo"):
     """One chat request with all images. api="ollama" uses Ollama's native /api/chat: it honors `think: false`
     (the OpenAI-compatible /v1 endpoint did not on 2026-11-16: reasoning models then spent ~500 hidden tokens, 18-45 s/item instead of ~2-5 s)."""
     b64 = [base64.b64encode(j).decode() for j in jpegs]
@@ -135,30 +138,43 @@ def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="open
     req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         out = json.load(resp)
+    if api == "ollama" and metrics is not None:
+        metrics.ollama(out, kind)
     return out["message"]["content"] if api == "ollama" else out["choices"][0]["message"]["content"]
 
 
-def summarize(row, library, a):
+def summarize(row, library, a, metrics=None):
     """-> dict of result columns for one queue row; never raises (errors become status='error' rows)."""
     base = {"source": "gphotos", "path": row["path"], "size_bytes": row["size_bytes"], "enricher": a.enricher, "model": a.model,
             "prompt_version": PROMPT_VERSION, "summary": None, "tags": None, "frames_sampled": None, "duration_s": None,
             "status": "error", "error": None}
     ap = os.path.join(library, row["path"])
+    metrics = metrics or PipelineMetrics(None, a.enricher)
+    kind = "video" if row["ext"] in VIDEO_EXTS else "photo"
     try:
-        if row["ext"] in VIDEO_EXTS:
-            dur = video_duration(ap)
-            n = max(1, min(a.frames, int(dur) or 1))
-            jpegs = [jpeg_frame(ap, dur * (i + 0.5) / n) for i in range(n)]
-            speech = transcript(ap)
+        with metrics.measure("decode", kind):
+            if kind == "video":
+                dur = video_duration(ap)
+                n = max(1, min(a.frames, int(dur) or 1))
+                jpegs = [jpeg_frame(ap, dur * (i + 0.5) / n) for i in range(n)]
+            else:
+                jpegs = [jpeg_frame(ap)]
+        speech = ""
+        if kind == "video":
+            with metrics.measure("transcribe", kind):
+                speech = transcript(ap)
             base.update(frames_sampled=n, duration_s=dur)
-            prompt = build_prompt(row, True, n, speech)
-        else:
-            jpegs = [jpeg_frame(ap)]
-            prompt = build_prompt(row, False, 1, "")
-        summary, tags = parse_answer(ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api, num_ctx=a.num_ctx))
+        with metrics.measure("prompt", kind):
+            prompt = build_prompt(row, kind == "video", len(jpegs), speech)
+        with metrics.measure("inference", kind):
+            answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
+                               num_ctx=a.num_ctx, metrics=metrics, kind=kind)
+        with metrics.measure("parse", kind):
+            summary, tags = parse_answer(answer)
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
+    metrics.item(kind, base["status"])
     return base
 
 
@@ -199,23 +215,28 @@ def run(a):
     t0 = time.time()
     remaining = a.limit
     seen = set()
-    while remaining > 0:
-        rows = queue(a.index, a.enricher, min(a.batch_size, remaining), seen)
-        if not rows:
-            break
-        seen.update(r["path"] for r in rows)
-        out = [summarize(r, a.library, a) for r in rows]
-        done += sum(r["status"] == "ok" for r in out)
-        errors += sum(r["status"] != "ok" for r in out)
-        if a.dry_run:
-            for r in out:
-                print("%s\t%s\t%s\t%s" % (r["status"], r["path"], r["summary"] or r["error"], ",".join(r["tags"] or [])))
-            break
-        write_batch(out, a.index, a.enricher)
-        remaining -= len(rows)
-        if errors and not done and len(rows) == errors:   # a whole batch failed: the model server is probably down, stop
-            print("whole batch failed; stopping", file=sys.stderr)
-            break
+    with PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
+        while remaining > 0:
+            with metrics.measure("queue"):
+                rows = queue(a.index, a.enricher, min(a.batch_size, remaining), seen)
+            if not rows:
+                break
+            seen.update(r["path"] for r in rows)
+            out = [summarize(r, a.library, a, metrics) for r in rows]
+            done += sum(r["status"] == "ok" for r in out)
+            errors += sum(r["status"] != "ok" for r in out)
+            if a.dry_run:
+                for r in out:
+                    print("%s\t%s\t%s\t%s" % (r["status"], r["path"], r["summary"] or r["error"], ",".join(r["tags"] or [])))
+                break
+            with metrics.measure("write"):
+                write_batch(out, a.index, a.enricher)
+            for row, result in zip(rows, out):
+                metrics.item("video" if row["ext"] in VIDEO_EXTS else "photo", result["status"], persisted=True)
+            remaining -= len(rows)
+            if errors and not done and len(rows) == errors:   # a whole batch failed: the model server is probably down, stop
+                print("whole batch failed; stopping", file=sys.stderr)
+                break
     n = done + errors
     print("ok=%d errors=%d seconds=%.1f per_item=%.1f" % (done, errors, time.time() - t0, (time.time() - t0) / max(n, 1)))
     return 0
@@ -238,6 +259,8 @@ def main(argv):
     ap.add_argument("--num-ctx", type=int, default=8192, help="context length for --api ollama (8 frames x ~300 tokens + transcript)")
     ap.add_argument("--extra-json", default="{}", help='extra request fields merged into the chat body, e.g. \'{"think": false}\' to stop reasoning models burning tokens')
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--prom", default=os.environ.get("KI_PIPELINE_PROM"),
+                    help="live pipeline metrics textfile for node-exporter (or KI_PIPELINE_PROM); ignored by --dry-run")
     args = ap.parse_args(argv)
     args.extra = json.loads(args.extra_json)
     return run(args)

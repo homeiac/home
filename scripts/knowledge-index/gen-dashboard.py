@@ -154,6 +154,84 @@ def panels():
     p += shift(backfill_panels(), 16)
     p += shift(gpu_panels(), 16 + 16)
     p += shift(core_panels(), 16 + 16 + 27)
+    # Build new panels after the existing ones to preserve their IDs and links.
+    insert_at = next(i for i, panel in enumerate(p) if panel["title"] == "Ingest and index pipeline")
+    offset = p[insert_at]["gridPos"]["y"]
+    shift(p[insert_at:], 42)
+    p[insert_at:insert_at] = shift(pipeline_panels(), offset)
+    return p
+
+
+def pipeline_panels():
+    """Stage telemetry comes straight from the worker, not the five-minute inventory scan."""
+    sel = '{instance=~"$instance",enricher=~"$pipeline_enricher"}'
+    stage_rate = 'rate(media_pipeline_stage_seconds_total' + sel + '[$__rate_interval])'
+    share = '100 * sum by (stage) (' + stage_rate + ') / scalar(sum(' + stage_rate + '))'
+    heartbeat = 'time() - media_pipeline_heartbeat_timestamp_seconds' + sel
+    current = ('(media_pipeline_worker_stage' + sel + ' and (' + heartbeat + ' < 60))'
+               ' or (media_pipeline_worker_stage' + sel + ' * 0 - 1)')
+    states = {str(i): {"text": name, "color": color} for i, name, color in [
+        (-1, "No recent telemetry", "gray"), (0, "Between stages", "gray"), (1, "Selecting batch", "purple"),
+        (2, "Read / decode", "blue"), (3, "Transcribing", "yellow"), (4, "Building prompt", "light-blue"),
+        (5, "Ollama request", "green"), (6, "Parsing answer", "light-purple"), (7, "Writing Parquet", "orange"),
+        (8, "Finished", "dark-green"), (9, "Failed", "red")]}
+    p = [row("Pipeline bottlenecks", 0)]
+    p += [stat("Worker stage", current, 0, 1, w=8, mappings=states, legend="{{instance}} / {{enricher}}"),
+          stat("Time in current stage", '(time() - media_pipeline_stage_started_timestamp_seconds' + sel + ') and (' + heartbeat + ' < 60) and (media_pipeline_running' + sel + ' == 1)',
+               8, 1, w=8, unit="s", legend="{{instance}} / {{enricher}}"),
+          stat("Worker telemetry age", heartbeat, 16, 1, w=8, unit="s", thresholds=[("green", None), ("orange", 30), ("red", 60)],
+               description="Published every 5 s by the instrumented worker. Missing data means it has not published yet. After 60 s, the state becomes unknown rather than claiming it is still busy.")]
+    graph = _panel("nodeGraph", "Value stream map", [], 0, 5, 24, 10,
+                   description="Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues.")
+    graph["targets"] = [
+        {"refId": "nodes", "expr": '(100 * sum by (id, title) (' + stage_rate + ') / scalar(sum(' + stage_rate + ')) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total' + sel + ') * 0)', "format": "table", "instant": True, "range": False},
+        {"refId": "edges", "expr": 'max by (id, source, target) (media_pipeline_edge_info' + sel + ')', "format": "table", "instant": True, "range": False}]
+    # Node Graph reads field.name, not Organize's display-name override.
+    # Copy the sole numeric value into an actual mainstat field.
+    graph["transformations"] = [
+        {"id": "calculateField", "filter": {"id": "byRefId", "options": "nodes"},
+         "options": {"mode": "reduceRow", "reduce": {"reducer": "sum", "include": ["Value", "Value #nodes"]}, "alias": "mainstat"}},
+        {"id": "organize", "filter": {"id": "byRefId", "options": "nodes"},
+         "options": {"excludeByName": {"Time": True, "Value": True, "Value #nodes": True}}},
+        {"id": "organize", "filter": {"id": "byRefId", "options": "edges"},
+         "options": {"excludeByName": {"Time": True, "Value": True, "Value #edges": True}}}]
+    graph["options"] = {"nodes": {"mainStatUnit": "percent"}}
+    p += [graph, bars("Time spent by stage", share, "{{stage}}", 0, 15, 8, 6, unit="percent", decimals=1,
+                      description="Includes in-flight operations, so a stalled decode or model request is visible before it completes. This is wall time, not CPU or GPU utilization.")]
+    timeline = _panel("state-timeline", "Worker activity (sampled)", [(current, "{{instance}} / {{enricher}}")], 8, 15, 16, 6, mappings=states)
+    timeline["options"] = {"mergeValues": True, "showValue": "auto", "alignValue": "center", "rowHeight": 0.9,
+                           "legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}
+    timeline["fieldConfig"]["defaults"]["custom"] = {"spanNulls": False}
+    timeline["description"] = "Sampled at Prometheus scrape cadence: stages shorter than a scrape can be missed. Cumulative timing counters still include every measured stage."
+    p.append(timeline)
+    for x, kind, title in ((0, "photo", "Photo: seconds per stage operation"), (8, "video", "Video: seconds per stage operation"),
+                           (16, "batch", "Batch: query / write seconds")):
+        ks = '{instance=~"$instance",enricher=~"$pipeline_enricher",kind="' + kind + '"}'
+        avg = ('sum by (stage) (rate(media_pipeline_stage_completed_seconds_total' + ks + '[$__rate_interval])) / '
+               '(sum by (stage) (rate(media_pipeline_stage_operations_total' + ks + '[$__rate_interval])) > 0)')
+        p.append(series(title, [(avg, "{{stage}}")], x, 21, 8, 7, unit="s", decimals=2,
+                        description="Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."))
+    ollama_avg = ('sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total' + sel + '[$__rate_interval])) / '
+                  '(sum by (phase, kind) (rate(media_pipeline_ollama_observations_total' + sel + '[$__rate_interval])) > 0)')
+    tokens = ('sum by (phase, kind) (rate(media_pipeline_ollama_tokens_total' + sel + '[$__rate_interval])) / '
+              '(sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total' + sel + '[$__rate_interval])) > 0)')
+    p += [series("Ollama: seconds per response", [(ollama_avg, "{{kind}} / {{phase}}")], 0, 28, 12, 7, unit="s", decimals=2,
+                 description="Native API timings: load, prompt processing, generation and total. Total overlaps the components; do not add them. Missing fields are not reported as zero."),
+          series("Ollama: tokens per second", [(tokens, "{{kind}} / {{phase}}")], 12, 28, 12, 7, unit="suffix: tokens/s", decimals=1),
+          series("Attempted vs saved items per minute", [
+              ('sum by (kind, status) (rate(media_pipeline_items_total' + sel + '[$__rate_interval])) * 60', '{{kind}} {{status}} attempted'),
+              ('sum by (kind, status) (rate(media_pipeline_persisted_items_total' + sel + '[$__rate_interval])) * 60', '{{kind}} {{status}} saved')],
+                 0, 35, 12, 7, decimals=1, description="Attempted items include errors. Saved items advance only after atomic Parquet writes; batching creates bursts."),
+          series("Worker time by stage", [(share, "{{stage}}")], 12, 35, 12, 7, unit="percent", decimals=1)]
+    # The host is scraped every 30 s; tell Grafana so $__rate_interval includes enough samples.
+    for panel in p:
+        for target in panel.get("targets", []):
+            target["interval"] = "30s"
+            if panel["type"] == "stat":
+                target.update({"instant": True, "range": False})
+            elif panel["type"] != "nodeGraph":
+                target.update({"instant": False, "range": True})
+    graph["description"] += " Nodes show zero during the first two scrapes while rate samples accumulate."
     return p
 
 
@@ -201,6 +279,28 @@ def core_panels():
                                               ("smart_reallocated_sectors" + INST, "{{device}} {{model}} reallocated")], 12, 43, 12, 8),
           series("Reboots (boot time changes per hour)", [('changes(node_boot_time_seconds{job="proxmox-node-exporter",instance=~"$instance"}[1h])', "{{instance}}")], 0, 47, 12, 6),
           series("NVMe power cycles", [("nvme_power_cycles_total" + INST, "{{device}}")], 0, 53, 12, 6)]
+    # Allocate the new panel last so existing panel IDs (and bookmarked links) stay stable.
+    summary_stats = {panel["title"]: panel for panel in p if panel["type"] == "stat"}
+    history = series("Summary progress over time",
+                     [(summary_stats[name]["targets"][0]["expr"], name)
+                      for name in ("Summarized", "Still to do", "Errors")],
+                     0, 23, 24, 8, decimals=0,
+                     description="The totals above over the selected time range. Errors use the right axis. Counts update when the metrics exporter runs.")
+    history["fieldConfig"]["defaults"].update({
+        "min": 0, "custom": {"drawStyle": "line", "lineInterpolation": "linear", "lineWidth": 2,
+                              "fillOpacity": 0, "showPoints": "never", "spanNulls": False,
+                              "axisLabel": "Items", "stacking": {"mode": "none", "group": "A"}}})
+    for name, color in (("Summarized", "green"), ("Still to do", "blue"), ("Errors", "orange")):
+        properties = [{"id": "color", "value": {"mode": "fixed", "fixedColor": color}}]
+        if name == "Errors":
+            properties += [{"id": "custom.axisPlacement", "value": "right"},
+                           {"id": "custom.axisLabel", "value": "Errors"}]
+        history["fieldConfig"]["overrides"].append({"matcher": {"id": "byName", "options": name}, "properties": properties})
+    for target in history["targets"]:
+        target.update({"range": True, "instant": False})
+    insert_at = next(i for i, panel in enumerate(p) if panel["gridPos"]["y"] >= 23)
+    shift(p[insert_at:], 8)
+    p.insert(insert_at, history)
     return p
 
 
@@ -212,6 +312,9 @@ def dashboard():
         "templating": {"list": [{"current": {}, "datasource": DS, "definition": "label_values(knowledge_index_exporter_success, instance)", "hide": 0, "includeAll": True,
                                  "label": "Host", "multi": True, "name": "instance", "options": [], "query": "label_values(knowledge_index_exporter_success, instance)",
                                  "refresh": 2, "regex": "", "skipUrlSync": False, "sort": 1, "type": "query", "allValue": ".*"},
+                                {"type": "query", "name": "pipeline_enricher", "label": "Pipeline enricher", "datasource": DS,
+                                 "query": 'label_values(media_pipeline_worker_stage{instance=~"$instance"}, enricher)', "refresh": 2,
+                                 "multi": True, "includeAll": True, "allValue": ".*", "current": {"text": "All", "value": "$__all"}, "options": []},
                                 *[_textbox(n, l, v) for n, l, v in TEXTBOXES]]},
         "title": "Knowledge Index", "uid": "knowledge-index", "version": 1,
     }

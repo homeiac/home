@@ -139,6 +139,49 @@ and SMART health per USB/SATA disk (labelled by model: Linux device letters chan
 - `scripts/knowledge-index/test-metrics.sh` checks the exposition format, the numbers, that the committed dashboard equals the generated one,
   and that every metric used by the dashboard and alerts exists. Flux applies dashboard and rules after the change is merged to master.
 
+## Pipeline bottlenecks dashboard
+
+The **Pipeline bottlenecks** row measures the sequential worker itself: select a batch → read/decode → optional
+audio transcription → build prompt → Ollama request → parse → next item → write Parquet at the batch boundary.
+Use the **Pipeline enricher** filter to select a model/prompt run. Existing totals remain in the Summaries row.
+
+- **Value stream map / time by stage:** percentage of measured wall time in each stage, including in-flight work.
+  Edges describe control flow, not independently queued workers. Inference includes request encoding, transport,
+  server waiting and inference; it is not a GPU-utilization measurement.
+- **Worker activity:** stage and time in that stage. The timeline is sampled at Prometheus scrape cadence; short
+  stages may be missed visually, but their duration counters are still recorded. A heartbeat older than 60 seconds
+  becomes “No recent telemetry”, including after an abrupt kill. A missing series means no instrumented run yet.
+- **Photo/video stage duration:** mean seconds per completed operation, including failed attempts. Queue lookup and
+  Parquet write durations are shown separately **per batch**. In-flight durations are excluded from these means.
+- **Ollama timings:** native `/api/chat` load, prompt processing, generation and total durations, converted from
+  nanoseconds. Total overlaps its components; never add them together. Unsupported/missing response fields stay
+  absent. Token throughput is tokens divided by the associated model processing time, not end-to-end throughput.
+- **Attempted vs saved items:** attempted items include errors; saved counts advance only after the atomic Parquet
+  rename. Normal batching creates bursts in the saved line. Counters reset when the worker restarts; queries use
+  `rate()` to handle resets. No per-file paths, transcripts, prompts or summaries enter metric labels.
+
+`enrich start` now supplies `--prom /var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom`.
+`enrichers/pipeline_metrics.py` writes that file atomically at stage boundaries and every five seconds, independently
+of the five-minute index scan. Publication failures log an error and leave summary processing running. The node-exporter
+directory must already exist and be writable by the worker. `enrich sample` writes no metrics, even with `--prom`.
+
+Deployment: merge the generator and generated ConfigMap through GitOps, install both enricher Python files on the host,
+then restart the resumable worker with its existing endpoint/model/enricher settings plus `--prom`. A running Python
+process does not pick up replaced source files. A forced restart can discard an unfinished in-memory batch; saved Parquet
+is retained and those unfinished items remain queued. Do not merge unrelated draft work or stop GPU tenants just to
+publish the dashboard. Inspect the deployment first with:
+
+```bash
+CB_HOST=root@<inventory-host> bash scripts/knowledge-index/check-pipeline-rollout.sh
+python3 scripts/knowledge-index/test-pipeline-metrics.py
+bash scripts/knowledge-index/test-enricher.sh
+bash scripts/knowledge-index/test-metrics.sh
+bash scripts/knowledge-index/check-promql.sh
+```
+
+When diagnosing gaps, correlate stage time with CPU saturation, disk latency, GPU activity and memory on both the
+Proxmox host and GPU VM; the map identifies where the worker spends time, not which resource caused the delay.
+
 ## Example queries (these double as checks)
 
 ```sql

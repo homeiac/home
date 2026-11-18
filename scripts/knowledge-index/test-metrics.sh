@@ -154,7 +154,7 @@ for p in j["panels"]:
 r = yaml.safe_load(open(mon + "knowledge-index-alerting-rules.yaml"))
 exprs += [x["expr"] for g in r["spec"]["groups"] for x in g["rules"]]
 names = {n for e in exprs for n in re.findall(r"[a-zA-Z_:][a-zA-Z0-9_:]*(?=\s*[{\[(]|\s|$|\)|,)", e)}
-metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
+metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|media_pipeline_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
 missing = {m for m in metrics - have - external if not m.startswith("DCGM_FI_DEV_")}   # DCGM names come from the NVIDIA exporter (checked live by check-promql.sh)
 if missing:
     print("  missing:", sorted(missing)); sys.exit(1)

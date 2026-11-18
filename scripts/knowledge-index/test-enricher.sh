@@ -28,7 +28,9 @@ class H(http.server.BaseHTTPRequestHandler):
         open(log.replace("requests.log", "extra.log"), "w").write(str(body.get("think")) + "\n")
         open(log, "a").write("%d\n" % n)
         reply = 'Sure!\n```json\n{"summary": "stub summary", "tags": ["a", "b"]}\n```'
-        out = json.dumps({"message": {"content": reply}} if self.path == "/api/chat" else {"choices": [{"message": {"content": reply}}]}).encode()
+        out = json.dumps({"message": {"content": reply}, "total_duration": 2000000000, "load_duration": 100000000,
+                          "prompt_eval_duration": 400000000, "eval_duration": 1500000000, "eval_count": 30, "prompt_eval_count": 80}
+                         if self.path == "/api/chat" else {"choices": [{"message": {"content": reply}}]}).encode()
         self.send_response(200); self.send_header("Content-Length", str(len(out))); self.end_headers(); self.wfile.write(out)
     def log_message(self, *a): pass
 s = http.server.HTTPServer(("127.0.0.1", 0), H)
@@ -52,7 +54,8 @@ reb
 check "queue starts with 3 media files"  "$(q "SELECT count(*) FROM gphotos_to_summarize('e1')")" 3
 
 echo "-- dry run"
-enrich --dry-run --limit 3 | sed 's/^/  /'
+enrich --dry-run --limit 3 --prom "$W/dry.prom" | sed 's/^/  /'
+check "dry run wrote no telemetry"        "$([[ -e "$W/dry.prom" ]] && echo yes || echo no)" no
 check "dry run wrote nothing"            "$(ls "$IDX/summaries/e1" 2>/dev/null | wc -l | tr -d ' ')" 0
 
 echo "-- real run"
@@ -96,6 +99,23 @@ echo "-- native Ollama API mode"
 check "used /api/chat"                   "$(sort -u "$W/path.log")" "/api/chat"
 check "think=false sent at top level"    "$(cat "$W/extra.log")" "False"
 check "video sent 3 frames natively"     "$(grep -c '^3$' "$W/requests.log")" 1
+
+echo "-- instrumented native run"
+"$PYTHON" "$HERE/enrichers/media_summary.py" run --index "$IDX" --library "$LIB" --endpoint "$EP" --model m --enricher timed --min-free-mib 0 \
+  --api ollama --prom "$W/pipeline.prom" --batch-size 2 >/dev/null
+"$PYTHON" - "$W/pipeline.prom" <<'PY' && ok "pipeline timings, durable counts and Ollama units" || bad "pipeline telemetry incorrect"
+import sys
+text = open(sys.argv[1]).read()
+assert 'media_pipeline_running{enricher="timed"} 0' in text
+assert 'media_pipeline_worker_stage{enricher="timed"} 8' in text
+for kind, status, n in [('photo', 'ok', 1), ('photo', 'error', 1), ('video', 'ok', 1)]:
+    for metric in ('items', 'persisted_items'):
+        assert f'media_pipeline_{metric}_total{{enricher="timed",kind="{kind}",status="{status}"}} {n}' in text
+assert 'media_pipeline_stage_operations_total{enricher="timed",kind="photo",stage="decode"} 2' in text
+assert 'media_pipeline_ollama_seconds_total{enricher="timed",kind="video",phase="generation"} 1.5' in text
+assert 'media_pipeline_ollama_tokens_total{enricher="timed",kind="photo",phase="generation"} 30' in text
+assert 'photo.jpg' not in text and 'stub summary' not in text
+PY
 
 echo "-- GPU memory guard"
 printf '#!/bin/sh\necho 1000\n' > "$W/fake-smi"; chmod +x "$W/fake-smi"

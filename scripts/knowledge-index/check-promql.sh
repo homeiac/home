@@ -24,7 +24,7 @@ for p in j["panels"]:
 for g in yaml.safe_load(open(mon + "/knowledge-index-alerting-rules.yaml"))["spec"]["groups"]:
     for r in g["rules"]:
         exprs.append(("alert: " + r["alert"], r["expr"]))
-subs = {"$__range": "24h", "$__rate_interval": "5m", "$instance": ".*", "$kwh_price": "0.35", "$price_photo": "0.002", "$price_video_min": "0.02", "$baseline_s": "2280"}
+subs = {"$__range": "24h", "$__rate_interval": "5m", "$instance": ".*", "$pipeline_enricher": ".*", "$kwh_price": "0.35", "$price_photo": "0.002", "$price_video_min": "0.02", "$baseline_s": "2280"}
 bad = 0
 for name, e in exprs:
     for k, v in subs.items():

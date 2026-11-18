@@ -24,6 +24,7 @@ import duckdb
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from progress import BACKFILL_HELP  # noqa: E402
+from enrichers.pipeline_metrics import PIPELINE_HELP  # noqa: E402
 
 OUT_DEFAULT = "/var/lib/prometheus/node-exporter/knowledge_index.prom"
 INDEX_DATASET = "local-3TB-backup/knowledge-index"
@@ -257,7 +258,7 @@ def main(argv):
     ap.add_argument("--list-metrics", action="store_true")
     a = ap.parse_args(argv)
     if a.list_metrics:
-        print("\n".join(sorted(set(HELP) | set(PROGRESS_HELP))))
+        print("\n".join(sorted(set(HELP) | set(PROGRESS_HELP) | set(PIPELINE_HELP))))
         return 0
     t0 = time.time()
     index = a.index or mountpoint(INDEX_DATASET)

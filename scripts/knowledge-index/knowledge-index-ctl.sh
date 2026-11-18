@@ -30,7 +30,7 @@ MOUNTS="IDX=\$(zfs get -H -o value mountpoint $IDX_DATASET); PH=\$(zfs get -H -o
 
 install_files() {
   cb_ssh "mkdir -p $KI/adapters $KI/enrichers $KI/oracle"
-  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
+  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py enrichers/pipeline_metrics.py kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"
   # Prometheus textfile exporter: systemd timer every 5 min (node-exporter on the host already reads /var/lib/prometheus/node-exporter)
   for u in knowledge-index-metrics.service knowledge-index-metrics.timer; do
@@ -75,7 +75,8 @@ case "${1:-}" in
     KI_MODEL="${KI_MODEL:-gemma4:e2b}"; KI_ENRICHER="${KI_ENRICHER:-gemma4-e2b-p1}"; KI_MIN_FREE_MIB="${KI_MIN_FREE_MIB:-3000}"
     run_cmd() {   # runs on the host: reads the photos dataset read-only, calls the model server over the LAN
       echo "$KI/venv/bin/python $KI/enrichers/media_summary.py run --index \"\$IDX\" --library \"\$PH/library\" --endpoint '${KI_ENDPOINT:?set KI_ENDPOINT}' \
-            --model '$KI_MODEL' --api ollama --extra-json '{\"think\": false}' --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB $*"; }
+            --model '$KI_MODEL' --api ollama --extra-json '{\"think\": false}' --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB \
+            --prom /var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom $*"; }
     case "${2:-}" in
       sample) install_files
               cb_ssh "command -v ffmpeg >/dev/null || { echo 'ffmpeg missing on the host: apt-get install ffmpeg (ask first)'; exit 1; }; $MOUNTS; $(run_cmd --dry-run --limit "${3:-10}")";;
