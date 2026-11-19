@@ -190,8 +190,8 @@ data:
     \"\",\n          \"queryType\": \"range\"\n        }\n      ],\n      \"options\"\
     : {\n        \"showTime\": true,\n        \"wrapLogMessage\": true,\n        \"\
     sortOrder\": \"Descending\",\n        \"enableLogDetails\": true\n      }\n  \
-    \  },\n    {\n      \"id\": 16,\n      \"title\": \"GPS context backlog\",\n \
-    \     \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"\
+    \  },\n    {\n      \"id\": 16,\n      \"title\": \"Photo context backlog\",\n\
+    \      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"\
     prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n\
     \        \"x\": 0,\n        \"y\": 42,\n        \"w\": 8,\n        \"h\": 6\n\
     \      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n    \
@@ -201,7 +201,7 @@ data:
     \    },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
     : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 17,\n      \"title\": \"GPS lookup\
+    \  }\n      }\n    },\n    {\n      \"id\": 17,\n      \"title\": \"Context lookup\
     \ and local LLM stage time\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
     : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
     \  },\n      \"gridPos\": {\n        \"x\": 8,\n        \"y\": 42,\n        \"\

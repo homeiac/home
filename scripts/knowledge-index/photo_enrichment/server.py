@@ -72,7 +72,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     return self.send((STATIC / name).read_bytes(), content_type=kind)
                 if parsed.path == "/api/config":
                     import os
-                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False), "auto_accept": hasattr(store,'auto_accept_pass')})
+                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False), "auto_accept": hasattr(store,'auto_accept_pass'), "search_index": hasattr(store,'search')})
                 if parsed.path == "/api/auto-accept":
                     return self.send(store.auto_accept_settings())
                 if parsed.path == "/api/status":
@@ -85,6 +85,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     return self.send(store.dates(query.get("timezone", "UTC")))
                 if parsed.path == "/api/photos":
                     return self.send(store.photos(query["date"], query.get("timezone", "UTC"), int(query.get("offset", 0))))
+                if parsed.path == '/api/search':
+                    return self.send(store.search(query.get('q',''),query.get('timezone','UTC'),int(query.get('offset',0))))
                 if parsed.path == "/api/photo":
                     return self.send(store.detail(query["path"]))
                 if parsed.path == "/api/thumbnail":
@@ -112,6 +114,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Expected JSON object")
+            if parsed.path == '/api/group-suggestions':
+                return self.send(store.group_suggestions(body.get('paths'),body.get('timezone','UTC')))
             if parsed.path == "/api/groups/save":
                 return self.send(store.save_group(body))
             if parsed.path == "/api/groups/delete":
@@ -151,7 +155,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             try:
                 route=urllib.parse.urlsplit(self.path).path
                 if route.startswith('/api/') and route not in ('/api/config','/api/diagnostics') and hasattr(store,'request_session'):
-                    with store.request_session(readonly=self.command=='GET') as reader:
+                    with store.request_session(readonly=self.command=='GET' or route=='/api/group-suggestions') as reader:
                         self.request_store=reader
                         self.dispatch()
                 elif self.command=='GET' and (route in ('/','/app.js','/style.css','/healthz','/api/config','/api/diagnostics')

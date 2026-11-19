@@ -249,8 +249,18 @@ class PostgresStore(Store):
         photo=super().detail(path)
         if self.rows("SELECT to_regclass('public.photo_context') IS NOT NULL AS present")[0]['present']:
             context=self.rows("SELECT summary AS context_summary,context AS location_context,model AS context_model FROM photo_context WHERE path=? AND size_bytes=? AND status='done'",[path,photo['size_bytes']])
-            if context:photo.update(context[0])
+            if context:
+                photo.update(context[0])
+                names={f['person'] for f in photo['faces'] if f['person']}
+                if names!={p['name'] for p in (photo.get('location_context') or {}).get('saved_people',[])}:
+                    photo['context_summary']=None
         return photo
+
+    def search(self,query,timezone='UTC',offset=0):
+        return self.gallery_query('photos','unknown',timezone,offset,100,query)
+
+    def group_suggestions(self,paths,timezone='UTC'):
+        return self.gallery_query('group_suggestions',paths,timezone)
 
     def matching_pass(self) -> dict:
         """Read saved embeddings in bounded batches; never change confirmed labels.

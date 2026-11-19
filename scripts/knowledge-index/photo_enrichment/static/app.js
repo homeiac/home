@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const state = {csrf:'', frigate:false, date:null, offset:0, total:0, photos:[], selected:new Set(), busy:false};
+const state = {csrf:'', frigate:false, date:null, offset:0, total:0, search:'', photos:[], selected:new Set(), busy:false};
 const timezone = () => $('timezone').value.trim();
 function status(message, error=false) { $('status').textContent=message; $('status').classList.toggle('error',error); }
 function element(tag, text, className) { const node=document.createElement(tag); if(text!==undefined) node.textContent=text; if(className) node.className=className; return node; }
@@ -17,8 +17,8 @@ async function run(fn) {
   finally {state.busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);pagination();}
 }
 function pagination() { $('previous').disabled=state.offset===0; $('next').disabled=state.offset+state.photos.length>=state.total; }
-function selected() { $('selected').textContent=state.selected.size; document.querySelectorAll('.photo-card').forEach(card=>{const yes=state.selected.has(card.dataset.path);card.classList.toggle('chosen',yes);card.querySelector('input').checked=yes;}); }
-function clearForm() { $('delete-group').dataset.confirm='';$('delete-group').textContent='Delete this group'; $('group-form').reset();$('group-id').value='';$('delete-group').hidden=true;$('save').textContent='Save group context'; }
+function selected() { scheduleGroupSuggestions(); $('selected').textContent=state.selected.size; document.querySelectorAll('.photo-card').forEach(card=>{const yes=state.selected.has(card.dataset.path);card.classList.toggle('chosen',yes);card.querySelector('input').checked=yes;}); }
+function clearForm() { autoGroupValues={}; $('delete-group').dataset.confirm='';$('delete-group').textContent='Delete this group'; $('group-form').reset();$('group-id').value='';$('delete-group').hidden=true;$('save').textContent='Save group context'; }
 async function loadGroups() {
   const groups=await api('/api/groups');$('groups').replaceChildren();
   for(const group of groups) $('groups').append(button((group.event||group.location||'Untitled group')+' · '+group.photos, async()=>{
@@ -32,7 +32,7 @@ async function loadGroups() {
 async function loadDates() {
   const dates=await api(query('/api/dates',{timezone:timezone()}));$('dates').replaceChildren();
   for(const date of dates) {
-    const node=button(date.date,async()=>{state.date=date.date;state.offset=0;state.selected.clear();clearForm();await loadPhotos();});
+    const node=button(date.date,async()=>{state.date=date.date;state.search='';$('photo-search').value='';state.offset=0;state.selected.clear();clearForm();await loadPhotos();});
     node.dataset.date=date.date;node.append(element('span',String(date.photos)));$('dates').append(node);
   }
   if(!state.date||!dates.some(d=>d.date===state.date)) state.date=dates[0]?.date||null;
@@ -40,8 +40,8 @@ async function loadDates() {
 }
 async function loadPhotos() {
   if(!state.date){$('photos').replaceChildren(element('p','No photos found in the index.'));status('No indexed photos yet.');return;}
-  const data=await api(query('/api/photos',{date:state.date,timezone:timezone(),offset:state.offset}));state.photos=data.photos;state.total=data.total;
-  $('date-title').textContent=state.date==='unknown'?'Capture date unknown':state.date;
+  const data=await api(query(state.search?'/api/search':'/api/photos',{date:state.date,q:state.search,timezone:timezone(),offset:state.offset}));state.photos=data.photos;state.total=data.total;
+  $('date-title').textContent=state.search?'Search: '+state.search:state.date==='unknown'?'Capture date unknown':state.date;
   $('count').textContent=data.total+' photos · '+timezone();$('photos').replaceChildren();
   for(const photo of state.photos) {
     const card=element('article',undefined,'photo-card');card.dataset.path=photo.path;
@@ -49,8 +49,9 @@ async function loadPhotos() {
     const label=element('label',undefined,'check');const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+photo.name);
     check.onchange=()=>{if(check.checked)state.selected.add(photo.path);else state.selected.delete(photo.path);selected();};label.append(check);
     const body=element('div',undefined,'card-body');body.append(element('span',photo.latitude!==null?'GPS available':'Location unknown','badge'));
+    if(photo.suggested_location)body.append(element('span',photo.suggested_location,'badge'));
     for(const person of photo.saved_people||[])body.append(element('span',person,'badge'));
-    if(photo.context_summary)body.append(element('span','GPS-informed caption','badge'));
+    if(photo.context_summary)body.append(element('span','Enriched caption','badge'));
     body.append(element('p',photo.context_summary||photo.summary||'No model caption yet','card-caption'));body.append(button('Review photo',()=>showPhoto(photo.path)));
     card.append(image,label,body);$('photos').append(card);
   }
@@ -101,6 +102,23 @@ async function showPhoto(path) {
   }
   if(!$('detail').open)$('detail').showModal();
 }
+let autoGroupValues={},suggestionTimer=null,suggestionRevision=0;
+function scheduleGroupSuggestions(){
+  clearTimeout(suggestionTimer);const revision=++suggestionRevision;
+  if(!state.contextSuggestions||$('group-id').value||!state.selected.size)return;
+  suggestionTimer=setTimeout(async()=>{
+    try{
+      const data=await api('/api/group-suggestions',{paths:[...state.selected],timezone:timezone()});
+      if(revision!==suggestionRevision||$('group-id').value)return;
+      for(const [key,value] of Object.entries({event:data.event,location:data.location,tags:data.tags.join(', ')})){
+        if(!$(key).value||$(key).value===autoGroupValues[key]){$(key).value=value;autoGroupValues[key]=value;}
+      }
+      $('group-suggestion-note').textContent=data.photos?(data.inferred?'Nearby GPS places are inferred; review before saving. ':'')+'Indexed context for '+data.photos+' selected photos.':'Search index is updating; your edits can still be saved.';
+    }catch(error){$('group-suggestion-note').textContent='Could not load indexed context: '+error.message;}
+  },300);
+}
+$('photo-search-form').onsubmit=event=>{event.preventDefault();run(async()=>{state.search=$('photo-search').value.trim();state.offset=0;state.selected.clear();clearForm();await loadPhotos();});};
+$('clear-search').onclick=()=>run(async()=>{state.search='';$('photo-search').value='';state.offset=0;state.selected.clear();clearForm();await loadPhotos();});
 $('close-detail').onclick=()=>$('detail').close();
 $('refresh').onclick=()=>run(async()=>{state.offset=0;state.selected.clear();clearForm();await loadDates();});
 $('select-page').onclick=()=>{state.photos.forEach(p=>state.selected.add(p.path));selected();};
@@ -278,7 +296,7 @@ $('view-faces').onclick=()=>run(()=>switchView('faces'));$('view-photos').onclic
 $('refresh').onclick=()=>run(async()=>{state.faceSelection.clear();await switchView(state.view);await loadAutoAccept();status('Library refreshed. Confirmed edits are visible immediately.');});
 $('export').onclick=()=>run(async()=>{await api('/api/export',{});status('A complete analytical snapshot is now available.');});
 run(async()=>{
-  const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;
+  const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;state.contextSuggestions=config.search_index;$('photo-search-form').hidden=!config.search_index;
   state.autoAcceptSupported=Boolean(config.auto_accept);$('auto-accept-settings').hidden=!state.autoAcceptSupported;await loadAutoAccept();
   if(config.background_only){$('extract').hidden=true;$('detect').hidden=true;$('export').textContent='Refresh analytics';}
   const health=await api('/api/status');if(health.captured_at)$('freshness').textContent='DuckDB browsing snapshot · your edits update immediately · '+new Date(health.captured_at*1000).toLocaleTimeString();

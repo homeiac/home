@@ -34,8 +34,8 @@ def dashboard():
       'datasource':{'type':'loki','uid':'photo-loki'},'gridPos':{'x':0,'y':30,'w':24,'h':12},
       'targets':[{'refId':'A','expr':'{service_name=~"photo-review|photo-triage|photo-context"} | json | event=~"request.slow|request.error|triage.result|matching.finished|context.finished|context.error|context.deferred"','queryType':'range'}],
       'options':{'showTime':True,'wrapLogMessage':True,'sortOrder':'Descending','enableLogDetails':True}})
-    panel('GPS context backlog','sum by(kind)(photo_context_jobs)',0,42,8,6,legend='{{kind}}')
-    panel('GPS lookup and local LLM stage time','sum by(stage)(rate(photo_context_stage_seconds_total[5m]))',8,42,8,6,unit='s',legend='{{stage}}')
+    panel('Photo context backlog','sum by(kind)(photo_context_jobs)',0,42,8,6,legend='{{kind}}')
+    panel('Context lookup and local LLM stage time','sum by(stage)(rate(photo_context_stage_seconds_total[5m]))',8,42,8,6,unit='s',legend='{{stage}}')
     panel('GPS lookup cache use since worker start','sum by(kind)(photo_context_inventory)',16,42,8,6,legend='{{kind}}')
     return {'uid':'photo-app','title':'Photo App · Requests, traces & triage','schemaVersion':39,'version':1,
       'tags':['photos','otel'],'refresh':'10s','time':{'from':'now-1h','to':'now'},'timezone':'browser','panels':panels,

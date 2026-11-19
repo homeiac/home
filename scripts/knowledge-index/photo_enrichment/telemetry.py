@@ -14,7 +14,7 @@ CURRENT = contextvars.ContextVar('photo_request',default=None)
 ROUTES = {'/','/app.js','/style.css','/healthz','/metrics','/api/config','/api/status',
           '/api/faces','/api/faces/selection','/api/faces/label','/api/faces/labels',
           '/api/faces/reject','/api/faces/frigate','/api/auto-accept','/api/dates',
-          '/api/photos','/api/photo','/api/thumbnail','/api/groups','/api/group',
+          '/api/photos','/api/search','/api/group-suggestions','/api/photo','/api/thumbnail','/api/groups','/api/group',
           '/api/groups/save','/api/groups/delete','/api/extract','/api/export',
           '/api/suggestions','/api/diagnostics'}
 _instance = None

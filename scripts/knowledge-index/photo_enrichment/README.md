@@ -292,13 +292,16 @@ from indefinitely blocking later candidates. Refresh the library to see changes.
 Grafana measures matching and automatic acceptance as separate stages in the
 value stream map; stage percentages describe processing time, not match quality.
 
-### GPS context backfill
+### Names, GPS context and searchable groups
 
 `context-worker` is independent of face extraction and the original caption worker.
-It reads a pinned DuckDB/Parquet generation, queues already-captioned GPS photos in
-PostgreSQL, caches nearby Wikimedia articles, and sends the original image plus
-nearby landmark candidates to the existing local Ollama vision model. Captions
-without GPS are skipped. Existing captions and all human annotations are retained.
+It reads a pinned DuckDB/Parquet generation, queues already-captioned GPS photos and photos with saved person labels in
+PostgreSQL, caches nearby Wikimedia articles, and sends the image, prior caption,
+saved names with face-box positions and nearby candidates to the local Ollama model.
+Names and photos never go to Wikimedia. Names alone qualify without GPS; no GPS
+means no external lookup. Changes to saved labels requeue contextual captions after
+the next snapshot. The GUI immediately hides a contextual caption whose person
+labels no longer match, preserving the original caption while it regenerates. Existing captions and all human annotations are retained.
 The gallery prefers the separate contextual caption after the next snapshot export;
 photo details retain the original and link the lookup sources. Saved face labels
 also appear on gallery cards without guessing identity from the caption.
@@ -345,3 +348,16 @@ Catalog refresh uses transactional DELETE/COPY instead of TRUNCATE and avoids
 replacing an unchanged view. This allows existing MVCC readers to continue while
 refreshing the catalog, eliminating the observed AccessExclusiveLock deadlock path.
 The prior catalog remains visible until commit; a failed refresh rolls back.
+
+The export builds `photo_search.parquet` and `photo_group_index.parquet` locally
+from the same immutable generation. They index dates, saved names, inferred nearby
+places, original/enriched captions, model tags and user group annotations. Group
+index dates use UTC; selection suggestions respect the GUI timezone. Manual
+locations override derived nearby labels. Grouping never assigns identities to
+unlabelled faces. DuckDB serves global multi-term search and selection suggestions;
+the GUI prefills shared date/location/tags while retaining edits and saved groups.
+The search/group index refreshes with the five-minute export and is fully rebuildable.
+Cached nearby-place results also populate the index for every photo in the same
+rounded coordinate cell, without waiting for its contextual caption. Short search
+terms (such as a one-letter saved name) match whole words, avoiding accidental
+substring matches across file extensions and captions.

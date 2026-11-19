@@ -1,6 +1,7 @@
 """Gallery queries over immutable Parquet, overlaid with recent PostgreSQL edits."""
 import datetime as dt
 import json
+import re
 from zoneinfo import ZoneInfo
 
 from .snapshots import analytical_connection
@@ -29,6 +30,8 @@ class GalleryReader:
                 self.db.execute("CREATE TEMP TABLE album_duplicates AS SELECT value->>'path' AS path FROM json_each(?)",[json.dumps(duplicates)])
             if 'photo_context' not in self.manifest['tables']:
                 self.db.execute("CREATE TEMP TABLE photo_context(path VARCHAR,size_bytes BIGINT,status VARCHAR,summary VARCHAR,context JSON)")
+            if 'photo_search' not in self.manifest['tables']:
+                self.db.execute("CREATE TEMP TABLE photo_search(path VARCHAR,size_bytes BIGINT,location VARCHAR,location_source VARCHAR,tags VARCHAR[],people VARCHAR[],search_text VARCHAR)")
         except BaseException:
             self.db.close();raise
 
@@ -79,18 +82,50 @@ class GalleryReader:
             count(*) AS photos,count(*) FILTER(WHERE latitude IS NOT NULL) AS with_gps FROM enriched_media m
             WHERE NOT EXISTS (SELECT 1 FROM album_duplicates d WHERE d.path=m.path) GROUP BY 1 ORDER BY 1 DESC""",[timezone])
 
-    def photos(self,date,timezone,offset,limit):
+    def photos(self,date,timezone,offset,limit,search=''):
         ZoneInfo(timezone)
-        if date!='unknown':dt.date.fromisoformat(date)
+        if not search and date!='unknown':dt.date.fromisoformat(date)
         if offset<0 or not 1<=limit<=200:raise ValueError('Invalid pagination')
         condition="""coalesce(CAST(CAST(timezone(?,to_timestamp(capture_ts)) AS DATE) AS VARCHAR),'unknown')=?
             AND NOT EXISTS (SELECT 1 FROM album_duplicates d WHERE d.path=m.path)"""
-        total=self.rows('SELECT count(*) n FROM enriched_media m WHERE '+condition,[timezone,date])[0]['n']
+        params=[timezone,date]
+        if search:
+            if len(search)>200:raise ValueError('Search is too long')
+            words=search.lower().split()[:10]
+            if not words:raise ValueError('Enter a search term')
+            condition='NOT EXISTS(SELECT 1 FROM album_duplicates d WHERE d.path=m.path) AND m.path IN (SELECT path FROM photo_search WHERE '+ ' AND '.join('regexp_matches(search_text,?)' if len(word)<=2 else 'contains(search_text,?)' for word in words)+')'
+            params=[r'\b'+re.escape(word)+r'\b' if len(word)<=2 else word for word in words]
+        total=self.rows('SELECT count(*) n FROM enriched_media m WHERE '+condition,params)[0]['n']
         photos=self.rows("""SELECT m.*,c.summary AS context_summary,c.context AS location_context,
+            s.location AS suggested_location,s.location_source,s.tags AS search_tags,
             (SELECT list(DISTINCT f.person ORDER BY f.person) FROM reviewed_faces f JOIN face_scans fs
              ON fs.path=f.path AND fs.size_bytes=f.size_bytes AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
              WHERE f.path=m.path AND f.size_bytes=m.size_bytes AND f.person IS NOT NULL) AS saved_people
             FROM enriched_media m LEFT JOIN photo_context c ON c.path=m.path AND c.size_bytes=m.size_bytes AND c.status='done'
+            LEFT JOIN photo_search s ON s.path=m.path AND s.size_bytes=m.size_bytes
             WHERE """+condition+' ORDER BY capture_ts NULLS LAST,m.path LIMIT ? OFFSET ?',
-            [timezone,date,limit,offset])
+            [*params,limit,offset])
+        for photo in photos:
+            context=photo.get('location_context')
+            if isinstance(context,str):context=json.loads(context)
+            photo['location_context']=context
+            if context and sorted({p['name'] for p in context.get('saved_people',[])})!=sorted(photo.get('saved_people') or []):
+                # A correction takes effect immediately, before the next backfill.
+                photo['context_summary']=None
         return dict(photos=photos,total=total,offset=offset,query_backend='duckdb',captured_at=self.manifest['captured_at'])
+
+    def group_suggestions(self,paths,timezone):
+        from collections import Counter
+        ZoneInfo(timezone)
+        if not isinstance(paths,list) or not 1<=len(paths)<=1000 or not all(isinstance(p,str) for p in paths):
+            raise ValueError('Select between 1 and 1000 photos')
+        rows=self.rows("""SELECT s.*,CAST(timezone(?,to_timestamp(m.capture_ts)) AS DATE) AS date
+            FROM photo_search s JOIN enriched_media m ON m.path=s.path AND m.size_bytes=s.size_bytes WHERE s.path=ANY(?)""",[timezone,paths])
+        locations={r['location'] for r in rows if r['location']}
+        dates={str(r['date']) for r in rows if r['date']}
+        people=sorted({p for r in rows for p in r['people']})
+        counts=Counter(t for r in rows for t in set(r['tags']))
+        tags=sorted({t for t,n in counts.items() if n>=max(1,len(rows)/2)}|set(people))[:50]
+        return dict(location=next(iter(locations)) if len(locations)==1 else '',
+            event=next(iter(dates)) if len(dates)==1 else '',tags=tags,people=people,
+            photos=len(rows),inferred=any(r['location_source']=='nearby_gps' for r in rows))

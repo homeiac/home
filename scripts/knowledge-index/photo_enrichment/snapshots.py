@@ -14,6 +14,7 @@ from .postgres import TABLES, connect
 from .store import sql_path
 
 CONTEXT_TABLES = ("photo_context", "photo_place_cache")
+SEARCH_TABLES = ("photo_search", "photo_group_index")
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -62,6 +63,13 @@ def export_snapshot(state: Path, prom: Path | None = None) -> dict:
                     with target.open('rb') as handle: os.fsync(handle.fileno())
                     result['tables'][table] = {'file':str(target),'rows':count,'bytes':target.stat().st_size}
                 db.execute('COMMIT')
+                from .search_index import build
+                build(db,directory)
+                for table in SEARCH_TABLES:
+                    target=directory/(table+'.parquet')
+                    count=db.execute('SELECT count(*) FROM read_parquet(?)',[str(target)]).fetchone()[0]
+                    with target.open('rb') as handle:os.fsync(handle.fileno())
+                    result['tables'][table]={'file':str(target),'rows':count,'bytes':target.stat().st_size}
             descriptor = os.open(directory,os.O_RDONLY)
             try: os.fsync(descriptor)
             finally: os.close(descriptor)
@@ -88,12 +96,18 @@ def export_snapshot(state: Path, prom: Path | None = None) -> dict:
                     '# HELP photo_snapshot_bytes Total Parquet bytes in the current generation',
                     '# TYPE photo_snapshot_bytes gauge',
                     f'photo_snapshot_bytes {sum(t["bytes"] for t in result["tables"].values())}',
+                    '# HELP photo_snapshot_index_rows Rows in derived search and group indexes',
+                    '# TYPE photo_snapshot_index_rows gauge',
+                    f'photo_snapshot_index_rows{{kind="photos"}} {result["tables"]["photo_search"]["rows"]}',
+                    f'photo_snapshot_index_rows{{kind="groups"}} {result["tables"]["photo_group_index"]["rows"]}',
                     '# HELP photo_snapshot_success Last export attempt succeeded',
                     '# TYPE photo_snapshot_success gauge','photo_snapshot_success 1',
                     '# HELP photo_pipeline_edge_info Durable queue and snapshot data flow',
                     '# TYPE photo_pipeline_edge_info gauge',
                     'photo_pipeline_edge_info{id="jobs-queue",source="photo_jobs",target="photo_queue"} 1',
-                    'photo_pipeline_edge_info{id="export-analytics",source="photo_export",target="photo_analytics"} 1','']))
+                    'photo_pipeline_edge_info{id="export-analytics",source="photo_export",target="photo_analytics"} 1',
+                    'photo_pipeline_edge_info{id="export-search",source="photo_export",target="photo_search"} 1',
+                    'photo_pipeline_edge_info{id="search-gallery",source="photo_search",target="photo_gallery"} 1','']))
                 temporary.chmod(0o644);temporary.replace(prom)
             return result
         except BaseException:
@@ -142,7 +156,7 @@ def analytical_connection(state: Path):
     connection = duckdb.connect()
     connection.execute("SET threads=2; SET memory_limit='512MB'")
     for table,info in manifest['tables'].items():
-        if table not in (*TABLES,'photo_jobs','enriched_media','album_duplicates',*CONTEXT_TABLES): raise ValueError('Invalid snapshot table')
+        if table not in (*TABLES,'photo_jobs','enriched_media','album_duplicates',*CONTEXT_TABLES,*SEARCH_TABLES): raise ValueError('Invalid snapshot table')
         path = Path(info['file']).resolve()
         if not path.is_relative_to((state/'analytics/generations').resolve()): raise ValueError('Invalid snapshot path')
         connection.execute(f'CREATE VIEW {table} AS SELECT * FROM read_parquet({sql_path(path)})')

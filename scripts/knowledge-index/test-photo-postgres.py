@@ -23,6 +23,37 @@ class FakeFaces:
 
 
 class PipelineTests(unittest.TestCase):
+    def test_names_without_gps_enrich_reindex_and_clear_on_correction(self):
+        from photo_enrichment.context_worker import initialize,seed,process
+        from photo_enrichment.metrics import Metrics
+        c=self.store.connection;initialize(c)
+        export_snapshot(self.state);seed(c,self.state,'synthetic')
+        def infer(source,prompt):
+            self.assertIn('Synthetic person',prompt)
+            self.assertIn('[left,top,right,bottom]',prompt)
+            return 'Synthetic person at a celebration',['celebration']
+        process(c,self.library,'unused','synthetic',Metrics(),lambda *a:self.fail('No GPS must not call Wikimedia'),infer)
+        export_snapshot(self.state)
+        results=self.store.search('Synthetic person celebration')
+        self.assertEqual(results['total'],1)
+        self.assertEqual(results['photos'][0]['path'],self.path)
+        suggestions=self.store.group_suggestions([self.path])
+        self.assertIn('Synthetic person',suggestions['tags'])
+        self.assertIn('celebration',suggestions['tags'])
+        self.assertEqual(suggestions['location'],'')
+        self.store.label_face('stable-face','G')
+        self.assertIsNone(self.store.detail(self.path)['context_summary'])
+        for date in self.store.dates('UTC'):
+            for photo in self.store.photos(date['date'],'UTC')['photos']:
+                if photo['path']==self.path:self.assertIsNone(photo['context_summary'])
+        export_snapshot(self.state);seed(c,self.state,'synthetic')
+        status,data=c.execute('SELECT status,input FROM photo_context WHERE path=%s',[self.path]).fetchone()
+        self.assertEqual(status,'ready');self.assertEqual(data['people'][0]['name'],'G')
+        self.assertEqual(self.store.search('G')['total'],1)
+        self.store.label_face('stable-face','')
+        export_snapshot(self.state);seed(c,self.state,'synthetic')
+        self.assertEqual(c.execute('SELECT status FROM photo_context WHERE path=%s',[self.path]).fetchone()[0],'obsolete')
+
     def test_catalog_refresh_does_not_block_snapshot_readers(self):
         from photo_enrichment.postgres import refresh_catalog
         with connect() as reader,reader.transaction():
@@ -61,7 +92,7 @@ class PipelineTests(unittest.TestCase):
             FROM catalog.gphotos_media WHERE path=%s""",[self.path])
         export_snapshot(self.state)
         seed(c,self.state,'synthetic')
-        provider=lambda lat,lon:dict(candidates=[dict(title='Synthetic landmark',description='Test only',latitude=lat,longitude=lon,url='https://example.invalid/')])
+        provider=lambda lat,lon:dict(query_latitude=lat,query_longitude=lon,candidates=[dict(title='Synthetic landmark',description='Test only',latitude=lat,longitude=lon,url='https://example.invalid/')])
         seen=[]
         def infer(source,prompt):
             self.assertEqual(c.info.transaction_status.name,'IDLE')
@@ -76,7 +107,11 @@ class PipelineTests(unittest.TestCase):
         with patch('photo_enrichment.places.nearby',side_effect=AssertionError('Cache miss')):
             cached,hit=lookup(c,12.34,23.45,lambda *a:self.fail('Cache miss'))
         self.assertTrue(hit)
+        second=c.execute('SELECT path FROM extracted WHERE path<>%s LIMIT 1',[self.path]).fetchone()[0]
+        c.execute('UPDATE extracted SET latitude=12.34,longitude=23.45 WHERE path=%s',[second])
         export_snapshot(self.state)
+        self.assertEqual(self.store.search('Synthetic landmark')['total'],2)
+        self.assertEqual(self.store.group_suggestions([second])['location'],'Near Synthetic landmark')
         date=self.store.dates('UTC')[0]['date']
         photos=[p for d in self.store.dates('UTC') for p in self.store.photos(d['date'],'UTC')['photos']]
         photo=next(p for p in photos if p['path']==self.path)

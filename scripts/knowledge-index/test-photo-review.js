@@ -31,7 +31,9 @@ function harness(){
     let result={};
     if(options?.body){
       const body=JSON.parse(options.body);posts.push(body);
-      if(url==='/api/auto-accept'){automatic={...automatic,...body};result=automatic;}else result={saved:true};
+      if(url==='/api/auto-accept'){automatic={...automatic,...body};result=automatic;}
+      else if(url==='/api/group-suggestions')result={location:'Near synthetic landmark',event:'2026-01-02',tags:['Synthetic G','celebration'],photos:body.paths.length,inferred:true};
+      else result={saved:true};
     }
     else if(url==='/api/config')result={csrf:'synthetic',auto_accept:true};
     else if(url==='/api/auto-accept')result=automatic;
@@ -51,6 +53,19 @@ function harness(){
   return {nodes,posts,rows,offered,context,run:code=>vm.runInContext(code,context)};
 }
 async function ready(h){await new Promise(resolve=>setImmediate(resolve));assert.equal(h.run('state.busy'),false);}
+
+test('group context autofills from the index without replacing manual edits',async()=>{
+  const h=harness();await ready(h);
+  h.run("state.contextSuggestions=true;state.selected.add('a.jpg');scheduleGroupSuggestions()");
+  await new Promise(resolve=>setTimeout(resolve,350));
+  assert.equal(h.nodes.get('location').value,'Near synthetic landmark');
+  assert.equal(h.nodes.get('tags').value,'Synthetic G, celebration');
+  h.nodes.get('location').value='My confirmed venue';
+  h.run("state.selected.add('b.jpg');scheduleGroupSuggestions()");
+  await new Promise(resolve=>setTimeout(resolve,350));
+  assert.equal(h.nodes.get('location').value,'My confirmed venue');
+  assert.match(h.nodes.get('group-suggestion-note').textContent,/2 selected photos/);
+});
 
 test('mixed selections survive collections and submit their displayed names',async()=>{
   const h=harness();await ready(h);

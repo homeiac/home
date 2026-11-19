@@ -11,8 +11,8 @@ TITLES = {"queue": "Photo: catalog / queue", "exif": "Photo: read EXIF", "faces"
           "persist": "Photo: PostgreSQL commit", "review": "Photo: save human labels",
           "frigate": "Photo: optional Frigate", "export": "Photo: export Parquet", "match": "Photo: match saved faces",
           "auto_accept": "Photo: automatically accept suggestions",
-          "context_queue": "GPS: queue", "location": "GPS: nearby place lookup",
-          "context_llm": "GPS: contextual LLM caption", "context_save": "GPS: PostgreSQL save"}
+          "context_queue": "Context: queue", "location": "Context: nearby place lookup",
+          "context_llm": "Context: contextual LLM caption", "context_save": "Context: PostgreSQL save"}
 STATES = {"idle": 0, **{stage: i for i, stage in enumerate(TITLES, 1)}, "complete": 8, "failed": 9, "match": 10, "auto_accept": 11, "context_queue": 12, "location": 13, "context_llm": 14, "context_save": 15}
 EDGES = [("queue", "exif"), ("exif", "faces"), ("exif", "persist"), ("faces", "persist"),
          ("persist", "review"), ("persist", "export"), ("faces", "frigate"), ("frigate", "review"), ("review", "export"), ("faces", "match"), ("match", "review"), ("match", "auto_accept"), ("auto_accept", "export"), ("context_queue", "location"), ("location", "context_llm"), ("context_llm", "context_save"), ("context_save", "export")]
