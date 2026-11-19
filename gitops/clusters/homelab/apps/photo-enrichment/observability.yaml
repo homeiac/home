@@ -1,0 +1,416 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photo-tempo-config
+  namespace: monitoring
+data:
+  config.yaml: "target: all\nstream_over_http_enabled: true\nserver:\n  http_listen_port:\
+    \ 3200\ndistributor:\n  receivers:\n    otlp:\n      protocols:\n        grpc:\n\
+    \          endpoint: 0.0.0.0:4317\nstorage:\n  trace:\n    backend: local\n  \
+    \  wal:\n      path: /var/tempo/wal\n    local:\n      path: /var/tempo/blocks\n\
+    backend_worker:\n  compaction:\n    block_retention: 48h\nusage_report:\n  reporting_enabled:\
+    \ false\n"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: photo-tempo
+  namespace: monitoring
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-tempo
+  namespace: monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: photo-tempo
+  template:
+    metadata:
+      labels:
+        app: photo-tempo
+      annotations:
+        checksum/config: bc26f10ff6a1aaef819ffa91664062c98b31893e2e80f1c12cf81751363b7532
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+      - name: photo-tempo
+        image: grafana/tempo:3.1.0
+        args:
+        - -config.file=/etc/photo-observability/config.yaml
+        ports:
+        - name: http
+          containerPort: 3200
+        - name: otlp-grpc
+          containerPort: 4317
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: config
+          mountPath: /etc/photo-observability
+          readOnly: true
+        - name: data
+          mountPath: /var/tempo
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3200
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: 3200
+          initialDelaySeconds: 90
+          periodSeconds: 20
+          failureThreshold: 6
+      volumes:
+      - name: config
+        configMap:
+          name: photo-tempo-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: photo-tempo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photo-tempo
+  namespace: monitoring
+  labels:
+    app: photo-tempo
+spec:
+  selector:
+    app: photo-tempo
+  ports:
+  - name: http
+    port: 3200
+    targetPort: http
+  - name: otlp-grpc
+    port: 4317
+    targetPort: otlp-grpc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photo-loki-config
+  namespace: monitoring
+data:
+  config.yaml: "auth_enabled: false\nserver:\n  http_listen_port: 3100\n  grpc_listen_port:\
+    \ 9096\ncommon:\n  instance_addr: 127.0.0.1\n  path_prefix: /loki\n  replication_factor:\
+    \ 1\n  ring:\n    kvstore:\n      store: inmemory\n  storage:\n    filesystem:\n\
+    \      chunks_directory: /loki/chunks\n      rules_directory: /loki/rules\nschema_config:\n\
+    \  configs:\n  - from: '2020-10-24'\n    store: tsdb\n    object_store: filesystem\n\
+    \    schema: v13\n    index:\n      prefix: index_\n      period: 24h\nstorage_config:\n\
+    \  tsdb_shipper:\n    active_index_directory: /loki/index\n    cache_location:\
+    \ /loki/index-cache\ningester:\n  wal:\n    dir: /loki/wal\ncompactor:\n  working_directory:\
+    \ /loki/compactor\n  compaction_interval: 10m\n  retention_enabled: true\n  retention_delete_delay:\
+    \ 2h\n  retention_delete_worker_count: 10\n  delete_request_store: filesystem\n\
+    limits_config:\n  allow_structured_metadata: true\n  retention_period: 72h\nanalytics:\n\
+    \  reporting_enabled: false\n"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: photo-loki
+  namespace: monitoring
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-loki
+  namespace: monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: photo-loki
+  template:
+    metadata:
+      labels:
+        app: photo-loki
+      annotations:
+        checksum/config: 023dc5f95f4ad7a6edc4f98a41170807bf9a5d3a92d3eb752a2c03e00ad9de90
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+      - name: photo-loki
+        image: grafana/loki:3.7.10
+        args:
+        - -config.file=/etc/photo-observability/config.yaml
+        - -target=all
+        ports:
+        - name: http
+          containerPort: 3100
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: config
+          mountPath: /etc/photo-observability
+          readOnly: true
+        - name: data
+          mountPath: /loki
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3100
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: 3100
+          initialDelaySeconds: 90
+          periodSeconds: 20
+          failureThreshold: 6
+      volumes:
+      - name: config
+        configMap:
+          name: photo-loki-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: photo-loki
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photo-loki
+  namespace: monitoring
+  labels:
+    app: photo-loki
+spec:
+  selector:
+    app: photo-loki
+  ports:
+  - name: http
+    port: 3100
+    targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photo-otel-config
+  namespace: monitoring
+data:
+  config.yaml: "extensions:\n  health_check:\n    endpoint: 0.0.0.0:13133\nreceivers:\n\
+    \  otlp:\n    protocols:\n      http:\n        endpoint: 0.0.0.0:4318\nprocessors:\n\
+    \  memory_limiter:\n    check_interval: 1s\n    limit_mib: 192\n    spike_limit_mib:\
+    \ 32\n  batch:\n    timeout: 1s\n    send_batch_size: 256\nexporters:\n  otlp/tempo:\n\
+    \    endpoint: photo-tempo.monitoring.svc.cluster.local:4317\n    tls:\n     \
+    \ insecure: true\n  otlphttp/loki:\n    endpoint: http://photo-loki.monitoring.svc.cluster.local:3100/otlp\n\
+    \  prometheus:\n    endpoint: 0.0.0.0:8889\n    resource_to_telemetry_conversion:\n\
+    \      enabled: true\nservice:\n  extensions:\n  - health_check\n  pipelines:\n\
+    \    traces:\n      receivers:\n      - otlp\n      processors:\n      - memory_limiter\n\
+    \      - batch\n      exporters:\n      - otlp/tempo\n    logs:\n      receivers:\n\
+    \      - otlp\n      processors:\n      - memory_limiter\n      - batch\n    \
+    \  exporters:\n      - otlphttp/loki\n    metrics:\n      receivers:\n      -\
+    \ otlp\n      processors:\n      - memory_limiter\n      - batch\n      exporters:\n\
+    \      - prometheus\n"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-otel
+  namespace: monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: photo-otel
+  template:
+    metadata:
+      labels:
+        app: photo-otel
+      annotations:
+        checksum/config: ab02695dc1a4a9e9a7cef4efa89e7414f4c9cfdcd83783e0d98422b9f52f98d1
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+      - name: photo-otel
+        image: otel/opentelemetry-collector-contrib:0.165.0
+        args:
+        - --config=/etc/photo-observability/config.yaml
+        ports:
+        - name: otlp-http
+          containerPort: 4318
+        - name: metrics
+          containerPort: 8889
+        - name: health
+          containerPort: 13133
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: config
+          mountPath: /etc/photo-observability
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 90
+          periodSeconds: 20
+          failureThreshold: 6
+      volumes:
+      - name: config
+        configMap:
+          name: photo-otel-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photo-otel
+  namespace: monitoring
+  labels:
+    app: photo-otel
+spec:
+  selector:
+    app: photo-otel
+  ports:
+  - name: otlp-http
+    port: 4318
+    targetPort: otlp-http
+  - name: metrics
+    port: 8889
+    targetPort: metrics
+  - name: health
+    port: 13133
+    targetPort: health
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: photo-otel-private
+  namespace: monitoring
+spec:
+  ipAllowList:
+    sourceRange:
+    - 192.168.4.0/24
+    - 100.64.0.0/10
+    - 10.42.0.0/16
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: photo-otel
+  namespace: monitoring
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`photo-otel.app.home.panderosystems.com`)
+    kind: Rule
+    middlewares:
+    - name: photo-otel-private
+    services:
+    - name: photo-otel
+      port: 4318
+  tls: {}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: photo-otel
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: photo-otel
+  endpoints:
+  - port: metrics
+    interval: 15s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: photo-observability-datasources
+  namespace: monitoring
+  labels:
+    grafana_datasource: '1'
+data:
+  datasources.yaml: "apiVersion: 1\ndatasources:\n- name: Photo traces\n  uid: photo-tempo\n\
+    \  type: tempo\n  access: proxy\n  url: http://photo-tempo.monitoring.svc.cluster.local:3200\n\
+    \  jsonData:\n    tracesToLogsV2:\n      datasourceUid: photo-loki\n      spanStartTimeShift:\
+    \ -1m\n      spanEndTimeShift: 1m\n      customQuery: true\n      query: '{service_name=\"\
+    photo-review\"} | json | trace_id=\"$${__span.traceId}\"'\n- name: Photo logs\n\
+    \  uid: photo-loki\n  type: loki\n  access: proxy\n  url: http://photo-loki.monitoring.svc.cluster.local:3100\n\
+    \  jsonData:\n    derivedFields:\n    - name: TraceID\n      matcherRegex: '\"\
+    trace_id\":\\s*\"([a-f0-9]{32})\"'\n      datasourceUid: photo-tempo\n      url:\
+    \ $${__value.raw}\n"
