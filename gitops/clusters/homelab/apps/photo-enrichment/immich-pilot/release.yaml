@@ -39,6 +39,10 @@ spec:
         library:
           existingClaim: immich-library
     server:
+      serviceMonitor:
+        main:
+          labels:
+            release: kube-prometheus-stack
       controllers:
         main:
           strategy: Recreate
@@ -47,6 +51,10 @@ spec:
               image:
                 tag: v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
               env:
+                # OTel 0.300 constructs an invalid base URL from Immich's default ::.
+                # This IPv4 cluster needs a routable metrics listener, not an IPv6 URL.
+                IMMICH_HOST: 0.0.0.0
+                IMMICH_LOG_FORMAT: json
                 DB_HOSTNAME: immich-postgres
                 DB_USERNAME: immich
                 DB_DATABASE_NAME: immich

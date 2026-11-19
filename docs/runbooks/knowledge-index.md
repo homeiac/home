@@ -209,3 +209,66 @@ Library 243,088 files + `.versions` 6,753 = ledger 249,841; media 118,987; `.jso
 `scripts/knowledge-index/test-enricher.sh` (stub model server + ffmpeg fixtures, 21 checks) and
 `scripts/knowledge-index/test-knowledge-index.sh` (local, python3 + duckdb): same fixture as `test-gphotos-quota-list.sh`
 plus cross-archive sidecars, corrupt sidecar, re-run idempotency, later-unit-wins, and the hook's forced-failure path.
+# Immich migration pilot (November 2026, issue #217)
+
+Immich is the target photo UI and authority for people, albums and editable
+photo metadata. The earlier decision to build a summary worker addressed video
+and audio descriptions; it did not establish a reason to replace Immich's gallery.
+
+The isolated pilot is at `https://immich.app.home.panderosystems.com`, deployed by
+the existing `photo-enrichment-preview` Flux source. It uses the official Helm
+chart 0.12.0 with explicitly pinned Immich v3.4.2 images, a dedicated VectorChord
+PostgreSQL database, persistent Valkey/model caches, and copied managed media on
+still-fawn. It does not mount the original library. The original Photos route and
+workers continue operating. The pilot storage template is `YYYY/MM/DD`.
+
+The compatibility boundary is the Immich API, never direct writes to its schema:
+
+```mermaid
+flowchart LR
+  A[Archive ingest] --> B[Parquet inventory]
+  B --> C[DuckDB selection and deduplication]
+  C --> D[Immich API and managed library]
+  D --> E[Immich face detection and people]
+  D --> F[Local caption and landmark enrichment]
+  E --> F
+  F -->|Descriptions, tags, provenance| D
+  D --> G[Parquet export and DuckDB analytics]
+```
+
+Use a durable writable queue for claims/retries. DuckDB queries immutable
+inventory/snapshot files; it is not a shared transactional job database. Existing
+face embeddings remain archived, but Immich computes its own embeddings. Transfer
+human-confirmed labels by asset identity and unambiguous normalized box overlap;
+preserve missed detections as manual boxes. Do not promote old automatic matches
+to human-confirmed annotations. Frigate remains the NVR; the legacy photo worker
+uses YuNet/SFace, not Frigate recognition.
+
+`scripts/knowledge-index/immich-pilot.py` provides resumable `initialize`, `export`,
+`upload`, `annotate`, `preserve-missing`, `tags`, `verify`, and `health` steps.
+Set `CB_HOST=root@192.168.4.175` for export, per inventory. The exporter runs a
+read-only repeatable-read PostgreSQL transaction and copies at most 16 selected
+photos (25 MiB per file). Private archives and the selected photos’ legacy face embeddings
+remain on the source host under `photo-enrichment/migrations/immich-pilot`.
+Local credentials, copied samples, target-ID ledger and verification report are
+under `/private/tmp/immich-pilot`, outside Git. Preserve these private files before
+cleaning temporary storage. The pilot credential is not a production account plan.
+
+The sample test copied 12 photos, transferred 20 human-confirmed faces (19 detected
+matches, one manual box), six named people, two albums, captions, GPS and tags.
+API read-back checks and browser inspection passed. No full-library cutover has
+occurred. Motion-photo metadata in several source JPEGs pointed to invalid video
+payloads; still images imported, but motion-video parity needs separate validation.
+
+Before a production switch, validate a stable source-to-asset ledger at library
+scale, backups of both media and database, video/rotation/rescan behavior, automatic
+label and rejection provenance, API-based enrichment with human-edit precedence,
+and the analytics export plus Grafana value stream map. Pilot metadata writes are
+explicit migration operations; do not run `annotate` as a recurring enrichment job
+because it deliberately restores source descriptions.
+
+Metrics use Immich's native OTel/Prometheus endpoints. The ServiceMonitor must carry
+`release: kube-prometheus-stack`. Immich v3.4.2's OTel exporter 0.300 constructs an
+invalid metrics base URL with the default `::` bind address; `IMMICH_HOST=0.0.0.0`
+avoids HTTP 400 on this IPv4 cluster. JSON server logging is enabled. Keep metrics
+internal and expose only the application through private Traefik TLS.
