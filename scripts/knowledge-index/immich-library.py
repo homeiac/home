@@ -74,6 +74,7 @@ def run(action: str) -> None:
         stats = pilot.request('/libraries/'+library['id']+'/statistics',token=token)
         print(json.dumps(dict(name=library['name'],id=library['id'],folders=len(library['importPaths']),statistics=stats)))
     print(json.dumps(dict(account_assets=pilot.request('/assets/statistics',token=token))))
+    print(json.dumps(dict(queues=pilot.request('/jobs',token=token))))
 
 
 if __name__ == '__main__':
