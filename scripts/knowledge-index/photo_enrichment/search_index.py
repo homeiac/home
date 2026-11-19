@@ -58,6 +58,7 @@ def build(db,directory):
             sha256(coalesce(CAST(capture_day AS VARCHAR),'unknown')||':'||coalesce(location,'')) AS group_id
         FROM idx_enriched_media m LEFT JOIN people p ON p.path=m.path AND p.size_bytes=m.size_bytes
         LEFT JOIN idx_context c ON c.path=m.path AND c.size_bytes=m.size_bytes
+            AND list_sort(list_distinct(c.people))=coalesce(p.names,[]::VARCHAR[])
         LEFT JOIN idx_places pc ON pc.latitude=round(m.latitude,3) AND pc.longitude=round(m.longitude,3)
         LEFT JOIN annotations a ON a.path=m.path AND a.size_bytes=m.size_bytes
         WHERE NOT EXISTS(SELECT 1 FROM idx_album_duplicates d WHERE d.path=m.path)""")

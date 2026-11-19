@@ -50,6 +50,7 @@ class PipelineTests(unittest.TestCase):
         status,data=c.execute('SELECT status,input FROM photo_context WHERE path=%s',[self.path]).fetchone()
         self.assertEqual(status,'ready');self.assertEqual(data['people'][0]['name'],'G')
         self.assertEqual(self.store.search('G')['total'],1)
+        self.assertEqual(self.store.search('Synthetic person')['total'],0)
         self.store.label_face('stable-face','')
         export_snapshot(self.state);seed(c,self.state,'synthetic')
         self.assertEqual(c.execute('SELECT status FROM photo_context WHERE path=%s',[self.path]).fetchone()[0],'obsolete')
