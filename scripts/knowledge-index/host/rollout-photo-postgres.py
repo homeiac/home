@@ -38,6 +38,7 @@ EnvironmentFile=/etc/default/photo-enrichment-worker
 Environment=PGSERVICEFILE=/etc/photo-enrichment/pg_service.conf
 Environment=PGPASSFILE=/etc/photo-enrichment/pgpass
 Environment=PHOTO_PG_SERVICE=photo_pipeline
+Environment=PHOTO_SNAPSHOT_PROM=/var/lib/prometheus/node-exporter/photo_snapshot.prom
 Environment=HOME=/local-3TB-backup/photo-enrichment
 Environment=OPENBLAS_NUM_THREADS=2 OMP_NUM_THREADS=2
 ExecStart={command}

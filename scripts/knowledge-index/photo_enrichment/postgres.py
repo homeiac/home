@@ -262,7 +262,7 @@ class PostgresStore(Store):
                 if detected is not None:
                     for face in detected:
                         self.db.execute('INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)',
-                            [face['id'],job['path'],before.st_size,before.st_mtime_ns,face['box'],face['confidence'],face['embedding'],face['model']])
+                            [face['id'],job['path'],before.st_size,before.st_mtime_ns,list(map(float,face['box'])),face['confidence'],list(map(float,face['embedding'])),face['model']])
                     self.upsert('face_scans',[job['path'],before.st_size,before.st_mtime_ns,MODEL_ID])
                 error = bool(meta and meta['error'])
                 self.db.execute("UPDATE photo_jobs SET status=?,completed_at=CASE WHEN ? THEN NULL ELSE now() END,available_at=now()+? * interval '1 second',lease_until=NULL,claim=NULL,last_error=? WHERE path=?",

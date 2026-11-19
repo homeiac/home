@@ -72,8 +72,8 @@ class FaceEngine:
             vector = self.recognizer.feature(aligned).reshape(-1)
             vector = vector / max(float(np.linalg.norm(vector)), 1e-12)
             x, y, w, h = map(float, face[:4])
-            results.append(dict(id=uuid.uuid4().hex, box=[max(0, x/width), max(0, y/height),
-                                                        min(1, (x+w)/width), min(1, (y+h)/height)],
+            results.append(dict(id=uuid.uuid4().hex, box=[max(0.0, x/width), max(0.0, y/height),
+                                                        min(1.0, (x+w)/width), min(1.0, (y+h)/height)],
                                 confidence=float(face[-1]), embedding=vector.tolist(), model=MODEL_ID))
         return results
 

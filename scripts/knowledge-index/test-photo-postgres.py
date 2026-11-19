@@ -109,6 +109,42 @@ class PipelineTests(unittest.TestCase):
             self.store.label_faces([{'id':face['id'],'revision':str(face['revision'])}],'Stale edit')
         self.assertEqual(self.store.face(face['id'])['person'],'Newer edit')
 
+    def test_clipped_face_coordinates_commit(self):
+        """OpenCV boxes at image edges can mix integer clamps with float values."""
+        class ClippedFaces:
+            def detect(self,path):
+                return [dict(id='clipped-face',box=[0,.1,1,.9],confidence=.9,embedding=[1.,0.],model=MODEL_ID)]
+        self.store.seed_jobs()
+        job=self.store.claim_job()
+        self.assertTrue(self.store.process_job(job,ClippedFaces()))
+        self.assertEqual(self.store.face('clipped-face')['box'],[0.,.1,1.,.9])
+
+    def test_gui_api_saves_labels_and_group_context(self):
+        import json
+        import threading
+        import urllib.request
+        from photo_enrichment.server import make_server
+        server=make_server(self.store,self.state/'models','127.0.0.1',0)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        base=f'http://127.0.0.1:{server.server_port}'
+        try:
+            with urllib.request.urlopen(base+'/api/config') as response:csrf=json.load(response)['csrf']
+            def post(path,body):
+                request=urllib.request.Request(base+path,data=json.dumps(body).encode(),headers={
+                    'Content-Type':'application/json','Origin':base,'X-Photo-Token':csrf})
+                with urllib.request.urlopen(request) as response:return json.load(response)
+            with urllib.request.urlopen(base+'/api/faces?status=named') as response:face=json.load(response)['faces'][0]
+            post('/api/faces/labels',{'faces':[{'id':face['id'],'revision':face['revision']}],'person':'Synthetic API label'})
+            self.assertEqual(self.store.face(face['id'])['person'],'Synthetic API label')
+            group=post('/api/groups/save',{'paths':[self.path],'event':'Synthetic API event','location':'Synthetic location'})
+            self.assertEqual(self.store.group(group['id'])['location'],'Synthetic location')
+            post('/api/groups/save',{'id':group['id'],'paths':[self.path],'notes':'Synthetic correction'})
+            self.assertEqual(self.store.group(group['id'])['notes'],'Synthetic correction')
+            post('/api/groups/delete',{'id':group['id']})
+            self.assertEqual(len(self.store.groups()),1)
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
     def test_snapshot_remains_consistent_during_concurrent_edit(self):
         import duckdb
         real_connect=duckdb.connect
