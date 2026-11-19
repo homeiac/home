@@ -25,7 +25,7 @@ spec:
   values:
     defaultPodOptions:
       nodeSelector:
-        kubernetes.io/hostname: k3s-vm-still-fawn
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
     controllers:
       main:
         containers:
@@ -37,8 +37,17 @@ spec:
         enabled: true
       persistence:
         library:
-          existingClaim: immich-library
+          existingClaim: immich-library-piglet
     server:
+      persistence:
+        originals:
+          enabled: true
+          type: hostPath
+          hostPath: /mnt/gphotos/library
+          hostPathType: Directory
+          globalMounts:
+            - path: /external/gphotos
+              readOnly: true
       serviceMonitor:
         main:
           labels:
@@ -88,6 +97,7 @@ spec:
         cache:
           retain: true
           type: persistentVolumeClaim
+          existingClaim: immich-cache-piglet
           accessMode: ReadWriteOnce
           size: 10Gi
     valkey:
@@ -105,4 +115,5 @@ spec:
         data:
           retain: true
           type: persistentVolumeClaim
+          existingClaim: immich-valkey-piglet
           size: 1Gi

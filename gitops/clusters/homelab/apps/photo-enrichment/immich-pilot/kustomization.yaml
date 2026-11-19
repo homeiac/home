@@ -7,3 +7,4 @@ resources:
   - release.yaml
   - ingress.yaml
   - migration-source.yaml
+  - piglet-storage.yaml

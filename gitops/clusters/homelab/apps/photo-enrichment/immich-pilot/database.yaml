@@ -57,7 +57,7 @@ spec:
         app: immich-postgres
     spec:
       nodeSelector:
-        kubernetes.io/hostname: k3s-vm-still-fawn
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
       containers:
         - name: postgres
           image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
@@ -88,7 +88,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: immich-postgres
+            claimName: immich-postgres-piglet
         - name: shm
           emptyDir:
             medium: Memory
