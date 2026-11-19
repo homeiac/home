@@ -86,6 +86,7 @@ spec:
                 limits: {cpu: '2', memory: 4Gi}
       persistence:
         cache:
+          retain: true
           type: persistentVolumeClaim
           accessMode: ReadWriteOnce
           size: 10Gi
@@ -102,5 +103,6 @@ spec:
                 limits: {cpu: '1', memory: 512Mi}
       persistence:
         data:
+          retain: true
           type: persistentVolumeClaim
           size: 1Gi
