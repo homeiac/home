@@ -13,6 +13,8 @@ import duckdb
 from .postgres import TABLES, connect
 from .store import sql_path
 
+CONTEXT_TABLES = ("photo_context", "photo_place_cache")
+
 
 def atomic_json(path: Path, value: dict) -> None:
     temporary = path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
@@ -49,7 +51,8 @@ def export_snapshot(state: Path, prom: Path | None = None) -> dict:
                 isolation = db.execute("SELECT * FROM postgres_query('source', $$SELECT current_setting('transaction_isolation') AS isolation,current_setting('transaction_read_only') AS read_only,extract(epoch FROM transaction_timestamp())::double precision$$)").fetchone()
                 if isolation[:2] != ('repeatable read','on'): raise RuntimeError('Export isolation validation failed')
                 result['captured_at'] = isolation[2]
-                for table in (*TABLES,'photo_jobs','enriched_media','album_duplicates'):
+                optional=[name for name in CONTEXT_TABLES if db.execute("SELECT * FROM postgres_query('source', $$SELECT to_regclass('public."+name+"') IS NOT NULL$$)").fetchone()[0]]
+                for table in (*TABLES,'photo_jobs','enriched_media','album_duplicates',*optional):
                     target = directory/(table+'.parquet')
                     relation=f'source.public.{table}' if table!='album_duplicates' else "postgres_query('source', 'SELECT path FROM catalog.gphotos_album_dup')"
                     db.execute(f'COPY (SELECT * FROM {relation}) TO {sql_path(target)} (FORMAT parquet, COMPRESSION zstd)')
@@ -139,7 +142,7 @@ def analytical_connection(state: Path):
     connection = duckdb.connect()
     connection.execute("SET threads=2; SET memory_limit='512MB'")
     for table,info in manifest['tables'].items():
-        if table not in (*TABLES,'photo_jobs','enriched_media','album_duplicates'): raise ValueError('Invalid snapshot table')
+        if table not in (*TABLES,'photo_jobs','enriched_media','album_duplicates',*CONTEXT_TABLES): raise ValueError('Invalid snapshot table')
         path = Path(info['file']).resolve()
         if not path.is_relative_to((state/'analytics/generations').resolve()): raise ValueError('Invalid snapshot path')
         connection.execute(f'CREATE VIEW {table} AS SELECT * FROM read_parquet({sql_path(path)})')

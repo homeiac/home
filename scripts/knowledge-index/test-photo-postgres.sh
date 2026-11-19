@@ -23,4 +23,4 @@ sslmode=disable
 EOF
 export PGSERVICEFILE="$scratch/pg_service.conf"
 export PHOTO_PG_SERVICE=photo_pipeline
-"$TEST_PYTHON" "$SCRIPT_DIR/test-photo-postgres.py"
+"$TEST_PYTHON" "$SCRIPT_DIR/test-photo-postgres.py" "$@"

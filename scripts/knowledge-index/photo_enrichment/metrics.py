@@ -10,16 +10,18 @@ import time
 TITLES = {"queue": "Photo: catalog / queue", "exif": "Photo: read EXIF", "faces": "Photo: CPU faces",
           "persist": "Photo: PostgreSQL commit", "review": "Photo: save human labels",
           "frigate": "Photo: optional Frigate", "export": "Photo: export Parquet", "match": "Photo: match saved faces",
-          "auto_accept": "Photo: automatically accept suggestions"}
-STATES = {"idle": 0, **{stage: i for i, stage in enumerate(TITLES, 1)}, "complete": 8, "failed": 9, "match": 10, "auto_accept": 11}
+          "auto_accept": "Photo: automatically accept suggestions",
+          "context_queue": "GPS: queue", "location": "GPS: nearby place lookup",
+          "context_llm": "GPS: contextual LLM caption", "context_save": "GPS: PostgreSQL save"}
+STATES = {"idle": 0, **{stage: i for i, stage in enumerate(TITLES, 1)}, "complete": 8, "failed": 9, "match": 10, "auto_accept": 11, "context_queue": 12, "location": 13, "context_llm": 14, "context_save": 15}
 EDGES = [("queue", "exif"), ("exif", "faces"), ("exif", "persist"), ("faces", "persist"),
-         ("persist", "review"), ("persist", "export"), ("faces", "frigate"), ("frigate", "review"), ("review", "export"), ("faces", "match"), ("match", "review"), ("match", "auto_accept"), ("auto_accept", "export")]
+         ("persist", "review"), ("persist", "export"), ("faces", "frigate"), ("frigate", "review"), ("review", "export"), ("faces", "match"), ("match", "review"), ("match", "auto_accept"), ("auto_accept", "export"), ("context_queue", "location"), ("location", "context_llm"), ("context_llm", "context_save"), ("context_save", "export")]
 HELP = {
     "jobs": ("gauge", "PostgreSQL jobs by state and oldest unfinished job age in seconds"),
     "stage_seconds_total": ("counter", "Wall time including in-flight work; shares are local to this worker, not GPU utilization"),
     "stage_completed_seconds_total": ("counter", "Duration of completed operations including failures"),
     "stage_operations_total": ("counter", "Completed operations by stage and result"),
-    "worker_stage": ("gauge", "idle=0 queue=1 exif=2 faces=3 persist=4 review=5 frigate=6 export=7 complete=8 failed=9 match=10 auto_accept=11"),
+    "worker_stage": ("gauge", "idle=0 queue=1 exif=2 faces=3 persist=4 review=5 frigate=6 export=7 complete=8 failed=9 match=10 auto_accept=11 context_queue=12 location=13 context_llm=14 context_save=15"),
     "heartbeat_timestamp_seconds": ("gauge", "Last telemetry publication Unix time"),
     "stage_started_timestamp_seconds": ("gauge", "Current stage start Unix time"),
     "running": ("gauge", "Process alive; check heartbeat to detect abrupt termination"),
@@ -33,7 +35,7 @@ class Metrics:
     """Publish bounded stage labels atomically, with a heartbeat independent of DB locks."""
     def __init__(self, path: Path | None = None):
         self.prefix = "photo_enrichment"
-        self.stages = tuple(TITLES)
+        self.stages = tuple(s for s in TITLES if not s.startswith('context') and s!='location')
         self.path = path
         self.seconds = defaultdict(float, {s: 0.0 for s in TITLES})
         self.operations = defaultdict(int)
@@ -128,7 +130,11 @@ class Metrics:
             for kind, value in self.inventory.items():
                 add("inventory", value, kind=kind)
             for source, target in EDGES:
+                if self.prefix=='photo_context' and source not in self.stages:continue
+                if self.prefix!='photo_context' and (source.startswith('context') or source=='location'):continue
                 add("edge_info", 1, id=f"photo_{source}-{target}", source="photo_"+source, target="photo_"+target)
+            if self.prefix=='photo_context':
+                add("edge_info",1,id="photo_context_jobs-queue",source="photo_context_jobs",target="photo_context_queue")
             return "\n".join(line for name in sorted(rows) for line in
                 [f"# HELP {self.prefix}_{name} {HELP[name][1]}", f"# TYPE {self.prefix}_{name} {HELP[name][0]}", *rows[name]]) + "\n"
 

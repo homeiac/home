@@ -12,7 +12,8 @@ import subprocess
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','prepare','cutover','gui','status'))
+    parser.add_argument('mode',choices=('inspect','prepare','cutover','gui','context','status'))
+    parser.add_argument('--first-photo',default='')
     args=parser.parse_args()
     here=Path(__file__).resolve().parent
     host=os.environ['CB_HOST']
@@ -23,7 +24,7 @@ def main():
             input=statement,text=True,capture_output=True,env=env)
         if result.returncode: raise RuntimeError('PostgreSQL provisioning failed; output suppressed to protect credentials')
         return result.stdout.strip()
-    payload={'mode':args.mode}
+    payload={'mode':args.mode,'first_photo':args.first_photo}
     if args.mode=='prepare':
         exists=pg("SELECT count(*) FROM pg_roles WHERE rolname='photo_enrichment';")=='1'
         if not exists:
@@ -33,11 +34,12 @@ def main():
             payload['pgpass']=password
         elif pg("SELECT count(*) FROM pg_database WHERE datname='photo_enrichment';")!='1':
             raise RuntimeError('Existing role has no matching database; inspect before continuing')
-    if args.mode in ('prepare','cutover','gui'):
+    if args.mode in ('prepare','cutover','gui','context'):
         files={'photo-enrich.py':(here/'photo-enrich.py').read_text()}
         for path in sorted((here/'photo_enrichment').rglob('*')):
             if path.is_file() and path.suffix in ('.py','.html','.css','.js','.txt','.md'):
                 files[str(path.relative_to(here))]=path.read_text()
+        for name in ('media_summary.py','pipeline_metrics.py'):files['enrichers/'+name]=(here/'enrichers'/name).read_text()
         payload['files']=files
         payload['release']=hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest()[:16]
     remote=(here/'host/rollout-photo-postgres.py').read_text()

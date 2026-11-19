@@ -291,3 +291,57 @@ from indefinitely blocking later candidates. Refresh the library to see changes.
 
 Grafana measures matching and automatic acceptance as separate stages in the
 value stream map; stage percentages describe processing time, not match quality.
+
+### GPS context backfill
+
+`context-worker` is independent of face extraction and the original caption worker.
+It reads a pinned DuckDB/Parquet generation, queues already-captioned GPS photos in
+PostgreSQL, caches nearby Wikimedia articles, and sends the original image plus
+nearby landmark candidates to the existing local Ollama vision model. Captions
+without GPS are skipped. Existing captions and all human annotations are retained.
+The gallery prefers the separate contextual caption after the next snapshot export;
+photo details retain the original and link the lookup sources. Saved face labels
+also appear on gallery cards without guessing identity from the caption.
+
+Wikimedia receives only coordinates rounded to 0.001 degrees, not photos, names,
+paths or timestamps. Rounding reduces precision; it does not anonymize location.
+Lookups use a 1.5 km radius and at most eight candidates. Candidates are explicitly
+unverified subjects: camera position does not establish what the camera sees.
+Short descriptions come from Wikidata (CC0); source URL, Wikidata ID, provider
+version and retrieval time are retained. Positive and empty lookups are cached.
+One worker holds a PostgreSQL advisory lock, so network requests are serialized.
+The durable budget permits 1,000 uncached requests per UTC database day, reserves
+20 seconds between starts and at least five seconds after completion, and honors
+Retry-After/maxlag. Calls run outside transactions. Failed jobs retry with bounded
+backoff and stop after five failures; throttling does not consume that limit.
+A process restart recovers unfinished jobs under the singleton lock. Changed input,
+model or context version requeues a photo without overwriting the original summary.
+
+Deploy using `CB_HOST` from the inventory:
+`python3 scripts/knowledge-index/deploy-photo-postgres.py context`
+An optional `--first-photo FILENAME` prioritizes a rollout example. Deployment
+reuses the active summary worker's endpoint/model and writes a versioned systemd
+service. The pipeline value stream map and Photo App dashboard show context queue,
+lookup, LLM, commit, cache use and structured errors. No location or photo identity
+appears in telemetry. Context results and the place cache join immutable exports.
+
+Provider references: [nearby places](https://www.mediawiki.org/wiki/API:Nearby_places_viewer),
+[robot policy](https://wikitech.wikimedia.org/wiki/Robot_policy),
+[rate limits](https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits),
+[Wikidata licensing](https://www.wikidata.org/wiki/Wikidata:Licensing).
+
+### Network attribution and catalog refresh
+
+`CB_HOST=... python3 scripts/knowledge-index/check-photo-network.py` reports network
+counter deltas, PostgreSQL socket bytes, service start times and catalog errors.
+The November 18 17:39:47 Pacific PostgreSQL cutover matches the traffic change
+around commit cc6b220. Physical NIC, bridge and VM TAP counters overlap and must
+not be summed as independent traffic. Repeated remote embedding reads were an
+avoidable contributor. Matching now reads embeddings from local Parquet/DuckDB,
+overlays recent review labels, and reuses results until faces/reviews/snapshot change.
+New face detections appear after the next analytical snapshot.
+
+Catalog refresh uses transactional DELETE/COPY instead of TRUNCATE and avoids
+replacing an unchanged view. This allows existing MVCC readers to continue while
+refreshing the catalog, eliminating the observed AccessExclusiveLock deadlock path.
+The prior catalog remains visible until commit; a failed refresh rolls back.

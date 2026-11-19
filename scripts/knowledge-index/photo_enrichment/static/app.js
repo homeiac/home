@@ -49,7 +49,9 @@ async function loadPhotos() {
     const label=element('label',undefined,'check');const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+photo.name);
     check.onchange=()=>{if(check.checked)state.selected.add(photo.path);else state.selected.delete(photo.path);selected();};label.append(check);
     const body=element('div',undefined,'card-body');body.append(element('span',photo.latitude!==null?'GPS available':'Location unknown','badge'));
-    body.append(element('p',photo.summary||'No model caption yet','card-caption'));body.append(button('Review photo',()=>showPhoto(photo.path)));
+    for(const person of photo.saved_people||[])body.append(element('span',person,'badge'));
+    if(photo.context_summary)body.append(element('span','GPS-informed caption','badge'));
+    body.append(element('p',photo.context_summary||photo.summary||'No model caption yet','card-caption'));body.append(button('Review photo',()=>showPhoto(photo.path)));
     card.append(image,label,body);$('photos').append(card);
   }
   document.querySelectorAll('#dates button').forEach(b=>b.classList.toggle('active',b.dataset.date===state.date));selected();pagination();
@@ -57,12 +59,22 @@ async function loadPhotos() {
 }
 async function showPhoto(path) {
   const photo=await api(query('/api/photo',{path}));$('detail-image').src=query('/api/thumbnail',{path});$('detail-name').textContent=path;
-  $('caption').textContent=photo.summary||'No model caption saved yet.';$('metadata').replaceChildren();
+  $('caption').textContent=photo.context_summary||photo.summary||'No model caption saved yet.';$('metadata').replaceChildren();
   const fields=[['Captured',photo.capture_ts ? new Date(photo.capture_ts*1000).toLocaleString(undefined,{timeZone:timezone()})+' ('+timezone()+')':'Unknown'],
     ['Date source',photo.capture_source||'Unknown'],['GPS',photo.latitude===null?'Unknown':photo.latitude.toFixed(6)+', '+photo.longitude.toFixed(6)],
     ['GPS source',photo.gps_source||'Unknown'],['Camera',[photo.camera_make,photo.camera_model].filter(Boolean).join(' ')||'Not extracted'],
     ['Extraction',photo.extraction_error||photo.extraction_version||'Not run'],['Caption model',photo.summary_model||'None']];
+  if(photo.context_summary)fields.push(['Original caption',photo.summary],['GPS caption model',photo.context_model]);
   for(const [key,value] of fields) $('metadata').append(element('dt',key),element('dd',value));
+  if(photo.location_context){
+    const context=photo.location_context;
+    $('metadata').append(element('dt','Nearby places (not confirmed subjects)'));
+    const sources=element('dd');
+    for(const candidate of context.candidates||[]){
+      const link=element('a',candidate.title+' ');link.href=candidate.url;link.target='_blank';link.rel='noopener noreferrer';sources.append(link);
+    }
+    sources.append(element('p',context.attribution||'Wikipedia / Wikidata','muted'));$('metadata').append(sources);
+  }
   $('photo-groups').replaceChildren(...(photo.groups.length?photo.groups.map(g=>element('p',[g.event,g.location,g.venue,g.notes,g.tags.join(', ')].filter(Boolean).join(' · '))):[element('p','No user annotations yet.','muted')]));
   $('imported-people').textContent='Imported whole-photo tags: '+((photo.people||[]).join(', ')||'none')+'. These are not face assignments.';
   $('faces').replaceChildren();

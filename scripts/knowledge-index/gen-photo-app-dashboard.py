@@ -15,6 +15,7 @@ def panel(title,expr,x,y,w=8,h=6,kind='timeseries',unit='short',legend='{{route}
 
 
 def dashboard():
+    panels.clear()
     panel('Independent API probe','min(photo_app_probe_success{probe="api"})',0,0,6,4,'stat')
     panel('Requests waiting for the DB lock','max(photo_app_lock_waiters{service_name="photo-review"})',6,0,6,4,'stat')
     panel('Oldest unfinished request','max(photo_app_oldest_request_seconds{service_name="photo-review"})',12,0,6,4,'stat','s')
@@ -31,8 +32,11 @@ def dashboard():
     panel('Connection pool wait p95','histogram_quantile(0.95,sum by(le,pool)(rate(photo_app_pool_wait_seconds_bucket{service_name="photo-review"}[5m])))',16,24,8,6,unit='s',legend='{{pool}}')
     panels.append({'id':len(panels)+1,'title':'Slow requests, errors and automatic diagnosis · trace IDs link to Photo traces','type':'logs',
       'datasource':{'type':'loki','uid':'photo-loki'},'gridPos':{'x':0,'y':30,'w':24,'h':12},
-      'targets':[{'refId':'A','expr':'{service_name=~"photo-review|photo-triage"} | json | event=~"request.slow|request.error|triage.result|matching.finished"','queryType':'range'}],
+      'targets':[{'refId':'A','expr':'{service_name=~"photo-review|photo-triage|photo-context"} | json | event=~"request.slow|request.error|triage.result|matching.finished|context.finished|context.error|context.deferred"','queryType':'range'}],
       'options':{'showTime':True,'wrapLogMessage':True,'sortOrder':'Descending','enableLogDetails':True}})
+    panel('GPS context backlog','sum by(kind)(photo_context_jobs)',0,42,8,6,legend='{{kind}}')
+    panel('GPS lookup and local LLM stage time','sum by(stage)(rate(photo_context_stage_seconds_total[5m]))',8,42,8,6,unit='s',legend='{{stage}}')
+    panel('GPS lookup cache use since worker start','sum by(kind)(photo_context_inventory)',16,42,8,6,legend='{{kind}}')
     return {'uid':'photo-app','title':'Photo App · Requests, traces & triage','schemaVersion':39,'version':1,
       'tags':['photos','otel'],'refresh':'10s','time':{'from':'now-1h','to':'now'},'timezone':'browser','panels':panels,
       'description':'Request telemetry from OpenTelemetry; independent health checks run every minute. Slow requests are logged before their spans finish. DuckDB queries use Parquet snapshots plus live PostgreSQL review edits.',

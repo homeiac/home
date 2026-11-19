@@ -99,6 +99,28 @@ def main():
     run(python,'-c',"import psycopg,duckdb; c=psycopg.connect(service='photo_pipeline'); print('PostgreSQL connected:',c.info.server_version); c.close(); d=duckdb.connect(); d.execute('INSTALL postgres; LOAD postgres'); print('Signed DuckDB PostgreSQL extension ready')",env=env)
     print('Prepared release:',payload['release'],flush=True)
     if payload['mode']=='prepare':return
+    if payload['mode']=='context':
+        # Separate additive worker; the caption/face ingestion services keep running.
+        import shlex
+        pid=subprocess.check_output(['systemctl','show','knowledge-index-enrich','-p','MainPID','--value'],text=True).strip()
+        argv=Path('/proc',pid,'cmdline').read_bytes().decode().split('\0')
+        endpoint=argv[argv.index('--endpoint')+1];model=argv[argv.index('--model')+1]
+        backup=ROOT/'backups'/('context-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
+        backup.mkdir(parents=True)
+        service=UNITS/'photo-enrichment-context.service'
+        if service.exists():shutil.copy2(service,backup/service.name)
+        link=ROOT/'context'
+        if link.exists():(backup/'previous-release.txt').write_text(str(link.resolve()))
+        run(python,'-c','from photo_enrichment.postgres import connect; from photo_enrichment.context_worker import initialize; c=connect(); initialize(c); c.close()',cwd=release,env=env)
+        temporary=ROOT/'context.new';temporary.unlink(missing_ok=True);temporary.symlink_to(release);temporary.replace(link)
+        base='/opt/photo-enrichment/context/venv/bin/python /opt/photo-enrichment/context/photo-enrich.py --backend postgres --index ${PHOTO_INDEX} --library ${PHOTO_LIBRARY} --state ${PHOTO_STATE}'
+        service.write_text(unit(base+' --prom /var/lib/prometheus/node-exporter/photo_context.prom context-worker --endpoint '+shlex.quote(endpoint)+' --model '+shlex.quote(model)+' --first-photo '+shlex.quote(payload.get('first_photo','')),
+            'Photo GPS context enrichment', 'Restart=on-failure\nRestartSec=30\nEnvironment=OTEL_EXPORTER_OTLP_ENDPOINT=https://photo-otel.app.home.panderosystems.com\nEnvironment=OTEL_SERVICE_NAME=photo-context\nEnvironment=PHOTO_SERVICE_VERSION='+payload['release']))
+        run('systemd-analyze','verify',str(service));run('systemctl','daemon-reload')
+        run('systemctl','enable','--now',service.name)
+        run('systemctl','restart',service.name)
+        print('GPS context worker deployed; original captions and reviews retained')
+        return status()
     if payload['mode']=='gui':
         # Deploy read/review features independently: no ingestion restart, migration,
         # model invocation or modifications to the authoritative data are involved.
@@ -106,7 +128,7 @@ def main():
         unit_path=UNITS/'photo-enrichment-gui.service'; original=unit_path.read_text()
         backup=ROOT/'backups'/('gui-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
         backup.mkdir(parents=True);(backup/unit_path.name).write_text(original)
-        related=['photo-enrichment-export.service','photo-enrichment-triage.service','photo-enrichment-triage.timer']
+        related=['photo-enrichment-catalog.service','photo-enrichment-export.service','photo-enrichment-triage.service','photo-enrichment-triage.timer']
         previous_units={name:(UNITS/name).read_text() if (UNITS/name).exists() else None for name in related}
         for name,content in previous_units.items():
             if content is not None:(backup/name).write_text(content)
@@ -119,6 +141,8 @@ def main():
             unit_path.write_text(updated.replace('[Service]\n','[Service]\n'+otel))
             export_unit=UNITS/'photo-enrichment-export.service'
             export_unit.write_text(export_unit.read_text().replace('/opt/photo-enrichment/current/','/opt/photo-enrichment/gui/'))
+            catalog_unit=UNITS/'photo-enrichment-catalog.service'
+            catalog_unit.write_text(catalog_unit.read_text().replace('/opt/photo-enrichment/current/','/opt/photo-enrichment/gui/'))
             base='/opt/photo-enrichment/gui/venv/bin/python /opt/photo-enrichment/gui/photo-enrich.py --backend postgres --index ${PHOTO_INDEX} --library ${PHOTO_LIBRARY} --state ${PHOTO_STATE}'
             (UNITS/'photo-enrichment-triage.service').write_text(unit(base+' --prom /var/lib/prometheus/node-exporter/photo_app_triage.prom triage',
                 'Read-only photo app incident triage',otel.replace('photo-review','photo-triage')+'TimeoutStartSec=35',oneshot=True))

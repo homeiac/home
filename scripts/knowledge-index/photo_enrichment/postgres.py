@@ -88,7 +88,7 @@ def copy_table(source, connection, name: str, target: str, replace: bool = False
     target_sql = sql.SQL('.').join(sql.Identifier(n) for n in target.split('.'))
     connection.execute(sql.SQL('CREATE TABLE IF NOT EXISTS {} (').format(target_sql) + sql.SQL(definition+')'))
     if replace:
-        connection.execute(sql.SQL('TRUNCATE {}').format(target_sql))
+        connection.execute(sql.SQL('DELETE FROM {}').format(target_sql))
     names = sql.SQL(',').join(sql.Identifier(c[0]) for c in columns)
     count = 0
     with connection.cursor() as cursor, cursor.copy(sql.SQL('COPY {} ({}) FROM STDIN').format(target_sql, names)) as copy:
@@ -113,7 +113,8 @@ def refresh_catalog(connection, index: Path) -> dict:
             view = MEDIA_VIEW_SQL.replace('TEMP VIEW', 'VIEW').replace(
                 "SELECT * FROM catalog.media_summaries WHERE status='ok'\n                QUALIFY row_number() OVER (PARTITION BY path ORDER BY created_at DESC, enricher DESC)=1",
                 "SELECT DISTINCT ON (path) * FROM catalog.media_summaries WHERE status='ok' ORDER BY path, created_at DESC, enricher DESC")
-            connection.execute(view)
+            if not connection.execute("SELECT to_regclass('public.enriched_media')").fetchone()[0]:
+                connection.execute(view)
             connection.execute("INSERT INTO pipeline_state VALUES ('catalog',%s,now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()", [json.dumps(counts)])
     return counts
 
@@ -244,10 +245,17 @@ class PostgresStore(Store):
         if (self.state/'analytics/current.json').exists():return self.gallery_query('photos',date,timezone,offset,limit)
         return super().photos(date,timezone,offset,limit)
 
+    def detail(self,path):
+        photo=super().detail(path)
+        if self.rows("SELECT to_regclass('public.photo_context') IS NOT NULL AS present")[0]['present']:
+            context=self.rows("SELECT summary AS context_summary,context AS location_context,model AS context_model FROM photo_context WHERE path=? AND size_bytes=? AND status='done'",[path,photo['size_bytes']])
+            if context:photo.update(context[0])
+        return photo
+
     def matching_pass(self) -> dict:
         """Read saved embeddings in bounded batches; never change confirmed labels.
 
-        Cache at most 30 seconds, invalidating immediately on label/rejection edits.
+        Cache until faces, reviews or the analytical generation change.
         A repeatable-read snapshot keeps references/candidates coherent during a pass.
         """
         from .matching import match_batch
@@ -257,30 +265,41 @@ class PostgresStore(Store):
             cache=getattr(self.suggestion_source,'_matching_cache',None)
             return cache['matches'] if cache else {}
         with self.lock:
-            signature=self.rows("""SELECT count(*) FILTER(WHERE person IS NOT NULL) AS named,
-                max(updated_at) FILTER(WHERE person IS NOT NULL) AS last_named,
+            signature=self.rows("""SELECT count(*) AS faces,max(updated_at) AS last_updated,
                 (SELECT count(*) FROM rejected_matches) AS rejected FROM faces""")[0]
+            manifest=self.state/'analytics/current.json'
+            signature['snapshot']=manifest.stat().st_mtime_ns if manifest.exists() else None
             cache=getattr(self,'_matching_cache',None)
-            if cache and cache['signature']==signature and time.monotonic()-cache['at']<30:
+            if cache and cache['signature']==signature:
                 return cache['matches']
             base="""FROM faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
                 AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
                 WHERE EXISTS (SELECT 1 FROM catalog.gphotos_media m WHERE m.path=f.path AND m.size_bytes=f.size_bytes)
                 AND NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=f.path)"""
             matches={}
-            with self.metrics.measure('match'),self.connection.transaction():
-                self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
-                references=self.rows('SELECT f.id,f.person,f.model,f.embedding '+base+" AND f.person IS NOT NULL AND f.label_source='user'")
-                last=''
-                if references:
-                    while True:
-                        candidates=self.rows('SELECT f.id,f.model,f.embedding '+base+
-                            ' AND f.person IS NULL AND f.id>? ORDER BY f.id LIMIT 256',[last])
-                        if not candidates:break
-                        rejected=self.rows('SELECT face_id,reference_id FROM rejected_matches WHERE face_id=ANY(?)',
-                            [[r['id'] for r in candidates]])
-                        matches.update(match_batch(candidates,references,{(r['face_id'],r['reference_id']) for r in rejected}))
-                        last=candidates[-1]['id']
+            reader=None
+            try:
+                if manifest.exists():
+                    from .readside import GalleryReader
+                    reader=GalleryReader(self)
+                    read=reader.rows
+                    base=base.replace('FROM faces f','FROM reviewed_faces f').replace('catalog.gphotos_media','enriched_media').replace('catalog.gphotos_album_dup','album_duplicates')
+                else:read=self.rows
+                with self.metrics.measure('match'),self.connection.transaction():
+                    self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                    references=read('SELECT f.id,f.person,f.model,f.embedding '+base+" AND f.person IS NOT NULL AND f.label_source='user'")
+                    last=''
+                    if references:
+                        while True:
+                            candidates=read('SELECT f.id,f.model,f.embedding '+base+
+                                ' AND f.person IS NULL AND f.id>? ORDER BY f.id LIMIT 256',[last])
+                            if not candidates:break
+                            rejected=self.rows('SELECT face_id,reference_id FROM rejected_matches WHERE face_id=ANY(?)',
+                                [[r['id'] for r in candidates]])
+                            matches.update(match_batch(candidates,references,{(r['face_id'],r['reference_id']) for r in rejected}))
+                            last=candidates[-1]['id']
+            finally:
+                if reader:reader.close()
             self._matching_cache=dict(signature=signature,at=time.monotonic(),matches=matches)
             return matches
 

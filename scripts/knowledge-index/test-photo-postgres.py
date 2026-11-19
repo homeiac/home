@@ -23,6 +23,95 @@ class FakeFaces:
 
 
 class PipelineTests(unittest.TestCase):
+    def test_catalog_refresh_does_not_block_snapshot_readers(self):
+        from photo_enrichment.postgres import refresh_catalog
+        with connect() as reader,reader.transaction():
+            reader.execute('SELECT * FROM enriched_media LIMIT 1').fetchone()
+            self.store.connection.execute("SET lock_timeout='1s'")
+            counts=refresh_catalog(self.store.connection,self.index)
+            self.assertEqual(counts['gphotos_media'],8)
+            self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
+
+    def test_matching_reads_embeddings_locally_and_caches_unchanged_inputs(self):
+        self.add_review_faces()
+        export_snapshot(self.state)
+        original=self.store.rows
+        def without_embedding_download(query,params=()):
+            self.assertNotIn('f.embedding',query)
+            return original(query,params)
+        with patch.object(self.store,'rows',side_effect=without_embedding_download):
+            matches=self.store.matching_pass()
+            self.assertIn('review-a',matches)
+            self.store._matching_cache['at']=0
+            with patch('photo_enrichment.matching.match_batch',side_effect=AssertionError('Unchanged library recomputed')):
+                self.assertEqual(self.store.matching_pass(),matches)
+            self.store.label_face('stable-face','Renamed synthetic person')
+            self.assertEqual(self.store.matching_pass()['review-a']['person'],'Renamed synthetic person')
+
+    def test_gps_context_backfill_preserves_original_and_reviews(self):
+        import json
+        from photo_enrichment.context_worker import initialize,seed,process,lookup
+        from photo_enrichment.metrics import Metrics
+        from photo_enrichment import places
+        c=self.store.connection
+        initialize(c)
+        c.execute('UPDATE extracted SET latitude=12.34,longitude=23.45 WHERE path=%s',[self.path])
+        c.execute("""INSERT INTO catalog.media_summaries(source,path,size_bytes,enricher,model,prompt_version,summary,tags,status,created_at)
+            SELECT 'gphotos',path,size_bytes,'synthetic','synthetic','p1','Original synthetic caption',ARRAY['original'],'ok',now()
+            FROM catalog.gphotos_media WHERE path=%s""",[self.path])
+        export_snapshot(self.state)
+        seed(c,self.state,'synthetic')
+        provider=lambda lat,lon:dict(candidates=[dict(title='Synthetic landmark',description='Test only',latitude=lat,longitude=lon,url='https://example.invalid/')])
+        seen=[]
+        def infer(source,prompt):
+            self.assertEqual(c.info.transaction_status.name,'IDLE')
+            self.assertIn('not verified subjects',prompt);seen.append(prompt)
+            return 'Contextual synthetic caption',['landmark']
+        self.assertTrue(process(c,self.library,'unused','synthetic',Metrics(),provider,infer))
+        self.assertEqual(len(seen),1)
+        self.assertEqual(self.store.photo(self.path)['summary'],'Original synthetic caption')
+        self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
+        seed(c,self.state,'synthetic')
+        self.assertFalse(process(c,self.library,'unused','synthetic',Metrics(),provider,infer))
+        with patch('photo_enrichment.places.nearby',side_effect=AssertionError('Cache miss')):
+            cached,hit=lookup(c,12.34,23.45,lambda *a:self.fail('Cache miss'))
+        self.assertTrue(hit)
+        export_snapshot(self.state)
+        date=self.store.dates('UTC')[0]['date']
+        photos=[p for d in self.store.dates('UTC') for p in self.store.photos(d['date'],'UTC')['photos']]
+        photo=next(p for p in photos if p['path']==self.path)
+        self.assertEqual(photo['context_summary'],'Contextual synthetic caption')
+        self.assertEqual(photo['saved_people'],['Synthetic person'])
+        self.assertEqual(self.store.detail(self.path)['context_summary'],'Contextual synthetic caption')
+        seed(c,self.state,'new-model')
+        self.assertEqual(c.execute('SELECT status,summary FROM photo_context').fetchone(),('ready',None))
+
+    def test_location_budget_and_empty_cache(self):
+        from photo_enrichment.context_worker import initialize,lookup
+        from photo_enrichment.places import LookupDeferred
+        c=self.store.connection;initialize(c)
+        provider=lambda *a:dict(candidates=[])
+        context,hit=lookup(c,12,23,provider,daily_budget=1)
+        self.assertFalse(hit);self.assertEqual(context['candidates'],[])
+        self.assertTrue(lookup(c,12,23,provider,daily_budget=1)[1])
+        c.execute("UPDATE photo_place_budget SET available_at=now()-interval '1 second'")
+        with self.assertRaises(LookupDeferred):lookup(c,13,24,lambda *a:self.fail('Budget exceeded'),daily_budget=1)
+
+    def test_context_failure_retains_original_and_retries(self):
+        import json
+        from photo_enrichment.context_worker import initialize,process
+        from photo_enrichment.metrics import Metrics
+        from photo_enrichment.places import LookupDeferred
+        c=self.store.connection;initialize(c)
+        c.execute('INSERT INTO photo_context(path,size_bytes,input_hash,input) VALUES(%s,1,%s,%s)',
+            [self.path,'test',json.dumps(dict(latitude=12,longitude=23))])
+        def deferred(*a):raise LookupDeferred(120)
+        process(c,self.library,'unused','test',Metrics(),deferred)
+        state,attempts=c.execute('SELECT status,attempts FROM photo_context').fetchone()
+        self.assertEqual((state,attempts),('retry',0))
+        self.assertEqual(c.execute('SELECT count(*) FROM photo_place_cache').fetchone()[0],0)
+        self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.root=Path(self.temp.name)

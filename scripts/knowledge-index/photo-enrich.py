@@ -36,6 +36,11 @@ def main() -> None:
     commands.add_parser("refresh-catalog", help="Refresh PostgreSQL catalog from existing Parquet-backed index")
     commands.add_parser("export", help="Export Parquet snapshots of enrichment and annotation tables")
     commands.add_parser("triage", help="Read-only bounded HTTP, DB wait and resource diagnostics")
+    context = commands.add_parser("context-worker", help="Cached GPS lookup and local contextual captions")
+    context.add_argument('--endpoint',required=True)
+    context.add_argument('--model',required=True)
+    context.add_argument('--max-jobs',type=int,default=0)
+    context.add_argument('--first-photo',default='',help='Prioritize one filename for rollout verification')
     worker = commands.add_parser("worker", help="Continuously extract pending photos and publish Parquet/telemetry")
     worker.add_argument("--batch-size", type=int, default=25)
     worker.add_argument("--timezone", default="UTC")
@@ -56,13 +61,22 @@ def main() -> None:
         parser.error("--index and --library are required")
     from photo_enrichment.telemetry import get_telemetry
     telemetry=get_telemetry()
-    if args.command in ('serve','triage'):telemetry.start()
+    if args.command in ('serve','triage','context-worker'):telemetry.start()
     if args.command=='triage':
         from photo_enrichment.triage import run as run_triage
         try:run_triage(args.state,args.prom)
         finally:telemetry.close()
         return
     metrics = Metrics(args.prom)
+    if args.command=='context-worker':
+        if args.backend!='postgres':parser.error('Context worker requires PostgreSQL')
+        from photo_enrichment.context_worker import run
+        metrics.prefix='photo_context'
+        metrics.stages=('context_queue','location','context_llm','context_save')
+        try:
+            with metrics:run(args.state,args.library,args.endpoint,args.model,metrics,args.max_jobs,args.first_photo)
+        finally:telemetry.close()
+        return
     if args.backend == "postgres" and args.command == "serve":
         metrics.prefix="photo_review"
         metrics.stages=("review","frigate","match","auto_accept")

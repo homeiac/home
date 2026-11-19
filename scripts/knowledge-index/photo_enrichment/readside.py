@@ -27,6 +27,8 @@ class GalleryReader:
                 # Compatibility with pre-readside snapshots until the next export.
                 duplicates=store.rows('SELECT path FROM catalog.gphotos_album_dup')
                 self.db.execute("CREATE TEMP TABLE album_duplicates AS SELECT value->>'path' AS path FROM json_each(?)",[json.dumps(duplicates)])
+            if 'photo_context' not in self.manifest['tables']:
+                self.db.execute("CREATE TEMP TABLE photo_context(path VARCHAR,size_bytes BIGINT,status VARCHAR,summary VARCHAR,context JSON)")
         except BaseException:
             self.db.close();raise
 
@@ -84,6 +86,11 @@ class GalleryReader:
         condition="""coalesce(CAST(CAST(timezone(?,to_timestamp(capture_ts)) AS DATE) AS VARCHAR),'unknown')=?
             AND NOT EXISTS (SELECT 1 FROM album_duplicates d WHERE d.path=m.path)"""
         total=self.rows('SELECT count(*) n FROM enriched_media m WHERE '+condition,[timezone,date])[0]['n']
-        photos=self.rows('SELECT * FROM enriched_media m WHERE '+condition+' ORDER BY capture_ts NULLS LAST,path LIMIT ? OFFSET ?',
+        photos=self.rows("""SELECT m.*,c.summary AS context_summary,c.context AS location_context,
+            (SELECT list(DISTINCT f.person ORDER BY f.person) FROM reviewed_faces f JOIN face_scans fs
+             ON fs.path=f.path AND fs.size_bytes=f.size_bytes AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+             WHERE f.path=m.path AND f.size_bytes=m.size_bytes AND f.person IS NOT NULL) AS saved_people
+            FROM enriched_media m LEFT JOIN photo_context c ON c.path=m.path AND c.size_bytes=m.size_bytes AND c.status='done'
+            WHERE """+condition+' ORDER BY capture_ts NULLS LAST,m.path LIMIT ? OFFSET ?',
             [timezone,date,limit,offset])
         return dict(photos=photos,total=total,offset=offset,query_backend='duckdb',captured_at=self.manifest['captured_at'])

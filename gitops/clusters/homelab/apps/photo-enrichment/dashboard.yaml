@@ -185,14 +185,49 @@ data:
     ,\n        \"uid\": \"photo-loki\"\n      },\n      \"gridPos\": {\n        \"\
     x\": 0,\n        \"y\": 30,\n        \"w\": 24,\n        \"h\": 12\n      },\n\
     \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
-    : \"{service_name=~\\\"photo-review|photo-triage\\\"} | json | event=~\\\"request.slow|request.error|triage.result|matching.finished\\\
+    : \"{service_name=~\\\"photo-review|photo-triage|photo-context\\\"} | json | event=~\\\
+    \"request.slow|request.error|triage.result|matching.finished|context.finished|context.error|context.deferred\\\
     \"\",\n          \"queryType\": \"range\"\n        }\n      ],\n      \"options\"\
     : {\n        \"showTime\": true,\n        \"wrapLogMessage\": true,\n        \"\
     sortOrder\": \"Descending\",\n        \"enableLogDetails\": true\n      }\n  \
-    \  }\n  ],\n  \"description\": \"Request telemetry from OpenTelemetry; independent\
-    \ health checks run every minute. Slow requests are logged before their spans\
-    \ finish. DuckDB queries use Parquet snapshots plus live PostgreSQL review edits.\"\
-    ,\n  \"links\": [\n    {\n      \"title\": \"Photo GUI\",\n      \"url\": \"https://photos.app.home.panderosystems.com\"\
+    \  },\n    {\n      \"id\": 16,\n      \"title\": \"GPS context backlog\",\n \
+    \     \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"\
+    prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n\
+    \        \"x\": 0,\n        \"y\": 42,\n        \"w\": 8,\n        \"h\": 6\n\
+    \      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n    \
+    \      \"expr\": \"sum by(kind)(photo_context_jobs)\",\n          \"legendFormat\"\
+    : \"{{kind}}\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\"\
+    : {\n          \"unit\": \"short\"\n        },\n        \"overrides\": []\n  \
+    \    },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
+    : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      }\n    },\n    {\n      \"id\": 17,\n      \"title\": \"GPS lookup\
+    \ and local LLM stage time\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
+    : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
+    \  },\n      \"gridPos\": {\n        \"x\": 8,\n        \"y\": 42,\n        \"\
+    w\": 8,\n        \"h\": 6\n      },\n      \"targets\": [\n        {\n       \
+    \   \"refId\": \"A\",\n          \"expr\": \"sum by(stage)(rate(photo_context_stage_seconds_total[5m]))\"\
+    ,\n          \"legendFormat\": \"{{stage}}\"\n        }\n      ],\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
+    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
+    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
+    \n          ]\n        }\n      }\n    },\n    {\n      \"id\": 18,\n      \"\
+    title\": \"GPS lookup cache use since worker start\",\n      \"type\": \"timeseries\"\
+    ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
+    : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 16,\n       \
+    \ \"y\": 42,\n        \"w\": 8,\n        \"h\": 6\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"sum by(kind)(photo_context_inventory)\"\
+    ,\n          \"legendFormat\": \"{{kind}}\"\n        }\n      ],\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n    \
+    \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
+    \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
+    \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
+    \ \"lastNotNull\"\n          ]\n        }\n      }\n    }\n  ],\n  \"description\"\
+    : \"Request telemetry from OpenTelemetry; independent health checks run every\
+    \ minute. Slow requests are logged before their spans finish. DuckDB queries use\
+    \ Parquet snapshots plus live PostgreSQL review edits.\",\n  \"links\": [\n  \
+    \  {\n      \"title\": \"Photo GUI\",\n      \"url\": \"https://photos.app.home.panderosystems.com\"\
     \n    },\n    {\n      \"title\": \"Pipeline value stream map\",\n      \"url\"\
     : \"/d/knowledge-index/knowledge-index\"\n    },\n    {\n      \"title\": \"Explore\
     \ traces and logs\",\n      \"url\": \"/explore\"\n    }\n  ]\n}"
