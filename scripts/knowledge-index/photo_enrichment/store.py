@@ -246,12 +246,24 @@ class Store:
         if not paths or len(paths) > 1000:
             raise ValueError("Choose 1–1000 photos per extraction")
         results = dict(processed=0, skipped=0, faces=0, errors=[])
+        # Batch catalog lookup avoids rescanning the Parquet-backed caption view twice
+        # for every photo. Only the source identity and sidecar are needed to extract.
+        with self.metrics.measure("queue"):
+            sources = {row["path"]: row for row in self.rows("""SELECT path, size_bytes, sidecar_path
+                FROM catalog.gphotos_media WHERE kind='media'
+                AND ext IN ('jpg','jpeg','heic','png','gif','webp')
+                AND path IN (SELECT unnest(?))""", [list(dict.fromkeys(paths))])}
         for path in dict.fromkeys(paths):
             try:
-                row = self.photo(path)
-                file = self.source_file(path)
-                st = file.stat()
-                previous = self.rows("SELECT * FROM extracted WHERE path=?", [path])
+                with self.metrics.measure("queue"):
+                    row = sources.get(path)
+                    if row is None:
+                        raise ValueError("Unknown photo")
+                    file = contained(self.library, path)
+                    st = file.stat()
+                    if st.st_size != row["size_bytes"]:
+                        raise ValueError("Photo changed since indexing; re-index it before enrichment")
+                    previous = self.rows("SELECT * FROM extracted WHERE path=?", [path])
                 unchanged = previous and previous[0]["size_bytes"] == st.st_size and previous[0]["mtime_ns"] == st.st_mtime_ns and previous[0]["version"] == VERSION and not previous[0]["error"]
                 # Offset-free dates must be reinterpreted when the user changes timezone.
                 if unchanged and (previous[0]["capture_source"] or "").startswith("exif.assumed:"):

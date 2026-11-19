@@ -32,6 +32,13 @@ def main() -> None:
     extract.add_argument("--faces", action="store_true")
     extract.add_argument("--force", action="store_true", help="Re-read metadata; confirmed face labels are retained")
     commands.add_parser("export", help="Export Parquet snapshots of enrichment and annotation tables")
+    worker = commands.add_parser("worker", help="Continuously extract pending photos and publish Parquet/telemetry")
+    worker.add_argument("--batch-size", type=int, default=25)
+    worker.add_argument("--timezone", default="UTC")
+    worker.add_argument("--metadata-only", action="store_true")
+    worker.add_argument("--pause-seconds", type=float, default=2)
+    worker.add_argument("--idle-seconds", type=float, default=60)
+    worker.add_argument("--max-batches", type=int, default=0, help="Stop after N batches; zero runs continuously")
     query = commands.add_parser("query", help="Read-only SQL over enriched_media and annotation tables")
     query.add_argument("sql")
     args = parser.parse_args()
@@ -44,6 +51,16 @@ def main() -> None:
     if not args.index or not args.library:
         parser.error("--index and --library are required")
     metrics = Metrics(args.prom)
+    if args.command == "worker":
+        from zoneinfo import ZoneInfo
+        from photo_enrichment.worker import run
+        ZoneInfo(args.timezone)
+        if not 1 <= args.batch_size <= 1000 or args.max_batches < 0 or args.pause_seconds < 0 or args.idle_seconds < 1:
+            parser.error("Invalid worker batch size, count or polling interval")
+        with metrics:
+            run(args.index, args.library, args.state, models, metrics, args.batch_size,
+                args.timezone, not args.metadata_only, args.pause_seconds, args.idle_seconds, args.max_batches)
+        return
     store = Store(args.index, args.library, args.state, metrics)
     metrics.__enter__()
     try:
