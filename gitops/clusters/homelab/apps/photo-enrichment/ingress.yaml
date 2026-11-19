@@ -1,0 +1,43 @@
+# Originals and the GUI run beside the existing library on the Proxmox host.
+apiVersion: v1
+kind: Service
+metadata:
+  name: photo-enrichment-external
+  namespace: kube-system
+spec:
+  type: ExternalName
+  externalName: pumped-piglet.maas
+  ports:
+    - port: 8765
+      protocol: TCP
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: photo-enrichment-private
+  namespace: kube-system
+spec:
+  ipAllowList:
+    sourceRange:
+      - 192.168.4.0/24
+      - 100.64.0.0/10
+      - 10.42.0.0/16
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: photo-enrichment
+  namespace: kube-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`photos.app.home.panderosystems.com`)
+      kind: Rule
+      middlewares:
+        - name: photo-enrichment-private
+      services:
+        - name: photo-enrichment-external
+          port: 8765
+  tls:
+    secretName: wildcard-home-tls

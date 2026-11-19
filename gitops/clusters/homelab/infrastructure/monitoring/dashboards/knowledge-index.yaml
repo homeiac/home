@@ -942,7 +942,7 @@ data:
           "targets": [
             {
               "refId": "nodes",
-              "expr": "label_replace(((100 * sum by (id, title) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 0) or (100 * sum by (id, title) (rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (photo_enrichment_stage_seconds_total{instance=~\"$instance\"}) * 0)), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or max by (id,title) (photo_frigate_processing_milliseconds{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by (id,title) (photo_frigate_service_up{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60))",
+              "expr": "label_replace(((100 * sum by (id, title) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 0) or (100 * sum by (id, title) (rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (photo_enrichment_stage_seconds_total{instance=~\"$instance\"}) * 0)), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or max by (id,title) (photo_frigate_processing_milliseconds{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by (id,title) (photo_frigate_service_up{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or label_replace(((100 * sum by(id,title) (rate(photo_review_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_review_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or sum by(id,title)(photo_review_stage_seconds_total{instance=~\"$instance\"}) * 0), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or label_replace(label_replace((sum(photo_enrichment_jobs{instance=~\"$instance\",kind=~\"ready|retry\"})), \"id\", \"photo_jobs\", \"\", \"\"), \"title\", \"PostgreSQL queue (jobs)\", \"\", \"\") or label_replace(label_replace((max(photo_snapshot_export_seconds{instance=~\"$instance\"})), \"id\", \"photo_export\", \"\", \"\"), \"title\", \"Parquet export (seconds)\", \"\", \"\") or label_replace(label_replace((time()-min(photo_snapshot_captured_timestamp_seconds{instance=~\"$instance\"})), \"id\", \"photo_analytics\", \"\", \"\"), \"title\", \"DuckDB snapshot age (seconds)\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false,
@@ -950,7 +950,7 @@ data:
             },
             {
               "refId": "edges",
-              "expr": "max by (id, source, target) (media_pipeline_edge_info{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) or max by (id, source, target) (photo_enrichment_edge_info{instance=~\"$instance\"}) or max by (id,source,target) (photo_frigate_edge_info{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60))",
+              "expr": "max by (id, source, target) (media_pipeline_edge_info{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) or max by (id, source, target) (photo_enrichment_edge_info{instance=~\"$instance\"}) or max by (id,source,target) (photo_frigate_edge_info{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by(id,source,target)(photo_pipeline_edge_info{instance=~\"$instance\"})",
               "format": "table",
               "instant": true,
               "range": false,
@@ -975,7 +975,7 @@ data:
             },
             "overrides": []
           },
-          "description": "Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; no end-to-end lead time or queue residence time is measured. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
+          "description": "Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI review percentages are normalized separately from worker percentages. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
           "transformations": [
             {
               "id": "calculateField",
@@ -1651,7 +1651,7 @@ data:
                       "text": "CPU faces"
                     },
                     "4": {
-                      "text": "Save DuckDB"
+                      "text": "PostgreSQL commit"
                     },
                     "5": {
                       "text": "Save human labels"
@@ -1912,7 +1912,7 @@ data:
               "mode": "multi"
             }
           },
-          "description": "EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source reindex requires a worker restart."
+          "description": "EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source catalog refresh runs hourly."
         },
         {
           "id": 114,
@@ -1998,7 +1998,7 @@ data:
               "mode": "multi"
             }
           },
-          "description": "Durable DuckDB facts. Counts can decrease after edits; these are gauges, not cumulative counters. Parquet export is a separate explicit operation."
+          "description": "Authoritative PostgreSQL facts. Counts can decrease after edits. A separate timer publishes coherent Parquet generations."
         },
         {
           "id": 115,
@@ -2278,7 +2278,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 84
+            "y": 103
           },
           "panels": []
         },
@@ -2294,7 +2294,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 85
+            "y": 104
           },
           "targets": [
             {
@@ -2363,7 +2363,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 85
+            "y": 104
           },
           "targets": [
             {
@@ -2416,7 +2416,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 85
+            "y": 104
           },
           "targets": [
             {
@@ -2469,7 +2469,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 85
+            "y": 104
           },
           "targets": [
             {
@@ -2523,7 +2523,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 89
+            "y": 108
           },
           "targets": [
             {
@@ -2577,7 +2577,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 89
+            "y": 108
           },
           "targets": [
             {
@@ -2619,6 +2619,439 @@ data:
           }
         },
         {
+          "id": 127,
+          "type": "row",
+          "title": "PostgreSQL queue and analytical snapshots",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 84
+          },
+          "panels": []
+        },
+        {
+          "id": 128,
+          "type": "timeseries",
+          "title": "Photo jobs over time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 85
+          },
+          "targets": [
+            {
+              "expr": "sum by(kind)(photo_enrichment_jobs{instance=~\"$instance\",kind=~\"ready|running|retry|done\"})",
+              "legendFormat": "{{kind}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 129,
+          "type": "timeseries",
+          "title": "Queue and analytics freshness",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 85
+          },
+          "targets": [
+            {
+              "expr": "max(photo_enrichment_jobs{instance=~\"$instance\",kind=\"oldest_seconds\"})",
+              "legendFormat": "oldest unfinished job",
+              "refId": "A"
+            },
+            {
+              "expr": "time()-min(photo_snapshot_captured_timestamp_seconds{instance=~\"$instance\"})",
+              "legendFormat": "analytical snapshot age",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 130,
+          "type": "stat",
+          "title": "Snapshot export status",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 92
+          },
+          "targets": [
+            {
+              "expr": "min(photo_snapshot_success{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "DOWN",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "OK",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 131,
+          "type": "stat",
+          "title": "Parquet export duration",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 92
+          },
+          "targets": [
+            {
+              "expr": "max(photo_snapshot_export_seconds{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 132,
+          "type": "stat",
+          "title": "Current analytical snapshot",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 92
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_snapshot_bytes{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 133,
+          "type": "stat",
+          "title": "Analytical freshness",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 92
+          },
+          "targets": [
+            {
+              "expr": "time()-min(photo_snapshot_captured_timestamp_seconds{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 600
+                  },
+                  {
+                    "color": "red",
+                    "value": 1800
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 134,
+          "type": "timeseries",
+          "title": "GUI review operations",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 96
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage,status)(rate(photo_review_stage_operations_total{instance=~\"$instance\"}[$__rate_interval])) * 60",
+              "legendFormat": "{{stage}} / {{status}} per minute",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 135,
+          "type": "timeseries",
+          "title": "Snapshot export history",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 96
+          },
+          "targets": [
+            {
+              "expr": "photo_snapshot_export_seconds{instance=~\"$instance\"}",
+              "legendFormat": "export seconds",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
           "id": 15,
           "type": "row",
           "title": "Backfill progress",
@@ -2627,7 +3060,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 96
+            "y": 115
           },
           "panels": []
         },
@@ -2643,7 +3076,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 97
+            "y": 116
           },
           "targets": [
             {
@@ -2693,7 +3126,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 97
+            "y": 116
           },
           "targets": [
             {
@@ -2747,7 +3180,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 97
+            "y": 116
           },
           "targets": [
             {
@@ -2796,7 +3229,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 97
+            "y": 116
           },
           "targets": [
             {
@@ -2845,7 +3278,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 97
+            "y": 116
           },
           "targets": [
             {
@@ -2895,7 +3328,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 97
+            "y": 116
           },
           "targets": [
             {
@@ -2944,7 +3377,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 101
+            "y": 120
           },
           "targets": [
             {
@@ -3008,7 +3441,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 101
+            "y": 120
           },
           "targets": [
             {
@@ -3057,7 +3490,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 101
+            "y": 120
           },
           "targets": [
             {
@@ -3107,7 +3540,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 101
+            "y": 120
           },
           "targets": [
             {
@@ -3156,7 +3589,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 101
+            "y": 120
           },
           "targets": [
             {
@@ -3205,7 +3638,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 101
+            "y": 120
           },
           "targets": [
             {
@@ -3258,7 +3691,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 105
+            "y": 124
           },
           "targets": [
             {
@@ -3317,7 +3750,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 105
+            "y": 124
           },
           "targets": [
             {
@@ -3366,7 +3799,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 105
+            "y": 124
           },
           "targets": [
             {
@@ -3413,7 +3846,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 112
+            "y": 131
           },
           "panels": []
         },
@@ -3429,7 +3862,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 113
+            "y": 132
           },
           "targets": [
             {
@@ -3483,7 +3916,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 113
+            "y": 132
           },
           "targets": [
             {
@@ -3533,7 +3966,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 113
+            "y": 132
           },
           "targets": [
             {
@@ -3591,7 +4024,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 113
+            "y": 132
           },
           "targets": [
             {
@@ -3641,7 +4074,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 113
+            "y": 132
           },
           "targets": [
             {
@@ -3699,7 +4132,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 113
+            "y": 132
           },
           "targets": [
             {
@@ -3753,7 +4186,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 117
+            "y": 136
           },
           "targets": [
             {
@@ -3821,7 +4254,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 117
+            "y": 136
           },
           "targets": [
             {
@@ -3871,7 +4304,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 117
+            "y": 136
           },
           "targets": [
             {
@@ -3930,7 +4363,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 117
+            "y": 136
           },
           "targets": [
             {
@@ -3980,7 +4413,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 117
+            "y": 136
           },
           "targets": [
             {
@@ -4029,7 +4462,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 117
+            "y": 136
           },
           "targets": [
             {
@@ -4078,7 +4511,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 121
+            "y": 140
           },
           "targets": [
             {
@@ -4147,7 +4580,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 121
+            "y": 140
           },
           "targets": [
             {
@@ -4215,7 +4648,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 121
+            "y": 140
           },
           "targets": [
             {
@@ -4283,7 +4716,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 121
+            "y": 140
           },
           "targets": [
             {
@@ -4334,7 +4767,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 121
+            "y": 140
           },
           "targets": [
             {
@@ -4385,7 +4818,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 121
+            "y": 140
           },
           "targets": [
             {
@@ -4435,7 +4868,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 125
+            "y": 144
           },
           "targets": [
             {
@@ -4484,7 +4917,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 125
+            "y": 144
           },
           "targets": [
             {
@@ -4538,7 +4971,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 132
+            "y": 151
           },
           "targets": [
             {
@@ -4592,7 +5025,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 132
+            "y": 151
           },
           "targets": [
             {
@@ -4638,7 +5071,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 139
+            "y": 158
           },
           "panels": []
         },
@@ -4654,7 +5087,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 140
+            "y": 159
           },
           "targets": [
             {
@@ -4722,7 +5155,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 140
+            "y": 159
           },
           "targets": [
             {
@@ -4779,7 +5212,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 140
+            "y": 159
           },
           "targets": [
             {
@@ -4828,7 +5261,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 140
+            "y": 159
           },
           "targets": [
             {
@@ -4877,7 +5310,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 140
+            "y": 159
           },
           "targets": [
             {
@@ -4926,7 +5359,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 140
+            "y": 159
           },
           "targets": [
             {
@@ -4976,7 +5409,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 144
+            "y": 163
           },
           "panels": []
         },
@@ -4992,7 +5425,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 145
+            "y": 164
           },
           "targets": [
             {
@@ -5042,7 +5475,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 145
+            "y": 164
           },
           "targets": [
             {
@@ -5091,7 +5524,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 145
+            "y": 164
           },
           "targets": [
             {
@@ -5140,7 +5573,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 145
+            "y": 164
           },
           "targets": [
             {
@@ -5193,7 +5626,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 145
+            "y": 164
           },
           "targets": [
             {
@@ -5242,7 +5675,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 145
+            "y": 164
           },
           "targets": [
             {
@@ -5292,7 +5725,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 149
+            "y": 168
           },
           "targets": [
             {
@@ -5342,7 +5775,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 149
+            "y": 168
           },
           "targets": [
             {
@@ -5388,7 +5821,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 157
+            "y": 176
           },
           "panels": []
         },
@@ -5404,7 +5837,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 158
+            "y": 177
           },
           "targets": [
             {
@@ -5453,7 +5886,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 158
+            "y": 177
           },
           "targets": [
             {
@@ -5506,7 +5939,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 158
+            "y": 177
           },
           "targets": [
             {
@@ -5555,7 +5988,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 158
+            "y": 177
           },
           "targets": [
             {
@@ -5605,7 +6038,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 158
+            "y": 177
           },
           "targets": [
             {
@@ -5669,7 +6102,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 158
+            "y": 177
           },
           "targets": [
             {
@@ -5718,7 +6151,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 162
+            "y": 181
           },
           "targets": [
             {
@@ -5853,7 +6286,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 170
+            "y": 189
           },
           "targets": [
             {
@@ -5907,7 +6340,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 170
+            "y": 189
           },
           "targets": [
             {
@@ -5958,7 +6391,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 178
+            "y": 197
           },
           "panels": []
         },
@@ -5974,7 +6407,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 179
+            "y": 198
           },
           "targets": [
             {
@@ -6038,7 +6471,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 179
+            "y": 198
           },
           "targets": [
             {
@@ -6087,7 +6520,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 179
+            "y": 198
           },
           "targets": [
             {
@@ -6155,7 +6588,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 179
+            "y": 198
           },
           "targets": [
             {
@@ -6204,7 +6637,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 179
+            "y": 198
           },
           "targets": [
             {
@@ -6253,7 +6686,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 179
+            "y": 198
           },
           "targets": [
             {
@@ -6303,7 +6736,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 183
+            "y": 202
           },
           "targets": [
             {
@@ -6349,7 +6782,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 189
+            "y": 208
           },
           "panels": []
         },
@@ -6365,7 +6798,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 190
+            "y": 209
           },
           "targets": [
             {
@@ -6433,7 +6866,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 190
+            "y": 209
           },
           "targets": [
             {
@@ -6482,7 +6915,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 190
+            "y": 209
           },
           "targets": [
             {
@@ -6541,7 +6974,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 194
+            "y": 213
           },
           "targets": [
             {
@@ -6590,7 +7023,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 200
+            "y": 219
           },
           "targets": [
             {

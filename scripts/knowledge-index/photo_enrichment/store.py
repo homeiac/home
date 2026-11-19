@@ -16,6 +16,62 @@ from .metadata import VERSION, PHOTO_EXTENSIONS, contained, oriented_image, read
 from .metrics import Metrics
 
 
+UPSERT_COLUMNS = {
+    'extracted': 'path size_bytes mtime_ns capture_ts capture_source latitude longitude altitude gps_source camera_make camera_model width height error version'.split(),
+    'photo_groups': 'id event location venue notes tags timezone'.split(),
+    'face_scans': 'path size_bytes mtime_ns model'.split(),
+}
+
+
+SCHEMA_SQL = """
+            CREATE TABLE IF NOT EXISTS extracted (
+                path VARCHAR PRIMARY KEY, size_bytes BIGINT, mtime_ns BIGINT, capture_ts DOUBLE,
+                capture_source VARCHAR, latitude DOUBLE, longitude DOUBLE, altitude DOUBLE, gps_source VARCHAR,
+                camera_make VARCHAR, camera_model VARCHAR, width INTEGER, height INTEGER,
+                error VARCHAR, version VARCHAR, updated_at TIMESTAMP DEFAULT current_timestamp);
+            CREATE TABLE IF NOT EXISTS photo_groups (
+                id VARCHAR PRIMARY KEY, event VARCHAR, location VARCHAR, venue VARCHAR, notes VARCHAR,
+                tags VARCHAR[], timezone VARCHAR, updated_at TIMESTAMP DEFAULT current_timestamp);
+            CREATE TABLE IF NOT EXISTS group_members (
+                group_id VARCHAR, path VARCHAR, size_bytes BIGINT, PRIMARY KEY(group_id, path));
+            CREATE TABLE IF NOT EXISTS faces (
+                id VARCHAR PRIMARY KEY, path VARCHAR, size_bytes BIGINT, mtime_ns BIGINT,
+                box DOUBLE[], confidence DOUBLE, embedding DOUBLE[], model VARCHAR,
+                person VARCHAR, label_source VARCHAR, updated_at TIMESTAMP DEFAULT current_timestamp);
+            CREATE TABLE IF NOT EXISTS face_scans (
+                path VARCHAR PRIMARY KEY, size_bytes BIGINT, mtime_ns BIGINT, model VARCHAR);
+            CREATE TABLE IF NOT EXISTS rejected_matches (
+                face_id VARCHAR, reference_id VARCHAR, PRIMARY KEY(face_id, reference_id));
+            CREATE TABLE IF NOT EXISTS annotation_history (
+                id VARCHAR, action VARCHAR, payload VARCHAR, created_at TIMESTAMP DEFAULT current_timestamp);
+        """
+
+MEDIA_VIEW_SQL = """
+            CREATE OR REPLACE TEMP VIEW enriched_media AS
+            SELECT m.*, coalesce(e.capture_ts, m.taken_ts) AS capture_ts,
+                   coalesce(e.capture_source, CASE WHEN m.taken_ts IS NOT NULL THEN 'takeout.photoTakenTime' END) AS capture_source,
+                   CASE WHEN e.path IS NOT NULL THEN e.latitude
+                        WHEN s.geo_lat BETWEEN -90 AND 90 AND s.geo_lon BETWEEN -180 AND 180
+                             AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN s.geo_lat END AS latitude,
+                   CASE WHEN e.path IS NOT NULL THEN e.longitude
+                        WHEN s.geo_lat BETWEEN -90 AND 90 AND s.geo_lon BETWEEN -180 AND 180
+                             AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN s.geo_lon END AS longitude,
+                   CASE WHEN e.path IS NOT NULL THEN e.gps_source
+                        WHEN s.geo_lat BETWEEN -90 AND 90 AND s.geo_lon BETWEEN -180 AND 180
+                             AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN 'takeout.geoData' END AS gps_source,
+                   e.camera_make, e.camera_model, e.error AS extraction_error, e.version AS extraction_version,
+                   summary.summary, summary.tags AS summary_tags, summary.model AS summary_model
+            FROM catalog.gphotos_media m
+            LEFT JOIN catalog.gphotos_sidecars s ON s.path=m.sidecar_path
+            LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes
+            LEFT JOIN (
+                SELECT * FROM catalog.media_summaries WHERE status='ok'
+                QUALIFY row_number() OVER (PARTITION BY path ORDER BY created_at DESC, enricher DESC)=1
+            ) summary ON summary.path=m.path AND summary.size_bytes=m.size_bytes
+            WHERE m.kind='media' AND m.ext IN ('jpg','jpeg','heic','png','gif','webp');
+        """
+
+
 def observed(stage: str | None = None):
     """Serialize mutations and refresh aggregate telemetry after the transaction."""
     def decorate(function):
@@ -39,7 +95,8 @@ def sql_path(path: Path) -> str:
 
 class Store:
     """Serialize local writes; keep original media and source DuckDB untouched."""
-    def __init__(self, index: Path, library: Path, state: Path, metrics: Metrics | None = None):
+    def __init__(self, index: Path, library: Path, state: Path, metrics: Metrics | None = None,
+                 memory: bool = False):
         self.library = library.resolve()
         self.state = state.resolve()
         if self.state.is_relative_to(index.resolve()) or self.state.is_relative_to(self.library):
@@ -47,55 +104,58 @@ class Store:
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.metrics = metrics or Metrics()
-        self.db = duckdb.connect(str(self.state / "enrichment.duckdb"))
-        self.db.execute(f"ATTACH {sql_path(index / 'knowledge.duckdb')} AS catalog (READ_ONLY)")
-        self.db.execute("""
-            CREATE TABLE IF NOT EXISTS extracted (
-                path VARCHAR PRIMARY KEY, size_bytes BIGINT, mtime_ns BIGINT, capture_ts DOUBLE,
-                capture_source VARCHAR, latitude DOUBLE, longitude DOUBLE, altitude DOUBLE, gps_source VARCHAR,
-                camera_make VARCHAR, camera_model VARCHAR, width INTEGER, height INTEGER,
-                error VARCHAR, version VARCHAR, updated_at TIMESTAMP DEFAULT current_timestamp);
-            CREATE TABLE IF NOT EXISTS photo_groups (
-                id VARCHAR PRIMARY KEY, event VARCHAR, location VARCHAR, venue VARCHAR, notes VARCHAR,
-                tags VARCHAR[], timezone VARCHAR, updated_at TIMESTAMP DEFAULT current_timestamp);
-            CREATE TABLE IF NOT EXISTS group_members (
-                group_id VARCHAR, path VARCHAR, size_bytes BIGINT, PRIMARY KEY(group_id, path));
-            CREATE TABLE IF NOT EXISTS faces (
-                id VARCHAR PRIMARY KEY, path VARCHAR, size_bytes BIGINT, mtime_ns BIGINT,
-                box DOUBLE[], confidence DOUBLE, embedding DOUBLE[], model VARCHAR,
-                person VARCHAR, label_source VARCHAR, updated_at TIMESTAMP DEFAULT current_timestamp);
-            CREATE TABLE IF NOT EXISTS face_scans (
-                path VARCHAR PRIMARY KEY, size_bytes BIGINT, mtime_ns BIGINT, model VARCHAR);
-            CREATE TABLE IF NOT EXISTS rejected_matches (
-                face_id VARCHAR, reference_id VARCHAR, PRIMARY KEY(face_id, reference_id));
-            CREATE TABLE IF NOT EXISTS annotation_history (
-                id VARCHAR, action VARCHAR, payload VARCHAR, created_at TIMESTAMP DEFAULT current_timestamp);
-        """)
+        self.index = index
+        self.db = duckdb.connect(":memory:" if memory else str(self.state / "enrichment.duckdb"))
+        if memory:
+            self.db.execute("SET threads=2; SET memory_limit='768MB'; ATTACH ':memory:' AS catalog")
+            self.refresh_catalog()
+        else:
+            self.db.execute(f"ATTACH {sql_path(index / 'knowledge.duckdb')} AS catalog (READ_ONLY)")
+        self.db.execute(SCHEMA_SQL)
+        self.db.execute(MEDIA_VIEW_SQL)
 
-        self.db.execute("""
-            CREATE OR REPLACE TEMP VIEW enriched_media AS
-            SELECT m.*, coalesce(e.capture_ts, m.taken_ts) AS capture_ts,
-                   coalesce(e.capture_source, CASE WHEN m.taken_ts IS NOT NULL THEN 'takeout.photoTakenTime' END) AS capture_source,
-                   CASE WHEN e.path IS NOT NULL THEN e.latitude
-                        WHEN s.geo_lat BETWEEN -90 AND 90 AND s.geo_lon BETWEEN -180 AND 180
-                             AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN s.geo_lat END AS latitude,
-                   CASE WHEN e.path IS NOT NULL THEN e.longitude
-                        WHEN s.geo_lat BETWEEN -90 AND 90 AND s.geo_lon BETWEEN -180 AND 180
-                             AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN s.geo_lon END AS longitude,
-                   CASE WHEN e.path IS NOT NULL THEN e.gps_source
-                        WHEN s.geo_lat BETWEEN -90 AND 90 AND s.geo_lon BETWEEN -180 AND 180
-                             AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN 'takeout.geoData' END AS gps_source,
-                   e.camera_make, e.camera_model, e.error AS extraction_error, e.version AS extraction_version,
-                   summary.summary, summary.tags AS summary_tags, summary.model AS summary_model
-            FROM catalog.gphotos_media m
-            LEFT JOIN catalog.gphotos_sidecars s ON s.path=m.sidecar_path
-            LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes
-            LEFT JOIN (
-                SELECT * FROM catalog.media_summaries WHERE status='ok'
-                QUALIFY row_number() OVER (PARTITION BY path ORDER BY created_at DESC, enricher DESC)=1
-            ) summary ON summary.path=m.path AND summary.size_bytes=m.size_bytes
-            WHERE m.kind='media' AND m.ext IN ('jpg','jpeg','heic','png','gif','webp');
-        """)
+    def upsert(self, table: str, values: list) -> None:
+        """Use the same explicit upserts for local recovery and PostgreSQL stores."""
+        columns = UPSERT_COLUMNS[table]
+        assignments = ','.join(f'{c}=excluded.{c}' for c in columns[1:])
+        if table != 'face_scans':
+            assignments += ',updated_at=now()'
+        self.db.execute(f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)}) ON CONFLICT ({columns[0]}) DO UPDATE SET {assignments}", values)
+
+    def refresh_catalog(self) -> None:
+        """Snapshot Parquet-backed source views in memory; release the source DB lock."""
+        with self.lock:
+            self.db.execute(f"ATTACH {sql_path(self.index / 'knowledge.duckdb')} AS source_catalog (READ_ONLY)")
+            try:
+                self.db.execute("BEGIN")
+                for name in ("gphotos_media", "gphotos_sidecars", "gphotos_album_dup", "media_summaries"):
+                    self.db.execute(f"CREATE OR REPLACE TABLE catalog.{name} AS SELECT * FROM source_catalog.{name}")
+                self.db.execute("COMMIT")
+            except Exception:
+                self.db.execute("ROLLBACK")
+                raise
+            finally:
+                self.db.execute("DETACH source_catalog")
+
+    def face_library(self, person: str = "", status: str = "unreviewed", offset: int = 0, limit: int = 48) -> dict:
+        """Paginate current face crops with named collections and review counts."""
+        if status not in ("all", "unreviewed", "named") or not 0 <= offset or not 1 <= limit <= 100:
+            raise ValueError("Invalid face filter")
+        base = """FROM faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+            AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+            JOIN enriched_media m ON m.path=f.path AND m.size_bytes=f.size_bytes
+            WHERE NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=f.path)"""
+        filters, params = "", []
+        if status == "unreviewed": filters += " AND f.person IS NULL"
+        if status == "named": filters += " AND f.person IS NOT NULL"
+        if person:
+            filters += " AND f.person=?"
+            params.append(person)
+        people = self.rows("SELECT person,count(*) AS faces " + base + " AND person IS NOT NULL GROUP BY person ORDER BY lower(person)")
+        total = self.rows("SELECT count(*) n " + base + filters, params)[0]["n"]
+        counts = self.rows("SELECT count(*) AS total, count(*) FILTER(WHERE f.person IS NULL) AS unreviewed " + base)[0]
+        items = self.rows("SELECT f.id,f.path,f.box,f.confidence,f.person,f.label_source,f.updated_at AS revision,m.capture_ts,m.latitude,m.longitude,m.summary " + base + filters + " ORDER BY m.capture_ts DESC NULLS LAST,f.id LIMIT ? OFFSET ?", [*params,limit,offset])
+        return dict(faces=items, people=people, total=total, offset=offset, counts=counts)
 
     def refresh_metrics(self) -> None:
         """Count current indexed facts without reading every original file."""
@@ -172,7 +232,7 @@ class Store:
         photo = self.photo(path)
         photo["groups"] = self.rows("SELECT g.* FROM photo_groups g JOIN group_members m ON m.group_id=g.id WHERE m.path=? AND m.size_bytes=? ORDER BY g.updated_at DESC", [path, photo["size_bytes"]])
         file = self.source_file(path)
-        photo["faces"] = self.rows("SELECT id, box, confidence, model, person, label_source FROM faces WHERE path=? AND size_bytes=? AND mtime_ns=? ORDER BY id",
+        photo["faces"] = self.rows("SELECT id, box, confidence, model, person, label_source, updated_at AS revision FROM faces WHERE path=? AND size_bytes=? AND mtime_ns=? ORDER BY id",
                                    [path, photo["size_bytes"], file.stat().st_mtime_ns])
         return photo
 
@@ -205,8 +265,7 @@ class Store:
                 raise ValueError("Unknown group")
             self.db.execute("BEGIN")
             try:
-                self.db.execute("INSERT OR REPLACE INTO photo_groups VALUES (?,?,?,?,?,?,?,current_timestamp)",
-                                [group_id, fields["event"], fields["location"], fields["venue"], fields["notes"], tags, timezone])
+                self.upsert("photo_groups", [group_id, fields["event"], fields["location"], fields["venue"], fields["notes"], tags, timezone])
                 self.db.execute("DELETE FROM group_members WHERE group_id=?", [group_id])
                 self.db.executemany("INSERT INTO group_members VALUES (?,?,?)", members)
                 self._history("save_group", dict(id=group_id, paths=paths, **fields, tags=tags, timezone=timezone))
@@ -276,8 +335,7 @@ class Store:
                     if (after.st_size, after.st_mtime_ns) != (st.st_size, st.st_mtime_ns):
                         raise ValueError("Photo changed during extraction")
                     with self.lock, self.metrics.measure("persist"):
-                        self.db.execute("INSERT OR REPLACE INTO extracted VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,current_timestamp)",
-                                        [path, st.st_size, st.st_mtime_ns] + list(meta.values()))
+                        self.upsert("extracted", [path, st.st_size, st.st_mtime_ns] + list(meta.values()))
                     results["processed"] += 1
                     if meta["error"]:
                         results["errors"].append({"path": path, "error": meta["error"]})
@@ -299,7 +357,7 @@ class Store:
                             for face in detected:
                                 self.db.execute("INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)",
                                                 [face["id"], path, st.st_size, st.st_mtime_ns, face["box"], face["confidence"], face["embedding"], face["model"]])
-                            self.db.execute("INSERT OR REPLACE INTO face_scans VALUES (?,?,?,?)", [path, st.st_size, st.st_mtime_ns, MODEL_ID])
+                            self.upsert("face_scans", [path, st.st_size, st.st_mtime_ns, MODEL_ID])
                             self.db.execute("COMMIT")
                         except Exception:
                             self.db.execute("ROLLBACK")
@@ -320,11 +378,13 @@ class Store:
         return face
 
     @observed("review")
-    def label_face(self, face_id: str, person: str) -> None:
+    def label_face(self, face_id: str, person: str, revision=None) -> None:
         if not isinstance(person, str) or len(person) > 200:
             raise ValueError("Invalid person name")
         with self.lock:
             face = self.face(face_id)
+            if revision is not None and str(face["updated_at"]) != str(revision):
+                raise ValueError("This face was edited elsewhere; refresh before saving")
             self.db.execute("BEGIN")
             try:
                 self.db.execute("UPDATE faces SET person=?,label_source=?,updated_at=current_timestamp WHERE id=?",
@@ -355,7 +415,7 @@ class Store:
     def reject(self, face_id: str, reference_id: str) -> None:
         with self.lock:
             self.face(face_id); self.face(reference_id)
-            self.db.execute("INSERT OR IGNORE INTO rejected_matches VALUES (?,?)", [face_id, reference_id])
+            self.db.execute("INSERT INTO rejected_matches VALUES (?,?) ON CONFLICT DO NOTHING", [face_id, reference_id])
 
     def thumbnail(self, path: str, face_id: str | None = None) -> bytes:
         image = oriented_image(self.source_file(path))

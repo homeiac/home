@@ -53,7 +53,11 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     return self.send((STATIC / name).read_bytes(), content_type=kind)
                 if parsed.path == "/api/config":
                     import os
-                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL"))})
+                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False)})
+                if parsed.path == "/api/status":
+                    return self.send(store.status() if hasattr(store,"status") else {"backend":"local"})
+                if parsed.path == "/api/faces":
+                    return self.send(store.face_library(query.get("person",""),query.get("status","unreviewed"),int(query.get("offset",0))))
                 if parsed.path == "/api/dates":
                     return self.send(store.dates(query.get("timezone", "UTC")))
                 if parsed.path == "/api/photos":
@@ -91,6 +95,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 store.delete_group(body["id"])
                 return self.send({"deleted": True})
             if parsed.path == "/api/extract":
+                if getattr(store,"background_only",False):
+                    raise ValueError("Extraction runs in the background worker")
                 paths = body.get("paths", [])
                 if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
                     raise ValueError("Expected photo paths")
@@ -100,7 +106,10 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                         engine = FaceEngine(models)
                     return self.send(store.extract(paths, body.get("timezone", "UTC"), engine if body.get("faces") else None))
             if parsed.path == "/api/faces/label":
-                store.label_face(body["id"], body.get("person", ""))
+                store.label_face(body["id"], body.get("person", ""), body.get("revision"))
+                return self.send({"saved": True})
+            if parsed.path == "/api/faces/labels":
+                store.label_faces(body.get("faces",[]),body.get("person",""))
                 return self.send({"saved": True})
             if parsed.path == "/api/faces/reject":
                 store.reject(body["id"], body["reference_id"])

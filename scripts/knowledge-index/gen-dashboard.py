@@ -159,7 +159,7 @@ def panels():
     offset = p[insert_at]["gridPos"]["y"]
     pipeline = pipeline_panels()
     enrichment = photo_enrichment_panels()
-    shift(p[insert_at:], 80)
+    shift(p[insert_at:], 99)
     p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 42)
     return p
 
@@ -198,7 +198,16 @@ def pipeline_panels():
         ' or max by (id,title) (photo_frigate_processing_milliseconds' + INST + fresh + ')'
         ' or max by (id,title) (photo_frigate_service_up' + INST + fresh + ')')
     graph["targets"][1]["expr"] += ' or max by (id,source,target) (photo_frigate_edge_info' + INST + fresh + ')'
-    graph["description"] += " Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; no end-to-end lead time or queue residence time is measured."
+    review_rate = 'rate(photo_review_stage_seconds_total' + INST + '[$__rate_interval])'
+    graph["targets"][0]["expr"] += ' or label_replace(((100 * sum by(id,title) (' + review_rate + ') / scalar(sum(' + review_rate + ')) >= 0) or sum by(id,title)(photo_review_stage_seconds_total' + INST + ') * 0), "title", "$1 (%)", "title", "(.+)")'
+    def node(expression, node_id, title):
+        return 'label_replace(label_replace((' + expression + '), "id", "' + node_id + '", "", ""), "title", "' + title + '", "", "")'
+    graph["targets"][0]["expr"] += ' or ' + node('sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|retry"})','photo_jobs','PostgreSQL queue (jobs)')
+    graph["targets"][0]["expr"] += ' or ' + node('max(photo_snapshot_export_seconds'+INST+')','photo_export','Parquet export (seconds)')
+    graph["targets"][0]["expr"] += ' or ' + node('time()-min(photo_snapshot_captured_timestamp_seconds'+INST+')','photo_analytics','DuckDB snapshot age (seconds)')
+    graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_pipeline_edge_info'+INST+')'
+    graph["description"] += " PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI review percentages are normalized separately from worker percentages."
+    graph["description"] += " Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured."
     # Node Graph reads field.name, not Organize's display-name override.
     # Copy the sole numeric value into an actual mainstat field.
     graph["transformations"] = [
@@ -254,7 +263,7 @@ def photo_enrichment_panels():
     age = 'time() - photo_enrichment_heartbeat_timestamp_seconds' + INST
     current = '(photo_enrichment_worker_stage' + INST + ' and (' + age + ' < 60)) or (photo_enrichment_worker_stage' + INST + ' * 0 - 1)'
     states = {str(i): {"text": name} for i, name in [(-1, "Stale telemetry"), (0, "Idle / waiting for selection"),
-        (1, "Catalog / queue"), (2, "Read EXIF"), (3, "CPU faces"), (4, "Save DuckDB"),
+        (1, "Catalog / queue"), (2, "Read EXIF"), (3, "CPU faces"), (4, "PostgreSQL commit"),
         (5, "Save human labels"), (6, "Optional Frigate"), (7, "Export Parquet"), (8, "Finished"), (9, "Failed")]}
     inventory = lambda kind: 'sum(photo_enrichment_inventory{instance=~"$instance",kind="' + kind + '"})'
     p = [row("Photo enrichment — parallel CPU branch", 0),
@@ -263,10 +272,10 @@ def photo_enrichment_panels():
          stat("Faces awaiting names", 'sum(photo_enrichment_queue{instance=~"$instance",stage="review"})', 12, 1, w=6),
          stat("Photos with GPS", inventory("gps"), 18, 1, w=6)]
     p += [series("Enrichment work remaining", [('sum by (stage) (photo_enrichment_queue' + INST + ')', '{{stage}} pending'), ('max(media_summaries_queue{instance=~"$instance",enricher=~"$pipeline_enricher"})', 'captions pending')], 0, 5, 12, 7,
-                 description="EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source reindex requires a worker restart."),
+                 description="EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source catalog refresh runs hourly."),
           series("Enrichment facts over time", [(inventory(kind), name) for kind, name in
                  (("exif", "EXIF extracted"), ("gps", "GPS available"), ("faces", "faces detected"), ("named_faces", "faces named"), ("groups", "annotated groups"))], 12, 5, 12, 7,
-                 description="Durable DuckDB facts. Counts can decrease after edits; these are gauges, not cumulative counters. Parquet export is a separate explicit operation.")]
+                 description="Authoritative PostgreSQL facts. Counts can decrease after edits. A separate timer publishes coherent Parquet generations.")]
     average = 'sum by (stage) (rate(photo_enrichment_stage_completed_seconds_total' + INST + '[$__rate_interval])) / (sum by (stage) (rate(photo_enrichment_stage_operations_total' + INST + '[$__rate_interval])) > 0)'
     p += [series("Photo stages: seconds per operation", [(average, '{{stage}}')], 0, 12, 12, 7, unit="s", decimals=3,
                  description="EXIF and CPU faces operate on photos; persistence operates on transactions; review measures annotation saves only; export covers a set of tables. Failed operations are included. Optional Frigate includes HTTP and server time."),
@@ -278,23 +287,32 @@ def photo_enrichment_panels():
           series("Photo current operation age", [('((time() - photo_enrichment_stage_started_timestamp_seconds' + INST + ') and (photo_enrichment_worker_stage' + INST + ' > 0) and (photo_enrichment_worker_stage' + INST + ' < 8) and (' + age + ' < 60)) or (photo_enrichment_worker_stage' + INST + ' * 0 and (' + age + ' < 60))', 'current operation seconds')], 18, 19, 6, 7, unit="s", description="Zero between operations or after a clean stop; missing data means telemetry is absent or older than 60 seconds.")]
     frigate_age = 'time() - photo_frigate_last_poll_timestamp_seconds' + INST
     fresh = ' and on(instance) (' + frigate_age + ' < 60)'
-    p += [row("Frigate processing — shared service", 26),
-          stat("Frigate API reachable", 'photo_frigate_service_up' + INST + fresh, 0, 27, w=6,
+    p += [row("Frigate processing — shared service", 45),
+          stat("Frigate API reachable", 'photo_frigate_service_up' + INST + fresh, 0, 46, w=6,
                mappings={"0": {"text": "Unreachable", "color": "red"}, "1": {"text": "Up", "color": "green"}},
                description="Endpoint reachability is not face-classifier readiness."),
-          stat("Frigate telemetry age", frigate_age, 6, 27, w=6, unit="s"),
-          stat("Frigate object processing", 'photo_frigate_frames_per_second{instance=~"$instance",kind="objects"}' + fresh, 12, 27, w=6, unit="fps"),
-          stat("Frigate face processing", 'photo_frigate_processing_milliseconds{instance=~"$instance",kind="faces"}' + fresh, 18, 27, w=6, unit="ms",
+          stat("Frigate telemetry age", frigate_age, 6, 46, w=6, unit="s"),
+          stat("Frigate object processing", 'photo_frigate_frames_per_second{instance=~"$instance",kind="objects"}' + fresh, 12, 46, w=6, unit="fps"),
+          stat("Frigate face processing", 'photo_frigate_processing_milliseconds{instance=~"$instance",kind="faces"}' + fresh, 18, 46, w=6, unit="ms",
                description="Native rolling processing time. Zero means no native face processing recorded; this is not an identity-readiness check."),
-          series("Frigate processing time", [('photo_frigate_processing_milliseconds' + INST + fresh, '{{kind}}')], 0, 31, 12, 7, unit="ms",
+          series("Frigate processing time", [('photo_frigate_processing_milliseconds' + INST + fresh, '{{kind}}')], 0, 50, 12, 7, unit="ms",
                  description="Native camera-service processing. Uploaded-photo requests are timed separately in the optional photo worker."),
-          series("Frigate processing rate", [('photo_frigate_frames_per_second' + INST + fresh, '{{kind}}')], 12, 31, 12, 7, unit="fps")]
+          series("Frigate processing rate", [('photo_frigate_frames_per_second' + INST + fresh, '{{kind}}')], 12, 50, 12, 7, unit="fps")]
     # Missing instrumentation is deliberately distinct from idle (zero) or no backlog.
     for panel in p:
         if "fieldConfig" in panel:
             panel["fieldConfig"]["defaults"]["noValue"] = "Not instrumented"
         for target in panel.get("targets", []):
             target.update({"interval": "30s", "instant": panel["type"] == "stat", "range": panel["type"] != "stat"})
+    p += [row("PostgreSQL queue and analytical snapshots", 26),
+          series("Photo jobs over time", [('sum by(kind)(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|running|retry|done"})','{{kind}}')],0,27,12,7),
+          series("Queue and analytics freshness", [('max(photo_enrichment_jobs{instance=~"$instance",kind="oldest_seconds"})','oldest unfinished job'),('time()-min(photo_snapshot_captured_timestamp_seconds'+INST+')','analytical snapshot age')],12,27,12,7,unit="s"),
+          stat("Snapshot export status",'min(photo_snapshot_success'+INST+')',0,34,w=6,mappings=OK),
+          stat("Parquet export duration",'max(photo_snapshot_export_seconds'+INST+')',6,34,w=6,unit="s"),
+          stat("Current analytical snapshot",'sum(photo_snapshot_bytes'+INST+')',12,34,w=6,unit="bytes"),
+          stat("Analytical freshness",'time()-min(photo_snapshot_captured_timestamp_seconds'+INST+')',18,34,w=6,unit="s",thresholds=[("green",None),("orange",600),("red",1800)]),
+          series("GUI review operations", [('sum by(stage,status)(rate(photo_review_stage_operations_total'+INST+'[$__rate_interval])) * 60','{{stage}} / {{status}} per minute')],0,38,12,7),
+          series("Snapshot export history", [('photo_snapshot_export_seconds'+INST,'export seconds')],12,38,12,7,unit="s")]
     return p
 
 

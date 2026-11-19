@@ -140,3 +140,65 @@ PYTHON=/tmp/photo-enrichment-venv/bin/python bash scripts/knowledge-index/test-k
 ```
 
 Tests use generated fixtures and a mock recognizer to check GPS precedence, timezone handling, traversal rejection, annotation isolation, face confirmation, resumability, Parquet and HTTP controls. They verify the source catalog remains byte-for-byte unchanged. The actual CPU model backend was also exercised on the synthetic demo; this tests loading/inference, not recognition accuracy on real faces. Chrome verification covered selecting a date, saving shared context to two photos and reading it back in photo details.
+
+## PostgreSQL authority and delayed analytics (#217)
+
+The deployed backend uses the existing PostgreSQL service in a dedicated
+`photo_enrichment` database. The original EXIF reader, CPU face models, stable
+face IDs, labels, group annotations and review UI are retained. The GPU caption
+worker keeps its existing output path; an hourly catalog refresh imports its
+latest captions and source-index rows into PostgreSQL without rerunning models.
+
+Photo enrichment workers claim durable PostgreSQL jobs with `SKIP LOCKED`, a
+lease and a fencing token. Image/model work happens outside transactions. Facts,
+zero-face scan completion and successful job completion commit together. Expired
+claims cannot publish results; failures retry after an hour. PostgreSQL also owns
+immediate face review and group edits, so saving a label updates review filters
+without waiting for analytics.
+
+A separate five-minute systemd timer uses DuckDB's official PostgreSQL extension
+to export one repeatable-read, read-only PostgreSQL transaction. It publishes an
+immutable Parquet generation through `analytics/current.json` only after every
+table validates. Failed exports retain the previous manifest. Analytical queries
+pin a generation; the bundled reader holds a filesystem lease until it closes.
+Old generations are retained for at least 24 hours and at least three generations;
+pinned readers prevent cleanup. External readers should use the bundled query
+entry point or hold the same `.readers` shared lock for long-running queries.
+
+```bash
+# Credentials are in protected libpq files, never CLI arguments or Git.
+CB_HOST=root@<inventory-address> python3 scripts/knowledge-index/deploy-photo-postgres.py inspect
+CB_HOST=root@<inventory-address> python3 scripts/knowledge-index/deploy-photo-postgres.py prepare
+CB_HOST=root@<inventory-address> python3 scripts/knowledge-index/deploy-photo-postgres.py cutover
+CB_HOST=root@<inventory-address> python3 scripts/knowledge-index/deploy-photo-postgres.py status
+```
+
+Preparation leaves the current worker running. Cutover stops it, backs up the
+legacy DuckDB/WAL and unit files under `/opt/photo-enrichment/backups/`, imports
+all eight state tables in one PostgreSQL transaction, runs three smoke jobs and
+publishes the first snapshot before starting the worker and GUI. Migration has
+an idempotency ledger and refuses to overwrite a nonempty untracked destination.
+The original state and legacy Parquet exports remain recovery material.
+
+If cutover fails, writers stay stopped. Do not blindly restart the legacy writer
+after PostgreSQL has accepted work: reconcile PG-only facts and edits first.
+Restore the saved unit/release only after choosing and validating the authoritative
+state. Existing PostgreSQL backups include the dedicated database; a successful
+backup job alone is not evidence of a tested restore.
+
+The GUI is `https://photos.app.home.panderosystems.com`, served through the existing
+Traefik wildcard certificate and private-network middleware. PR previews use
+`scripts/knowledge-index/deploy-photo-route.sh`: a Flux source scoped to the
+feature branch and only `apps/photo-enrichment`, not the entire unmerged branch.
+At merge, transfer route ownership to the main Flux source and remove the preview
+objects without pruning the transferred resources.
+
+Grafana retains the existing summary and Frigate branches. New panels show leased
+jobs, retries, oldest unfinished job age, export status/duration/size, snapshot
+freshness and GUI review operations. Node titles explicitly distinguish percent,
+job counts and seconds. Snapshot age is not query execution time or GPU time.
+
+Validation: `TEST_PYTHON=<venv>/bin/python bash scripts/knowledge-index/test-photo-postgres.sh`
+uses a disposable loopback PostgreSQL container and synthetic photos. It checks
+migration preservation, zero-face completion, retry backoff, claim fencing,
+concurrent-edit snapshot consistency, stale edit rejection and failed publication.

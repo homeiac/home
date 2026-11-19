@@ -1,0 +1,323 @@
+"""PostgreSQL authority for the existing extractors and review application (#217).
+
+DuckDB is used only for importing the existing catalog and exporting analytical
+snapshots. No live service opens the legacy writable enrichment.duckdb file.
+"""
+import datetime as dt
+import json
+import logging
+import os
+from pathlib import Path
+import threading
+import time
+import uuid
+from zoneinfo import ZoneInfo
+
+import duckdb
+import psycopg
+from psycopg import sql
+
+from .faces import MODEL_ID
+from .metadata import VERSION, contained, read_metadata
+from .metrics import Metrics
+from .store import Store, SCHEMA_SQL, MEDIA_VIEW_SQL
+
+TABLES = ('extracted', 'photo_groups', 'group_members', 'faces', 'face_scans',
+          'rejected_matches', 'annotation_history', 'worker_attempts')
+CATALOG = ('gphotos_media', 'gphotos_sidecars', 'gphotos_album_dup', 'media_summaries')
+JOBS_SQL = """
+CREATE TABLE IF NOT EXISTS worker_attempts (
+ path varchar PRIMARY KEY, size_bytes bigint, version varchar, model varchar,
+ timezone varchar, attempts integer, retry_after double precision);
+CREATE TABLE IF NOT EXISTS photo_jobs (
+ path varchar PRIMARY KEY, size_bytes bigint NOT NULL, version varchar NOT NULL,
+ model varchar NOT NULL, timezone varchar NOT NULL, status varchar NOT NULL DEFAULT 'ready'
+ CHECK(status IN ('ready','running','retry','done')), attempts integer NOT NULL DEFAULT 0,
+ available_at timestamptz NOT NULL DEFAULT now(), lease_until timestamptz,
+ claim varchar, enqueued_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz,
+ last_error varchar);
+CREATE INDEX IF NOT EXISTS photo_jobs_ready ON photo_jobs(status,available_at);
+CREATE TABLE IF NOT EXISTS migration_log (
+ id varchar PRIMARY KEY, counts jsonb NOT NULL, imported_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS pipeline_state (
+ key varchar PRIMARY KEY, value jsonb NOT NULL, updated_at timestamptz DEFAULT now());
+"""
+
+
+class Connection:
+    """Small parameter adapter for the shared, portable review queries."""
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, statement, parameters=()):
+        return self.connection.execute(statement.replace('%', '%%').replace('?', '%s'), parameters)
+
+    def executemany(self, statement, parameters):
+        with self.connection.cursor() as cursor:
+            cursor.executemany(statement.replace('%', '%%').replace('?', '%s'), parameters)
+
+    def close(self):
+        self.connection.close()
+
+
+def connect():
+    """Credentials stay in libpq service/pass files, never SQL or application logs."""
+    return psycopg.connect(service=os.environ.get('PHOTO_PG_SERVICE', 'photo_pipeline'),
+                           autocommit=True, connect_timeout=10)
+
+
+def initialize(connection) -> None:
+    """Create additive application tables inside the dedicated photo database."""
+    with connection.transaction():
+        connection.execute(SCHEMA_SQL.replace('DOUBLE', 'DOUBLE PRECISION'))
+        connection.execute(JOBS_SQL)
+        connection.execute('CREATE SCHEMA IF NOT EXISTS catalog')
+
+
+def copy_table(source, connection, name: str, target: str, replace: bool = False) -> int:
+    """Stream DuckDB rows into typed PostgreSQL tables without changing identities."""
+    columns = source.execute(f'DESCRIBE SELECT * FROM {name}').fetchall()
+    types = {'DOUBLE': 'double precision', 'FLOAT': 'real', 'UBIGINT': 'numeric(20)',
+             'UINTEGER': 'bigint', 'UTINYINT': 'smallint', 'USMALLINT': 'integer',
+             'TIMESTAMP WITH TIME ZONE': 'timestamptz', 'TIMESTAMP_NS': 'timestamp'}
+    definition = ','.join('"'+c[0].replace('"','""')+'" '+types.get(c[1], c[1]).replace('DOUBLE[]','double precision[]') for c in columns)
+    target_sql = sql.SQL('.').join(sql.Identifier(n) for n in target.split('.'))
+    connection.execute(sql.SQL('CREATE TABLE IF NOT EXISTS {} (').format(target_sql) + sql.SQL(definition+')'))
+    if replace:
+        connection.execute(sql.SQL('TRUNCATE {}').format(target_sql))
+    names = sql.SQL(',').join(sql.Identifier(c[0]) for c in columns)
+    count = 0
+    with connection.cursor() as cursor, cursor.copy(sql.SQL('COPY {} ({}) FROM STDIN').format(target_sql, names)) as copy:
+        result = source.execute(f'SELECT * FROM {name}')
+        while rows := result.fetchmany(1000):
+            for row in rows:
+                copy.write_row(row)
+            count += len(rows)
+    return count
+
+
+def refresh_catalog(connection, index: Path) -> dict:
+    """Import the existing Parquet-backed catalog; transactional replacement for UI."""
+    with duckdb.connect(str(index/'knowledge.duckdb'), read_only=True) as source:
+        with connection.transaction():
+            connection.execute('SELECT pg_advisory_xact_lock(217,1)')
+            counts = {name: copy_table(source, connection, name, 'catalog.'+name, True) for name in CATALOG}
+            connection.execute('CREATE INDEX IF NOT EXISTS media_path ON catalog.gphotos_media(path)')
+            connection.execute('CREATE INDEX IF NOT EXISTS sidecar_path ON catalog.gphotos_sidecars(path)')
+            connection.execute('CREATE INDEX IF NOT EXISTS album_path ON catalog.gphotos_album_dup(path)')
+            connection.execute('CREATE INDEX IF NOT EXISTS summary_path ON catalog.media_summaries(path,created_at DESC)')
+            view = MEDIA_VIEW_SQL.replace('TEMP VIEW', 'VIEW').replace(
+                "SELECT * FROM catalog.media_summaries WHERE status='ok'\n                QUALIFY row_number() OVER (PARTITION BY path ORDER BY created_at DESC, enricher DESC)=1",
+                "SELECT DISTINCT ON (path) * FROM catalog.media_summaries WHERE status='ok' ORDER BY path, created_at DESC, enricher DESC")
+            connection.execute(view)
+            connection.execute("INSERT INTO pipeline_state VALUES ('catalog',%s,now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()", [json.dumps(counts)])
+    return counts
+
+
+def migrate(connection, index: Path, state: Path) -> dict:
+    """One atomic import from a quiesced legacy DB, including zero-face/retry state.
+
+    The caller must stop the old worker and make a backup first. The ledger makes
+    reruns safe and a nonempty destination without a ledger is rejected.
+    """
+    initialize(connection)
+    with connection.transaction():
+        connection.execute('SELECT pg_advisory_xact_lock(217,2)')
+        existing = connection.execute("SELECT counts FROM migration_log WHERE id='legacy-duckdb-v1'").fetchone()
+        if existing:
+            return existing[0]
+        if any(connection.execute(sql.SQL('SELECT EXISTS(SELECT 1 FROM {})').format(sql.Identifier(t))).fetchone()[0] for t in TABLES):
+            raise RuntimeError('Destination is nonempty without a migration ledger; refusing to overwrite')
+        counts = {}
+        with duckdb.connect(str(state/'enrichment.duckdb'), read_only=True) as source:
+            present = {r[0] for r in source.execute('SHOW TABLES').fetchall()}
+            for table in TABLES:
+                counts[table] = copy_table(source, connection, table, table) if table in present else 0
+                actual = connection.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]
+                if actual != counts[table]:
+                    raise RuntimeError('Migration count mismatch: '+table)
+        refresh_catalog(connection, index)
+        connection.execute('CREATE INDEX IF NOT EXISTS faces_path ON faces(path,size_bytes,mtime_ns)')
+        connection.execute('CREATE INDEX IF NOT EXISTS faces_person ON faces(person)')
+        connection.execute("INSERT INTO migration_log(id,counts) VALUES ('legacy-duckdb-v1',%s)", [json.dumps(counts)])
+    return counts
+
+
+class PostgresStore(Store):
+    """Reuse validated review behavior while allowing separate worker/UI processes."""
+    background_only = True
+
+    def __init__(self, index: Path, library: Path, state: Path, metrics=None):
+        self.index, self.library, self.state = index, library.resolve(), state.resolve()
+        self.lock = threading.RLock()
+        self.metrics = metrics or Metrics()
+        self.connection = connect()
+        self.db = Connection(self.connection)
+
+    def export(self) -> dict:
+        from .snapshots import export_snapshot
+        target=os.environ.get('PHOTO_SNAPSHOT_PROM')
+        return export_snapshot(self.state,Path(target) if target else None)
+
+    def status(self) -> dict:
+        rows=self.rows("SELECT value FROM pipeline_state WHERE key='snapshot'")
+        snapshot=rows[0]['value'] if rows else {}
+        return dict(backend='postgres',captured_at=snapshot.get('captured_at'),published_at=snapshot.get('published_at'))
+
+    def label_face(self, face_id: str, person: str, revision=None) -> None:
+        """Check revisions while holding the row lock; audit the actual prior value."""
+        if not isinstance(person,str) or len(person)>200: raise ValueError('Invalid person name')
+        with self.lock, self.metrics.measure('review'), self.connection.transaction():
+            rows=self.rows('SELECT * FROM faces WHERE id=? FOR UPDATE',[face_id])
+            if not rows: raise ValueError('Unknown face')
+            face=rows[0]
+            if revision is not None and str(face['updated_at'])!=str(revision):
+                raise ValueError('This face was edited elsewhere; refresh before saving')
+            self.face(face_id)  # validate the original file identity too
+            self.db.execute('UPDATE faces SET person=?,label_source=?,updated_at=clock_timestamp() WHERE id=?',
+                [person.strip() or None,'user' if person.strip() else None,face_id])
+            self._history('label_face',dict(id=face_id,person=person.strip(),previous=face['person']))
+
+    def label_faces(self, faces: list, person: str) -> None:
+        """All selected labels commit together, or none do if a revision is stale."""
+        if not isinstance(faces,list) or not 1<=len(faces)<=100:
+            raise ValueError('Select 1–100 faces')
+        if not all(isinstance(f,dict) and f.get('id') and f.get('revision') for f in faces):
+            raise ValueError('Face revisions are required')
+        with self.lock,self.connection.transaction():
+            for face in sorted(faces,key=lambda f:f['id']):
+                self.label_face(face['id'],person,face['revision'])
+
+    def seed_jobs(self, timezone='UTC', faces=True) -> int:
+        """Queue only missing/stale work; preserve imported retries and completed scans."""
+        ZoneInfo(timezone)
+        with self.lock, self.metrics.measure('queue'):
+            cursor = self.db.execute("""INSERT INTO photo_jobs(path,size_bytes,version,model,timezone,attempts,available_at)
+              SELECT m.path,m.size_bytes,?,?,?,coalesce(a.attempts,0),
+                     coalesce(to_timestamp(a.retry_after),now())
+              FROM enriched_media m
+              LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes
+              LEFT JOIN face_scans f ON f.path=m.path AND f.size_bytes=m.size_bytes AND f.model=?
+              LEFT JOIN worker_attempts a ON a.path=m.path AND a.size_bytes=m.size_bytes
+                AND a.version=? AND a.model=? AND a.timezone=?
+              WHERE NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=m.path)
+                AND (e.path IS NULL OR e.error IS NOT NULL OR e.version<>?
+                  OR (e.capture_source LIKE 'exif.assumed:%' AND e.capture_source<>?)
+                  OR (? AND f.path IS NULL))
+              ON CONFLICT(path) DO UPDATE SET size_bytes=excluded.size_bytes,version=excluded.version,
+                model=excluded.model,timezone=excluded.timezone,status='ready',available_at=excluded.available_at,
+                claim=NULL,lease_until=NULL,enqueued_at=now(),completed_at=NULL
+              WHERE photo_jobs.status='done' OR
+                (photo_jobs.size_bytes,photo_jobs.version,photo_jobs.model,photo_jobs.timezone)
+                  IS DISTINCT FROM (excluded.size_bytes,excluded.version,excluded.model,excluded.timezone)""",
+              [VERSION, MODEL_ID if faces else '', timezone, MODEL_ID, VERSION, MODEL_ID if faces else '', timezone,
+               VERSION, 'exif.assumed:'+timezone, faces])
+            return cursor.rowcount
+
+    def claim_job(self, lease_seconds=600) -> dict | None:
+        with self.lock, self.metrics.measure('queue'), self.connection.transaction():
+            rows = self.rows("""WITH candidate AS (
+              SELECT path FROM photo_jobs WHERE
+                (status IN ('ready','retry') AND available_at<=now()) OR
+                (status='running' AND lease_until<now())
+              ORDER BY attempts,enqueued_at,path FOR UPDATE SKIP LOCKED LIMIT 1)
+              UPDATE photo_jobs j SET status='running',claim=?,lease_until=now()+? * interval '1 second',
+                attempts=attempts+1 FROM candidate c WHERE j.path=c.path RETURNING j.*""",
+              [uuid.uuid4().hex, lease_seconds])
+            return rows[0] if rows else None
+
+    def process_job(self, job: dict, engine=None, retry_seconds=3600) -> bool:
+        """Compute without a DB transaction; fence stale claims before atomic commit."""
+        try:
+            row = self.photo(job['path'])
+            file = contained(self.library, job['path'])
+            before = file.stat()
+            if before.st_size != job['size_bytes'] or row['size_bytes'] != job['size_bytes']:
+                raise ValueError('Source changed since indexing')
+            old = self.rows('SELECT * FROM extracted WHERE path=?', [job['path']])
+            old = old[0] if old else None
+            unchanged = old and (old['size_bytes'],old['mtime_ns'],old['version']) == (before.st_size,before.st_mtime_ns,VERSION) and not old['error']
+            if unchanged and (old['capture_source'] or '').startswith('exif.assumed:'):
+                unchanged = old['capture_source'] == 'exif.assumed:'+job['timezone']
+            meta = None
+            if not unchanged:
+                with self.metrics.measure('exif'):
+                    sidecar = contained(self.library,row['sidecar_path']) if row['sidecar_path'] else None
+                    meta = read_metadata(file,sidecar,job['timezone'])
+            scan = self.rows('SELECT * FROM face_scans WHERE path=?', [job['path']])
+            scan = scan[0] if scan else None
+            detected = None
+            if engine and not (scan and (scan['size_bytes'],scan['mtime_ns'],scan['model']) == (before.st_size,before.st_mtime_ns,MODEL_ID)):
+                with self.metrics.measure('faces'):
+                    detected = engine.detect(file)
+            after = file.stat()
+            if (before.st_size,before.st_mtime_ns) != (after.st_size,after.st_mtime_ns):
+                raise ValueError('Source changed during extraction')
+            with self.lock, self.metrics.measure('persist'), self.connection.transaction():
+                held = self.rows("SELECT claim FROM photo_jobs WHERE path=? AND claim=? AND status='running' AND lease_until>now() FOR UPDATE", [job['path'],job['claim']])
+                if not held:
+                    return False
+                if meta is not None:
+                    self.upsert('extracted',[job['path'],before.st_size,before.st_mtime_ns]+list(meta.values()))
+                if detected is not None:
+                    for face in detected:
+                        self.db.execute('INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)',
+                            [face['id'],job['path'],before.st_size,before.st_mtime_ns,face['box'],face['confidence'],face['embedding'],face['model']])
+                    self.upsert('face_scans',[job['path'],before.st_size,before.st_mtime_ns,MODEL_ID])
+                error = bool(meta and meta['error'])
+                self.db.execute("UPDATE photo_jobs SET status=?,completed_at=CASE WHEN ? THEN NULL ELSE now() END,available_at=now()+? * interval '1 second',lease_until=NULL,claim=NULL,last_error=? WHERE path=?",
+                    ['retry' if error else 'done',error,retry_seconds,'metadata_error' if error else None,job['path']])
+                self.db.execute('DELETE FROM worker_attempts WHERE path=?',[job['path']])
+            return not error
+        except Exception as exc:
+            # Exception text can contain private filenames: persist only a bounded category.
+            with self.lock:
+                self.db.execute("UPDATE photo_jobs SET status='retry',available_at=now()+? * interval '1 second',claim=NULL,lease_until=NULL,last_error=? WHERE path=? AND claim=?",
+                    [retry_seconds,type(exc).__name__,job['path'],job['claim']])
+            logging.warning('Photo job failed: %s', type(exc).__name__)
+            return False
+
+    def queue_metrics(self) -> dict:
+        return self.rows("""SELECT count(*) FILTER(WHERE status='ready') AS ready,
+          count(*) FILTER(WHERE status='running') AS running, count(*) FILTER(WHERE status='retry') AS retry,
+          count(*) FILTER(WHERE status='done') AS done,
+          coalesce(extract(epoch FROM now()-min(enqueued_at) FILTER(WHERE status<>'done')),0) AS oldest_seconds
+          FROM photo_jobs""")[0]
+
+
+def run_worker(index, library, state, models, metrics, batch_size=25, timezone='UTC', faces=True,
+               pause_seconds=2, idle_seconds=60, max_batches=0):
+    """Continuously claim independent jobs; a separate timer publishes analytics."""
+    import signal
+    from .faces import FaceEngine
+    metrics.stages = ("queue","exif","faces","persist")
+    stop = threading.Event()
+    previous = {sig: signal.signal(sig,lambda *_:stop.set()) for sig in (signal.SIGTERM,signal.SIGINT)}
+    store = PostgresStore(index,library,state,metrics)
+    try:
+        engine = None
+        if faces:
+            import cv2
+            cv2.setNumThreads(2)
+            with metrics.measure('faces'):
+                engine = FaceEngine(models)
+        count = 0
+        while not stop.is_set():
+            store.seed_jobs(timezone,faces)
+            selected = 0
+            for _ in range(batch_size):
+                if stop.is_set(): break
+                job = store.claim_job()
+                if not job: break
+                store.process_job(job,engine)
+                selected += 1
+            store.refresh_metrics()
+            metrics.jobs = store.queue_metrics()
+            metrics.publish()
+            logging.info('PostgreSQL batch completed: %d jobs',selected)
+            count += 1
+            if max_batches and count>=max_batches: break
+            stop.wait(pause_seconds if selected else idle_seconds)
+    finally:
+        store.close()
+        for sig,handler in previous.items(): signal.signal(sig,handler)

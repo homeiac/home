@@ -8,12 +8,13 @@ import threading
 import time
 
 TITLES = {"queue": "Photo: catalog / queue", "exif": "Photo: read EXIF", "faces": "Photo: CPU faces",
-          "persist": "Photo: save DuckDB", "review": "Photo: save human labels",
+          "persist": "Photo: PostgreSQL commit", "review": "Photo: save human labels",
           "frigate": "Photo: optional Frigate", "export": "Photo: export Parquet"}
 STATES = {"idle": 0, **{stage: i for i, stage in enumerate(TITLES, 1)}, "complete": 8, "failed": 9}
 EDGES = [("queue", "exif"), ("exif", "faces"), ("exif", "persist"), ("faces", "persist"),
          ("persist", "review"), ("persist", "export"), ("faces", "frigate"), ("frigate", "review"), ("review", "export")]
 HELP = {
+    "jobs": ("gauge", "PostgreSQL jobs by state and oldest unfinished job age in seconds"),
     "stage_seconds_total": ("counter", "Wall time including in-flight work; shares are local to this worker, not GPU utilization"),
     "stage_completed_seconds_total": ("counter", "Duration of completed operations including failures"),
     "stage_operations_total": ("counter", "Completed operations by stage and result"),
@@ -22,7 +23,7 @@ HELP = {
     "stage_started_timestamp_seconds": ("gauge", "Current stage start Unix time"),
     "running": ("gauge", "Process alive; check heartbeat to detect abrupt termination"),
     "queue": ("gauge", "Snapshot of indexed photos pending extraction or unnamed detected faces; not queue wait time"),
-    "inventory": ("gauge", "Snapshot of enrichment facts in DuckDB; counts may decrease after correction"),
+    "inventory": ("gauge", "Snapshot of authoritative enrichment facts; counts may decrease after correction"),
     "edge_info": ("gauge", "Possible workflow transitions; face recognition, review and export are optional"),
 }
 
@@ -30,6 +31,8 @@ HELP = {
 class Metrics:
     """Publish bounded stage labels atomically, with a heartbeat independent of DB locks."""
     def __init__(self, path: Path | None = None):
+        self.prefix = "photo_enrichment"
+        self.stages = tuple(TITLES)
         self.path = path
         self.seconds = defaultdict(float, {s: 0.0 for s in TITLES})
         self.operations = defaultdict(int)
@@ -37,6 +40,7 @@ class Metrics:
         self.started = time.time()
         self.active = None
         self.running = 1
+        self.jobs = {}
         self.queues = {}
         self.inventory = {}
         self.lock = threading.RLock()
@@ -99,8 +103,9 @@ class Metrics:
             rows = defaultdict(list)
             def add(name: str, value: float, **labels) -> None:
                 label = "{" + ",".join(f"{k}={json.dumps(v)}" for k, v in sorted(labels.items())) + "}" if labels else ""
-                rows[name].append(f"photo_enrichment_{name}{label} {value}")
+                rows[name].append(f"{self.prefix}_{name}{label} {value}")
             for stage, seconds in self.seconds.items():
+                if stage not in self.stages: continue
                 add("stage_completed_seconds_total", seconds, stage=stage)
                 live = max(0, time.monotonic()-self.active) if self.active is not None and self.stage == stage else 0
                 add("stage_seconds_total", seconds + live, stage=stage, id="photo_"+stage, title=TITLES[stage])
@@ -109,6 +114,8 @@ class Metrics:
             for name, value in (("worker_stage", STATES[self.stage]), ("heartbeat_timestamp_seconds", time.time()),
                                 ("stage_started_timestamp_seconds", self.started), ("running", self.running)):
                 add(name, value)
+            for kind,value in self.jobs.items():
+                add("jobs",float(value),kind=kind)
             for stage, value in self.queues.items():
                 add("queue", value, stage=stage)
             for kind, value in self.inventory.items():
@@ -116,7 +123,7 @@ class Metrics:
             for source, target in EDGES:
                 add("edge_info", 1, id=f"photo_{source}-{target}", source="photo_"+source, target="photo_"+target)
             return "\n".join(line for name in sorted(rows) for line in
-                [f"# HELP photo_enrichment_{name} {HELP[name][1]}", f"# TYPE photo_enrichment_{name} {HELP[name][0]}", *rows[name]]) + "\n"
+                [f"# HELP {self.prefix}_{name} {HELP[name][1]}", f"# TYPE {self.prefix}_{name} {HELP[name][0]}", *rows[name]]) + "\n"
 
     def publish(self) -> None:
         """Telemetry failure must not abort photo enrichment."""

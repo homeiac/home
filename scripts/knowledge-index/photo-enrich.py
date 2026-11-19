@@ -14,6 +14,7 @@ from photo_enrichment.metrics import Metrics
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backend", choices=("duckdb", "postgres"), default="duckdb")
     parser.add_argument("--index", type=Path, help="Read-only knowledge-index directory")
     parser.add_argument("--library", type=Path, help="Read-only photo library root containing Google Photos/")
     parser.add_argument("--state", type=Path, required=True, help="Separate writable enrichment directory")
@@ -31,6 +32,8 @@ def main() -> None:
     extract.add_argument("--timezone", default="UTC")
     extract.add_argument("--faces", action="store_true")
     extract.add_argument("--force", action="store_true", help="Re-read metadata; confirmed face labels are retained")
+    commands.add_parser("migrate", help="Import a quiesced legacy DuckDB into PostgreSQL once")
+    commands.add_parser("refresh-catalog", help="Refresh PostgreSQL catalog from existing Parquet-backed index")
     commands.add_parser("export", help="Export Parquet snapshots of enrichment and annotation tables")
     worker = commands.add_parser("worker", help="Continuously extract pending photos and publish Parquet/telemetry")
     worker.add_argument("--batch-size", type=int, default=25)
@@ -51,9 +54,15 @@ def main() -> None:
     if not args.index or not args.library:
         parser.error("--index and --library are required")
     metrics = Metrics(args.prom)
+    if args.backend == "postgres" and args.command == "serve":
+        metrics.prefix="photo_review"
+        metrics.stages=("review","frigate")
     if args.command == "worker":
         from zoneinfo import ZoneInfo
-        from photo_enrichment.worker import run
+        if args.backend == "postgres":
+            from photo_enrichment.postgres import run_worker as run
+        else:
+            from photo_enrichment.worker import run
         ZoneInfo(args.timezone)
         if not 1 <= args.batch_size <= 1000 or args.max_batches < 0 or args.pause_seconds < 0 or args.idle_seconds < 1:
             parser.error("Invalid worker batch size, count or polling interval")
@@ -61,7 +70,32 @@ def main() -> None:
             run(args.index, args.library, args.state, models, metrics, args.batch_size,
                 args.timezone, not args.metadata_only, args.pause_seconds, args.idle_seconds, args.max_batches)
         return
-    store = Store(args.index, args.library, args.state, metrics)
+    if args.command in ("migrate", "refresh-catalog"):
+        from photo_enrichment.postgres import connect, migrate, refresh_catalog
+        with connect() as connection:
+            result = migrate(connection,args.index,args.state) if args.command == "migrate" else refresh_catalog(connection,args.index)
+        logging.info("%s counts: %s",args.command,result)
+        return
+    if args.backend == "postgres" and args.command == "export":
+        from photo_enrichment.snapshots import export_snapshot
+        result = export_snapshot(args.state,args.prom)
+        logging.info("Snapshot published: %s",result.get("generation","already running"))
+        return
+    if args.backend == "postgres" and args.command == "query":
+        from photo_enrichment.snapshots import analytical_connection
+        connection,manifest = analytical_connection(args.state)
+        try:
+            statements=connection.extract_statements(args.sql)
+            if len(statements)!=1 or str(statements[0].type)!="StatementType.SELECT": parser.error("query accepts one SELECT")
+            cursor=connection.execute(args.sql)
+            print(json.dumps([dict(zip([c[0] for c in cursor.description],r)) for r in cursor.fetchall()],default=str,indent=2))
+        finally: connection.close()
+        return
+    if args.backend == "postgres":
+        from photo_enrichment.postgres import PostgresStore
+        store = PostgresStore(args.index,args.library,args.state,metrics)
+    else:
+        store = Store(args.index, args.library, args.state, metrics)
     metrics.__enter__()
     try:
         store.refresh_metrics()
@@ -73,6 +107,7 @@ def main() -> None:
             finally:
                 server.server_close()
         elif args.command == "extract":
+            if args.backend == "postgres": parser.error("PostgreSQL extraction runs through durable worker jobs")
             if not 1 <= args.limit <= 1000:
                 parser.error("--limit must be between 1 and 1000")
             if args.date:

@@ -145,8 +145,11 @@ import json, re, runpy, subprocess, sys, yaml
 here, repo, w = sys.argv[1:4]
 have = set(subprocess.check_output([sys.executable, here + "/export-metrics.py", "--list-metrics"], text=True).split())
 sys.path.insert(0, here)
+import pathlib
 from photo_enrichment.metrics import HELP as PHOTO_HELP
 have.update("photo_enrichment_" + name for name in PHOTO_HELP)
+have.update("photo_review_" + name for name in PHOTO_HELP)
+have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_enrichment/snapshots.py").read_text()))
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
 mon = repo + "/gitops/clusters/homelab/infrastructure/monitoring/"
@@ -158,7 +161,7 @@ for p in j["panels"]:
 r = yaml.safe_load(open(mon + "knowledge-index-alerting-rules.yaml"))
 exprs += [x["expr"] for g in r["spec"]["groups"] for x in g["rules"]]
 names = {n for e in exprs for n in re.findall(r"[a-zA-Z_:][a-zA-Z0-9_:]*(?=\s*[{\[(]|\s|$|\)|,)", e)}
-metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|media_pipeline_|photo_enrichment_|photo_frigate_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
+metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|media_pipeline_|photo_enrichment_|photo_review_|photo_snapshot_|photo_pipeline_|photo_frigate_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
 missing = {m for m in metrics - have - external if not m.startswith("DCGM_FI_DEV_")}   # DCGM names come from the NVIDIA exporter (checked live by check-promql.sh)
 if missing:
     print("  missing:", sorted(missing)); sys.exit(1)
