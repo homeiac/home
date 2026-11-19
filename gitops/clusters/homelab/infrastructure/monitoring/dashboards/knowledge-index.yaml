@@ -2231,7 +2231,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(time() - photo_enrichment_stage_started_timestamp_seconds{instance=~\"$instance\"}) and (photo_enrichment_worker_stage{instance=~\"$instance\"} > 0) and (photo_enrichment_worker_stage{instance=~\"$instance\"} < 8) and (time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 60)",
+              "expr": "((time() - photo_enrichment_stage_started_timestamp_seconds{instance=~\"$instance\"}) and (photo_enrichment_worker_stage{instance=~\"$instance\"} > 0) and (photo_enrichment_worker_stage{instance=~\"$instance\"} < 8) and (time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 60)) or (photo_enrichment_worker_stage{instance=~\"$instance\"} * 0 and (time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 60))",
               "legendFormat": "current operation seconds",
               "refId": "A",
               "interval": "30s",
@@ -2266,7 +2266,8 @@ data:
             "tooltip": {
               "mode": "multi"
             }
-          }
+          },
+          "description": "Zero between operations or after a clean stop; missing data means telemetry is absent or older than 60 seconds."
         },
         {
           "id": 120,

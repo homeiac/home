@@ -275,7 +275,7 @@ def photo_enrichment_panels():
     p += [series("CPU branch time by stage", [(share, '{{stage}}')], 0, 19, 12, 7, unit="percent",
                  description="Share of measured operation time, including in-flight work. Idle human time and queue residence are unmeasured. A dominant stage indicates where elapsed work occurs, not hardware saturation."),
           series("Photo extraction errors", [(inventory("exif_errors"), 'EXIF files with errors')], 12, 19, 6, 7),
-          series("Photo current operation age", [('(time() - photo_enrichment_stage_started_timestamp_seconds' + INST + ') and (photo_enrichment_worker_stage' + INST + ' > 0) and (photo_enrichment_worker_stage' + INST + ' < 8) and (' + age + ' < 60)', 'current operation seconds')], 18, 19, 6, 7, unit="s")]
+          series("Photo current operation age", [('((time() - photo_enrichment_stage_started_timestamp_seconds' + INST + ') and (photo_enrichment_worker_stage' + INST + ' > 0) and (photo_enrichment_worker_stage' + INST + ' < 8) and (' + age + ' < 60)) or (photo_enrichment_worker_stage' + INST + ' * 0 and (' + age + ' < 60))', 'current operation seconds')], 18, 19, 6, 7, unit="s", description="Zero between operations or after a clean stop; missing data means telemetry is absent or older than 60 seconds.")]
     frigate_age = 'time() - photo_frigate_last_poll_timestamp_seconds' + INST
     fresh = ' and on(instance) (' + frigate_age + ' < 60)'
     p += [row("Frigate processing — shared service", 26),
