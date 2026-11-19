@@ -4,3 +4,4 @@ resources:
   - ingress.yaml
   - observability.yaml
   - dashboard.yaml
+  - immich-pilot

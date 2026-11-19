@@ -32,6 +32,10 @@ spec:
     kind: GitRepository
     name: photo-enrichment-preview
   timeout: 2m
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
 YAML
 kubectl -n flux-system wait gitrepository/photo-enrichment-preview --for=condition=ready --timeout=60s
 kubectl -n flux-system wait kustomization/photo-enrichment-preview --for=condition=ready --timeout=60s
