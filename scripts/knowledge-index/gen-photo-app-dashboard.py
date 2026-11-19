@@ -26,8 +26,11 @@ def dashboard():
     panel('DB lock wait p95','histogram_quantile(0.95,sum by(le)(rate(photo_app_lock_wait_seconds_bucket{service_name="photo-review"}[5m])))',0,18,8,6,unit='s')
     panel('In-flight requests','max(photo_app_inflight{service_name="photo-review"})',8,18,8,6)
     panel('Automatic diagnostic incident','max(photo_app_triage_incident)',16,18,8,6,'stat')
+    panel('PostgreSQL pooled connections in use','photo_app_pg_pool_connections{service_name="photo-review"}-photo_app_pg_pool_idle{service_name="photo-review"}',0,24,8,6,legend='{{pool}}')
+    panel('PostgreSQL requests waiting for a connection','photo_app_pg_pool_waiting{service_name="photo-review"}',8,24,8,6,legend='{{pool}}')
+    panel('Connection pool wait p95','histogram_quantile(0.95,sum by(le,pool)(rate(photo_app_pool_wait_seconds_bucket{service_name="photo-review"}[5m])))',16,24,8,6,unit='s',legend='{{pool}}')
     panels.append({'id':len(panels)+1,'title':'Slow requests, errors and automatic diagnosis · trace IDs link to Photo traces','type':'logs',
-      'datasource':{'type':'loki','uid':'photo-loki'},'gridPos':{'x':0,'y':24,'w':24,'h':12},
+      'datasource':{'type':'loki','uid':'photo-loki'},'gridPos':{'x':0,'y':30,'w':24,'h':12},
       'targets':[{'refId':'A','expr':'{service_name=~"photo-review|photo-triage"} | json | event=~"request.slow|request.error|triage.result|matching.finished"','queryType':'range'}],
       'options':{'showTime':True,'wrapLogMessage':True,'sortOrder':'Descending','enableLogDetails':True}})
     return {'uid':'photo-app','title':'Photo App · Requests, traces & triage','schemaVersion':39,'version':1,

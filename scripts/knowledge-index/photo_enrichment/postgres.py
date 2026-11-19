@@ -4,6 +4,8 @@ DuckDB reads immutable Parquet for gallery queries and analytical snapshots.
 No live service opens the legacy writable enrichment.duckdb file.
 """
 import datetime as dt
+from contextlib import contextmanager
+import copy
 import json
 import logging
 import os
@@ -152,11 +154,58 @@ class PostgresStore(Store):
     def __init__(self, index: Path, library: Path, state: Path, metrics=None):
         self.index, self.library, self.state = index, library.resolve(), state.resolve()
         self.lock = threading.RLock()
+        self.pools=None
+        self.pool_lock=threading.Lock()
         self.metrics = metrics or Metrics()
         self.connection = connect()
         self.db = Connection(self.connection)
         if self.metrics.prefix=='photo_review':
             self.connection.execute("SET statement_timeout='15s'; SET lock_timeout='3s'")
+
+    def enable_pooling(self):
+        """Keep independent bounded reader and writer capacity for the GUI."""
+        from psycopg_pool import ConnectionPool
+        from .telemetry import get_telemetry
+        with self.pool_lock:
+            if self.pools is not None:return
+            pools={}
+            try:
+                for role,minimum,maximum in [('read',2,12),('write',1,2)]:
+                    def configure(connection,role=role):
+                        connection.execute("SET statement_timeout='15s'; SET lock_timeout='3s'")
+                        connection.execute('SET default_transaction_read_only='+('on' if role=='read' else 'off'))
+                    def reset(connection,configure=configure):
+                        connection.execute('RESET ALL');configure(connection)
+                    pool=ConnectionPool(kwargs=dict(service=os.environ.get('PHOTO_PG_SERVICE','photo_pipeline'),
+                        autocommit=True,connect_timeout=5,application_name='photo-review-'+role),
+                        min_size=minimum,max_size=maximum,timeout=5,max_waiting=32,
+                        max_lifetime=900,max_idle=60,configure=configure,reset=reset,
+                        check=ConnectionPool.check_connection,name='photo-'+role,open=False)
+                    pools[role]=pool;pool.open(wait=True,timeout=10)
+            except BaseException:
+                for pool in pools.values():pool.close()
+                raise
+            self.pools=pools
+            get_telemetry().pools=pools
+
+    @contextmanager
+    def request_session(self,readonly=True):
+        """Borrow a session for one request; always return it, including errors."""
+        from .telemetry import get_telemetry
+        self.enable_pooling()
+        role='read' if readonly else 'write';pool=self.pools[role]
+        with get_telemetry().stage('pg.pool.wait',pool=role):connection=pool.getconn()
+        try:
+            reader=copy.copy(self)
+            reader.lock=threading.RLock()
+            reader.connection=connection;reader.db=Connection(connection)
+            yield reader
+        finally:pool.putconn(connection)
+
+    def close(self):
+        if self.pools:
+            for pool in self.pools.values():pool.close()
+        self.db.close()
 
     def export(self) -> dict:
         from .snapshots import export_snapshot

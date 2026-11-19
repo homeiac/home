@@ -259,9 +259,8 @@ class PipelineTests(unittest.TestCase):
                 for route in ('/','/app.js','/healthz','/api/config'):
                     with urllib.request.urlopen(base+route,timeout=1) as response:
                         self.assertEqual(response.status,200)
-                with self.assertRaises(urllib.error.HTTPError) as busy:
-                    urllib.request.urlopen(base+'/api/status',timeout=1)
-                self.assertEqual(busy.exception.code,503)
+                with urllib.request.urlopen(base+'/api/status',timeout=1) as response:
+                    self.assertEqual(response.status,200,'Readers must not wait for a confirmation batch')
             with urllib.request.urlopen(base+'/api/config') as response:csrf=json.load(response)['csrf']
             def post(path,body):
                 request=urllib.request.Request(base+path,data=json.dumps(body).encode(),headers={
@@ -406,6 +405,32 @@ class PipelineTests(unittest.TestCase):
         face=named['faces'][0]
         self.store.label_faces([dict(id=face['id'],revision=str(face['revision']))],'Second correction')
         self.assertEqual(self.store.face('review-a')['person'],'Second correction')
+
+    def test_connection_pools_reuse_sessions_and_isolate_exhausted_writers(self):
+        import psycopg
+        from psycopg_pool import PoolTimeout
+        self.store.enable_pooling()
+        pids=[]
+        for _ in range(10):
+            with self.store.request_session() as reader:
+                pids.append(reader.rows('SELECT pg_backend_pid() id')[0]['id'])
+        self.assertLess(len(set(pids)),10,'Connections should be reused across HTTP requests')
+        with self.store.request_session() as reader:
+            with self.assertRaises(psycopg.errors.ReadOnlySqlTransaction):
+                reader.db.execute("UPDATE faces SET person='Forbidden read-session write'")
+        with self.store.request_session(False) as writer1,self.store.request_session(False):
+            with self.assertRaises(PoolTimeout):self.store.pools['write'].getconn(timeout=.05)
+            with writer1.connection.transaction():
+                writer1.db.execute("UPDATE faces SET person='Uncommitted' WHERE id='stable-face'")
+                with self.store.request_session() as reader:
+                    self.assertEqual(reader.face('stable-face')['person'],'Synthetic person')
+        self.assertGreaterEqual(self.store.pools['write'].get_stats().get('requests_errors',0),1)
+        with self.assertRaises(ValueError):
+            with self.store.request_session(False) as writer,writer.connection.transaction():
+                writer.db.execute("UPDATE faces SET person='Rolled back' WHERE id='stable-face'")
+                raise ValueError('synthetic failure')
+        with self.store.request_session() as reader:
+            self.assertEqual(reader.face('stable-face')['person'],'Uncommitted')
 
 
 if __name__=='__main__': unittest.main()

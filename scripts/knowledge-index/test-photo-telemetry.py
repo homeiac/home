@@ -23,6 +23,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(classify(probes,diag,[],{}),'slow_duckdb_query')
         self.assertEqual(classify({'health':False},{},[],{}),'service_unreachable')
         self.assertEqual(classify({'health':True,'api':True},{},[],{}),'healthy')
+        self.assertEqual(classify(probes,{'oldest_request':6,'pools':{'read':{'requests_waiting':2}}},[],{}),'postgres_pool_exhausted')
 
     def test_otlp_signals_correlate_and_exclude_photo_data(self):
         from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest

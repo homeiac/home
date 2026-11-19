@@ -18,10 +18,12 @@ DIAGNOSIS={
     'resource_pressure':'GUI cgroup pressure exceeds the diagnostic threshold; inspect the pressure resource and active request stages.',
     'slow_application_operation':'A request is unfinished after ten seconds; follow its trace ID and current stage.',
     'api_unavailable':'HTTP liveness succeeded but the database-backed API probe failed; inspect request errors and database connectivity.'}
+DIAGNOSIS['postgres_pool_exhausted']='Requests are queued for a PostgreSQL connection; compare pool waiting/idle/limit and open the pg.pool.wait trace span.'
 
 
 def classify(probes,diagnostics,waits,pressure):
     if not probes.get('health',False):return 'service_unreachable'
+    if diagnostics.get('oldest_request',0)>=3 and any(p.get('requests_waiting',0)>0 for p in diagnostics.get('pools',{}).values()):return 'postgres_pool_exhausted'
     if any(row['blockers'] or row['wait_type']=='Lock' for row in waits):return 'postgres_blocked'
     if any(row['state']=='active' and row['age_seconds']>=10 for row in waits):return 'slow_postgres_query'
     if any(row['stage']=='duckdb.query' and row['age_seconds']>=10 for row in diagnostics.get('requests',[])):return 'slow_duckdb_query'
@@ -63,7 +65,7 @@ def collect():
         except (OSError,StopIteration,ValueError):pass
     category=classify(probes,diagnostics,waits,pressure)
     return dict(checked_at=time.time(),category=category,diagnosis=DIAGNOSIS[category],probes=probes,timings=timings,pressure=pressure,
-        database_waits=waits,requests=diagnostics.get('requests',[]),database_error=diagnostics.get('database_error'))
+        database_waits=waits,requests=diagnostics.get('requests',[]),pools=diagnostics.get('pools',{}),database_error=diagnostics.get('database_error'))
 
 
 def run(state: Path,prom: Path):

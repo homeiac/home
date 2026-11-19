@@ -30,6 +30,7 @@ class Telemetry:
         self.providers=[]
         self.tracer=None
         self.instruments={}
+        self.pools={}
         self.logger=logging.getLogger('photo.app')
         self.logger.setLevel(logging.INFO)
         self.logger.propagate=False
@@ -63,11 +64,14 @@ class Telemetry:
             self.providers.append(mp)
             meter=mp.get_meter('photo.app')
             self.instruments['requests']=meter.create_counter('photo_app_http_requests')
-            for name in ('http_duration','lock_wait','db_duration'):
+            for name in ('http_duration','lock_wait','db_duration','pool_wait'):
                 self.instruments[name]=meter.create_histogram('photo_app_'+name,unit='s')
             for name in ('inflight','lock_waiters','oldest_request'):
                 meter.create_observable_gauge('photo_app_'+name,unit='s' if name=='oldest_request' else '',
                     callbacks=[lambda options,key=name:[metrics.Observation(self.summary()[key])]])
+            for metric,stat in [('connections','pool_size'),('idle','pool_available'),('limit','pool_max'),('waiting','requests_waiting'),('errors','requests_errors')]:
+                meter.create_observable_gauge('photo_app_pg_pool_'+metric,
+                    callbacks=[lambda options,key=stat:[metrics.Observation(pool.get_stats().get(key,0),{'pool':role}) for role,pool in self.pools.items()]])
             lp=LoggerProvider(resource=resource)
             lp.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter(endpoint=endpoint+'/v1/logs',timeout=3),
                 max_queue_size=1024,max_export_batch_size=128,schedule_delay_millis=1000))
@@ -94,7 +98,8 @@ class Telemetry:
     def diagnostics(self):
         with self.lock:
             return dict(**self.summary(),requests=[dict(route=r['route'],stage=r['stage'],trace_id=r['trace_id'],
-                age_seconds=round(time.monotonic()-r['started'],3)) for r in self.active.values()],events=list(self.events)[-30:])
+                age_seconds=round(time.monotonic()-r['started'],3)) for r in self.active.values()],events=list(self.events)[-30:],
+                pools={role:pool.get_stats() for role,pool in self.pools.items()})
 
     def _watch(self):
         while not self.stop.wait(5):
@@ -159,8 +164,10 @@ class Telemetry:
             with span as current_span:yield current_span
         finally:
             duration=time.monotonic()-start
-            metric={'lock.wait':'lock_wait','db.query':'db_duration','duckdb.query':'db_duration'}.get(name)
-            if metric in self.instruments:self.instruments[metric].record(duration,{'stage':name})
+            metric={'lock.wait':'lock_wait','db.query':'db_duration','duckdb.query':'db_duration','pg.pool.wait':'pool_wait'}.get(name)
+            labels={'stage':name}
+            if 'pool' in attributes:labels['pool']=attributes['pool']
+            if metric in self.instruments:self.instruments[metric].record(duration,labels)
             with self.lock:
                 if key in self.active:
                     record=self.active[key]

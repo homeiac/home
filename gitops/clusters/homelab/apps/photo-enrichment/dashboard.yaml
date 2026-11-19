@@ -142,11 +142,48 @@ data:
     \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
     ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 12,\n      \"title\": \"Slow requests,\
+    \  }\n      }\n    },\n    {\n      \"id\": 12,\n      \"title\": \"PostgreSQL\
+    \ pooled connections in use\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
+    : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
+    \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 24,\n        \"\
+    w\": 8,\n        \"h\": 6\n      },\n      \"targets\": [\n        {\n       \
+    \   \"refId\": \"A\",\n          \"expr\": \"photo_app_pg_pool_connections{service_name=\\\
+    \"photo-review\\\"}-photo_app_pg_pool_idle{service_name=\\\"photo-review\\\"}\"\
+    ,\n          \"legendFormat\": \"{{pool}}\"\n        }\n      ],\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n    \
+    \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
+    \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
+    \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
+    \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
+    : 13,\n      \"title\": \"PostgreSQL requests waiting for a connection\",\n  \
+    \    \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"\
+    prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n\
+    \        \"x\": 8,\n        \"y\": 24,\n        \"w\": 8,\n        \"h\": 6\n\
+    \      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n    \
+    \      \"expr\": \"photo_app_pg_pool_waiting{service_name=\\\"photo-review\\\"\
+    }\",\n          \"legendFormat\": \"{{pool}}\"\n        }\n      ],\n      \"\
+    fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\n   \
+    \     },\n        \"overrides\": []\n      },\n      \"options\": {\n        \"\
+    legend\": {\n          \"displayMode\": \"list\",\n          \"placement\": \"\
+    bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n \
+    \           \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n\
+    \      \"id\": 14,\n      \"title\": \"Connection pool wait p95\",\n      \"type\"\
+    : \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
+    \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
+    : 16,\n        \"y\": 24,\n        \"w\": 8,\n        \"h\": 6\n      },\n   \
+    \   \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"histogram_quantile(0.95,sum by(le,pool)(rate(photo_app_pool_wait_seconds_bucket{service_name=\\\
+    \"photo-review\\\"}[5m])))\",\n          \"legendFormat\": \"{{pool}}\"\n    \
+    \    }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n        \
+    \  \"unit\": \"s\"\n        },\n        \"overrides\": []\n      },\n      \"\
+    options\": {\n        \"legend\": {\n          \"displayMode\": \"list\",\n  \
+    \        \"placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n\
+    \          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n\
+    \      }\n    },\n    {\n      \"id\": 15,\n      \"title\": \"Slow requests,\
     \ errors and automatic diagnosis \\u00b7 trace IDs link to Photo traces\",\n \
     \     \"type\": \"logs\",\n      \"datasource\": {\n        \"type\": \"loki\"\
     ,\n        \"uid\": \"photo-loki\"\n      },\n      \"gridPos\": {\n        \"\
-    x\": 0,\n        \"y\": 24,\n        \"w\": 24,\n        \"h\": 12\n      },\n\
+    x\": 0,\n        \"y\": 30,\n        \"w\": 24,\n        \"h\": 12\n      },\n\
     \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"{service_name=~\\\"photo-review|photo-triage\\\"} | json | event=~\\\"request.slow|request.error|triage.result|matching.finished\\\
     \"\",\n          \"queryType\": \"range\"\n        }\n      ],\n      \"options\"\

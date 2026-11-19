@@ -17,6 +17,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
     """Serve previews and annotation commands without arbitrary filesystem or SQL access."""
     token = secrets.token_urlsafe(32)
     engine = None
+    root_store=store
+    if hasattr(store,'enable_pooling'):store.enable_pooling()
 
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
@@ -56,6 +58,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
 
         def dispatch(self):
             nonlocal engine
+            store=getattr(self,'request_store',root_store)
             self.safe_host()
             parsed = urllib.parse.urlsplit(self.path)
             query = {k: values[0] for k, values in urllib.parse.parse_qs(parsed.query).items()}
@@ -147,7 +150,11 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
         def dispatch_safely(self):
             try:
                 route=urllib.parse.urlsplit(self.path).path
-                if self.command=='GET' and (route in ('/','/app.js','/style.css','/healthz','/api/config','/api/diagnostics')
+                if route.startswith('/api/') and route not in ('/api/config','/api/diagnostics') and hasattr(store,'request_session'):
+                    with store.request_session(readonly=self.command=='GET') as reader:
+                        self.request_store=reader
+                        self.dispatch()
+                elif self.command=='GET' and (route in ('/','/app.js','/style.css','/healthz','/api/config','/api/diagnostics')
                     or getattr(store,'background_only',False)):
                     # PostgreSQL reads take short per-query locks internally;
                     # independent DuckDB queries and image I/O need no GUI lock.
@@ -167,7 +174,9 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 self.send({"error": str(exc)[:250]}, 400)
             except Exception as exc:
                 get_telemetry().emit('request.error',error_type=type(exc).__name__,trace_id=self.request_record['trace_id'])
-                if type(exc).__name__ in ('QueryCanceled','LockNotAvailable'):
+                if type(exc).__name__ in ('PoolTimeout','TooManyRequests'):
+                    self.send({'error':'Photo database connection pool is busy; retry shortly'},503)
+                elif type(exc).__name__ in ('QueryCanceled','LockNotAvailable'):
                     self.send({'error':'Photo query timed out; retry shortly'},503)
                 else:self.send({"error": "Operation failed; check the server log"}, 500)
             self.request_record['status']=self.pending_response[1]

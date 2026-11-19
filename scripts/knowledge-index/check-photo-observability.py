@@ -41,6 +41,7 @@ def main():
         if not records:raise RuntimeError('No stored structured photo logs')
         prometheus='kube-prometheus-stack-prometheus'
         for expr in ['count(photo_app_http_requests_total{service_name="photo-review"})',
+            'count(photo_app_pg_pool_connections{service_name="photo-review"})',
             'count(photo_app_db_duration_seconds_count{stage="duckdb.query"})',
             'min(photo_app_probe_success{probe="api"})']:
             result=get(prometheus,'/api/v1/query?'+urllib.parse.urlencode({'query':expr}))['data']['result']
