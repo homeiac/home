@@ -145,6 +145,16 @@ import json, re, subprocess, sys, yaml
 here, repo, w = sys.argv[1:4]
 have = set(subprocess.check_output([sys.executable, here + "/export-metrics.py", "--list-metrics"], text=True).split())
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
+# Optional exporters owned by PR #218; declarations checked against its e73a110
+# photo_enrichment/metrics.py and export-frigate-metrics.py HELP registries.
+# Keep an explicit contract so typos fail without importing the downstream worker.
+external.update("photo_enrichment_" + name for name in (
+    "edge_info", "heartbeat_timestamp_seconds", "inventory", "queue", "running",
+    "stage_completed_seconds_total", "stage_operations_total", "stage_seconds_total",
+    "stage_started_timestamp_seconds", "worker_stage"))
+external.update("photo_frigate_" + name for name in (
+    "edge_info", "frames_per_second", "last_poll_timestamp_seconds",
+    "processing_milliseconds", "service_up"))
 mon = repo + "/gitops/clusters/homelab/infrastructure/monitoring/"
 exprs = []
 d = yaml.safe_load(open(mon + "dashboards/knowledge-index.yaml"))
@@ -154,7 +164,7 @@ for p in j["panels"]:
 r = yaml.safe_load(open(mon + "knowledge-index-alerting-rules.yaml"))
 exprs += [x["expr"] for g in r["spec"]["groups"] for x in g["rules"]]
 names = {n for e in exprs for n in re.findall(r"[a-zA-Z_:][a-zA-Z0-9_:]*(?=\s*[{\[(]|\s|$|\)|,)", e)}
-metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|media_pipeline_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
+metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|media_pipeline_|photo_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
 missing = {m for m in metrics - have - external if not m.startswith("DCGM_FI_DEV_")}   # DCGM names come from the NVIDIA exporter (checked live by check-promql.sh)
 if missing:
     print("  missing:", sorted(missing)); sys.exit(1)

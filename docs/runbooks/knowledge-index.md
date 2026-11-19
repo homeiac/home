@@ -145,6 +145,19 @@ The **Pipeline bottlenecks** row measures the sequential worker itself: select a
 audio transcription → build prompt → Ollama request → parse → next item → write Parquet at the batch boundary.
 Use the **Pipeline enricher** filter to select a model/prompt run. Existing totals remain in the Summaries row.
 
+The pipeline row now sits directly below **Value delivered**, followed by **Photo enrichment — parallel CPU branch**
+and **Frigate processing — shared service**. These optional panels and map nodes match the live dashboard from
+[PR #218](https://github.com/homeiac/home/pull/218), revision `e73a110`. Their photo worker and Frigate stats exporter
+are delivered by that PR, independently of the caption worker in #216. Without those exporters, the panels show
+**Not instrumented**. The Host filter applies to all components; Pipeline enricher selects only caption runs.
+
+Photo panels show EXIF/face/review backlogs, durable facts, stage durations, operation rates, errors and current
+operation age (zero while idle). Each worker's map percentages use its own measured time as the denominator;
+do not add percentages across components. Human review measures database saves, not time spent deciding labels.
+Frigate nodes show API reachability (1/0) and native camera-service processing time (milliseconds), with units in
+the titles. They expire after 60 seconds without polling; they do not measure uploaded-photo throughput or prove
+identity recognition readiness. Existing panel IDs and the summary-count line graph are preserved.
+
 - **Value stream map / time by stage:** percentage of measured wall time in each stage, including in-flight work.
   Edges describe control flow, not independently queued workers. Inference includes request encoding, transport,
   server waiting and inference; it is not a GPU-utilization measurement.
