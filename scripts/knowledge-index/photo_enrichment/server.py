@@ -8,6 +8,7 @@ import secrets
 import urllib.parse
 
 from .faces import FaceEngine, frigate_candidate
+from .telemetry import get_telemetry
 
 STATIC = Path(__file__).parent / "static"
 
@@ -18,16 +19,27 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
     engine = None
 
     class Handler(BaseHTTPRequestHandler):
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(20)
+
         def log_message(self, fmt, *args):
             logging.info("HTTP %s", args[1] if len(args) > 1 else "request")
 
         def send(self, body, status=200, content_type="application/json"):
             if not isinstance(body, bytes):
                 body = json.dumps(body, default=str).encode()
+            # Prepare under the DB lock, but never hold it while writing a socket.
+            self.pending_response=(body,status,content_type)
+
+        def write_response(self):
+            body,status,content_type=self.pending_response
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header('X-Trace-ID',self.request_record['trace_id'])
             self.send_header("Cache-Control", "no-store")
+            if status==503:self.send_header('Retry-After','3')
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
@@ -48,6 +60,10 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             parsed = urllib.parse.urlsplit(self.path)
             query = {k: values[0] for k, values in urllib.parse.parse_qs(parsed.query).items()}
             if self.command == "GET":
+                if parsed.path == '/healthz':
+                    return self.send({'status':'alive'})
+                if parsed.path == '/api/diagnostics':
+                    return self.send(get_telemetry().diagnostics())
                 if parsed.path in ("/", "/app.js", "/style.css"):
                     name, kind = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css")}[parsed.path]
                     return self.send((STATIC / name).read_bytes(), content_type=kind)
@@ -128,20 +144,42 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 return self.send(store.export())
             self.send({"error": "Not found"}, 404)
 
-        def handle_request(self):
+        def dispatch_safely(self):
             try:
-                # The GUI and optional background rule share one connection.
-                # Serialize requests so they cannot join another task's transaction.
-                with store.lock:
+                route=urllib.parse.urlsplit(self.path).path
+                if self.command=='GET' and (route in ('/','/app.js','/style.css','/healthz','/api/config','/api/diagnostics')
+                    or getattr(store,'background_only',False)):
+                    # PostgreSQL reads take short per-query locks internally;
+                    # independent DuckDB queries and image I/O need no GUI lock.
                     self.dispatch()
+                else:
+                    with get_telemetry().stage('lock.wait'):
+                        if not store.lock.acquire(timeout=getattr(self.server,'lock_timeout',3)):
+                            raise TimeoutError('Photo database is busy; retry shortly')
+                    try:self.dispatch()
+                    finally:store.lock.release()
+            except TimeoutError as exc:
+                self.send({'error':str(exc)},503)
             except PermissionError as exc:
                 self.send({"error": str(exc)}, 403)
             except (ValueError, KeyError, OSError) as exc:
                 logging.warning("Photo request failed: %s", type(exc).__name__)
                 self.send({"error": str(exc)[:250]}, 400)
-            except Exception:
-                logging.exception("Photo request failed")
-                self.send({"error": "Operation failed; check the server log"}, 500)
+            except Exception as exc:
+                get_telemetry().emit('request.error',error_type=type(exc).__name__,trace_id=self.request_record['trace_id'])
+                if type(exc).__name__ in ('QueryCanceled','LockNotAvailable'):
+                    self.send({'error':'Photo query timed out; retry shortly'},503)
+                else:self.send({"error": "Operation failed; check the server log"}, 500)
+            self.request_record['status']=self.pending_response[1]
+            try:
+                with get_telemetry().stage('response.write'):self.write_response()
+            except (BrokenPipeError,ConnectionResetError,TimeoutError):
+                logging.info('Photo client disconnected before response completed')
+
+        def handle_request(self):
+            with get_telemetry().request(self.command,urllib.parse.urlsplit(self.path).path,self.headers) as record:
+                self.request_record=record
+                self.dispatch_safely()
 
         do_GET = handle_request
         do_POST = handle_request

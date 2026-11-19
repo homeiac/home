@@ -40,6 +40,7 @@ class Metrics:
         self.stage = "idle"
         self.started = time.time()
         self.active = None
+        self.active_operations = {}
         self.running = 1
         self.jobs = {}
         self.queues = {}
@@ -70,13 +71,14 @@ class Metrics:
 
     @contextmanager
     def measure(self, stage: str):
-        """Time a serialized operation without holding the telemetry lock during work."""
+        """Time operations, including background matching concurrent with review."""
         if stage not in TITLES:
             raise ValueError("Unknown telemetry stage")
         with self.lock:
-            if self.active is not None:
-                raise RuntimeError("Photo stage measurements must be serialized")
-            self.stage, self.started, self.active = stage, time.time(), time.monotonic()
+            key=object()
+            started=time.monotonic()
+            self.active_operations[key]=(stage,started,time.time())
+            self.stage, self.started, self.active = stage, time.time(), started
         status = "ok"
         try:
             yield
@@ -85,10 +87,14 @@ class Metrics:
             raise
         finally:
             with self.lock:
-                self.seconds[stage] += max(0, time.monotonic() - self.active)
+                self.seconds[stage] += max(0, time.monotonic() - started)
                 self.operations[stage, status] += 1
-                self.active = None
-                self.stage, self.started = "idle", time.time()
+                self.active_operations.pop(key)
+                if self.active_operations:
+                    self.stage,self.active,self.started=next(iter(self.active_operations.values()))
+                else:
+                    self.active = None
+                    self.stage, self.started = "idle", time.time()
                 self.publish()
 
     def snapshot(self, queues: dict, inventory: dict) -> None:
@@ -108,7 +114,7 @@ class Metrics:
             for stage, seconds in self.seconds.items():
                 if stage not in self.stages: continue
                 add("stage_completed_seconds_total", seconds, stage=stage)
-                live = max(0, time.monotonic()-self.active) if self.active is not None and self.stage == stage else 0
+                live = sum(max(0,time.monotonic()-start) for name,start,_ in self.active_operations.values() if name==stage)
                 add("stage_seconds_total", seconds + live, stage=stage, id="photo_"+stage, title=TITLES[stage])
                 for status in ("ok", "error"):
                     add("stage_operations_total", self.operations[stage, status], stage=stage, status=status)

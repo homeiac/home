@@ -121,6 +121,28 @@ class IntegrationTests(unittest.TestCase):
                         pass
             self.assertEqual(broken.operations['persist','ok'], 1)
 
+    def test_background_matching_and_review_have_independent_timing(self):
+        metrics=Metrics()
+        with metrics.measure('match'):
+            with metrics.measure('review'):
+                self.assertEqual(len(metrics.active_operations),2)
+            self.assertEqual(metrics.stage,'match')
+        self.assertEqual(metrics.operations['match','ok'],1)
+        self.assertEqual(metrics.operations['review','ok'],1)
+        self.assertEqual(metrics.stage,'idle')
+
+    def test_preview_cache_is_bounded_and_invalidates_changed_source_identity(self):
+        from photo_enrichment.previews import PreviewCache
+        cache=PreviewCache(max_bytes=8,max_entries=2)
+        build=MagicMock(return_value=b'1234')
+        self.assertEqual(cache.render(('source',1),build),b'1234')
+        cache.render(('source',1),build)
+        self.assertEqual(build.call_count,1)
+        cache.render(('source',2),build);cache.render(('other',1),build)
+        self.assertEqual(build.call_count,3)
+        self.assertIsNone(cache.get(('source',1)))
+        self.assertEqual(cache.bytes,8)
+
 
 class StoreTests(unittest.TestCase):
     @classmethod

@@ -27,7 +27,7 @@ function harness(){
   const rows=[{id:'a',revision:'r1',person:null,suggestion:{person:'Synthetic G',score:.8},path:'a.jpg',confidence:.9},
     {id:'b',revision:'r2',person:null,suggestion:{person:'Synthetic Asha',score:.8},path:'b.jpg',confidence:.9},
     {id:'c',revision:'r3',person:null,suggestion:null,path:'c.jpg',confidence:.9}];
-  const context=vm.createContext({document,URLSearchParams,fetch:async(url,options)=>{
+  const context=vm.createContext({document,URLSearchParams,AbortSignal,setTimeout,clearTimeout,fetch:async(url,options)=>{
     let result={};
     if(options?.body){
       const body=JSON.parse(options.body);posts.push(body);

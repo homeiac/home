@@ -1,8 +1,36 @@
 # Photo enrichment and group review
 
-Implements [#217](https://github.com/homeiac/home/issues/217) alongside the existing media-summary worker. Reads the existing knowledge-index catalog and originals without modifying them. Owns a separate DuckDB database for extracted metadata, detected faces and human annotations; exports Parquet for downstream queries.
+Implements [#217](https://github.com/homeiac/home/issues/217) alongside the existing media-summary worker. Reads the existing knowledge-index catalog and originals without modifying them. The deployed pipeline uses PostgreSQL for jobs, enrichment facts and review edits; immutable Parquet snapshots and DuckDB serve gallery browsing and analytics. The standalone DuckDB writable mode below remains available for local demos and migration compatibility.
 
-## Run locally
+## Deployed gallery queries and incident diagnostics
+
+Photo lists, capture-date grouping, face filters and counts query Parquet with a private in-memory DuckDB connection per request. A generation lease keeps all files consistent. PostgreSQL supplies only recent face review changes for the gallery overlay, so confirmation, renaming and clearing a label appear immediately. Point lookups, matching references and writes still use PostgreSQL. New enrichment becomes visible after the five-minute snapshot export; source catalog imports run hourly. Neither the GUI nor the worker writes a shared DuckDB database in PostgreSQL mode.
+
+The November 18 hang came from a PostgreSQL gallery plan repeatedly scanning captions before pagination while holding the shared application lock. Static files also waited for that lock. Static/config/health/diagnostic requests now bypass it, socket writes happen after release, lock acquisition times out after three seconds, and GUI PostgreSQL statements have a fifteen-second timeout. The gallery read path now uses DuckDB. A bootstrap path before the first snapshot retains PostgreSQL pagination before caption lookup.
+
+A second contention source was whole-library matching inside face-list requests (measured at 20 seconds), plus thumbnail decoding under the same lock. Matching and automatic acceptance now use a separate PostgreSQL connection and lock. Browser requests consume the latest completed suggestion cache; a cold start shows a background-refresh notice and polls until similarities appear. The matcher starts immediately and checks again thirty seconds after each pass. Gallery reads hold the PostgreSQL connection lock only during a query; DuckDB and image I/O run outside it. Preview decoding is limited to two concurrent originals, with a 32 MiB / 256-entry cache keyed by original path, size, modification time and face box. This avoids the observed memory-pressure spike from simultaneous original decodes. Slow completed request logs include stage durations, the bottleneck stage and the slowest SQL-template fingerprint; background matching has its own trace and completion event.
+
+- [Photo App dashboard](https://grafana.app.home.panderosystems.com/d/photo-app/photo-app): request rates, p95 latency, errors, PostgreSQL/DuckDB time, lock waits, unfinished requests and automatic diagnostic logs.
+- [Knowledge Index value stream map](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index): processing stages plus snapshot-to-gallery and live-review data flow, with explicitly labeled query p95 seconds.
+- Grafana Explore data sources **Photo traces** and **Photo logs**: correlated trace IDs; HTTP response headers include `X-Trace-ID`.
+
+OpenTelemetry spans start before lock acquisition and cover SQL, DuckDB, thumbnail processing and response writes. Every five seconds a watchdog checks unfinished requests; after ten seconds it logs the current stage and trace ID without waiting for the span to finish. Metrics export every five seconds. Traces/logs exclude query parameters, names, image paths, embeddings and SQL parameter values. SQL templates are hashed. Bounded asynchronous exporters have a three-second network timeout.
+
+The independent `photo-enrichment-triage.timer` runs once a minute. It probes health/API/diagnostics, collects PostgreSQL wait/blocker metadata when needed, checks GUI cgroup pressure, and records an evidence-based category such as `postgres_blocked`, `slow_duckdb_query` or `application_lock`. It does not restart services or edit photo data. Latest evidence is `/local-3TB-backup/photo-enrichment/observability/triage-latest.json`; the same event goes to structured journald/OTel logs. Health, freshness and incident gauges are scraped through node exporter. `/healthz` tests HTTP liveness, while the independent API probe tests database-backed readiness.
+
+Private Traefik OTLP ingestion feeds an OTel collector, Tempo and Loki on `k3s-vm-still-fawn`. Tempo retains traces for 48 hours; Loki retains logs for 72 hours. Each backend has a 5 GiB PVC. These are photo-app signals; existing processing-worker metrics continue to populate the pipeline dashboard.
+
+Read-only operational checks from the worktree:
+
+```bash
+CB_HOST=root@<inventory-address> python3 scripts/knowledge-index/triage-photo-app.py
+python3 scripts/knowledge-index/check-photo-service.py
+python3 scripts/knowledge-index/check-photo-observability.py
+```
+
+The last command checks actual stored traces/logs, collector and Prometheus metrics, and dashboard PromQL. `deploy-photo-postgres.py gui` installs the versioned GUI, exporter and triage units with rollback backups, preserving review data and the worker. Kubernetes observability and the app dashboard deploy through the feature branch's Flux preview.
+
+## Run locally (standalone DuckDB mode)
 
 Python 3.11–3.13 is supported by the pinned dependencies. From the repository root:
 
@@ -70,7 +98,7 @@ Run `check-frigate-enrichment.py --recognize-reference` with the same virtualenv
 
 When Frigate is intentionally scaled to zero, the API returns HTTP 503. The operator-approved helper `validate-frigate-temporarily.py --allow-temporary-start` backs up replica/pause settings, starts only Frigate, runs the probe, then restores replicas even on failure. Adding `--keep-running` explicitly retains one replica once the deployment is ready, including after a failed recognition probe for diagnosis. Existing Flux pause annotations are preserved in either case; other GPU tenants are untouched.
 
-## Background worker deployment
+## Legacy standalone worker deployment
 
 The persistent `photo-enrichment-worker.service` runs on the Proxmox host beside the existing catalog, not inside the Kubernetes VM. It uses an isolated, versioned virtualenv, reads the catalog/originals, and writes only its own state and node-exporter textfile. CPU is capped at two cores, memory at 2 GiB, with low scheduling priority and no network access during extraction.
 
@@ -115,7 +143,7 @@ Install the backed-up systemd poller with `CB_HOST=root@<inventory-address> pyth
 
 The live 0.16.0 instance reports a CPU object detector and large face recognition. Available ONNX providers are OpenVINO and CPU, with no CUDA provider. Starting this instance therefore does not demonstrate GPU-accelerated face recognition. It was left running at the user's request with its existing per-object Flux pause retained. The independent CPU photo worker is deployed separately with the service below.
 
-## Storage and DuckDB
+## Legacy standalone storage and DuckDB
 
 `STATE/enrichment.duckdb` is authoritative. Tables are `extracted`, `photo_groups`, `group_members`, `faces`, `face_scans`, `rejected_matches` and `annotation_history`; the session view `enriched_media` joins extracted facts with the read-only catalog and latest successful captions. Keep backups of the state directory while the application is stopped.
 

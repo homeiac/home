@@ -253,6 +253,15 @@ class PipelineTests(unittest.TestCase):
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         base=f'http://127.0.0.1:{server.server_port}'
         try:
+            server.lock_timeout=.05
+            self.store.query_lock_timeout=.05
+            with self.store.lock:
+                for route in ('/','/app.js','/healthz','/api/config'):
+                    with urllib.request.urlopen(base+route,timeout=1) as response:
+                        self.assertEqual(response.status,200)
+                with self.assertRaises(urllib.error.HTTPError) as busy:
+                    urllib.request.urlopen(base+'/api/status',timeout=1)
+                self.assertEqual(busy.exception.code,503)
             with urllib.request.urlopen(base+'/api/config') as response:csrf=json.load(response)['csrf']
             def post(path,body):
                 request=urllib.request.Request(base+path,data=json.dumps(body).encode(),headers={
@@ -324,7 +333,7 @@ class PipelineTests(unittest.TestCase):
             def __exit__(self,*args):self.inner.close()
             def execute(self,statement,*args):
                 result=self.inner.execute(statement,*args)
-                if statement.startswith('COPY source.public.extracted') and not self.changed:
+                if statement.startswith('COPY ') and 'source.public.extracted' in statement and not self.changed:
                     writer.label_face('stable-face','Concurrent edit')
                     self.changed=True
                 return result
@@ -336,6 +345,67 @@ class PipelineTests(unittest.TestCase):
             finally:reader.close()
             self.assertEqual(writer.face('stable-face')['person'],'Concurrent edit')
         finally:writer.close()
+
+    def test_gallery_and_status_do_not_wait_for_background_matching_or_thumbnail_decode(self):
+        import threading
+        import urllib.parse
+        import urllib.request
+        from concurrent.futures import ThreadPoolExecutor
+        from photo_enrichment.server import make_server
+        from photo_enrichment.store import oriented_image
+        self.add_review_faces()
+        export_snapshot(self.state)
+        background=PostgresStore(self.index,self.library,self.state)
+        self.store.suggestion_source=background
+        server=make_server(self.store,self.state/'models','127.0.0.1',0)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        base=f'http://127.0.0.1:{server.server_port}'
+        entered=threading.Event();release=threading.Event()
+        def slow_decode(path):
+            entered.set()
+            if not release.wait(5):raise RuntimeError('Test decode release timed out')
+            return oriented_image(path)
+        try:
+            with background.lock,patch.object(background,'matching_pass',side_effect=AssertionError('HTTP must not run matching')):
+                with urllib.request.urlopen(base+'/api/faces',timeout=2) as response:
+                    import json
+                    self.assertTrue(json.load(response)['suggestions_refreshing'])
+                background._matching_cache={'matches':{'review-a':{'person':'Synthetic person','reference_id':'stable-face','score':.95}}}
+                self.assertIn('review-a',self.store.matching_pass())
+            with patch('photo_enrichment.store.oriented_image',side_effect=slow_decode),ThreadPoolExecutor(1) as pool:
+                thumbnail=pool.submit(urllib.request.urlopen,base+'/api/thumbnail?'+urllib.parse.urlencode({'path':self.path,'face':'stable-face'}))
+                try:
+                    self.assertTrue(entered.wait(2))
+                    with urllib.request.urlopen(base+'/api/status',timeout=1) as response:self.assertEqual(response.status,200)
+                    with urllib.request.urlopen(base+'/api/faces',timeout=2) as response:self.assertEqual(response.status,200)
+                finally:release.set()
+                thumbnail.result(timeout=2).close()
+        finally:
+            release.set();server.shutdown();server.server_close();thread.join();background.close()
+
+    def test_gallery_uses_duckdb_and_overlays_live_confirmations(self):
+        self.add_review_faces()
+        snapshot=export_snapshot(self.state)
+        self.store.label_face('review-a','Immediate correction')
+        execute=self.store.db.execute
+        def bounded_postgres(statement,params=()):
+            self.assertNotIn('enriched_media',statement,'Gallery browsing must not query the PostgreSQL enrichment view')
+            return execute(statement,params)
+        with patch.object(self.store.db,'execute',side_effect=bounded_postgres):
+            page=self.store.face_library(status='unreviewed')
+            self.assertEqual(page['query_backend'],'duckdb')
+            self.assertEqual(page['captured_at'],snapshot['captured_at'])
+            self.assertEqual([f['id'] for f in page['faces']],['review-b'])
+            named=self.store.face_library(person='Immediate correction',status='named')
+            self.assertEqual(named['faces'][0]['id'],'review-a')
+            self.assertEqual(named['faces'][0]['label_source'],'user')
+            dates=self.store.dates('UTC')
+            self.assertTrue(dates)
+            self.assertEqual(self.store.photos(dates[0]['date'],'UTC')['query_backend'],'duckdb')
+        # A stale snapshot must not make the updated revision unusable for review.
+        face=named['faces'][0]
+        self.store.label_faces([dict(id=face['id'],revision=str(face['revision']))],'Second correction')
+        self.assertEqual(self.store.face('review-a')['person'],'Second correction')
 
 
 if __name__=='__main__': unittest.main()

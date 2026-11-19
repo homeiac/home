@@ -418,17 +418,30 @@ class Store:
             self.db.execute("INSERT INTO rejected_matches VALUES (?,?) ON CONFLICT DO NOTHING", [face_id, reference_id])
 
     def thumbnail(self, path: str, face_id: str | None = None) -> bytes:
-        image = oriented_image(self.source_file(path))
+        from .telemetry import get_telemetry
+        from .previews import PREVIEWS
+        telemetry=get_telemetry()
+        file=self.source_file(path)
+        st=file.stat();box=None
         if face_id:
             face = self.face(face_id)
             if face["path"] != path:
                 raise ValueError("Face does not belong to this photo")
-            x1, y1, x2, y2 = face["box"]
-            image = image.crop((round(x1*image.width), round(y1*image.height), round(x2*image.width), round(y2*image.height)))
-        image.thumbnail((960, 960))
-        buffer = io.BytesIO()
-        image.save(buffer, "JPEG", quality=85)  # Preview only; no EXIF copied into browser thumbnails.
-        return buffer.getvalue()
+            box=tuple(face['box'])
+        def build():
+            with telemetry.stage('thumbnail.read_decode'):
+                image=oriented_image(file)
+            try:
+                if box:
+                    x1,y1,x2,y2=box
+                    crop=image.crop((round(x1*image.width),round(y1*image.height),round(x2*image.width),round(y2*image.height)))
+                    image.close();image=crop
+                with telemetry.stage('thumbnail.resize'):image.thumbnail((960,960))
+                buffer=io.BytesIO()
+                with telemetry.stage('thumbnail.encode'):image.save(buffer,'JPEG',quality=85)
+                return buffer.getvalue()
+            finally:image.close()
+        return PREVIEWS.render((str(file),st.st_size,st.st_mtime_ns,box),build)
 
     @observed("export")
     def export(self) -> dict:

@@ -106,10 +106,23 @@ def main():
         unit_path=UNITS/'photo-enrichment-gui.service'; original=unit_path.read_text()
         backup=ROOT/'backups'/('gui-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
         backup.mkdir(parents=True);(backup/unit_path.name).write_text(original)
+        related=['photo-enrichment-export.service','photo-enrichment-triage.service','photo-enrichment-triage.timer']
+        previous_units={name:(UNITS/name).read_text() if (UNITS/name).exists() else None for name in related}
+        for name,content in previous_units.items():
+            if content is not None:(backup/name).write_text(content)
         temporary=ROOT/'gui.new';temporary.unlink(missing_ok=True);temporary.symlink_to(release)
         temporary.replace(gui)
         try:
-            unit_path.write_text(original.replace('/opt/photo-enrichment/current/','/opt/photo-enrichment/gui/'))
+            updated=original.replace('/opt/photo-enrichment/current/','/opt/photo-enrichment/gui/')
+            updated='\n'.join(line for line in updated.splitlines() if not line.startswith(('Environment=OTEL_','Environment=PHOTO_SERVICE_VERSION=')))+'\n'
+            otel='Environment=OTEL_EXPORTER_OTLP_ENDPOINT=https://photo-otel.app.home.panderosystems.com\nEnvironment=OTEL_SERVICE_NAME=photo-review\nEnvironment=PHOTO_SERVICE_VERSION='+payload['release']+'\n'
+            unit_path.write_text(updated.replace('[Service]\n','[Service]\n'+otel))
+            export_unit=UNITS/'photo-enrichment-export.service'
+            export_unit.write_text(export_unit.read_text().replace('/opt/photo-enrichment/current/','/opt/photo-enrichment/gui/'))
+            base='/opt/photo-enrichment/gui/venv/bin/python /opt/photo-enrichment/gui/photo-enrich.py --backend postgres --index ${PHOTO_INDEX} --library ${PHOTO_LIBRARY} --state ${PHOTO_STATE}'
+            (UNITS/'photo-enrichment-triage.service').write_text(unit(base+' --prom /var/lib/prometheus/node-exporter/photo_app_triage.prom triage',
+                'Read-only photo app incident triage',otel.replace('photo-review','photo-triage')+'TimeoutStartSec=35',oneshot=True))
+            (UNITS/'photo-enrichment-triage.timer').write_text('[Unit]\nDescription=Photo app automatic incident diagnostics\n[Timer]\nOnBootSec=1min\nOnUnitInactiveSec=1min\n[Install]\nWantedBy=timers.target\n')
             run('systemd-analyze','verify',str(unit_path))
             run('systemctl','daemon-reload');run('systemctl','restart','photo-enrichment-gui.service')
             import urllib.request
@@ -120,9 +133,14 @@ def main():
                 except OSError:
                     time.sleep(1)
             else:raise RuntimeError('GUI did not become healthy')
+            run('systemctl','enable','--now','photo-enrichment-triage.timer')
             print('GUI-only rollout complete; ingestion was not restarted')
             return status()
         except BaseException:
+            run('systemctl','stop','photo-enrichment-triage.timer')
+            for name,content in previous_units.items():
+                if content is None:(UNITS/name).unlink(missing_ok=True)
+                else:(UNITS/name).write_text(content)
             unit_path.write_text(original);gui.unlink(missing_ok=True)
             if previous:gui.symlink_to(previous)
             run('systemctl','daemon-reload');run('systemctl','restart','photo-enrichment-gui.service')

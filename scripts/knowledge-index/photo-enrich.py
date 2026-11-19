@@ -35,6 +35,7 @@ def main() -> None:
     commands.add_parser("migrate", help="Import a quiesced legacy DuckDB into PostgreSQL once")
     commands.add_parser("refresh-catalog", help="Refresh PostgreSQL catalog from existing Parquet-backed index")
     commands.add_parser("export", help="Export Parquet snapshots of enrichment and annotation tables")
+    commands.add_parser("triage", help="Read-only bounded HTTP, DB wait and resource diagnostics")
     worker = commands.add_parser("worker", help="Continuously extract pending photos and publish Parquet/telemetry")
     worker.add_argument("--batch-size", type=int, default=25)
     worker.add_argument("--timezone", default="UTC")
@@ -53,6 +54,14 @@ def main() -> None:
         return
     if not args.index or not args.library:
         parser.error("--index and --library are required")
+    from photo_enrichment.telemetry import get_telemetry
+    telemetry=get_telemetry()
+    if args.command in ('serve','triage'):telemetry.start()
+    if args.command=='triage':
+        from photo_enrichment.triage import run as run_triage
+        try:run_triage(args.state,args.prom)
+        finally:telemetry.close()
+        return
     metrics = Metrics(args.prom)
     if args.backend == "postgres" and args.command == "serve":
         metrics.prefix="photo_review"
@@ -105,15 +114,19 @@ def main() -> None:
             import threading
             stop=threading.Event()
             automatic=None
+            automatic_store=None
             if args.backend=='postgres':
                 from photo_enrichment.auto_accept import run as run_auto_accept
-                automatic=threading.Thread(target=run_auto_accept,args=(store,stop),daemon=True)
+                automatic_store=PostgresStore(args.index,args.library,args.state,metrics)
+                store.suggestion_source=automatic_store
+                automatic=threading.Thread(target=run_auto_accept,args=(automatic_store,stop),daemon=True)
                 automatic.start()
             try:
                 server.serve_forever()
             finally:
                 stop.set()
                 if automatic:automatic.join()
+                if automatic_store:automatic_store.close()
                 server.server_close()
         elif args.command == "extract":
             if args.backend == "postgres": parser.error("PostgreSQL extraction runs through durable worker jobs")
@@ -147,6 +160,7 @@ def main() -> None:
     finally:
         metrics.__exit__(*sys.exc_info())
         store.close()
+        if args.command=='serve':telemetry.close()
 
 
 if __name__ == "__main__":

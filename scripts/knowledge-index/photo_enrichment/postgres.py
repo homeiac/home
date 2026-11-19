@@ -1,7 +1,7 @@
 """PostgreSQL authority for the existing extractors and review application (#217).
 
-DuckDB is used only for importing the existing catalog and exporting analytical
-snapshots. No live service opens the legacy writable enrichment.duckdb file.
+DuckDB reads immutable Parquet for gallery queries and analytical snapshots.
+No live service opens the legacy writable enrichment.duckdb file.
 """
 import datetime as dt
 import json
@@ -50,7 +50,9 @@ class Connection:
         self.connection = connection
 
     def execute(self, statement, parameters=()):
-        return self.connection.execute(statement.replace('%', '%%').replace('?', '%s'), parameters)
+        from .telemetry import get_telemetry,query_attributes
+        with get_telemetry().stage('db.query',**query_attributes(statement)):
+            return self.connection.execute(statement.replace('%', '%%').replace('?', '%s'), parameters)
 
     def executemany(self, statement, parameters):
         with self.connection.cursor() as cursor:
@@ -153,16 +155,45 @@ class PostgresStore(Store):
         self.metrics = metrics or Metrics()
         self.connection = connect()
         self.db = Connection(self.connection)
+        if self.metrics.prefix=='photo_review':
+            self.connection.execute("SET statement_timeout='15s'; SET lock_timeout='3s'")
 
     def export(self) -> dict:
         from .snapshots import export_snapshot
         target=os.environ.get('PHOTO_SNAPSHOT_PROM')
         return export_snapshot(self.state,Path(target) if target else None)
 
+    def rows(self,statement,parameters=()):
+        """Serialize only the shared PostgreSQL connection, never DuckDB or I/O."""
+        from .telemetry import get_telemetry
+        with get_telemetry().stage('lock.wait'):
+            if not self.lock.acquire(timeout=getattr(self,'query_lock_timeout',3)):
+                raise TimeoutError('Photo database is busy; retry shortly')
+        try:
+            result=self.db.execute(statement,parameters)
+            names=[item[0] for item in result.description]
+            return [dict(zip(names,row)) for row in result.fetchall()]
+        finally:self.lock.release()
+
     def status(self) -> dict:
         rows=self.rows("SELECT value FROM pipeline_state WHERE key='snapshot'")
         snapshot=rows[0]['value'] if rows else {}
-        return dict(backend='postgres',captured_at=snapshot.get('captured_at'),published_at=snapshot.get('published_at'))
+        return dict(backend='postgres',query_backend='duckdb' if (self.state/'analytics/current.json').exists() else 'postgres_bootstrap',
+            captured_at=snapshot.get('captured_at'),published_at=snapshot.get('published_at'))
+
+    def gallery_query(self,method,*args):
+        from .readside import GalleryReader
+        reader=GalleryReader(self)
+        try:return getattr(reader,method)(*args)
+        finally:reader.close()
+
+    def dates(self,timezone):
+        if (self.state/'analytics/current.json').exists():return self.gallery_query('dates',timezone)
+        return super().dates(timezone)
+
+    def photos(self,date,timezone,offset=0,limit=100):
+        if (self.state/'analytics/current.json').exists():return self.gallery_query('photos',date,timezone,offset,limit)
+        return super().photos(date,timezone,offset,limit)
 
     def matching_pass(self) -> dict:
         """Read saved embeddings in bounded batches; never change confirmed labels.
@@ -171,6 +202,11 @@ class PostgresStore(Store):
         A repeatable-read snapshot keeps references/candidates coherent during a pass.
         """
         from .matching import match_batch
+        if hasattr(self,'suggestion_source'):
+            # HTTP requests consume the last completed pass. Never run a whole
+            # library embedding comparison while a browser waits for its page.
+            cache=getattr(self.suggestion_source,'_matching_cache',None)
+            return cache['matches'] if cache else {}
         with self.lock:
             signature=self.rows("""SELECT count(*) FILTER(WHERE person IS NOT NULL) AS named,
                 max(updated_at) FILTER(WHERE person IS NOT NULL) AS last_named,
@@ -203,21 +239,50 @@ class PostgresStore(Store):
         """Group previously processed unnamed faces into bulk-review suggestions."""
         if status not in ('all','unreviewed','named','suggested') or offset<0 or not 1<=limit<=100:
             raise ValueError('Invalid face filter')
+        if (self.state/'analytics/current.json').exists():
+            result=self.gallery_query('faces',person,status,offset,limit,self.matching_pass())
+            result['suggestions_refreshing']=hasattr(self,'suggestion_source') and not getattr(self.suggestion_source,'_matching_cache',None)
+            return result
         with self.lock:
             matches=self.matching_pass()
+            # Paginate before fetching captions. Joining the global latest-caption
+            # view before LIMIT can repeatedly scan every caption for every face.
+            base="""FROM faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+                AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+                JOIN catalog.gphotos_media m ON m.path=f.path AND m.size_bytes=f.size_bytes
+                WHERE m.kind='media' AND m.ext IN ('jpg','jpeg','heic','png','gif','webp')
+                AND NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=f.path)"""
+            counts=self.rows('SELECT count(*) AS total,count(*) FILTER(WHERE f.person IS NULL) AS unreviewed '+base)[0]
+            people=self.rows('SELECT f.person,count(*) AS faces '+base+' AND f.person IS NOT NULL GROUP BY f.person ORDER BY lower(f.person)')
+            data=dict(counts=counts,people=people,offset=offset)
             if status!='suggested':
-                data=super().face_library(person,status,offset,limit)
+                filters,params='',[]
+                if status=='unreviewed':filters+=' AND f.person IS NULL'
+                if status=='named':filters+=' AND f.person IS NOT NULL'
+                if person:filters+=' AND f.person=?';params.append(person)
+                data['total']=self.rows('SELECT count(*) n '+base+filters,params)[0]['n']
+                dated=base.replace('WHERE m.kind', 'LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes WHERE m.kind')
+                ids=[r['id'] for r in self.rows('SELECT f.id '+dated+filters+
+                    ' ORDER BY coalesce(e.capture_ts,m.taken_ts) DESC NULLS LAST,f.id LIMIT ? OFFSET ?',[*params,limit,offset])]
             else:
-                data=super().face_library('', 'unreviewed',0,1)
                 selected=sorted((face_id for face_id,m in matches.items() if not person or m['person']==person),
                     key=lambda face_id:(matches[face_id]['person'],-matches[face_id]['score'],face_id))
                 data['total'],data['offset']=len(selected),offset
                 ids=selected[offset:offset+limit]
-                data['faces']=self.rows("""SELECT f.id,f.path,f.box,f.confidence,f.person,f.label_source,
-                    f.updated_at AS revision,m.capture_ts,m.latitude,m.longitude,m.summary
-                    FROM faces f JOIN enriched_media m ON m.path=f.path AND m.size_bytes=f.size_bytes
-                    WHERE f.id=ANY(?) AND f.person IS NULL""",[ids]) if ids else []
-                data['faces'].sort(key=lambda r:ids.index(r['id']))
+            data['faces']=self.rows("""SELECT f.id,f.path,f.box,f.confidence,f.person,f.label_source,f.updated_at AS revision,
+                coalesce(e.capture_ts,m.taken_ts) AS capture_ts,
+                CASE WHEN e.path IS NOT NULL THEN e.latitude WHEN s.geo_lat BETWEEN -90 AND 90
+                    AND s.geo_lon BETWEEN -180 AND 180 AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN s.geo_lat END AS latitude,
+                CASE WHEN e.path IS NOT NULL THEN e.longitude WHEN s.geo_lat BETWEEN -90 AND 90
+                    AND s.geo_lon BETWEEN -180 AND 180 AND NOT(s.geo_lat=0 AND s.geo_lon=0) THEN s.geo_lon END AS longitude,
+                caption.summary FROM faces f JOIN catalog.gphotos_media m ON m.path=f.path AND m.size_bytes=f.size_bytes
+                LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes
+                LEFT JOIN catalog.gphotos_sidecars s ON s.path=m.sidecar_path
+                LEFT JOIN LATERAL (SELECT summary,size_bytes FROM catalog.media_summaries
+                    WHERE path=m.path AND status='ok' ORDER BY created_at DESC,enricher DESC LIMIT 1) caption ON caption.size_bytes=m.size_bytes
+                WHERE f.id=ANY(?)""",[ids]) if ids else []
+            if status=='suggested':data['faces']=[f for f in data['faces'] if f['person'] is None]
+            data['faces'].sort(key=lambda r:ids.index(r['id']))
             groups={}
             for match in matches.values():groups[match['person']]=groups.get(match['person'],0)+1
             data['suggested_people']=[dict(person=name,faces=count) for name,count in sorted(groups.items())]
@@ -225,6 +290,14 @@ class PostgresStore(Store):
             for face in data['faces']:
                 face['suggestion']=matches.get(face['id']) if face['person'] is None else None
             return data
+
+    def source_file(self, path: str) -> Path:
+        """Validate originals without evaluating captions or other enrichment joins."""
+        rows=self.rows('SELECT size_bytes FROM catalog.gphotos_media WHERE path=?',[path])
+        if not rows:raise ValueError('Unknown photo')
+        file=contained(self.library,path)
+        if file.stat().st_size!=rows[0]['size_bytes']:raise ValueError('Photo changed since indexing; re-index it before enrichment')
+        return file
 
     def suggested_selection(self, threshold: float = .9, person: str = '') -> dict:
         """Snapshot all eligible displayed names/revisions for explicit bulk review."""

@@ -7,7 +7,7 @@ function element(tag, text, className) { const node=document.createElement(tag);
 function button(text, fn, className='secondary') { const node=element('button',text,className); node.type='button'; node.onclick=()=>run(fn); return node; }
 function query(path, params) { return path+'?'+new URLSearchParams(params); }
 async function api(path, body) {
-  const response=await fetch(path, body===undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Photo-Token':state.csrf},body:JSON.stringify(body)});
+  const response=await fetch(path, body===undefined ? {signal:AbortSignal.timeout(20000)} : {signal:AbortSignal.timeout(20000),method:'POST', headers:{'Content-Type':'application/json','X-Photo-Token':state.csrf},body:JSON.stringify(body)});
   const result=await response.json(); if(!response.ok) throw new Error(result.error||'Request failed'); return result;
 }
 async function run(fn) {
@@ -133,12 +133,22 @@ function renderPeople() {
   }
 }
 async function filterFaces(filter,person='') {state.faceStatus=filter;state.person=person;$('bulk-person').value='';state.faceOffset=0;await loadFaces();}
+function refreshPendingSuggestions(){
+  if(state.view!=='faces')return;
+  if(state.busy){state.suggestionRefresh=setTimeout(refreshPendingSuggestions,5000);return;}
+  run(loadFaces);
+}
 async function loadFaces() {
   const data=await api(query('/api/faces',{status:state.faceStatus,person:state.person,offset:state.faceOffset}));
   state.faceItems=data.faces;state.faceTotal=data.total;state.people=data.people;
   if(!data.faces.length&&state.faceOffset>0){state.faceOffset=Math.max(0,state.faceOffset-48);return loadFaces();}
   $('face-title').textContent=(state.faceStatus==='suggested'?'Suggested matches'+(state.person?' · '+state.person:''):state.person||(state.faceStatus==='unreviewed'?'Needs review':'All faces'));
   $('face-count').textContent=data.total+' faces · confirm names individually or together';
+  if(data.suggestions_refreshing){
+    $('face-count').textContent+=' · Calculating match similarities in the background…';
+    clearTimeout(state.suggestionRefresh);
+    state.suggestionRefresh=setTimeout(refreshPendingSuggestions,5000);
+  }
   $('suggested-count').textContent=data.counts.suggested||0;
   $('suggested-people').replaceChildren();
   for(const group of data.suggested_people||[]){const item=button(group.person,()=>filterFaces('suggested',group.person),'collection');item.append(element('span',group.faces));item.classList.toggle('active',state.faceStatus==='suggested'&&state.person===group.person);$('suggested-people').append(item);}
@@ -259,6 +269,6 @@ run(async()=>{
   const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;
   state.autoAcceptSupported=Boolean(config.auto_accept);$('auto-accept-settings').hidden=!state.autoAcceptSupported;await loadAutoAccept();
   if(config.background_only){$('extract').hidden=true;$('detect').hidden=true;$('export').textContent='Refresh analytics';}
-  const health=await api('/api/status');if(health.captured_at)$('freshness').textContent='Edits update immediately · analytics snapshot '+new Date(health.captured_at*1000).toLocaleTimeString();
+  const health=await api('/api/status');if(health.captured_at)$('freshness').textContent='DuckDB browsing snapshot · your edits update immediately · '+new Date(health.captured_at*1000).toLocaleTimeString();
   await loadFaces();status('Use Suggested matches to confirm similar faces together. Your saved names and corrections are preserved.');
 });
