@@ -1,0 +1,19 @@
+[Unit]
+Description=Frigate processing telemetry for the knowledge-index value stream (#217)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/opt/knowledge-index/frigate-metrics.env
+ExecStart=/usr/bin/python3 /opt/knowledge-index/export-frigate-metrics.py --out /var/lib/prometheus/node-exporter/knowledge_index_frigate.prom
+Restart=on-failure
+RestartSec=5
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prometheus/node-exporter
+
+[Install]
+WantedBy=multi-user.target

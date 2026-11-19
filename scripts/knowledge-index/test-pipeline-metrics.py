@@ -124,10 +124,16 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(graph["transformations"][0]["id"], "calculateField")
         self.assertEqual(graph["transformations"][0]["options"]["alias"], "mainstat")
         self.assertTrue(all(s in TITLES and t in TITLES for s, t in EDGES))
-        # New row must fit between summaries and the unchanged pipeline/host sections.
+        # Both instrumented branches sit directly after Value delivered, before inventory.
         start = next(p["gridPos"]["y"] for p in panels if p["title"] == "Pipeline bottlenecks")
-        end = next(p["gridPos"]["y"] for p in panels if p["title"] == "Ingest and index pipeline")
-        self.assertEqual(end - start, 42)
+        end = next(p["gridPos"]["y"] for p in panels if p["title"] == "Backfill progress")
+        self.assertEqual(end - start, 80)
+        self.assertEqual(start, 16)
+        self.assertIn("photo_enrichment_stage_seconds_total", graph["targets"][0]["expr"])
+        self.assertIn("photo_enrichment_edge_info", graph["targets"][1]["expr"])
+        self.assertEqual(graph["options"]["nodes"]["mainStatUnit"], "")
+        self.assertIn("photo_frigate_processing_milliseconds", graph["targets"][0]["expr"])
+        self.assertIn("photo_frigate_last_poll_timestamp_seconds", graph["targets"][0]["expr"])
         new = [p for p in panels if start <= p["gridPos"]["y"] < end]
         for i, a in enumerate(new):
             ag = a["gridPos"]

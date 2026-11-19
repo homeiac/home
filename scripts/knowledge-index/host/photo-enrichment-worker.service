@@ -1,0 +1,30 @@
+[Unit]
+Description=Resumable photo EXIF and CPU face enrichment (#217)
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/photo-enrichment-worker
+Environment=OPENBLAS_NUM_THREADS=2 OMP_NUM_THREADS=2 PYTHONUNBUFFERED=1
+ExecStart=/opt/photo-enrichment/current/venv/bin/python /opt/photo-enrichment/current/photo-enrich.py --index ${PHOTO_INDEX} --library ${PHOTO_LIBRARY} --state ${PHOTO_STATE} --prom /var/lib/prometheus/node-exporter/photo_enrichment.prom worker --batch-size 25 --timezone UTC
+Restart=on-failure
+RestartSec=60
+TimeoutStopSec=180
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=200%
+MemoryHigh=1G
+MemoryMax=2G
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/local-3TB-backup/photo-enrichment /var/lib/prometheus/node-exporter
+
+[Install]
+WantedBy=multi-user.target

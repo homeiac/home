@@ -697,6 +697,1928 @@ data:
           }
         },
         {
+          "id": 94,
+          "type": "row",
+          "title": "Pipeline bottlenecks",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "panels": []
+        },
+        {
+          "id": 95,
+          "type": "stat",
+          "title": "Worker stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 0,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "(media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) or (media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} * 0 - 1)",
+              "legendFormat": "{{instance}} / {{enricher}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "-1": {
+                      "text": "No recent telemetry",
+                      "color": "gray"
+                    },
+                    "0": {
+                      "text": "Between stages",
+                      "color": "gray"
+                    },
+                    "1": {
+                      "text": "Selecting batch",
+                      "color": "purple"
+                    },
+                    "2": {
+                      "text": "Read / decode",
+                      "color": "blue"
+                    },
+                    "3": {
+                      "text": "Transcribing",
+                      "color": "yellow"
+                    },
+                    "4": {
+                      "text": "Building prompt",
+                      "color": "light-blue"
+                    },
+                    "5": {
+                      "text": "Ollama request",
+                      "color": "green"
+                    },
+                    "6": {
+                      "text": "Parsing answer",
+                      "color": "light-purple"
+                    },
+                    "7": {
+                      "text": "Writing Parquet",
+                      "color": "orange"
+                    },
+                    "8": {
+                      "text": "Finished",
+                      "color": "dark-green"
+                    },
+                    "9": {
+                      "text": "Failed",
+                      "color": "red"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 96,
+          "type": "stat",
+          "title": "Time in current stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 8,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "(time() - media_pipeline_stage_started_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) and (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1)",
+              "legendFormat": "{{instance}} / {{enricher}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 97,
+          "type": "stat",
+          "title": "Worker telemetry age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 16,
+            "y": 17
+          },
+          "targets": [
+            {
+              "expr": "time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 30
+                  },
+                  {
+                    "color": "red",
+                    "value": 60
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Published every 5 s by the instrumented worker. Missing data means it has not published yet. After 60 s, the state becomes unknown rather than claiming it is still busy."
+        },
+        {
+          "id": 98,
+          "type": "nodeGraph",
+          "title": "Value stream map",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 21
+          },
+          "targets": [
+            {
+              "refId": "nodes",
+              "expr": "label_replace(((100 * sum by (id, title) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 0) or (100 * sum by (id, title) (rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (photo_enrichment_stage_seconds_total{instance=~\"$instance\"}) * 0)), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or max by (id,title) (photo_frigate_processing_milliseconds{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by (id,title) (photo_frigate_service_up{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60))",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "interval": "30s"
+            },
+            {
+              "refId": "edges",
+              "expr": "max by (id, source, target) (media_pipeline_edge_info{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) or max by (id, source, target) (photo_enrichment_edge_info{instance=~\"$instance\"}) or max by (id,source,target) (photo_frigate_edge_info{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60))",
+              "format": "table",
+              "instant": true,
+              "range": false,
+              "interval": "30s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "description": "Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; no end-to-end lead time or queue residence time is measured. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
+          "transformations": [
+            {
+              "id": "calculateField",
+              "filter": {
+                "id": "byRefId",
+                "options": "nodes"
+              },
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "sum",
+                  "include": [
+                    "Value",
+                    "Value #nodes"
+                  ]
+                },
+                "alias": "mainstat"
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "nodes"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #nodes": true
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "edges"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #edges": true
+                }
+              }
+            }
+          ],
+          "options": {
+            "nodes": {
+              "mainStatUnit": ""
+            }
+          }
+        },
+        {
+          "id": 99,
+          "type": "bargauge",
+          "title": "Time spent by stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 31
+          },
+          "targets": [
+            {
+              "expr": "100 * sum by (stage) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "description": "Includes in-flight operations, so a stalled decode or model request is visible before it completes. This is wall time, not CPU or GPU utilization."
+        },
+        {
+          "id": 100,
+          "type": "state-timeline",
+          "title": "Worker activity (sampled)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 16,
+            "x": 8,
+            "y": 31
+          },
+          "targets": [
+            {
+              "expr": "(media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) or (media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} * 0 - 1)",
+              "legendFormat": "{{instance}} / {{enricher}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "-1": {
+                      "text": "No recent telemetry",
+                      "color": "gray"
+                    },
+                    "0": {
+                      "text": "Between stages",
+                      "color": "gray"
+                    },
+                    "1": {
+                      "text": "Selecting batch",
+                      "color": "purple"
+                    },
+                    "2": {
+                      "text": "Read / decode",
+                      "color": "blue"
+                    },
+                    "3": {
+                      "text": "Transcribing",
+                      "color": "yellow"
+                    },
+                    "4": {
+                      "text": "Building prompt",
+                      "color": "light-blue"
+                    },
+                    "5": {
+                      "text": "Ollama request",
+                      "color": "green"
+                    },
+                    "6": {
+                      "text": "Parsing answer",
+                      "color": "light-purple"
+                    },
+                    "7": {
+                      "text": "Writing Parquet",
+                      "color": "orange"
+                    },
+                    "8": {
+                      "text": "Finished",
+                      "color": "dark-green"
+                    },
+                    "9": {
+                      "text": "Failed",
+                      "color": "red"
+                    }
+                  }
+                }
+              ],
+              "custom": {
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "mergeValues": true,
+            "showValue": "auto",
+            "alignValue": "center",
+            "rowHeight": 0.9,
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "description": "Sampled at Prometheus scrape cadence: stages shorter than a scrape can be missed. Cumulative timing counters still include every measured stage."
+        },
+        {
+          "id": 101,
+          "type": "timeseries",
+          "title": "Photo: seconds per stage operation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
+        },
+        {
+          "id": 102,
+          "type": "timeseries",
+          "title": "Video: seconds per stage operation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
+        },
+        {
+          "id": 103,
+          "type": "timeseries",
+          "title": "Batch: query / write seconds",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 37
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
+        },
+        {
+          "id": 104,
+          "type": "timeseries",
+          "title": "Ollama: seconds per response",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / (sum by (phase, kind) (rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{kind}} / {{phase}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Native API timings: load, prompt processing, generation and total. Total overlaps the components; do not add them. Missing fields are not reported as zero."
+        },
+        {
+          "id": 105,
+          "type": "timeseries",
+          "title": "Ollama: tokens per second",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (phase, kind) (rate(media_pipeline_ollama_tokens_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / (sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{kind}} / {{phase}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: tokens/s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 106,
+          "type": "timeseries",
+          "title": "Attempted vs saved items per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 51
+          },
+          "targets": [
+            {
+              "expr": "sum by (kind, status) (rate(media_pipeline_items_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) * 60",
+              "legendFormat": "{{kind}} {{status}} attempted",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "sum by (kind, status) (rate(media_pipeline_persisted_items_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) * 60",
+              "legendFormat": "{{kind}} {{status}} saved",
+              "refId": "B",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Attempted items include errors. Saved items advance only after atomic Parquet writes; batching creates bursts."
+        },
+        {
+          "id": 107,
+          "type": "timeseries",
+          "title": "Worker time by stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 51
+          },
+          "targets": [
+            {
+              "expr": "100 * sum by (stage) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 108,
+          "type": "row",
+          "title": "Photo enrichment \u2014 parallel CPU branch",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 58
+          },
+          "panels": []
+        },
+        {
+          "id": 109,
+          "type": "stat",
+          "title": "Photo worker stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 59
+          },
+          "targets": [
+            {
+              "expr": "(photo_enrichment_worker_stage{instance=~\"$instance\"} and (time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 60)) or (photo_enrichment_worker_stage{instance=~\"$instance\"} * 0 - 1)",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "-1": {
+                      "text": "Stale telemetry"
+                    },
+                    "0": {
+                      "text": "Idle / waiting for selection"
+                    },
+                    "1": {
+                      "text": "Catalog / queue"
+                    },
+                    "2": {
+                      "text": "Read EXIF"
+                    },
+                    "3": {
+                      "text": "CPU faces"
+                    },
+                    "4": {
+                      "text": "Save DuckDB"
+                    },
+                    "5": {
+                      "text": "Save human labels"
+                    },
+                    "6": {
+                      "text": "Optional Frigate"
+                    },
+                    "7": {
+                      "text": "Export Parquet"
+                    },
+                    "8": {
+                      "text": "Finished"
+                    },
+                    "9": {
+                      "text": "Failed"
+                    }
+                  }
+                }
+              ],
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 110,
+          "type": "stat",
+          "title": "Photo telemetry age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 59
+          },
+          "targets": [
+            {
+              "expr": "time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 30
+                  },
+                  {
+                    "color": "red",
+                    "value": 60
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 111,
+          "type": "stat",
+          "title": "Faces awaiting names",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 59
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_enrichment_queue{instance=~\"$instance\",stage=\"review\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 112,
+          "type": "stat",
+          "title": "Photos with GPS",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 59
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"gps\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 113,
+          "type": "timeseries",
+          "title": "Enrichment work remaining",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 63
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (photo_enrichment_queue{instance=~\"$instance\"})",
+              "legendFormat": "{{stage}} pending",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "max(media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"})",
+              "legendFormat": "captions pending",
+              "refId": "B",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source reindex requires a worker restart."
+        },
+        {
+          "id": 114,
+          "type": "timeseries",
+          "title": "Enrichment facts over time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 63
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"exif\"})",
+              "legendFormat": "EXIF extracted",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"gps\"})",
+              "legendFormat": "GPS available",
+              "refId": "B",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"faces\"})",
+              "legendFormat": "faces detected",
+              "refId": "C",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"named_faces\"})",
+              "legendFormat": "faces named",
+              "refId": "D",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"groups\"})",
+              "legendFormat": "annotated groups",
+              "refId": "E",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Durable DuckDB facts. Counts can decrease after edits; these are gauges, not cumulative counters. Parquet export is a separate explicit operation."
+        },
+        {
+          "id": 115,
+          "type": "timeseries",
+          "title": "Photo stages: seconds per operation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 70
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(photo_enrichment_stage_completed_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / (sum by (stage) (rate(photo_enrichment_stage_operations_total{instance=~\"$instance\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 3,
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "EXIF and CPU faces operate on photos; persistence operates on transactions; review measures annotation saves only; export covers a set of tables. Failed operations are included. Optional Frigate includes HTTP and server time."
+        },
+        {
+          "id": 116,
+          "type": "timeseries",
+          "title": "Photo stage operations per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 70
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage, status) (rate(photo_enrichment_stage_operations_total{instance=~\"$instance\"}[$__rate_interval])) * 60",
+              "legendFormat": "{{stage}} / {{status}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 117,
+          "type": "timeseries",
+          "title": "CPU branch time by stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 77
+          },
+          "targets": [
+            {
+              "expr": "100 * sum by (stage) (rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Share of measured operation time, including in-flight work. Idle human time and queue residence are unmeasured. A dominant stage indicates where elapsed work occurs, not hardware saturation."
+        },
+        {
+          "id": 118,
+          "type": "timeseries",
+          "title": "Photo extraction errors",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 12,
+            "y": 77
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_enrichment_inventory{instance=~\"$instance\",kind=\"exif_errors\"})",
+              "legendFormat": "EXIF files with errors",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 119,
+          "type": "timeseries",
+          "title": "Photo current operation age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 18,
+            "y": 77
+          },
+          "targets": [
+            {
+              "expr": "((time() - photo_enrichment_stage_started_timestamp_seconds{instance=~\"$instance\"}) and (photo_enrichment_worker_stage{instance=~\"$instance\"} > 0) and (photo_enrichment_worker_stage{instance=~\"$instance\"} < 8) and (time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 60)) or (photo_enrichment_worker_stage{instance=~\"$instance\"} * 0 and (time() - photo_enrichment_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 60))",
+              "legendFormat": "current operation seconds",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Zero between operations or after a clean stop; missing data means telemetry is absent or older than 60 seconds."
+        },
+        {
+          "id": 120,
+          "type": "row",
+          "title": "Frigate processing \u2014 shared service",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 84
+          },
+          "panels": []
+        },
+        {
+          "id": 121,
+          "type": "stat",
+          "title": "Frigate API reachable",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 85
+          },
+          "targets": [
+            {
+              "expr": "photo_frigate_service_up{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Unreachable",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "Up",
+                      "color": "green"
+                    }
+                  }
+                }
+              ],
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Endpoint reachability is not face-classifier readiness."
+        },
+        {
+          "id": 122,
+          "type": "stat",
+          "title": "Frigate telemetry age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 85
+          },
+          "targets": [
+            {
+              "expr": "time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"}",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 123,
+          "type": "stat",
+          "title": "Frigate object processing",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 85
+          },
+          "targets": [
+            {
+              "expr": "photo_frigate_frames_per_second{instance=~\"$instance\",kind=\"objects\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "fps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 124,
+          "type": "stat",
+          "title": "Frigate face processing",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 85
+          },
+          "targets": [
+            {
+              "expr": "photo_frigate_processing_milliseconds{instance=~\"$instance\",kind=\"faces\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)",
+              "legendFormat": "",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Native rolling processing time. Zero means no native face processing recorded; this is not an identity-readiness check."
+        },
+        {
+          "id": 125,
+          "type": "timeseries",
+          "title": "Frigate processing time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 89
+          },
+          "targets": [
+            {
+              "expr": "photo_frigate_processing_milliseconds{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Native camera-service processing. Uploaded-photo requests are timed separately in the optional photo worker."
+        },
+        {
+          "id": 126,
+          "type": "timeseries",
+          "title": "Frigate processing rate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 89
+          },
+          "targets": [
+            {
+              "expr": "photo_frigate_frames_per_second{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "fps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Not instrumented"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
           "id": 15,
           "type": "row",
           "title": "Backfill progress",
@@ -705,7 +2627,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 16
+            "y": 96
           },
           "panels": []
         },
@@ -721,7 +2643,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 17
+            "y": 97
           },
           "targets": [
             {
@@ -771,7 +2693,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 17
+            "y": 97
           },
           "targets": [
             {
@@ -825,7 +2747,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 17
+            "y": 97
           },
           "targets": [
             {
@@ -874,7 +2796,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 17
+            "y": 97
           },
           "targets": [
             {
@@ -923,7 +2845,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 17
+            "y": 97
           },
           "targets": [
             {
@@ -973,7 +2895,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 17
+            "y": 97
           },
           "targets": [
             {
@@ -1022,7 +2944,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 21
+            "y": 101
           },
           "targets": [
             {
@@ -1086,7 +3008,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 21
+            "y": 101
           },
           "targets": [
             {
@@ -1135,7 +3057,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 21
+            "y": 101
           },
           "targets": [
             {
@@ -1185,7 +3107,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 21
+            "y": 101
           },
           "targets": [
             {
@@ -1234,7 +3156,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 21
+            "y": 101
           },
           "targets": [
             {
@@ -1283,7 +3205,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 21
+            "y": 101
           },
           "targets": [
             {
@@ -1336,7 +3258,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 25
+            "y": 105
           },
           "targets": [
             {
@@ -1395,7 +3317,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 25
+            "y": 105
           },
           "targets": [
             {
@@ -1444,7 +3366,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 25
+            "y": 105
           },
           "targets": [
             {
@@ -1491,7 +3413,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 32
+            "y": 112
           },
           "panels": []
         },
@@ -1507,7 +3429,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 33
+            "y": 113
           },
           "targets": [
             {
@@ -1561,7 +3483,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 33
+            "y": 113
           },
           "targets": [
             {
@@ -1611,7 +3533,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 33
+            "y": 113
           },
           "targets": [
             {
@@ -1669,7 +3591,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 33
+            "y": 113
           },
           "targets": [
             {
@@ -1719,7 +3641,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 33
+            "y": 113
           },
           "targets": [
             {
@@ -1777,7 +3699,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 33
+            "y": 113
           },
           "targets": [
             {
@@ -1831,7 +3753,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 37
+            "y": 117
           },
           "targets": [
             {
@@ -1899,7 +3821,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 37
+            "y": 117
           },
           "targets": [
             {
@@ -1949,7 +3871,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 37
+            "y": 117
           },
           "targets": [
             {
@@ -2008,7 +3930,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 37
+            "y": 117
           },
           "targets": [
             {
@@ -2058,7 +3980,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 37
+            "y": 117
           },
           "targets": [
             {
@@ -2107,7 +4029,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 37
+            "y": 117
           },
           "targets": [
             {
@@ -2156,7 +4078,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 41
+            "y": 121
           },
           "targets": [
             {
@@ -2225,7 +4147,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 41
+            "y": 121
           },
           "targets": [
             {
@@ -2293,7 +4215,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 41
+            "y": 121
           },
           "targets": [
             {
@@ -2361,7 +4283,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 41
+            "y": 121
           },
           "targets": [
             {
@@ -2412,7 +4334,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 41
+            "y": 121
           },
           "targets": [
             {
@@ -2463,7 +4385,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 41
+            "y": 121
           },
           "targets": [
             {
@@ -2513,7 +4435,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 45
+            "y": 125
           },
           "targets": [
             {
@@ -2562,7 +4484,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 45
+            "y": 125
           },
           "targets": [
             {
@@ -2616,7 +4538,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 52
+            "y": 132
           },
           "targets": [
             {
@@ -2670,7 +4592,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 52
+            "y": 132
           },
           "targets": [
             {
@@ -2716,7 +4638,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 59
+            "y": 139
           },
           "panels": []
         },
@@ -2732,7 +4654,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 60
+            "y": 140
           },
           "targets": [
             {
@@ -2800,7 +4722,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 60
+            "y": 140
           },
           "targets": [
             {
@@ -2857,7 +4779,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 60
+            "y": 140
           },
           "targets": [
             {
@@ -2906,7 +4828,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 60
+            "y": 140
           },
           "targets": [
             {
@@ -2955,7 +4877,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 60
+            "y": 140
           },
           "targets": [
             {
@@ -3004,7 +4926,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 60
+            "y": 140
           },
           "targets": [
             {
@@ -3054,7 +4976,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 64
+            "y": 144
           },
           "panels": []
         },
@@ -3070,7 +4992,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 65
+            "y": 145
           },
           "targets": [
             {
@@ -3120,7 +5042,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 65
+            "y": 145
           },
           "targets": [
             {
@@ -3169,7 +5091,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 65
+            "y": 145
           },
           "targets": [
             {
@@ -3218,7 +5140,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 65
+            "y": 145
           },
           "targets": [
             {
@@ -3271,7 +5193,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 65
+            "y": 145
           },
           "targets": [
             {
@@ -3320,7 +5242,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 65
+            "y": 145
           },
           "targets": [
             {
@@ -3370,7 +5292,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 149
           },
           "targets": [
             {
@@ -3420,7 +5342,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 149
           },
           "targets": [
             {
@@ -3466,7 +5388,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 77
+            "y": 157
           },
           "panels": []
         },
@@ -3482,7 +5404,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 78
+            "y": 158
           },
           "targets": [
             {
@@ -3531,7 +5453,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 78
+            "y": 158
           },
           "targets": [
             {
@@ -3584,7 +5506,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 78
+            "y": 158
           },
           "targets": [
             {
@@ -3633,7 +5555,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 78
+            "y": 158
           },
           "targets": [
             {
@@ -3683,7 +5605,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 78
+            "y": 158
           },
           "targets": [
             {
@@ -3747,7 +5669,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 78
+            "y": 158
           },
           "targets": [
             {
@@ -3796,7 +5718,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 82
+            "y": 162
           },
           "targets": [
             {
@@ -3931,7 +5853,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 90
+            "y": 170
           },
           "targets": [
             {
@@ -3985,7 +5907,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 90
+            "y": 170
           },
           "targets": [
             {
@@ -4028,889 +5950,6 @@ data:
           }
         },
         {
-          "id": 94,
-          "type": "row",
-          "title": "Pipeline bottlenecks",
-          "collapsed": false,
-          "gridPos": {
-            "h": 1,
-            "w": 24,
-            "x": 0,
-            "y": 98
-          },
-          "panels": []
-        },
-        {
-          "id": 95,
-          "type": "stat",
-          "title": "Worker stage",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 8,
-            "x": 0,
-            "y": 99
-          },
-          "targets": [
-            {
-              "expr": "(media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) or (media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} * 0 - 1)",
-              "legendFormat": "{{instance}} / {{enricher}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "none",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "-1": {
-                      "text": "No recent telemetry",
-                      "color": "gray"
-                    },
-                    "0": {
-                      "text": "Between stages",
-                      "color": "gray"
-                    },
-                    "1": {
-                      "text": "Selecting batch",
-                      "color": "purple"
-                    },
-                    "2": {
-                      "text": "Read / decode",
-                      "color": "blue"
-                    },
-                    "3": {
-                      "text": "Transcribing",
-                      "color": "yellow"
-                    },
-                    "4": {
-                      "text": "Building prompt",
-                      "color": "light-blue"
-                    },
-                    "5": {
-                      "text": "Ollama request",
-                      "color": "green"
-                    },
-                    "6": {
-                      "text": "Parsing answer",
-                      "color": "light-purple"
-                    },
-                    "7": {
-                      "text": "Writing Parquet",
-                      "color": "orange"
-                    },
-                    "8": {
-                      "text": "Finished",
-                      "color": "dark-green"
-                    },
-                    "9": {
-                      "text": "Failed",
-                      "color": "red"
-                    }
-                  }
-                }
-              ]
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          }
-        },
-        {
-          "id": 96,
-          "type": "stat",
-          "title": "Time in current stage",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 8,
-            "x": 8,
-            "y": 99
-          },
-          "targets": [
-            {
-              "expr": "(time() - media_pipeline_stage_started_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) and (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1)",
-              "legendFormat": "{{instance}} / {{enricher}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          }
-        },
-        {
-          "id": 97,
-          "type": "stat",
-          "title": "Worker telemetry age",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 8,
-            "x": 16,
-            "y": 99
-          },
-          "targets": [
-            {
-              "expr": "time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}",
-              "legendFormat": "",
-              "refId": "A",
-              "interval": "30s",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 30
-                  },
-                  {
-                    "color": "red",
-                    "value": 60
-                  }
-                ]
-              },
-              "color": {
-                "mode": "thresholds"
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          },
-          "description": "Published every 5 s by the instrumented worker. Missing data means it has not published yet. After 60 s, the state becomes unknown rather than claiming it is still busy."
-        },
-        {
-          "id": 98,
-          "type": "nodeGraph",
-          "title": "Value stream map",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 10,
-            "w": 24,
-            "x": 0,
-            "y": 103
-          },
-          "targets": [
-            {
-              "refId": "nodes",
-              "expr": "(100 * sum by (id, title) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 0)",
-              "format": "table",
-              "instant": true,
-              "range": false,
-              "interval": "30s"
-            },
-            {
-              "refId": "edges",
-              "expr": "max by (id, source, target) (media_pipeline_edge_info{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"})",
-              "format": "table",
-              "instant": true,
-              "range": false,
-              "interval": "30s"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "none",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "description": "Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues. Nodes show zero during the first two scrapes while rate samples accumulate.",
-          "transformations": [
-            {
-              "id": "calculateField",
-              "filter": {
-                "id": "byRefId",
-                "options": "nodes"
-              },
-              "options": {
-                "mode": "reduceRow",
-                "reduce": {
-                  "reducer": "sum",
-                  "include": [
-                    "Value",
-                    "Value #nodes"
-                  ]
-                },
-                "alias": "mainstat"
-              }
-            },
-            {
-              "id": "organize",
-              "filter": {
-                "id": "byRefId",
-                "options": "nodes"
-              },
-              "options": {
-                "excludeByName": {
-                  "Time": true,
-                  "Value": true,
-                  "Value #nodes": true
-                }
-              }
-            },
-            {
-              "id": "organize",
-              "filter": {
-                "id": "byRefId",
-                "options": "edges"
-              },
-              "options": {
-                "excludeByName": {
-                  "Time": true,
-                  "Value": true,
-                  "Value #edges": true
-                }
-              }
-            }
-          ],
-          "options": {
-            "nodes": {
-              "mainStatUnit": "percent"
-            }
-          }
-        },
-        {
-          "id": 99,
-          "type": "bargauge",
-          "title": "Time spent by stage",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 6,
-            "w": 8,
-            "x": 0,
-            "y": 113
-          },
-          "targets": [
-            {
-              "expr": "100 * sum by (stage) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])))",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 1
-            },
-            "overrides": []
-          },
-          "options": {
-            "orientation": "horizontal",
-            "displayMode": "gradient",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            }
-          },
-          "description": "Includes in-flight operations, so a stalled decode or model request is visible before it completes. This is wall time, not CPU or GPU utilization."
-        },
-        {
-          "id": 100,
-          "type": "state-timeline",
-          "title": "Worker activity (sampled)",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 6,
-            "w": 16,
-            "x": 8,
-            "y": 113
-          },
-          "targets": [
-            {
-              "expr": "(media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) or (media_pipeline_worker_stage{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} * 0 - 1)",
-              "legendFormat": "{{instance}} / {{enricher}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "none",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "-1": {
-                      "text": "No recent telemetry",
-                      "color": "gray"
-                    },
-                    "0": {
-                      "text": "Between stages",
-                      "color": "gray"
-                    },
-                    "1": {
-                      "text": "Selecting batch",
-                      "color": "purple"
-                    },
-                    "2": {
-                      "text": "Read / decode",
-                      "color": "blue"
-                    },
-                    "3": {
-                      "text": "Transcribing",
-                      "color": "yellow"
-                    },
-                    "4": {
-                      "text": "Building prompt",
-                      "color": "light-blue"
-                    },
-                    "5": {
-                      "text": "Ollama request",
-                      "color": "green"
-                    },
-                    "6": {
-                      "text": "Parsing answer",
-                      "color": "light-purple"
-                    },
-                    "7": {
-                      "text": "Writing Parquet",
-                      "color": "orange"
-                    },
-                    "8": {
-                      "text": "Finished",
-                      "color": "dark-green"
-                    },
-                    "9": {
-                      "text": "Failed",
-                      "color": "red"
-                    }
-                  }
-                }
-              ],
-              "custom": {
-                "spanNulls": false
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "mergeValues": true,
-            "showValue": "auto",
-            "alignValue": "center",
-            "rowHeight": 0.9,
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "single"
-            }
-          },
-          "description": "Sampled at Prometheus scrape cadence: stages shorter than a scrape can be missed. Cumulative timing counters still include every measured stage."
-        },
-        {
-          "id": 101,
-          "type": "timeseries",
-          "title": "Photo: seconds per stage operation",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 8,
-            "x": 0,
-            "y": 119
-          },
-          "targets": [
-            {
-              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
-        },
-        {
-          "id": 102,
-          "type": "timeseries",
-          "title": "Video: seconds per stage operation",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 8,
-            "x": 8,
-            "y": 119
-          },
-          "targets": [
-            {
-              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
-        },
-        {
-          "id": 103,
-          "type": "timeseries",
-          "title": "Batch: query / write seconds",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 8,
-            "x": 16,
-            "y": 119
-          },
-          "targets": [
-            {
-              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
-        },
-        {
-          "id": 104,
-          "type": "timeseries",
-          "title": "Ollama: seconds per response",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 126
-          },
-          "targets": [
-            {
-              "expr": "sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / (sum by (phase, kind) (rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{kind}} / {{phase}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Native API timings: load, prompt processing, generation and total. Total overlaps the components; do not add them. Missing fields are not reported as zero."
-        },
-        {
-          "id": 105,
-          "type": "timeseries",
-          "title": "Ollama: tokens per second",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 126
-          },
-          "targets": [
-            {
-              "expr": "sum by (phase, kind) (rate(media_pipeline_ollama_tokens_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / (sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{kind}} / {{phase}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "suffix: tokens/s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 1
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 106,
-          "type": "timeseries",
-          "title": "Attempted vs saved items per minute",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 133
-          },
-          "targets": [
-            {
-              "expr": "sum by (kind, status) (rate(media_pipeline_items_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) * 60",
-              "legendFormat": "{{kind}} {{status}} attempted",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            },
-            {
-              "expr": "sum by (kind, status) (rate(media_pipeline_persisted_items_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) * 60",
-              "legendFormat": "{{kind}} {{status}} saved",
-              "refId": "B",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "none",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 1
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Attempted items include errors. Saved items advance only after atomic Parquet writes; batching creates bursts."
-        },
-        {
-          "id": 107,
-          "type": "timeseries",
-          "title": "Worker time by stage",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 133
-          },
-          "targets": [
-            {
-              "expr": "100 * sum by (stage) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])))",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 1
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
           "id": 79,
           "type": "row",
           "title": "Ingest and index pipeline",
@@ -4919,7 +5958,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 140
+            "y": 178
           },
           "panels": []
         },
@@ -4935,7 +5974,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 141
+            "y": 179
           },
           "targets": [
             {
@@ -4999,7 +6038,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 141
+            "y": 179
           },
           "targets": [
             {
@@ -5048,7 +6087,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 141
+            "y": 179
           },
           "targets": [
             {
@@ -5116,7 +6155,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 141
+            "y": 179
           },
           "targets": [
             {
@@ -5165,7 +6204,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 141
+            "y": 179
           },
           "targets": [
             {
@@ -5214,7 +6253,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 141
+            "y": 179
           },
           "targets": [
             {
@@ -5264,7 +6303,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 145
+            "y": 183
           },
           "targets": [
             {
@@ -5310,7 +6349,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 151
+            "y": 189
           },
           "panels": []
         },
@@ -5326,7 +6365,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 152
+            "y": 190
           },
           "targets": [
             {
@@ -5394,7 +6433,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 152
+            "y": 190
           },
           "targets": [
             {
@@ -5443,7 +6482,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 152
+            "y": 190
           },
           "targets": [
             {
@@ -5502,7 +6541,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 156
+            "y": 194
           },
           "targets": [
             {
@@ -5551,7 +6590,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 162
+            "y": 200
           },
           "targets": [
             {
