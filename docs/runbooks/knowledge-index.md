@@ -300,3 +300,20 @@ Metrics use Immich's native OTel/Prometheus endpoints. The ServiceMonitor must c
 invalid metrics base URL with the default `::` bind address; `IMMICH_HOST=0.0.0.0`
 avoids HTTP 400 on this IPv4 cluster. JSON server logging is enabled. Keep metrics
 internal and expose only the application through private Traefik TLS.
+
+### Existing-photo visibility
+
+Mounting originals does not register them in Immich. Run
+`python3 scripts/knowledge-index/immich-library.py register` to back up the current
+Immich database, register the actual `Google Photos/Photos from YYYY` folders,
+validate every path, and enqueue the external-library scan. The script reuses the
+private pilot credentials and refuses to alter an existing library's import scope.
+Use its `status` action to inspect imported photo/video counts. The initial scope
+contains 31 year folders; album-only files, Archive, Trash, and Locked Folder are
+not included. The originals stay read-only at `/external/gphotos`.
+
+The library belongs to the existing pilot account and appears in its main Photos
+timeline. Scanning and thumbnail generation continue asynchronously in Immich's
+queues. This makes existing media visible; it does not migrate the remaining
+legacy face confirmations, descriptions, or groups. Those records remain in the
+original PostgreSQL database; the 12-photo pilot remains separately preserved.
