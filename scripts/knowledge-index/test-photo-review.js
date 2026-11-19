@@ -23,13 +23,18 @@ function harness(){
     createElement:tag=>new Element(tag),querySelectorAll:selector=>selector==='.face-tile'?nodes.get('face-grid').children.filter(node=>node.dataset.id):[]};
   const posts=[];
   const offered=[];
+  let automatic={enabled:false,threshold:.9,accepted:0};
   const rows=[{id:'a',revision:'r1',person:null,suggestion:{person:'Synthetic G',score:.8},path:'a.jpg',confidence:.9},
     {id:'b',revision:'r2',person:null,suggestion:{person:'Synthetic Asha',score:.8},path:'b.jpg',confidence:.9},
     {id:'c',revision:'r3',person:null,suggestion:null,path:'c.jpg',confidence:.9}];
   const context=vm.createContext({document,URLSearchParams,fetch:async(url,options)=>{
     let result={};
-    if(options?.body){posts.push(JSON.parse(options.body));result={saved:true};}
-    else if(url==='/api/config')result={csrf:'synthetic'};
+    if(options?.body){
+      const body=JSON.parse(options.body);posts.push(body);
+      if(url==='/api/auto-accept'){automatic={...automatic,...body};result=automatic;}else result={saved:true};
+    }
+    else if(url==='/api/config')result={csrf:'synthetic',auto_accept:true};
+    else if(url==='/api/auto-accept')result=automatic;
     else if(url.startsWith('/api/faces/selection?')){
       const params=new URLSearchParams(url.split('?')[1]);
       const faces=offered.filter(face=>face.score>=Number(params.get('threshold'))&&(!params.get('person')||face.person===params.get('person')));
@@ -108,4 +113,17 @@ test('a later batch conflict preserves pending faces and reports partial progres
   assert.equal(h.posts.length,1);
   assert.equal(h.run('state.faceSelection.size'),150);
   assert.match(h.nodes.get('status').textContent,/Confirmed 100 of 250 before the request failed/);
+});
+
+test('automatic acceptance starts off, saves a chosen rule and can be paused',async()=>{
+  const h=harness();await ready(h);
+  assert.equal(h.posts.length,0,'Loading the page must not enable the rule');
+  assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Enable auto-accept');
+  h.nodes.get('auto-accept-threshold').value='95';
+  await h.nodes.get('auto-accept-toggle').onclick();
+  assert.deepEqual(h.posts,[{enabled:true,threshold:.95}]);
+  assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Pause auto-accept');
+  await h.nodes.get('auto-accept-toggle').onclick();
+  assert.deepEqual(h.posts[1],{enabled:false,threshold:.95});
+  assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Enable auto-accept');
 });

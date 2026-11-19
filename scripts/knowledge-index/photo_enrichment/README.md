@@ -238,3 +238,26 @@ backs up its unit/release and restarts only the GUI. It does not restart ingesti
 invoke recognition models or rerun migration. PostgreSQL remains the durable
 owner of review decisions when these services later move into pods. Pending
 suggestions are derived data and can be regenerated.
+
+### Optional automatic acceptance
+
+Open **Automatic acceptance** in the GUI, choose a minimum similarity (default
+90/100) and enable the rule. New installations start disabled. The rule and its
+latest status live in PostgreSQL and survive service restarts or a future move
+to pods. A background loop in the GUI service checks every 30 seconds without
+requiring an open browser. Each pass processes up to 100 candidates, using only
+human-confirmed references and the existing distinct-person ambiguity margin.
+
+Names accepted by the rule have `label_source=automatic`, are separately marked
+in the GUI and are not reference examples. They become references only after
+explicit human confirmation. Existing names and rejections are preserved;
+removing a name records `user_cleared`, which prevents automatic reassignment.
+Human edits and auto-acceptance retain revision guards, audit entries and Parquet
+provenance. The rule checks reference names and rejections again before writing.
+Pausing stops future passes and retains names already accepted. Failed passes
+roll back their transaction and expose an error in the settings panel; earlier
+successful passes stay saved. A rotating cursor prevents stale/unreadable photos
+from indefinitely blocking later candidates. Refresh the library to see changes.
+
+Grafana measures matching and automatic acceptance as separate stages in the
+value stream map; stage percentages describe processing time, not match quality.

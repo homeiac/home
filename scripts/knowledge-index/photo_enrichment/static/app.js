@@ -157,8 +157,8 @@ async function loadFaces() {
     const img=element('img');img.loading='lazy';img.src=query('/api/thumbnail',{path:face.path,face:face.id});img.alt=face.person||'Unnamed detected face';crop.append(img);
     const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+(face.person||face.suggestion?.person||'unnamed face'));check.onchange=()=>{if(!state.busy){if(check.checked)selectFace(face);else state.faceSelection.delete(face.id);}faceSelection();};
     const label=element('label',undefined,'face-select');label.append(check);
-    const body=element('div',undefined,'face-info');body.append(element('strong',face.person||face.suggestion?.person||'Unnamed face'),element('span',face.person?'Confirmed by you':face.suggestion?'Suggested · needs confirmation':'Needs review','badge'),element('p','Detection '+Math.round(face.confidence*100)+'% · '+(face.latitude==null?'No GPS':'GPS available'),'muted'));
-    if(face.suggestion){body.append(element('p','Similarity '+face.suggestion.score.toFixed(3)+' · not a probability','muted'),button('Not this person',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:face.suggestion.reference_id});state.faceSelection.delete(face.id);await loadFaces();status('Suggestion rejected; your existing labels are unchanged.');}));}
+    const body=element('div',undefined,'face-info');body.append(element('strong',face.person||face.suggestion?.person||'Unnamed face'),element('span',face.person?(face.label_source==='automatic'?'Auto-accepted · editable':'Confirmed by you'):face.suggestion?'Suggested name':'Needs review','badge'),element('p',face.latitude==null?'Location not recorded':'Location available','muted'));
+    if(face.suggestion){body.append(element('p','Match similarity '+(Math.min(1,face.suggestion.score)*100).toFixed(1)+' / 100','muted'),button('Not this person',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:face.suggestion.reference_id});state.faceSelection.delete(face.id);await loadFaces();status('Suggestion rejected; your existing labels are unchanged.');}));}
     body.append(element('p',face.capture_ts?new Date(face.capture_ts*1000).toLocaleDateString(undefined,{timeZone:timezone()}):'Date unknown','muted'));card.append(crop,label,body);$('face-grid').append(card);
   }
   faceSelection();facePagination();
@@ -236,11 +236,28 @@ async function switchView(view){
   for(const name of ['faces','photos']){$('view-'+name).classList.toggle('active',name===view);$('view-'+name).setAttribute('aria-pressed',String(name===view));}
   if(view==='faces')await loadFaces();else await loadDates();
 }
+async function loadAutoAccept(){
+  if(!state.autoAcceptSupported)return;
+  const settings=await api('/api/auto-accept');state.autoAcceptEnabled=settings.enabled;
+  $('auto-accept-threshold').value=String(Math.round(settings.threshold*100));
+  $('auto-accept-toggle').textContent=settings.enabled?'Pause auto-accept':'Enable auto-accept';
+  $('auto-accept-save').hidden=!settings.enabled;
+  $('auto-accept-status').textContent=(settings.enabled?'On':'Off')+' · '+settings.accepted+' automatically accepted faces'+(settings.last_pass?.error?' · '+settings.last_pass.error:'');
+}
+async function saveAutoAccept(enabled){
+  const raw=$('auto-accept-threshold').value.trim();const score=Number(raw);
+  if(!raw||!Number.isFinite(score)||score<55||score>100)throw new Error('Enter a minimum similarity between 55 and 100.');
+  await api('/api/auto-accept',{enabled,threshold:score/100});await loadAutoAccept();
+  status(enabled?'Automatic acceptance is enabled. Qualifying suggestions will be processed in the background.':'Automatic acceptance is paused. Existing names are retained.');
+}
+$('auto-accept-toggle').onclick=()=>run(()=>saveAutoAccept(!state.autoAcceptEnabled));
+$('auto-accept-save').onclick=()=>run(()=>saveAutoAccept(true));
 $('view-faces').onclick=()=>run(()=>switchView('faces'));$('view-photos').onclick=()=>run(()=>switchView('photos'));
-$('refresh').onclick=()=>run(async()=>{state.faceSelection.clear();await switchView(state.view);status('Library refreshed. Confirmed edits are visible immediately.');});
+$('refresh').onclick=()=>run(async()=>{state.faceSelection.clear();await switchView(state.view);await loadAutoAccept();status('Library refreshed. Confirmed edits are visible immediately.');});
 $('export').onclick=()=>run(async()=>{await api('/api/export',{});status('A complete analytical snapshot is now available.');});
 run(async()=>{
   const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;
+  state.autoAcceptSupported=Boolean(config.auto_accept);$('auto-accept-settings').hidden=!state.autoAcceptSupported;await loadAutoAccept();
   if(config.background_only){$('extract').hidden=true;$('detect').hidden=true;$('export').textContent='Refresh analytics';}
   const health=await api('/api/status');if(health.captured_at)$('freshness').textContent='Edits update immediately · analytics snapshot '+new Date(health.captured_at*1000).toLocaleTimeString();
   await loadFaces();status('Use Suggested matches to confirm similar faces together. Your saved names and corrections are preserved.');

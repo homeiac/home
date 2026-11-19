@@ -15,6 +15,7 @@ def main() -> None:
     faces=get('/api/faces?status=all')
     suggested=get('/api/faces?status=suggested')
     selected=get('/api/faces/selection?threshold=.9')
+    automatic=get('/api/auto-accept')
     dates=get('/api/dates?timezone=UTC')
     print('Backend:',status['backend'],'snapshot captured:',status.get('captured_at'))
     print('Faces:',faces['total'],'first page:',len(faces['faces']),'capture dates:',len(dates))
@@ -22,6 +23,7 @@ def main() -> None:
     assert selected['total']==len(selected['faces'])
     assert all(face.get('person') and face.get('revision') for face in selected['faces'])
     print('Full-library selection at similarity 90:',selected['total'],'(read only)')
+    print('Automatic acceptance:', 'enabled' if automatic['enabled'] else 'disabled', 'machine labels:',automatic['accepted'])
     if faces['faces']:
         face=faces['faces'][0]
         path='/api/thumbnail?'+urllib.parse.urlencode({'path':face['path'],'face':face['id']})

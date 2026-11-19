@@ -177,6 +177,63 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n'],before)
         self.assertEqual(self.store.rows('SELECT count(*) n FROM faces WHERE person IS NULL')[0]['n'],125)
 
+    def test_automatic_acceptance_is_opt_in_and_preserves_review_work(self):
+        self.add_review_faces()
+        self.assertFalse(self.store.auto_accept_settings()['enabled'])
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+        self.store.label_face('review-b','Explicit correction')
+        self.store.db.execute("UPDATE faces SET embedding=ARRAY[0.,1.]::double precision[] WHERE id='review-b'")
+        self.store.configure_auto_accept(True,.9)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],1)
+        self.assertEqual(self.store.face('review-a')['person'],'Synthetic person')
+        self.assertEqual(self.store.face('review-a')['label_source'],'automatic')
+        self.assertEqual(self.store.face('review-b')['person'],'Explicit correction')
+        self.assertEqual(self.store.face('stable-face')['label_source'],'user')
+        # Opt-in configuration and machine provenance survive another process.
+        other=PostgresStore(self.index,self.library,self.state)
+        try:
+            self.assertTrue(other.auto_accept_settings()['enabled'])
+            self.assertEqual(other.auto_accept_settings()['accepted'],1)
+        finally:other.close()
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+        self.assertEqual(self.store.rows("SELECT count(*) n FROM annotation_history WHERE action='auto_accept_face'")[0]['n'],1)
+        export_snapshot(self.state)
+        reader,_=analytical_connection(self.state)
+        try:
+            self.assertEqual(reader.execute("SELECT person,label_source FROM faces WHERE id='review-a'").fetchone(),('Synthetic person','automatic'))
+        finally:reader.close()
+        # Clearing an automatic label is a durable instruction to leave it for review.
+        self.store.label_face('review-a','')
+        self.assertEqual(self.store.face('review-a')['label_source'],'user_cleared')
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+        self.assertIsNone(self.store.face('review-a')['person'])
+        self.store.configure_auto_accept(False,.9)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+
+    def test_automatic_names_never_train_matching_without_human_confirmation(self):
+        self.add_review_faces()
+        self.store.configure_auto_accept(True,.9)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],2)
+        self.store.label_face('stable-face','')  # no human reference remains
+        self.assertEqual(self.store.suggestions('stable-face'),[])
+        self.assertEqual(self.store.matching_pass(),{})
+        self.store.label_face('review-a','Human-confirmed example')
+        self.assertEqual(self.store.matching_pass()['stable-face']['person'],'Human-confirmed example')
+
+    def test_auto_accept_respects_threshold_rejections_and_pause(self):
+        self.add_review_faces()
+        self.store.db.execute("UPDATE faces SET embedding=ARRAY[.8,.6]::double precision[] WHERE id='review-a'")
+        self.store.reject('review-b','stable-face')
+        self.store.configure_auto_accept(True,.9)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+        self.store.configure_auto_accept(True,.75)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],1)
+        self.assertIsNone(self.store.face('review-b')['person'])
+        self.store.configure_auto_accept(False,.75)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+        for enabled,threshold in [('yes',.9),(True,.54),(True,float('nan')),(True,True)]:
+            with self.assertRaises(ValueError):self.store.configure_auto_accept(enabled,threshold)
+
     def test_clipped_face_coordinates_commit(self):
         """OpenCV boxes at image edges can mix integer clamps with float values."""
         class ClippedFaces:
@@ -201,6 +258,9 @@ class PipelineTests(unittest.TestCase):
                 request=urllib.request.Request(base+path,data=json.dumps(body).encode(),headers={
                     'Content-Type':'application/json','Origin':base,'X-Photo-Token':csrf})
                 with urllib.request.urlopen(request) as response:return json.load(response)
+            with urllib.request.urlopen(base+'/api/auto-accept') as response:
+                self.assertFalse(json.load(response)['enabled'])
+            self.assertFalse(post('/api/auto-accept',{'enabled':False,'threshold':.9})['enabled'])
             with urllib.request.urlopen(base+'/api/faces?status=named') as response:face=json.load(response)['faces'][0]
             post('/api/faces/labels',{'faces':[{'id':face['id'],'revision':face['revision']}],'person':'Synthetic API label'})
             self.assertEqual(self.store.face(face['id'])['person'],'Synthetic API label')

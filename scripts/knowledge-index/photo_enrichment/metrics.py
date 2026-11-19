@@ -9,16 +9,17 @@ import time
 
 TITLES = {"queue": "Photo: catalog / queue", "exif": "Photo: read EXIF", "faces": "Photo: CPU faces",
           "persist": "Photo: PostgreSQL commit", "review": "Photo: save human labels",
-          "frigate": "Photo: optional Frigate", "export": "Photo: export Parquet", "match": "Photo: match saved faces"}
-STATES = {"idle": 0, **{stage: i for i, stage in enumerate(TITLES, 1)}, "complete": 8, "failed": 9, "match": 10}
+          "frigate": "Photo: optional Frigate", "export": "Photo: export Parquet", "match": "Photo: match saved faces",
+          "auto_accept": "Photo: automatically accept suggestions"}
+STATES = {"idle": 0, **{stage: i for i, stage in enumerate(TITLES, 1)}, "complete": 8, "failed": 9, "match": 10, "auto_accept": 11}
 EDGES = [("queue", "exif"), ("exif", "faces"), ("exif", "persist"), ("faces", "persist"),
-         ("persist", "review"), ("persist", "export"), ("faces", "frigate"), ("frigate", "review"), ("review", "export"), ("faces", "match"), ("match", "review")]
+         ("persist", "review"), ("persist", "export"), ("faces", "frigate"), ("frigate", "review"), ("review", "export"), ("faces", "match"), ("match", "review"), ("match", "auto_accept"), ("auto_accept", "export")]
 HELP = {
     "jobs": ("gauge", "PostgreSQL jobs by state and oldest unfinished job age in seconds"),
     "stage_seconds_total": ("counter", "Wall time including in-flight work; shares are local to this worker, not GPU utilization"),
     "stage_completed_seconds_total": ("counter", "Duration of completed operations including failures"),
     "stage_operations_total": ("counter", "Completed operations by stage and result"),
-    "worker_stage": ("gauge", "idle=0 queue=1 exif=2 faces=3 persist=4 review=5 frigate=6 export=7 complete=8 failed=9 match=10"),
+    "worker_stage": ("gauge", "idle=0 queue=1 exif=2 faces=3 persist=4 review=5 frigate=6 export=7 complete=8 failed=9 match=10 auto_accept=11"),
     "heartbeat_timestamp_seconds": ("gauge", "Last telemetry publication Unix time"),
     "stage_started_timestamp_seconds": ("gauge", "Current stage start Unix time"),
     "running": ("gauge", "Process alive; check heartbeat to detect abrupt termination"),

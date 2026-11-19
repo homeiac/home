@@ -56,7 +56,7 @@ def main() -> None:
     metrics = Metrics(args.prom)
     if args.backend == "postgres" and args.command == "serve":
         metrics.prefix="photo_review"
-        metrics.stages=("review","frigate","match")
+        metrics.stages=("review","frigate","match","auto_accept")
     if args.command == "worker":
         from zoneinfo import ZoneInfo
         if args.backend == "postgres":
@@ -102,9 +102,18 @@ def main() -> None:
         if args.command == "serve":
             server = make_server(store, models, args.bind, args.port, args.public_origin)
             logging.info("Photo enrichment: http://%s:%s", args.bind, server.server_port)
+            import threading
+            stop=threading.Event()
+            automatic=None
+            if args.backend=='postgres':
+                from photo_enrichment.auto_accept import run as run_auto_accept
+                automatic=threading.Thread(target=run_auto_accept,args=(store,stop),daemon=True)
+                automatic.start()
             try:
                 server.serve_forever()
             finally:
+                stop.set()
+                if automatic:automatic.join()
                 server.server_close()
         elif args.command == "extract":
             if args.backend == "postgres": parser.error("PostgreSQL extraction runs through durable worker jobs")

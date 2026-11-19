@@ -185,7 +185,7 @@ class PostgresStore(Store):
             matches={}
             with self.metrics.measure('match'),self.connection.transaction():
                 self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
-                references=self.rows('SELECT f.id,f.person,f.model,f.embedding '+base+' AND f.person IS NOT NULL')
+                references=self.rows('SELECT f.id,f.person,f.model,f.embedding '+base+" AND f.person IS NOT NULL AND f.label_source='user'")
                 last=''
                 if references:
                     while True:
@@ -254,7 +254,7 @@ class PostgresStore(Store):
                 raise ValueError('This face was edited elsewhere; refresh before saving')
             self.face(face_id)  # validate the original file identity too
             self.db.execute('UPDATE faces SET person=?,label_source=?,updated_at=clock_timestamp() WHERE id=?',
-                [person.strip() or None,'user' if person.strip() else None,face_id])
+                [person.strip() or None,'user' if person.strip() else 'user_cleared',face_id])
             self._history('label_face',dict(id=face_id,person=person.strip(),previous=face['person']))
 
     def label_faces(self, faces: list, person: str | None = None) -> None:
@@ -271,6 +271,73 @@ class PostgresStore(Store):
         with self.lock,self.connection.transaction():
             for face in sorted(faces,key=lambda f:f['id']):
                 self.label_face(face['id'],face['person'] if person is None else person,face['revision'])
+
+    def auto_accept_settings(self) -> dict:
+        """Read the durable opt-in rule and distinguish machine labels from reviews."""
+        with self.lock:
+            rows=self.rows("SELECT value FROM pipeline_state WHERE key='auto_accept'")
+            rule=rows[0]['value'] if rows else dict(enabled=False,threshold=.9)
+            status=self.rows("SELECT value FROM pipeline_state WHERE key='auto_accept_status'")
+            count=self.rows("SELECT count(*) n FROM faces WHERE label_source='automatic'")[0]['n']
+            return dict(**rule,accepted=count,last_pass=status[0]['value'] if status else None)
+
+    def configure_auto_accept(self, enabled: bool, threshold: float) -> dict:
+        """Save a user-controlled rule; this request does not itself process faces."""
+        if not isinstance(enabled,bool) or isinstance(threshold,bool) or not isinstance(threshold,(int,float)) or not .55<=threshold<=1:
+            raise ValueError('Choose enabled/disabled and a similarity between 55 and 100')
+        rule=dict(enabled=enabled,threshold=threshold)
+        with self.lock,self.connection.transaction():
+            self.db.execute("INSERT INTO pipeline_state VALUES ('auto_accept',?,now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()",[json.dumps(rule)])
+            self._history('configure_auto_accept',rule)
+        return self.auto_accept_settings()
+
+    def auto_accept_pass(self, limit: int = 100) -> dict:
+        """Apply an opted-in rule in bounded batches, preserving human decisions.
+
+        Only human-confirmed references are eligible. Conditional updates and a
+        locked rule prevent concurrent edits, overlapping pods or a disabled rule
+        from being overwritten. Automatically named faces are never references.
+        """
+        if not 1<=limit<=100:raise ValueError('Invalid automatic batch size')
+        with self.lock:
+            settings=self.auto_accept_settings()
+            if not settings['enabled']:return dict(saved=0,skipped=0)
+            matches=self.matching_pass()
+            candidates=self.suggested_selection(settings['threshold'])['faces']
+            cursor=(settings.get('last_pass') or {}).get('last_id','')
+            candidates=[f for f in candidates if f['id']>cursor]+[f for f in candidates if f['id']<=cursor]
+            result=dict(saved=0,skipped=0,checked_at=time.time())
+            with self.metrics.measure('auto_accept'),self.connection.transaction():
+                rows=self.rows("SELECT value FROM pipeline_state WHERE key='auto_accept' FOR UPDATE")
+                if not rows or not rows[0]['value']['enabled'] or rows[0]['value']['threshold']!=settings['threshold']:
+                    return dict(saved=0,skipped=0)
+                # Leave explicitly cleared faces for human review, even when a
+                # reference still produces a high score for the previous name.
+                ids=[f['id'] for f in candidates]
+                eligible={r['id'] for r in self.rows("SELECT id FROM faces WHERE id=ANY(?) AND person IS NULL AND label_source IS DISTINCT FROM 'user_cleared'",[ids])} if ids else set()
+                for candidate in (f for f in candidates if f['id'] in eligible):
+                    if result['saved']+result['skipped']>=limit:break
+                    result['last_id']=candidate['id']
+                    try:self.face(candidate['id'])
+                    except (OSError,ValueError):
+                        result['skipped']+=1;continue
+                    match=matches[candidate['id']]
+                    # Re-check the reference and revision after taking the rule
+                    # lock; another GUI/pod may have edited them since matching.
+                    changed=self.rows("""UPDATE faces SET person=?,label_source='automatic',updated_at=clock_timestamp()
+                        WHERE id=? AND person IS NULL AND updated_at=?
+                        AND label_source IS DISTINCT FROM 'user_cleared'
+                        AND EXISTS (SELECT 1 FROM faces ref WHERE ref.id=? AND ref.person=? AND ref.label_source='user')
+                        AND NOT EXISTS (SELECT 1 FROM rejected_matches r JOIN faces ref ON ref.id=r.reference_id
+                            WHERE r.face_id=? AND ref.person=?) RETURNING id""",
+                        [candidate['person'],candidate['id'],candidate['revision'],match['reference_id'],candidate['person'],candidate['id'],candidate['person']])
+                    if not changed:
+                        result['skipped']+=1;continue
+                    self._history('auto_accept_face',dict(id=candidate['id'],person=candidate['person'],
+                        previous=None,score=match['score'],threshold=settings['threshold'],reference_id=match['reference_id']))
+                    result['saved']+=1
+                self.db.execute("INSERT INTO pipeline_state VALUES ('auto_accept_status',?,now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()",[json.dumps(result)])
+            return result
 
     def seed_jobs(self, timezone='UTC', faces=True) -> int:
         """Queue only missing/stale work; preserve imported retries and completed scans."""

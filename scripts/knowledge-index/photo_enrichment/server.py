@@ -53,7 +53,9 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     return self.send((STATIC / name).read_bytes(), content_type=kind)
                 if parsed.path == "/api/config":
                     import os
-                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False)})
+                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False), "auto_accept": hasattr(store,'auto_accept_pass')})
+                if parsed.path == "/api/auto-accept":
+                    return self.send(store.auto_accept_settings())
                 if parsed.path == "/api/status":
                     return self.send(store.status() if hasattr(store,"status") else {"backend":"local"})
                 if parsed.path == "/api/faces":
@@ -113,6 +115,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             if parsed.path == "/api/faces/labels":
                 store.label_faces(body.get("faces",[]),body.get("person"))
                 return self.send({"saved": True})
+            if parsed.path == "/api/auto-accept":
+                return self.send(store.configure_auto_accept(body.get('enabled'),body.get('threshold')))
             if parsed.path == "/api/faces/reject":
                 store.reject(body["id"], body["reference_id"])
                 return self.send({"rejected": True})
@@ -126,7 +130,10 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
 
         def handle_request(self):
             try:
-                self.dispatch()
+                # The GUI and optional background rule share one connection.
+                # Serialize requests so they cannot join another task's transaction.
+                with store.lock:
+                    self.dispatch()
             except PermissionError as exc:
                 self.send({"error": str(exc)}, 403)
             except (ValueError, KeyError, OSError) as exc:
