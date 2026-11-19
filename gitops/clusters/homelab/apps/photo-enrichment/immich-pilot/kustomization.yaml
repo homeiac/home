@@ -6,5 +6,4 @@ resources:
   - database-secret.sops.yaml
   - release.yaml
   - ingress.yaml
-  - migration-source.yaml
   - piglet-storage.yaml

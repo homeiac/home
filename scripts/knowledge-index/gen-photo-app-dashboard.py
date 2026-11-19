@@ -37,10 +37,14 @@ def dashboard():
     panel('Photo context backlog','sum by(kind)(photo_context_jobs)',0,42,8,6,legend='{{kind}}')
     panel('Context lookup and local LLM stage time','sum by(stage)(rate(photo_context_stage_seconds_total[5m]))',8,42,8,6,unit='s',legend='{{stage}}')
     panel('GPS lookup cache use since worker start','sum by(kind)(photo_context_inventory)',16,42,8,6,legend='{{kind}}')
+    panel('Immich API and worker metrics availability','up{namespace="immich-pilot"}',0,48,8,6,'stat',legend='{{endpoint}}')
+    panel('Immich CPU by pod','sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilot",container!="POD",container!=""}[5m]))',8,48,8,6,legend='{{pod}}')
+    panel('Immich memory by pod','sum by(pod)(container_memory_working_set_bytes{namespace="immich-pilot",container!="POD",container!=""})',16,48,8,6,unit='bytes',legend='{{pod}}')
     return {'uid':'photo-app','title':'Photo App · Requests, traces & triage','schemaVersion':39,'version':1,
       'tags':['photos','otel'],'refresh':'10s','time':{'from':'now-1h','to':'now'},'timezone':'browser','panels':panels,
       'description':'Request telemetry from OpenTelemetry; independent health checks run every minute. Slow requests are logged before their spans finish. DuckDB queries use Parquet snapshots plus live PostgreSQL review edits.',
       'links':[{'title':'Photo GUI','url':'https://photos.app.home.panderosystems.com'},
+        {'title':'Immich pilot','url':'https://immich.app.home.panderosystems.com'},
         {'title':'Pipeline value stream map','url':'/d/knowledge-index/knowledge-index'},
         {'title':'Explore traces and logs','url':'/explore'}]}
 

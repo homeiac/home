@@ -54,7 +54,7 @@ spec:
             release: kube-prometheus-stack
       controllers:
         main:
-          replicas: 0 # Quiesce while moving durable state to piglet.
+          replicas: 1
           strategy: Recreate
           containers:
             main:
@@ -79,7 +79,7 @@ spec:
     machine-learning:
       controllers:
         main:
-          replicas: 0
+          replicas: 1
           strategy: Recreate
           containers:
             main:

@@ -219,8 +219,11 @@ The isolated pilot is at `https://immich.app.home.panderosystems.com`, deployed 
 the existing `photo-enrichment-preview` Flux source. It uses the official Helm
 chart 0.12.0 with explicitly pinned Immich v3.4.2 images, a dedicated VectorChord
 PostgreSQL database, persistent Valkey/model caches, and copied managed media on
-still-fawn. It does not mount the original library. The original Photos route and
-workers continue operating. The pilot storage template is `YYYY/MM/DD`.
+pumped-piglet's Kubernetes VM 105. The existing `gphotos` virtiofs device exposes
+the ZFS dataset at `/mnt/gphotos`; the pod mounts its library read-only at
+`/external/gphotos`. That path is available for a future external-library import;
+the pilot still consists of uploaded copies. The original Photos route and workers
+continue operating. The pilot storage template is `YYYY/MM/DD`.
 
 The compatibility boundary is the Immich API, never direct writes to its schema:
 
@@ -236,6 +239,21 @@ flowchart LR
   D --> G[Parquet export and DuckDB analytics]
 ```
 
+The installed v3.4.2 workflow triggers are `AssetCreate`,
+`AssetMetadataExtraction`, `AssetOcrExtraction`, and `AssetTagged`. Its core
+`immich-plugin-core#webhook` action can POST/PUT an `AssetV1` event to a private
+enrichment receiver. Use metadata extraction as the normal enqueue trigger, then
+fetch current faces through the API. This release has no face-completion/person
+rename workflow trigger. Keep reconciliation for late person changes, existing
+assets and missed events. The core webhook ignores HTTP error status and the queue
+defaults to one attempt, so successful workflow status alone is not delivery proof.
+The receiver must commit a durable job before acknowledgement. The integration
+is planned; no enrichment workflow has been enabled against a missing receiver.
+
+Preserve user descriptions: store machine output/provenance separately and only
+replace a description under an explicit ownership policy. Native workflow changes
+do not supply an atomic human-edit guard.
+
 Use a durable writable queue for claims/retries. DuckDB queries immutable
 inventory/snapshot files; it is not a shared transactional job database. Existing
 face embeddings remain archived, but Immich computes its own embeddings. Transfer
@@ -245,7 +263,7 @@ to human-confirmed annotations. Frigate remains the NVR; the legacy photo worker
 uses YuNet/SFace, not Frigate recognition.
 
 `scripts/knowledge-index/immich-pilot.py` provides resumable `initialize`, `export`,
-`upload`, `annotate`, `preserve-missing`, `tags`, `verify`, and `health` steps.
+`upload`, `annotate`, `preserve-missing`, `tags`, `verify`, `verify-bytes`, and `health` steps.
 Set `CB_HOST=root@192.168.4.175` for export, per inventory. The exporter runs a
 read-only repeatable-read PostgreSQL transaction and copies at most 16 selected
 photos (25 MiB per file). Private archives and the selected photos’ legacy face embeddings
@@ -259,6 +277,16 @@ matches, one manual box), six named people, two albums, captions, GPS and tags.
 API read-back checks and browser inspection passed. No full-library cutover has
 occurred. Motion-photo metadata in several source JPEGs pointed to invalid video
 payloads; still images imported, but motion-video parity needs separate validation.
+
+The storage move is managed by `move-immich-pilot.py`: mount the existing virtiofs
+device, quiesce server/ML via GitOps, dump PostgreSQL and archive managed media plus
+Valkey, restore into fresh `/var/lib/immich-pilot/{library,postgres,valkey,cache}`
+directories, switch to Retain local PVs on piglet, restore the empty database, then
+resume through GitOps. The original still-fawn PVCs are retained. Private backups
+are in `/private/tmp/immich-pilot/move-to-piglet` and on pumped-piglet at
+`/local-3TB-backup/gphotos/.immich-pilot-migration`, outside the source library.
+VM fstab was backed up before adding the read-only virtiofs mount. No VM restart,
+Frigate pause, or Ollama change is required. The model cache can be regenerated.
 
 Before a production switch, validate a stable source-to-asset ledger at library
 scale, backups of both media and database, video/rotation/rescan behavior, automatic

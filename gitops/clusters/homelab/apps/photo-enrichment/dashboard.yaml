@@ -223,11 +223,48 @@ data:
     \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
     \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
     \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
-    \ \"lastNotNull\"\n          ]\n        }\n      }\n    }\n  ],\n  \"description\"\
-    : \"Request telemetry from OpenTelemetry; independent health checks run every\
-    \ minute. Slow requests are logged before their spans finish. DuckDB queries use\
-    \ Parquet snapshots plus live PostgreSQL review edits.\",\n  \"links\": [\n  \
-    \  {\n      \"title\": \"Photo GUI\",\n      \"url\": \"https://photos.app.home.panderosystems.com\"\
+    \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
+    : 19,\n      \"title\": \"Immich API and worker metrics availability\",\n    \
+    \  \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
+    x\": 0,\n        \"y\": 48,\n        \"w\": 8,\n        \"h\": 6\n      },\n \
+    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"up{namespace=\\\"immich-pilot\\\"}\",\n          \"legendFormat\": \"{{endpoint}}\"\
+    \n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n   \
+    \       \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n\
+    \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
+    ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      }\n    },\n    {\n      \"id\": 20,\n      \"title\": \"Immich CPU\
+    \ by pod\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n      \
+    \  \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n    \
+    \  \"gridPos\": {\n        \"x\": 8,\n        \"y\": 48,\n        \"w\": 8,\n\
+    \        \"h\": 6\n      },\n      \"targets\": [\n        {\n          \"refId\"\
+    : \"A\",\n          \"expr\": \"sum by(pod)(rate(container_cpu_usage_seconds_total{namespace=\\\
+    \"immich-pilot\\\",container!=\\\"POD\\\",container!=\\\"\\\"}[5m]))\",\n    \
+    \      \"legendFormat\": \"{{pod}}\"\n        }\n      ],\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n    \
+    \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
+    \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
+    \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
+    \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
+    : 21,\n      \"title\": \"Immich memory by pod\",\n      \"type\": \"timeseries\"\
+    ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
+    : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 16,\n       \
+    \ \"y\": 48,\n        \"w\": 8,\n        \"h\": 6\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"sum by(pod)(container_memory_working_set_bytes{namespace=\\\
+    \"immich-pilot\\\",container!=\\\"POD\\\",container!=\\\"\\\"})\",\n         \
+    \ \"legendFormat\": \"{{pod}}\"\n        }\n      ],\n      \"fieldConfig\": {\n\
+    \        \"defaults\": {\n          \"unit\": \"bytes\"\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
+    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
+    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
+    \n          ]\n        }\n      }\n    }\n  ],\n  \"description\": \"Request telemetry\
+    \ from OpenTelemetry; independent health checks run every minute. Slow requests\
+    \ are logged before their spans finish. DuckDB queries use Parquet snapshots plus\
+    \ live PostgreSQL review edits.\",\n  \"links\": [\n    {\n      \"title\": \"\
+    Photo GUI\",\n      \"url\": \"https://photos.app.home.panderosystems.com\"\n\
+    \    },\n    {\n      \"title\": \"Immich pilot\",\n      \"url\": \"https://immich.app.home.panderosystems.com\"\
     \n    },\n    {\n      \"title\": \"Pipeline value stream map\",\n      \"url\"\
     : \"/d/knowledge-index/knowledge-index\"\n    },\n    {\n      \"title\": \"Explore\
     \ traces and logs\",\n      \"url\": \"/explore\"\n    }\n  ]\n}"

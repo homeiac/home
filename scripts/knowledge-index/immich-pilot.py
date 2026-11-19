@@ -238,6 +238,21 @@ def tags() -> None:
     print('Existing search tags transferred')
 
 
+def verify_bytes() -> None:
+    """Download pilot originals and verify their source SHA-256 after a storage move."""
+    token=login()
+    records,ledger=sample_and_ledger()
+    for record in records:
+        asset=ledger['assets'][record['key']]
+        req=urllib.request.Request(BASE+'/assets/'+asset+'/original',headers={'Authorization':'Bearer '+token})
+        with urllib.request.urlopen(req,timeout=120) as response:
+            digest=hashlib.sha256(response.read()).hexdigest()
+        if digest!=record['sha256']:
+            raise RuntimeError('Original byte checksum mismatch for '+asset)
+    save('byte-verification.json',dict(verified_originals=len(records),algorithm='sha256'))
+    print(json.dumps(dict(verified_originals=len(records),algorithm='sha256')))
+
+
 def health() -> None:
     """Inspect pilot health and save native metrics for diagnosis/dashboard queries."""
     kube=['kubectl','--kubeconfig',str(Path.home()/'kubeconfig'),'-n','immich-pilot']
@@ -247,7 +262,13 @@ def health() -> None:
         source=f'fetch("http://127.0.0.1:{port}/metrics",{{headers:{{Accept:"text/plain; version=0.0.4"}}}}).then(async r=>{{if(!r.ok)throw Error(r.status+" "+await r.text());return r.text()}}).then(t=>console.log(t))'
         metrics=subprocess.check_output(kube+['exec','deployment/immich-server','--','node','-e',source],text=True)
         (ROOT/f'metrics-{port}.txt').write_text(metrics)
-        print(port, [line for line in metrics.splitlines() if line.startswith('# HELP') and any(w in line.lower() for w in ('job','request','queue','duration'))][:30])
+        print(json.dumps(dict(port=port,metric_families=sum(line.startswith('# HELP') for line in metrics.splitlines()))))
+    query='up{namespace="immich-pilot",service="immich-server"}'
+    source='fetch("http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query?query="+encodeURIComponent('+json.dumps(query)+')).then(r=>r.json()).then(r=>console.log(JSON.stringify(r.data.result.map(x=>({endpoint:x.metric.endpoint,up:x.value[1]})))))'
+    targets=json.loads(subprocess.check_output(kube+['exec','deployment/immich-server','--','node','-e',source],text=True))
+    print(json.dumps(dict(prometheus_targets=targets)))
+    if len(targets)!=2 or any(t['up']!='1' for t in targets):
+        raise RuntimeError('Both metrics targets must be scraped successfully; check discovery/reload and allow a scrape interval after restart')
 
 
 def preserve_missing() -> None:
@@ -292,7 +313,7 @@ def main() -> None:
     os.umask(0o077)
     ROOT.mkdir(mode=0o700,exist_ok=True)
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['initialize','export','upload','annotate','verify','preserve-missing','tags','health'])
+    parser.add_argument('action',choices=['initialize','export','upload','annotate','verify','verify-bytes','preserve-missing','tags','health'])
     action=parser.parse_args().action
     globals()[action.replace('-','_')]()
 
