@@ -202,3 +202,39 @@ Validation: `TEST_PYTHON=<venv>/bin/python bash scripts/knowledge-index/test-pho
 uses a disposable loopback PostgreSQL container and synthetic photos. It checks
 migration preservation, zero-face completion, retry backoff, claim fencing,
 concurrent-edit snapshot consistency, stale edit rejection and failed publication.
+
+### Review previously processed faces together
+
+The PostgreSQL GUI compares saved embeddings with confirmed named faces when
+loading the face library. No original photos, EXIF, face detections, embeddings,
+confirmed names or rejections are rewritten by that matching pass. Suggestions
+are grouped by person under **Suggested matches**. Inspect the crops and select
+individual faces or a page. **Confirm suggested matches** saves each selected
+face’s displayed name, including selections spanning different people. Selection
+persists across pages and collections. **Select all above threshold** selects
+all suggestions meeting a minimum similarity (default 90 on a 0–100 scale),
+across every page of the selected suggested-person collection or the entire
+library. This replaces the current selection and shows per-name counts before
+confirmation; it never saves automatically. Similarity is not a probability. Faces without suggestions need a manual name.
+**Assign this name to all selected** remains a separate action for shared labels.
+The API accepts per-face names and revisions; the GUI confirms large selections
+in batches of 100 with progress. Each batch commits its labels and audit entries
+atomically, or none do if any face was edited elsewhere. On failure, completed
+batches remain saved and the remaining selection is retained with an error;
+refresh before retrying. The selection snapshot excludes already-named faces. Confirmation uses the
+displayed suggestions, never freshly recomputed names behind the scenes.
+
+Only compatible model/dimension vectors are compared. Zero/non-finite vectors
+are skipped. Initial suggestion settings are cosine similarity >= 0.55 and a
+margin >= 0.08 over the next distinct person; these are review heuristics, not
+calibrated identity probabilities. Rejected references suppress that person's
+suggestion for the candidate. Ambiguous faces stay unnamed. A 30-second cache is
+invalidated immediately when confirmed labels or rejections change; new worker
+results become eligible on the next uncached pass. Matching is measured separately
+from model inference in Grafana.
+
+The GUI can be updated independently with `deploy-photo-postgres.py gui`; this
+backs up its unit/release and restarts only the GUI. It does not restart ingestion,
+invoke recognition models or rerun migration. PostgreSQL remains the durable
+owner of review decisions when these services later move into pods. Pending
+suggestions are derived data and can be regenerated.

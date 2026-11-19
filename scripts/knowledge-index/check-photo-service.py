@@ -13,9 +13,15 @@ def main() -> None:
             return json.load(response)
     status=get('/api/status')
     faces=get('/api/faces?status=all')
+    suggested=get('/api/faces?status=suggested')
+    selected=get('/api/faces/selection?threshold=.9')
     dates=get('/api/dates?timezone=UTC')
     print('Backend:',status['backend'],'snapshot captured:',status.get('captured_at'))
     print('Faces:',faces['total'],'first page:',len(faces['faces']),'capture dates:',len(dates))
+    print('Suggested matches:',suggested['total'],'person groups:',len(suggested.get('suggested_people',[])))
+    assert selected['total']==len(selected['faces'])
+    assert all(face.get('person') and face.get('revision') for face in selected['faces'])
+    print('Full-library selection at similarity 90:',selected['total'],'(read only)')
     if faces['faces']:
         face=faces['faces'][0]
         path='/api/thumbnail?'+urllib.parse.urlencode({'path':face['path'],'face':face['id']})

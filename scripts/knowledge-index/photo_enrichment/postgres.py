@@ -164,6 +164,85 @@ class PostgresStore(Store):
         snapshot=rows[0]['value'] if rows else {}
         return dict(backend='postgres',captured_at=snapshot.get('captured_at'),published_at=snapshot.get('published_at'))
 
+    def matching_pass(self) -> dict:
+        """Read saved embeddings in bounded batches; never change confirmed labels.
+
+        Cache at most 30 seconds, invalidating immediately on label/rejection edits.
+        A repeatable-read snapshot keeps references/candidates coherent during a pass.
+        """
+        from .matching import match_batch
+        with self.lock:
+            signature=self.rows("""SELECT count(*) FILTER(WHERE person IS NOT NULL) AS named,
+                max(updated_at) FILTER(WHERE person IS NOT NULL) AS last_named,
+                (SELECT count(*) FROM rejected_matches) AS rejected FROM faces""")[0]
+            cache=getattr(self,'_matching_cache',None)
+            if cache and cache['signature']==signature and time.monotonic()-cache['at']<30:
+                return cache['matches']
+            base="""FROM faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+                AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+                WHERE EXISTS (SELECT 1 FROM catalog.gphotos_media m WHERE m.path=f.path AND m.size_bytes=f.size_bytes)
+                AND NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=f.path)"""
+            matches={}
+            with self.metrics.measure('match'),self.connection.transaction():
+                self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+                references=self.rows('SELECT f.id,f.person,f.model,f.embedding '+base+' AND f.person IS NOT NULL')
+                last=''
+                if references:
+                    while True:
+                        candidates=self.rows('SELECT f.id,f.model,f.embedding '+base+
+                            ' AND f.person IS NULL AND f.id>? ORDER BY f.id LIMIT 256',[last])
+                        if not candidates:break
+                        rejected=self.rows('SELECT face_id,reference_id FROM rejected_matches WHERE face_id=ANY(?)',
+                            [[r['id'] for r in candidates]])
+                        matches.update(match_batch(candidates,references,{(r['face_id'],r['reference_id']) for r in rejected}))
+                        last=candidates[-1]['id']
+            self._matching_cache=dict(signature=signature,at=time.monotonic(),matches=matches)
+            return matches
+
+    def face_library(self, person: str = '', status: str = 'unreviewed', offset: int = 0, limit: int = 48) -> dict:
+        """Group previously processed unnamed faces into bulk-review suggestions."""
+        if status not in ('all','unreviewed','named','suggested') or offset<0 or not 1<=limit<=100:
+            raise ValueError('Invalid face filter')
+        with self.lock:
+            matches=self.matching_pass()
+            if status!='suggested':
+                data=super().face_library(person,status,offset,limit)
+            else:
+                data=super().face_library('', 'unreviewed',0,1)
+                selected=sorted((face_id for face_id,m in matches.items() if not person or m['person']==person),
+                    key=lambda face_id:(matches[face_id]['person'],-matches[face_id]['score'],face_id))
+                data['total'],data['offset']=len(selected),offset
+                ids=selected[offset:offset+limit]
+                data['faces']=self.rows("""SELECT f.id,f.path,f.box,f.confidence,f.person,f.label_source,
+                    f.updated_at AS revision,m.capture_ts,m.latitude,m.longitude,m.summary
+                    FROM faces f JOIN enriched_media m ON m.path=f.path AND m.size_bytes=f.size_bytes
+                    WHERE f.id=ANY(?) AND f.person IS NULL""",[ids]) if ids else []
+                data['faces'].sort(key=lambda r:ids.index(r['id']))
+            groups={}
+            for match in matches.values():groups[match['person']]=groups.get(match['person'],0)+1
+            data['suggested_people']=[dict(person=name,faces=count) for name,count in sorted(groups.items())]
+            data['counts']['suggested']=len(matches)
+            for face in data['faces']:
+                face['suggestion']=matches.get(face['id']) if face['person'] is None else None
+            return data
+
+    def suggested_selection(self, threshold: float = .9, person: str = '') -> dict:
+        """Snapshot all eligible displayed names/revisions for explicit bulk review."""
+        if not 0<=threshold<=1:
+            raise ValueError('Similarity must be between 0 and 1')
+        with self.lock:
+            matches=self.matching_pass()
+            ids=sorted(face_id for face_id,match in matches.items()
+                if match['score']>=threshold and (not person or match['person']==person))
+            faces=[]
+            for offset in range(0,len(ids),1000):
+                rows=self.rows("""SELECT f.id,f.updated_at AS revision FROM faces f
+                    JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+                      AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+                    WHERE f.id=ANY(?) AND f.person IS NULL ORDER BY f.id""",[ids[offset:offset+1000]])
+                faces.extend(dict(id=row['id'],revision=row['revision'],person=matches[row['id']]['person']) for row in rows)
+            return dict(faces=faces,total=len(faces),threshold=threshold)
+
     def label_face(self, face_id: str, person: str, revision=None) -> None:
         """Check revisions while holding the row lock; audit the actual prior value."""
         if not isinstance(person,str) or len(person)>200: raise ValueError('Invalid person name')
@@ -178,15 +257,20 @@ class PostgresStore(Store):
                 [person.strip() or None,'user' if person.strip() else None,face_id])
             self._history('label_face',dict(id=face_id,person=person.strip(),previous=face['person']))
 
-    def label_faces(self, faces: list, person: str) -> None:
-        """All selected labels commit together, or none do if a revision is stale."""
+    def label_faces(self, faces: list, person: str | None = None) -> None:
+        """Save one shared name or each user's selected name in a single transaction."""
         if not isinstance(faces,list) or not 1<=len(faces)<=100:
             raise ValueError('Select 1–100 faces')
         if not all(isinstance(f,dict) and f.get('id') and f.get('revision') for f in faces):
             raise ValueError('Face revisions are required')
+        if len({f['id'] for f in faces}) != len(faces):
+            raise ValueError('Select each face only once')
+        if person is None and not all(isinstance(f.get('person'),str)
+                and f['person'].strip() and len(f['person'])<=200 for f in faces):
+            raise ValueError('Each selected face must have a suggested name to confirm')
         with self.lock,self.connection.transaction():
             for face in sorted(faces,key=lambda f:f['id']):
-                self.label_face(face['id'],person,face['revision'])
+                self.label_face(face['id'],face['person'] if person is None else person,face['revision'])
 
     def seed_jobs(self, timezone='UTC', faces=True) -> int:
         """Queue only missing/stale work; preserve imported retries and completed scans."""

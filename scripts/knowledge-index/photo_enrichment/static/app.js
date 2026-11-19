@@ -115,33 +115,50 @@ $('export').onclick=()=>run(async()=>{const result=await api('/api/export',{});s
 Object.assign(state,{view:'faces',faceStatus:'unreviewed',person:'',faceOffset:0,faceTotal:0,faceItems:[],faceSelection:new Map(),people:[],review:null});
 function faceSelection() {
   $('face-selected').textContent=state.faceSelection.size;
+  const selected=[...state.faceSelection.values()];const names=new Map();
+  for(const face of selected){const name=face.person||'Without a suggestion';names.set(name,(names.get(name)||0)+1);}
+  $('face-selection-summary').textContent=[...names].map(([name,count])=>count+' × '+name).join(' · ');
+  $('bulk-confirm-suggestions').disabled=state.busy||!selected.length||selected.some(face=>!face.person);
   document.querySelectorAll('.face-tile').forEach(card=>{const chosen=state.faceSelection.has(card.dataset.id);card.classList.toggle('chosen',chosen);card.querySelector('input').checked=chosen;});
+}
+function selectFace(face) {
+  if(state.faceSelection.has(face.id))return;
+  // Keep the displayed name and revision: confirmation must not silently use a newer suggestion.
+  state.faceSelection.set(face.id,{id:face.id,revision:face.revision,person:face.person?null:face.suggestion?.person||null});
 }
 function renderPeople() {
   $('people').replaceChildren();const term=$('people-search').value.toLocaleLowerCase();
   for(const person of state.people.filter(p=>p.person.toLocaleLowerCase().includes(term))){
-    const node=button(person.person,()=>filterFaces('named',person.person),'collection');node.append(element('span',person.faces));node.classList.toggle('active',state.person===person.person);$('people').append(node);
+    const node=button(person.person,()=>filterFaces('named',person.person),'collection');node.append(element('span',person.faces));node.classList.toggle('active',state.faceStatus==='named'&&state.person===person.person);$('people').append(node);
   }
 }
-async function filterFaces(filter,person='') {state.faceStatus=filter;state.person=person;state.faceOffset=0;state.faceSelection.clear();await loadFaces();}
+async function filterFaces(filter,person='') {state.faceStatus=filter;state.person=person;$('bulk-person').value='';state.faceOffset=0;await loadFaces();}
 async function loadFaces() {
   const data=await api(query('/api/faces',{status:state.faceStatus,person:state.person,offset:state.faceOffset}));
   state.faceItems=data.faces;state.faceTotal=data.total;state.people=data.people;
   if(!data.faces.length&&state.faceOffset>0){state.faceOffset=Math.max(0,state.faceOffset-48);return loadFaces();}
-  $('face-title').textContent=state.person||(state.faceStatus==='unreviewed'?'Needs review':'All faces');
+  $('face-title').textContent=(state.faceStatus==='suggested'?'Suggested matches'+(state.person?' · '+state.person:''):state.person||(state.faceStatus==='unreviewed'?'Needs review':'All faces'));
   $('face-count').textContent=data.total+' faces · confirm names individually or together';
+  $('suggested-count').textContent=data.counts.suggested||0;
+  $('suggested-people').replaceChildren();
+  for(const group of data.suggested_people||[]){const item=button(group.person,()=>filterFaces('suggested',group.person),'collection');item.append(element('span',group.faces));item.classList.toggle('active',state.faceStatus==='suggested'&&state.person===group.person);$('suggested-people').append(item);}
+  $('filter-suggested').classList.toggle('active',state.faceStatus==='suggested');
+  $('face-select-page').hidden=state.faceStatus!=='suggested';
+  $('threshold-selection').hidden=state.faceStatus==='named';
+  $('selection-scope').textContent=state.faceStatus==='suggested'&&state.person?'All suggestions for '+state.person:'All suggested matches in the library';
   $('unreviewed-count').textContent=data.counts.unreviewed;$('face-total').textContent=data.counts.total;
   $('known-people').replaceChildren(...data.people.map(p=>{const option=element('option');option.value=p.person;return option;}));renderPeople();
   $('filter-unreviewed').classList.toggle('active',state.faceStatus==='unreviewed');$('filter-all').classList.toggle('active',state.faceStatus==='all');
   $('face-grid').replaceChildren();
-  if(!data.faces.length)$('face-grid').append(element('p',state.faceStatus==='unreviewed'?'No faces awaiting review. New detections will appear as the background worker progresses.':'No faces in this collection yet.','empty-state'));
+  if(!data.faces.length)$('face-grid').append(element('p',state.faceStatus==='suggested'?'No clear matches yet. Confirm more examples of a person, then refresh. Ambiguous faces stay unnamed.':state.faceStatus==='unreviewed'?'No faces awaiting review. New detections will appear as the background worker progresses.':'No faces in this collection yet.','empty-state'));
   for(const face of data.faces){
     const card=element('article',undefined,'face-tile');card.dataset.id=face.id;
     const crop=button('',()=>reviewFace(face),'face-crop');crop.setAttribute('aria-label','Review '+(face.person||'unnamed face'));
     const img=element('img');img.loading='lazy';img.src=query('/api/thumbnail',{path:face.path,face:face.id});img.alt=face.person||'Unnamed detected face';crop.append(img);
-    const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+(face.person||'unnamed face'));check.onchange=()=>{if(check.checked)state.faceSelection.set(face.id,{id:face.id,revision:face.revision});else state.faceSelection.delete(face.id);faceSelection();};
+    const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+(face.person||face.suggestion?.person||'unnamed face'));check.onchange=()=>{if(!state.busy){if(check.checked)selectFace(face);else state.faceSelection.delete(face.id);}faceSelection();};
     const label=element('label',undefined,'face-select');label.append(check);
-    const body=element('div',undefined,'face-info');body.append(element('strong',face.person||'Unnamed face'),element('span',face.person?'Confirmed by you':'Needs review','badge'),element('p','Detection '+Math.round(face.confidence*100)+'% · '+(face.latitude==null?'No GPS':'GPS available'),'muted'));
+    const body=element('div',undefined,'face-info');body.append(element('strong',face.person||face.suggestion?.person||'Unnamed face'),element('span',face.person?'Confirmed by you':face.suggestion?'Suggested · needs confirmation':'Needs review','badge'),element('p','Detection '+Math.round(face.confidence*100)+'% · '+(face.latitude==null?'No GPS':'GPS available'),'muted'));
+    if(face.suggestion){body.append(element('p','Similarity '+face.suggestion.score.toFixed(3)+' · not a probability','muted'),button('Not this person',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:face.suggestion.reference_id});state.faceSelection.delete(face.id);await loadFaces();status('Suggestion rejected; your existing labels are unchanged.');}));}
     body.append(element('p',face.capture_ts?new Date(face.capture_ts*1000).toLocaleDateString(undefined,{timeZone:timezone()}):'Date unknown','muted'));card.append(crop,label,body);$('face-grid').append(card);
   }
   faceSelection();facePagination();
@@ -151,9 +168,9 @@ function facePagination(){
   const at=state.faceItems.findIndex(f=>f.id===state.review?.id);$('review-previous').disabled=at<=0;$('review-next').disabled=at<0||at>=state.faceItems.length-1;
 }
 const previousPagination=pagination;
-pagination=function(){previousPagination();facePagination();};
+pagination=function(){previousPagination();facePagination();faceSelection();};
 async function reviewFace(face){
-  state.review=face;$('review-title').textContent=face.person||'Who is this?';$('review-person').value=face.person||'';
+  state.review=face;$('review-title').textContent=face.person||(face.suggestion?'Suggested: '+face.suggestion.person:'Who is this?');$('review-person').value=face.person||face.suggestion?.person||'';
   $('review-crop').src=query('/api/thumbnail',{path:face.path,face:face.id});$('review-context').src=query('/api/thumbnail',{path:face.path});
   $('review-context-text').textContent=(face.capture_ts?new Date(face.capture_ts*1000).toLocaleString(undefined,{timeZone:timezone()}):'Date unknown')+' · Detection '+Math.round(face.confidence*100)+'%';
   $('review-caption').textContent=face.summary||'No caption available yet.';$('review-suggestions').replaceChildren();$('review-frigate').hidden=!state.frigate;
@@ -177,16 +194,43 @@ $('review-frigate').onclick=()=>run(async()=>{
   const match=await api('/api/faces/frigate',{id:state.review.id});$('review-suggestions').replaceChildren(element('p',match.name?'Frigate suggests '+match.name+' · score '+match.score:'No confident Frigate match for this crop.'));
   if(match.name)$('review-suggestions').append(button('Confirm Frigate suggestion',()=>confirmFace(match.name)));
 });
+async function saveSelectedFaces(person) {
+  const faces=[...state.faceSelection.values()];
+  if(!faces.length||(!person&&faces.some(face=>!face.person)))throw new Error('Select faces with suggested names first. Unnamed faces need a name before confirmation.');
+  let saved=0;
+  try {
+    for(let offset=0;offset<faces.length;offset+=100){
+      const batch=faces.slice(offset,offset+100);
+      await api('/api/faces/labels',person?{faces:batch,person}:{faces:batch});
+      batch.forEach(face=>state.faceSelection.delete(face.id));saved+=batch.length;
+      faceSelection();status('Confirmed '+saved+' of '+faces.length+' selected faces…');
+    }
+  } catch(error) {
+    try{await loadFaces();}catch{/* Keep the remaining selection if the connection is unavailable. */}
+    throw new Error('Confirmed '+saved+' of '+faces.length+' before the request failed. '+error.message+'. Refresh before retrying the remaining selection.');
+  }
+  await loadFaces();status('Confirmed '+saved+' selected faces'+(person?' as '+person:', each with its displayed suggested name')+'.');
+}
 $('bulk-assign').onclick=()=>run(async()=>{
-  const person=$('bulk-person').value.trim();if(!person||!state.faceSelection.size)throw new Error('Select faces and enter a name first.');
-  const count=state.faceSelection.size;await api('/api/faces/labels',{faces:[...state.faceSelection.values()],person});state.faceSelection.clear();await loadFaces();status('Confirmed '+person+' for '+count+' selected faces.');
+  const person=$('bulk-person').value.trim();if(!person)throw new Error('Enter a name first.');
+  await saveSelectedFaces(person);
+});
+$('bulk-confirm-suggestions').onclick=()=>run(()=>saveSelectedFaces());
+$('face-select-threshold').onclick=()=>run(async()=>{
+  const raw=$('minimum-similarity').value.trim();const score=Number(raw);
+  if(!raw||!Number.isFinite(score)||score<0||score>100)throw new Error('Enter a similarity score between 0 and 100.');
+  const data=await api(query('/api/faces/selection',{threshold:score/100,person:state.faceStatus==='suggested'?state.person:''}));
+  state.faceSelection=new Map(data.faces.map(face=>[face.id,face]));faceSelection();
+  status('Selected '+data.total+' suggestions with similarity '+score+' or above across all pages. Review the name counts, then click Confirm suggested matches to save.');
 });
 $('face-clear').onclick=()=>{state.faceSelection.clear();faceSelection();};
 $('people-search').oninput=renderPeople;
 $('filter-unreviewed').onclick=()=>run(()=>filterFaces('unreviewed'));
+$('filter-suggested').onclick=()=>run(()=>filterFaces('suggested'));
+$('face-select-page').onclick=()=>{state.faceItems.forEach(selectFace);faceSelection();};
 $('filter-all').onclick=()=>run(()=>filterFaces('all'));
-$('face-previous').onclick=()=>run(async()=>{state.faceOffset=Math.max(0,state.faceOffset-48);state.faceSelection.clear();await loadFaces();});
-$('face-next').onclick=()=>run(async()=>{state.faceOffset+=48;state.faceSelection.clear();await loadFaces();});
+$('face-previous').onclick=()=>run(async()=>{state.faceOffset=Math.max(0,state.faceOffset-48);await loadFaces();});
+$('face-next').onclick=()=>run(async()=>{state.faceOffset+=48;await loadFaces();});
 async function switchView(view){
   state.view=view;$('face-workspace').hidden=view!=='faces';$('photo-workspace').hidden=view!=='photos';
   for(const name of ['faces','photos']){$('view-'+name).classList.toggle('active',name===view);$('view-'+name).setAttribute('aria-pressed',String(name===view));}
@@ -199,5 +243,5 @@ run(async()=>{
   const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;
   if(config.background_only){$('extract').hidden=true;$('detect').hidden=true;$('export').textContent='Refresh analytics';}
   const health=await api('/api/status');if(health.captured_at)$('freshness').textContent='Edits update immediately · analytics snapshot '+new Date(health.captured_at*1000).toLocaleTimeString();
-  await loadFaces();status('Review detected faces, or switch to Photos & events to add shared context.');
+  await loadFaces();status('Use Suggested matches to confirm similar faces together. Your saved names and corrections are preserved.');
 });

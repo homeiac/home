@@ -99,6 +99,34 @@ def main():
     run(python,'-c',"import psycopg,duckdb; c=psycopg.connect(service='photo_pipeline'); print('PostgreSQL connected:',c.info.server_version); c.close(); d=duckdb.connect(); d.execute('INSTALL postgres; LOAD postgres'); print('Signed DuckDB PostgreSQL extension ready')",env=env)
     print('Prepared release:',payload['release'],flush=True)
     if payload['mode']=='prepare':return
+    if payload['mode']=='gui':
+        # Deploy read/review features independently: no ingestion restart, migration,
+        # model invocation or modifications to the authoritative data are involved.
+        gui=ROOT/'gui'; previous=gui.resolve() if gui.exists() else None
+        unit_path=UNITS/'photo-enrichment-gui.service'; original=unit_path.read_text()
+        backup=ROOT/'backups'/('gui-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
+        backup.mkdir(parents=True);(backup/unit_path.name).write_text(original)
+        temporary=ROOT/'gui.new';temporary.unlink(missing_ok=True);temporary.symlink_to(release)
+        temporary.replace(gui)
+        try:
+            unit_path.write_text(original.replace('/opt/photo-enrichment/current/','/opt/photo-enrichment/gui/'))
+            run('systemd-analyze','verify',str(unit_path))
+            run('systemctl','daemon-reload');run('systemctl','restart','photo-enrichment-gui.service')
+            import urllib.request
+            for attempt in range(30):
+                try:
+                    with urllib.request.urlopen('http://127.0.0.1:8765/api/status',timeout=3) as response:
+                        if json.load(response)['backend']=='postgres':break
+                except OSError:
+                    time.sleep(1)
+            else:raise RuntimeError('GUI did not become healthy')
+            print('GUI-only rollout complete; ingestion was not restarted')
+            return status()
+        except BaseException:
+            unit_path.write_text(original);gui.unlink(missing_ok=True)
+            if previous:gui.symlink_to(previous)
+            run('systemctl','daemon-reload');run('systemctl','restart','photo-enrichment-gui.service')
+            raise
     stamp=dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     backup=ROOT/'backups'/('postgres-'+stamp);backup.mkdir(parents=True)
     for name in (WORKER,'photo-enrichment-gui.service','photo-enrichment-export.service','photo-enrichment-export.timer','photo-enrichment-catalog.service','photo-enrichment-catalog.timer'):

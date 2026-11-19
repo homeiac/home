@@ -109,6 +109,74 @@ class PipelineTests(unittest.TestCase):
             self.store.label_faces([{'id':face['id'],'revision':str(face['revision'])}],'Stale edit')
         self.assertEqual(self.store.face(face['id'])['person'],'Newer edit')
 
+    def add_review_faces(self):
+        """Synthetic, already processed faces for mixed-name confirmation tests."""
+        reference=self.store.face('stable-face')
+        for face_id in ('review-a','review-b'):
+            self.store.db.execute('INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)',
+                [face_id,reference['path'],reference['size_bytes'],reference['mtime_ns'],reference['box'],.9,[1.,0.],MODEL_ID])
+        return [dict(id=face_id,revision=str(self.store.face(face_id)['updated_at']),person=name)
+            for face_id,name in [('review-a','Synthetic G'),('review-b','Synthetic Asha')]]
+
+    def test_mixed_confirmation_preserves_each_name_and_audits(self):
+        faces=self.add_review_faces()
+        before=len(self.store.rows('SELECT * FROM annotation_history'))
+        self.store.label_faces(faces)
+        for face in faces:
+            saved=self.store.face(face['id'])
+            self.assertEqual(saved['person'],face['person'])
+            self.assertEqual(saved['label_source'],'user')
+        self.assertEqual(len(self.store.rows('SELECT * FROM annotation_history')),before+2)
+        self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
+        export_snapshot(self.state)
+        reader,_=analytical_connection(self.state)
+        try:
+            self.assertEqual(reader.execute("SELECT id,person FROM faces WHERE id LIKE 'review-%' ORDER BY id").fetchall(),
+                [('review-a','Synthetic G'),('review-b','Synthetic Asha')])
+        finally:reader.close()
+
+    def test_mixed_confirmation_rolls_back_entire_batch_on_stale_face(self):
+        faces=self.add_review_faces()
+        self.store.label_face('review-b','Newer correction')
+        before=len(self.store.rows('SELECT * FROM annotation_history'))
+        with self.assertRaisesRegex(ValueError,'edited elsewhere'):
+            self.store.label_faces(faces)
+        self.assertIsNone(self.store.face('review-a')['person'])
+        self.assertEqual(self.store.face('review-b')['person'],'Newer correction')
+        self.assertEqual(len(self.store.rows('SELECT * FROM annotation_history')),before)
+
+    def test_mixed_confirmation_requires_names_and_unique_faces(self):
+        faces=self.add_review_faces()
+        for bad in (None,'', ' ', 123, 'x'*201):
+            with self.subTest(name=bad),self.assertRaises(ValueError):
+                self.store.label_faces([faces[0],dict(faces[1],person=bad)])
+        with self.assertRaises(ValueError):self.store.label_faces([faces[0],faces[0]])
+        self.assertIsNone(self.store.face('review-a')['person'])
+        self.assertIsNone(self.store.face('review-b')['person'])
+
+    def test_threshold_selection_covers_all_pages_without_writing(self):
+        reference=self.store.face('stable-face')
+        matches={}
+        for i in range(125):
+            face_id=f'threshold-{i:03}'
+            self.store.db.execute('INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)',
+                [face_id,reference['path'],reference['size_bytes'],reference['mtime_ns'],reference['box'],.9,[1.,0.],MODEL_ID])
+            matches[face_id]=dict(person='Synthetic G' if i<100 else 'Synthetic Asha',score=.9 if i<124 else .899)
+        # A cached suggestion for a face already confirmed elsewhere is excluded.
+        matches['stable-face']=dict(person='Stale suggestion',score=.99)
+        before=self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n']
+        with patch.object(self.store,'matching_pass',return_value=matches):
+            selected=self.store.suggested_selection(.9)
+            self.assertEqual(selected['total'],124)
+            self.assertEqual(len({f['id'] for f in selected['faces']}),124)
+            self.assertTrue(all(f['revision'] for f in selected['faces']))
+            self.assertEqual(self.store.suggested_selection(.9,'Synthetic Asha')['total'],24)
+            self.assertEqual(self.store.suggested_selection(.91)['total'],0)
+            for invalid in (-.1,1.1,float('nan'),float('inf')):
+                with self.assertRaises(ValueError):self.store.suggested_selection(invalid)
+        self.assertEqual(self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n'],before)
+        self.assertEqual(self.store.rows('SELECT count(*) n FROM faces WHERE person IS NULL')[0]['n'],125)
+
     def test_clipped_face_coordinates_commit(self):
         """OpenCV boxes at image edges can mix integer clamps with float values."""
         class ClippedFaces:
@@ -136,6 +204,13 @@ class PipelineTests(unittest.TestCase):
             with urllib.request.urlopen(base+'/api/faces?status=named') as response:face=json.load(response)['faces'][0]
             post('/api/faces/labels',{'faces':[{'id':face['id'],'revision':face['revision']}],'person':'Synthetic API label'})
             self.assertEqual(self.store.face(face['id'])['person'],'Synthetic API label')
+            mixed=self.add_review_faces()
+            with urllib.request.urlopen(base+'/api/faces/selection?threshold=.9') as response:
+                selected=json.load(response)
+            self.assertEqual({f['id'] for f in selected['faces']},{'review-a','review-b'})
+            post('/api/faces/labels',{'faces':mixed})
+            for selected in mixed:
+                self.assertEqual(self.store.face(selected['id'])['person'],selected['person'])
             group=post('/api/groups/save',{'paths':[self.path],'event':'Synthetic API event','location':'Synthetic location'})
             self.assertEqual(self.store.group(group['id'])['location'],'Synthetic location')
             post('/api/groups/save',{'id':group['id'],'paths':[self.path],'notes':'Synthetic correction'})
@@ -144,6 +219,40 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(len(self.store.groups()),1)
         finally:
             server.shutdown();server.server_close();thread.join()
+
+    def test_matching_backfills_without_reextracting_or_relabeling(self):
+        reference=self.store.face('stable-face')
+        for face_id,vector in [('candidate-a',[.99,.05]),('candidate-b',[.97,.1]),('unrelated',[0.,1.])]:
+            self.store.db.execute('INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)',
+                [face_id,reference['path'],reference['size_bytes'],reference['mtime_ns'],reference['box'],.9,vector,MODEL_ID])
+        history=self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n']
+        with patch('photo_enrichment.postgres.read_metadata',side_effect=AssertionError('Must reuse embeddings')):
+            suggested=self.store.face_library(status='suggested',person='Synthetic person')
+        self.assertEqual({r['id'] for r in suggested['faces']},{'candidate-a','candidate-b'})
+        self.assertTrue(all(r['person'] is None for r in suggested['faces']))
+        self.assertEqual(self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n'],history)
+        self.store.reject('candidate-a','stable-face')
+        self.assertEqual([r['id'] for r in self.store.face_library(status='suggested')['faces']],['candidate-b'])
+        candidate=self.store.face_library(status='suggested')['faces'][0]
+        self.store.label_faces([{'id':candidate['id'],'revision':str(candidate['revision'])}],'Synthetic person')
+        self.assertEqual(self.store.face('candidate-b')['person'],'Synthetic person')
+        self.assertEqual(self.store.face_library(status='suggested')['total'],0)
+        self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
+        self.assertEqual(self.store.rows('SELECT count(*) n FROM face_scans')[0]['n'],3)
+
+    def test_matching_excludes_ambiguous_and_incompatible_vectors(self):
+        from photo_enrichment.matching import match_batch
+        references=[dict(id='a1',person='A',model='v1',embedding=[1.,0.]),
+                    dict(id='a2',person='A',model='v1',embedding=[.99,.01]),
+                    dict(id='b',person='B',model='v1',embedding=[0.,1.])]
+        candidates=[dict(id='clear',model='v1',embedding=[.98,.02]),
+                    dict(id='tie',model='v1',embedding=[1.,1.]),
+                    dict(id='wrong-model',model='v2',embedding=[1.,0.]),
+                    dict(id='zero',model='v1',embedding=[0.,0.]),
+                    dict(id='invalid',model='v1',embedding=[float('nan'),0.]),
+                    dict(id='wrong-size',model='v1',embedding=[1.,0.,0.])]
+        self.assertEqual(set(match_batch(candidates,references,set())),{'clear'})
+        self.assertEqual(match_batch(candidates,references,{('clear','a1')}),{})
 
     def test_snapshot_remains_consistent_during_concurrent_edit(self):
         import duckdb

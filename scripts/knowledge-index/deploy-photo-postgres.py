@@ -12,7 +12,7 @@ import subprocess
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','prepare','cutover','status'))
+    parser.add_argument('mode',choices=('inspect','prepare','cutover','gui','status'))
     args=parser.parse_args()
     here=Path(__file__).resolve().parent
     host=os.environ['CB_HOST']
@@ -33,7 +33,7 @@ def main():
             payload['pgpass']=password
         elif pg("SELECT count(*) FROM pg_database WHERE datname='photo_enrichment';")!='1':
             raise RuntimeError('Existing role has no matching database; inspect before continuing')
-    if args.mode in ('prepare','cutover'):
+    if args.mode in ('prepare','cutover','gui'):
         files={'photo-enrich.py':(here/'photo-enrich.py').read_text()}
         for path in sorted((here/'photo_enrichment').rglob('*')):
             if path.is_file() and path.suffix in ('.py','.html','.css','.js','.txt','.md'):

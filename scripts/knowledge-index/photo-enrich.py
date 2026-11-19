@@ -56,7 +56,7 @@ def main() -> None:
     metrics = Metrics(args.prom)
     if args.backend == "postgres" and args.command == "serve":
         metrics.prefix="photo_review"
-        metrics.stages=("review","frigate")
+        metrics.stages=("review","frigate","match")
     if args.command == "worker":
         from zoneinfo import ZoneInfo
         if args.backend == "postgres":
