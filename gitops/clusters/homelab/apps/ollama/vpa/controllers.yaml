@@ -140,6 +140,7 @@ spec:
         - --feature-gates=InPlace=true
         - --use-admission-controller-status=false
         - --in-place-skip-disruption-budget=true
+        - --in-recommendation-bounds-eviction-lifetime-threshold=2m
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
