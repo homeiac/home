@@ -317,3 +317,23 @@ timeline. Scanning and thumbnail generation continue asynchronously in Immich's
 queues. This makes existing media visible; it does not migrate the remaining
 legacy face confirmations, descriptions, or groups. Those records remain in the
 original PostgreSQL database; the 12-photo pilot remains separately preserved.
+
+### Missing thumbnails during the initial import
+
+An original opening successfully does not establish thumbnail health. Compare the
+original, preview and thumbnail HTTP endpoints with `immich-thumbnail.py`. A 404
+for derived images plus a large active queue means the thumbnail is still missing;
+zero failed jobs alone is not a reason to promise a short wait.
+
+The initial 2-CPU/4Gi server limit was heavily throttled, with about 34k generated
+thumbnails and 52k still waiting after 11 hours. The server now requests 1 CPU/2Gi
+and can burst to 4 CPUs/6Gi. Node CPU remains shared with other workloads.
+
+`python3 scripts/knowledge-index/immich-prioritize-thumbnails.py` previews a bounded
+selection of missing thumbnails from the newest normal timeline items. Add
+`--apply` to move their **existing waiting jobs** forward using BullMQ's supported
+`changePriority` operation. It does not create/drop jobs or write to Immich tables.
+Default 60 items, hard maximum 100; use sparingly to avoid starving the bulk scan.
+It authenticates using the existing kubeconfig, not the temporary pilot credential
+file. Verify rendered thumbnails in the browser after processing; remaining bulk
+work continues asynchronously.
