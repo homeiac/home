@@ -8,6 +8,11 @@ CPU = 'sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilo
 MEMORY = 'sum by(pod)(container_memory_working_set_bytes{namespace="immich-pilot",container!="",container!="POD"})'
 QUEUES = ['library', 'sidecar', 'metadata', 'thumbnail_generation', 'face_detection', 'facial_recognition', 'smart_search', 'ocr', 'video_conversion', 'duplicate_detection']
 
+OCR_RATE = 'sum(rate(immich_jobs_ocr_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
+OCR_BACKLOG = 'sum(immich_queue_jobs{queue="ocr",state=~"waiting|delayed|prioritized|paused"})'
+GPU = '{Hostname="k3s-vm-pumped-piglet-gpu"}'
+OVERVIEW_HEIGHT = 100
+
 
 def add_panels(panel, panels):
     """Append an Immich overview to a fresh panel list; return its height."""
@@ -61,7 +66,17 @@ def add_panels(panel, panels):
     add('Reconciliation cycle duration', 'immich_sync_cycle_seconds', 0, 65, 12, 6, unit='s')
     add('Oldest eligible transfer waiting', 'immich_sync_oldest_pending_seconds', 12, 65, 12, 6, unit='s')
     add('Reconciliation measured stage duration', 'immich_sync_stage_seconds', 0, 71, 24, 6, unit='s', legend='{{stage}}', description='Last completed inventory scan, source query, or individual asset preservation duration. Counts in the value stream map are separate from these measured timings.')
-    return 78
+    add('OCR jobs waiting', OCR_BACKLOG, 0, 78, 6, 4, 'stat')
+    add('OCR completed / minute', OCR_RATE+' * 60', 6, 78, 6, 4, 'stat', description='Successful OCR jobs, including photos with no text. Five-minute rate; compare before and after CUDA warm-up.')
+    add('OCR drain estimate', f'({OCR_BACKLOG} / ({OCR_RATE} > 0)) or ({OCR_BACKLOG} == 0)', 12, 78, 6, 4, 'stat', 's', description='Assumes no new arrivals. Blank while stalled; zero only when queue is empty.')
+    add('Shared GPU driver', 'max by(DCGM_FI_DRIVER_VERSION)(DCGM_FI_DEV_GPU_UTIL'+GPU+' * 0 + 1)', 18, 78, 6, 4, 'stat', legend='{{DCGM_FI_DRIVER_VERSION}}', description='Loaded driver reported by DCGM; value 1 means present.')['options']['textMode'] = 'name'
+    add('OCR throughput over time', OCR_RATE+' * 60', 0, 82, 12, 7, description='Jobs per minute. The driver and CUDA rollout briefly interrupt processing; use sustained rates after model warm-up.')
+    add('OCR queue states over time', 'sum by(state)(immich_queue_jobs{queue="ocr"})', 12, 82, 12, 7, legend='{{state}}')
+    add('Shared RTX 3070 utilization', 'max(DCGM_FI_DEV_GPU_UTIL'+GPU+')', 0, 89, 8, 7, unit='percent', description='Whole GPU shared by Immich, Frigate and Ollama. This is not attribution to OCR.')
+    p = add('Shared RTX 3070 memory', 'max(DCGM_FI_DEV_FB_USED'+GPU+') * 1024 * 1024', 8, 89, 8, 7, unit='bytes', legend='Used')
+    p['targets'].append({'refId':'B','expr':'max(DCGM_FI_DEV_FB_FREE'+GPU+') * 1024 * 1024','legendFormat':'Free'})
+    add('GPU service replicas ready', 'kube_deployment_status_replicas_available{namespace=~"immich-pilot|frigate|ollama",deployment=~"immich-machine-learning|frigate|ollama-gpu"}', 16, 89, 8, 7, legend='{{deployment}}', description='Availability only. CUDA provider logs and real OCR/camera/generation checks verify processing.')
+    return OVERVIEW_HEIGHT
 
 
 def add_graph(graph, node):
@@ -70,7 +85,8 @@ def add_graph(graph, node):
         expr = f'sum(immich_queue_jobs{{queue="{queue}",state=~"waiting|delayed|prioritized|paused"}})'
         graph['targets'][0]['expr'] += ' or '+node(expr, 'immich_'+queue, 'Immich '+queue.replace('_', ' ')+' (queued jobs)')
     graph['targets'][0]['expr'] += ' or '+node(RATE+' * 60', 'immich_gallery', 'Immich thumbnail completions (jobs/min)')
-    for source, target in [('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion')]:
+    graph['targets'][0]['expr'] += ' or '+node(OCR_RATE+' * 60', 'immich_ocr_completed', 'Immich OCR completions (jobs/min)')
+    for source, target in [('ocr','ocr_completed'),('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion')]:
         expr='vector(1)'
         for label, value in [('id', 'immich_'+source+'_'+target),('source','immich_'+source),('target','immich_'+target)]:
             expr = f'label_replace({expr}, "{label}", "{value}", "", "")'
@@ -87,4 +103,4 @@ def add_graph(graph, node):
         for label, value in [('id', source+'_'+target),('source',source),('target',target)]:
             expr = f'label_replace({expr}, "{label}", "{value}", "", "")'
         graph['targets'][1]['expr'] += ' or '+expr
-    graph['description'] += ' Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations.'
+    graph['description'] += ' Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations.'

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs inside VM 105's root through the GitOps maintenance Job. No VM SSH.
 set -euo pipefail
-phase=${1:?prepare or install}
+phase=${1:?prepare, install or rollback}
 version=580.178.04-0ubuntu0.24.04.1
 module_version=580.178.04
 state=/var/lib/homelab-gpu-driver/$module_version
@@ -58,6 +58,8 @@ Pin: version $version
 Pin-Priority: 1001
 EOF
   [[ $(modinfo -k "$(uname -r)" -F version nvidia) == "$module_version" ]]
+  # The repaired pending kernel will be selected by GRUB on reboot.
+  [[ $(modinfo -k 6.8.0-100-generic -F version nvidia) == "$module_version" ]]
   dkms status
   touch "$state/installed"
   if [[ ! -f $state/reboot-scheduled ]]; then
@@ -65,6 +67,15 @@ EOF
     touch "$state/reboot-scheduled"
   fi
   echo 'INSTALLED: VM reboot scheduled in 30 seconds to load the pinned driver.'
+elif [[ $phase == rollback ]]; then
+  [[ -f $state/prepared ]]
+  if [[ $(cat /sys/module/nvidia/version) == 535.288.01 ]]; then
+    echo 'Rollback driver is already loaded'; exit 0
+  fi
+  rm -f /etc/apt/preferences.d/homelab-nvidia-driver
+  apt-get -y --allow-downgrades install "$state"/rollback/*.deb
+  [[ $(modinfo -k "$(uname -r)" -F version nvidia) == 535.288.01 ]]
+  systemd-run --unit=homelab-nvidia-535-rollback --on-active=30s /usr/bin/systemctl reboot
 else
-  echo 'Unknown phase'; exit 1
+  echo 'Unknown phase' ; exit 1
 fi

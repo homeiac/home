@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import yaml
+from immich_dashboard import OVERVIEW_HEIGHT
 
 ROOT = Path(__file__).resolve().parents[2]
 base = ['kubectl', '--kubeconfig', os.environ.get('KUBECONFIG', str(Path.home() / 'kubeconfig'))]
@@ -14,7 +15,7 @@ photo = json.loads(yaml.safe_load((app / 'dashboard.yaml').read_text())['data'][
 knowledge = json.loads(next(iter(yaml.safe_load((app / 'knowledge-index-dashboard.yaml').read_text())['data'].values())))
 queries = []
 for panel in photo['panels']:
-    if panel['gridPos']['y'] < 78:
+    if panel['gridPos']['y'] < OVERVIEW_HEIGHT:
         queries.extend({'name': panel['title']+' '+target['refId'], 'expr': target['expr']} for target in panel.get('targets', []))
 for panel in knowledge['panels']:
     if panel['type'] == 'nodeGraph':

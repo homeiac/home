@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import yaml
 root=Path(__file__).resolve().parents[3]
-p=argparse.ArgumentParser();p.add_argument('phase',choices=['prepare','install']);args=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('phase',choices=['prepare','install','rollback']);args=p.parse_args()
 name='piglet-driver-580-'+args.phase+'-v4'
 image='ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd'
 code={'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'piglet-driver-580-code','namespace':'gpu-operator'},'data':{'driver.sh':(Path(__file__).parent/'upgrade.sh').read_text()}}
