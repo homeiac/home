@@ -22,6 +22,7 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
          ("decode", "prompt"), ("prompt", "inference"), ("inference", "parse"),
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
 PIPELINE_HELP = {
+    "media_pipeline_cache_hits_total": ("counter", "Successful captions reused for identical model inputs; inference requests avoided"),
     "media_pipeline_stage_seconds_total": ("counter", "Wall seconds in each stage, including in-flight work; inference includes transport and server time"),
     "media_pipeline_stage_completed_seconds_total": ("counter", "Wall seconds in completed stage operations, including failed attempts"),
     "media_pipeline_stage_operations_total": ("counter", "Completed stage operations including failed attempts; queue/write operate on batches"),
@@ -50,6 +51,7 @@ class PipelineMetrics:
         self.ollama_seconds = defaultdict(float)
         self.ollama_observations = defaultdict(int)
         self.tokens = defaultdict(int)
+        self.cache_hits = {"photo": 0, "video": 0}
         for stage in TITLES:
             for kind in (("batch",) if stage in ("queue", "write") else ("photo", "video")):
                 self.seconds[stage, kind] = 0.0
@@ -108,6 +110,11 @@ class PipelineMetrics:
         with self.lock:
             (self.persisted if persisted else self.items)[kind, status] += 1
 
+    def cache_hit(self, kind: str) -> None:
+        """Count avoided model calls without inflating inference timing observations."""
+        with self.lock:
+            self.cache_hits[kind] += 1
+
     def ollama(self, response: dict, kind: str) -> None:
         """Keep only numeric timing and token fields; missing fields remain absent."""
         with self.lock:
@@ -150,6 +157,8 @@ class PipelineMetrics:
             for name, values in (("seconds", self.ollama_seconds), ("observations", self.ollama_observations), ("tokens", self.tokens)):
                 for (phase, kind), value in sorted(values.items()):
                     add(f"media_pipeline_ollama_{name}_total", value, phase=phase, kind=kind)
+            for kind, count in self.cache_hits.items():
+                add("media_pipeline_cache_hits_total", count, kind=kind)
             for source, target in EDGES:
                 add("media_pipeline_edge_info", 1, id=source + "-" + target, source=source, target=target)
             lines = []

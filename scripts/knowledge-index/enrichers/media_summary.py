@@ -33,6 +33,8 @@ import urllib.request
 
 import duckdb
 from pipeline_metrics import PipelineMetrics
+from summary_cache import SummaryCache
+from contextlib import nullcontext
 
 VIDEO_EXTS = {"mp4", "mov", "3gp", "avi", "mpg", "m4v"}
 SCHEMA = ("source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR, prompt_version VARCHAR, "
@@ -143,7 +145,7 @@ def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="open
     return out["message"]["content"] if api == "ollama" else out["choices"][0]["message"]["content"]
 
 
-def summarize(row, library, a, metrics=None):
+def summarize(row, library, a, metrics=None, cache=None):
     """-> dict of result columns for one queue row; never raises (errors become status='error' rows)."""
     base = {"source": "gphotos", "path": row["path"], "size_bytes": row["size_bytes"], "enricher": a.enricher, "model": a.model,
             "prompt_version": PROMPT_VERSION, "summary": None, "tags": None, "frames_sampled": None, "duration_s": None,
@@ -166,11 +168,22 @@ def summarize(row, library, a, metrics=None):
             base.update(frames_sampled=n, duration_s=dur)
         with metrics.measure("prompt", kind):
             prompt = build_prompt(row, kind == "video", len(jpegs), speech)
-        with metrics.measure("inference", kind):
-            answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
-                               num_ctx=a.num_ctx, metrics=metrics, kind=kind)
-        with metrics.measure("parse", kind):
-            summary, tags = parse_answer(answer)
+        cache_key = SummaryCache.key(prompt, jpegs, {
+            "endpoint": a.endpoint, "enricher": a.enricher, "model": a.model,
+            "prompt_version": PROMPT_VERSION, "api": a.api, "num_ctx": a.num_ctx, "extra": a.extra,
+        }) if cache is not None else None
+        cached = cache.get(cache_key) if cache is not None else None
+        if cached is None:
+            with metrics.measure("inference", kind):
+                answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
+                                   num_ctx=a.num_ctx, metrics=metrics, kind=kind)
+            with metrics.measure("parse", kind):
+                summary, tags = parse_answer(answer)
+            if cache is not None:
+                cache.put(cache_key, summary, tags)
+        else:
+            summary, tags = cached
+            metrics.cache_hit(kind)
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
@@ -215,14 +228,16 @@ def run(a):
     t0 = time.time()
     remaining = a.limit
     seen = set()
-    with PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
+    # Dry runs must not read cached answers or write any cache files.
+    cache_context = nullcontext(None) if a.dry_run else SummaryCache(os.path.join(a.index, "summary-cache.sqlite3"))
+    with cache_context as cache, PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
         while remaining > 0:
             with metrics.measure("queue"):
                 rows = queue(a.index, a.enricher, min(a.batch_size, remaining), seen)
             if not rows:
                 break
             seen.update(r["path"] for r in rows)
-            out = [summarize(r, a.library, a, metrics) for r in rows]
+            out = [summarize(r, a.library, a, metrics, cache) for r in rows]
             done += sum(r["status"] == "ok" for r in out)
             errors += sum(r["status"] != "ok" for r in out)
             if a.dry_run:

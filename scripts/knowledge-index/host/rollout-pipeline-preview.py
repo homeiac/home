@@ -28,7 +28,8 @@ def main() -> None:
     subprocess.run(["systemctl", "is-active", "--quiet", unit], check=True)
     if not metrics.parent.is_dir():
         raise RuntimeError("node-exporter textfile directory is missing")
-    files = {source: payload["media_summary.py"], root / "enrichers/pipeline_metrics.py": payload["pipeline_metrics.py"]}
+    files = {source: payload["media_summary.py"], root / "enrichers/pipeline_metrics.py": payload["pipeline_metrics.py"],
+             root / "enrichers/summary_cache.py": payload["summary_cache.py"]}
     for path, text in files.items():
         compile(text, str(path), "exec")
     backup = root / "backups" / ("pipeline-" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))

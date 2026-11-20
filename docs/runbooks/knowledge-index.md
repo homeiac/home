@@ -222,3 +222,27 @@ Library 243,088 files + `.versions` 6,753 = ledger 249,841; media 118,987; `.jso
 `scripts/knowledge-index/test-enricher.sh` (stub model server + ffmpeg fixtures, 21 checks) and
 `scripts/knowledge-index/test-knowledge-index.sh` (local, python3 + duckdb): same fixture as `test-gphotos-quota-list.sh`
 plus cross-archive sidecars, corrupt sidecar, re-run idempotency, later-unit-wins, and the hook's forced-failure path.
+
+### Duplicate inference reuse
+
+The summary worker stores successful parsed answers in `<index>/summary-cache.sqlite3`.
+A SHA-256 key covers the exact decoded images/video frames, prompt (including
+metadata and transcript), endpoint, model, enricher ID, API and inference options.
+Renamed copies with matching inputs reuse the caption while retaining a separate
+Parquet row for each source path. Same-name/same-size files with different pixels
+never match. Changed album/person/date context gets its own inference, because
+that context can change the caption. This is conservative model-input reuse,
+not a claim that every album copy is deduplicated.
+
+Errors are not cached. Successful answers survive process restarts and retries
+of an unfinished Parquet batch. Dry runs bypass the cache and write nothing.
+Existing historical captions are not backfilled into the cache: their exact
+model inputs were not recorded. Bump the enricher ID when changing model weights
+behind an existing model tag. Cache data contains captions and stays beside the
+local Parquet data, never in Git. `media_pipeline_cache_hits_total` counts avoided
+model calls by photo/video; it does not inflate inference timing samples.
+
+Test with `python3 scripts/knowledge-index/test-summary-cache.py` and
+`scripts/knowledge-index/test-enricher.sh`. The approved preview installer accepts
+`--worker-only` to preserve concurrent dashboard changes; it validates the old
+worker hash, backs up code and settings, and rolls back on startup failure.
