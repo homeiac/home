@@ -2,8 +2,8 @@
 # Runs inside VM 105's root through the GitOps maintenance Job. No VM SSH.
 set -euo pipefail
 phase=${1:?prepare or install}
-version=580.126.09-0ubuntu0.24.04.1
-module_version=580.126.09
+version=580.178.04-0ubuntu0.24.04.1
+module_version=580.178.04
 state=/var/lib/homelab-gpu-driver/$module_version
 umask 077
 mkdir -p "$state/rollback"
@@ -15,7 +15,8 @@ flock -n 9
 export DEBIAN_FRONTEND=noninteractive
 if [[ $phase == prepare ]]; then
   if [[ -f $state/prepared ]]; then echo "Preparation already saved"; exit 0; fi
-  apt-get update
+  [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]
+  apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update
   apt-cache policy nvidia-driver-580
   apt-cache madison nvidia-driver-580 | grep -F "$version" >/dev/null || { echo "Pinned target no longer on mirror; refresh Git desired version first"; exit 42; }
   apt-get -y install dpkg-repack
