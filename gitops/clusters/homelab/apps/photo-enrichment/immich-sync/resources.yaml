@@ -7,21 +7,20 @@ data:
   bootstrap.mjs: "// Executed only by the GitOps bootstrap Job in namespace database.\n\
     import {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
-    \ db=new Client();await db.connect();\ntry {\n await db.query(\"SET log_statement='none'\"\
-    );\n await db.query('BEGIN');\n await db.query('SELECT pg_advisory_xact_lock(217,8000)');\n\
-    \ const exists=(await db.query(\"SELECT 1 FROM pg_roles WHERE rolname='immich_reconciler'\"\
-    )).rowCount;\n if(!exists)await db.query('CREATE ROLE immich_reconciler LOGIN');\n\
-    \ const statement=(await db.query(\"SELECT format('ALTER ROLE immich_reconciler\
-    \ PASSWORD %L',$1::text) command\",[process.env.ROLE_PASSWORD])).rows[0].command;\n\
+    \ db=new Client();let phase=\"connect\";\ntry {\n await db.connect();\n await\
+    \ db.query(\"SET log_statement='none'\");\n await db.query('BEGIN');\n await db.query('SELECT\
+    \ pg_advisory_xact_lock(217,8000)');\n const exists=(await db.query(\"SELECT 1\
+    \ FROM pg_roles WHERE rolname='immich_reconciler'\")).rowCount;\n if(!exists)await\
+    \ db.query('CREATE ROLE immich_reconciler LOGIN');\n const statement=(await db.query(\"\
+    SELECT format('ALTER ROLE immich_reconciler PASSWORD %L',$1::text) command\",[process.env.ROLE_PASSWORD])).rows[0].command;\n\
     \ await db.query(statement);\n await db.query('GRANT CONNECT ON DATABASE photo_enrichment\
     \ TO immich_reconciler');\n await db.query('GRANT USAGE ON SCHEMA public,catalog\
     \ TO immich_reconciler');\n await db.query('GRANT SELECT ON catalog.gphotos_media,catalog.media_summaries,public.photo_context,public.extracted,public.faces,public.photo_groups,public.group_members\
     \ TO immich_reconciler');\n await db.query('CREATE SCHEMA IF NOT EXISTS immich_sync\
     \ AUTHORIZATION immich_reconciler');\n await db.query('SET LOCAL ROLE immich_reconciler');\n\
-    \ await db.query(await fs.readFile('/code/schema.sql','utf8'));\n await db.query('COMMIT');\n\
-    \ console.log('Scoped reconciliation role and schema ready; source tables are\
-    \ read-only.');\n} catch {await db.query('ROLLBACK');console.error('Bootstrap\
-    \ failed; details suppressed to protect credentials.');process.exitCode=1;}\n\
+    \ phase='schema';\n await db.query(await fs.readFile('/code/schema.sql','utf8'));\n\
+    \ await db.query('COMMIT');\n console.log('Scoped reconciliation role and schema\
+    \ ready; source tables are read-only.');\n} catch(e) {try{await db.query('ROLLBACK');}catch{}console.error(JSON.stringify({event:'bootstrap.failed',phase,code:e.code??'unknown'}));process.exitCode=1;}\n\
     finally{await db.end();}\n"
   core.mjs: "// Pure reconciliation rules. No biometric inference: existing confirmations\
     \ are provenance.\nimport crypto from 'node:crypto';\nimport path from 'node:path';\n\
@@ -111,7 +110,7 @@ data:
     \ from './core.mjs';\nconst require=createRequire('/usr/src/app/server/package.json');\n\
     const {Pool}=require('pg');\nconst sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';\nconst MODE=process.env.SYNC_MODE??'dry-run';\n\
-    const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\nlet counters={source:0,summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};\n\
+    const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\nlet counters={source:0,available_summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};\n\
     let gauges='',active=false;\nconst log=(event,fields={})=>console.log(JSON.stringify({time:new\
     \ Date().toISOString(),event,...fields}));\nasync function api(route,method='GET',body)\
     \ {\n  const key=(await fs.readFile('/credentials/api-key','utf8')).trim();\n\
@@ -139,7 +138,7 @@ data:
     \ URL('./source.sql',import.meta.url),'utf8');\n  await db.query('BEGIN ISOLATION\
     \ LEVEL REPEATABLE READ');\n  try {\n    // Source tables are SELECT-only for\
     \ this role. Job discovery commits with its checkpoint.\n    const result=await\
-    \ db.query(query);\n    const cycle=crypto.randomUUID();\n    counters.source=result.rows.length;counters.summaries=result.rows.filter(x=>x.summary).length;\n\
+    \ db.query(query);\n    const cycle=crypto.randomUUID();\n    counters.source=result.rows.length;counters.available_summaries=result.rows.filter(x=>x.summary).length;\n\
     \    for(let offset=0;offset<result.rows.length;offset+=250){\n      const jobs=[];\n\
     \      for(const source of result.rows.slice(offset,offset+250)){\n        if(!eligible(source))continue;\n\
     \        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);\n\
@@ -156,13 +155,13 @@ data:
     \ OR immich_sync.jobs.state IN ('missing','excluded') THEN excluded.state ELSE\
     \ immich_sync.jobs.state END,\n        reason=CASE WHEN immich_sync.jobs.asset_id\
     \ IS NOT NULL AND immich_sync.jobs.asset_id IS DISTINCT FROM excluded.asset_id\
-    \ THEN 'asset_identity_changed' ELSE excluded.reason END,\n        updated_at=CASE\
-    \ WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at\
-    \ END`,[JSON.stringify(jobs)]);\n    }\n    await db.query(\"UPDATE immich_sync.jobs\
-    \ SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded'\"\
-    ,[cycle]);\n    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.summaries,capturedAt:new\
+    \ THEN 'asset_identity_changed' WHEN immich_sync.jobs.state='conflict' THEN immich_sync.jobs.reason\
+    \ ELSE excluded.reason END,\n        updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash\
+    \ THEN now() ELSE immich_sync.jobs.updated_at END`,[JSON.stringify(jobs)]);\n\
+    \    }\n    await db.query(\"UPDATE immich_sync.jobs SET state='conflict',reason='source_removed'\
+    \ WHERE cycle_id<>$1 AND state<>'excluded'\",[cycle]);\n    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new\
     \ Date().toISOString()});\n    await db.query('COMMIT');counters.last_discovery=Date.now()/1000;\n\
-    \    log('sync.discovery',{source:counters.source,available_summaries:counters.summaries});\n\
+    \    log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});\n\
     \  } catch(e){await db.query('ROLLBACK');throw e;}\n}\nasync function checksum(file)\
     \ {\n  const hash=crypto.createHash('sha256');for await(const chunk of createReadStream(file))hash.update(chunk);return\
     \ hash.digest('hex');\n}\nasync function verifyFile(job) {\n  const file=await\
@@ -279,21 +278,20 @@ data:
   bootstrap.mjs: "// Executed only by the GitOps bootstrap Job in namespace database.\n\
     import {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
-    \ db=new Client();await db.connect();\ntry {\n await db.query(\"SET log_statement='none'\"\
-    );\n await db.query('BEGIN');\n await db.query('SELECT pg_advisory_xact_lock(217,8000)');\n\
-    \ const exists=(await db.query(\"SELECT 1 FROM pg_roles WHERE rolname='immich_reconciler'\"\
-    )).rowCount;\n if(!exists)await db.query('CREATE ROLE immich_reconciler LOGIN');\n\
-    \ const statement=(await db.query(\"SELECT format('ALTER ROLE immich_reconciler\
-    \ PASSWORD %L',$1::text) command\",[process.env.ROLE_PASSWORD])).rows[0].command;\n\
+    \ db=new Client();let phase=\"connect\";\ntry {\n await db.connect();\n await\
+    \ db.query(\"SET log_statement='none'\");\n await db.query('BEGIN');\n await db.query('SELECT\
+    \ pg_advisory_xact_lock(217,8000)');\n const exists=(await db.query(\"SELECT 1\
+    \ FROM pg_roles WHERE rolname='immich_reconciler'\")).rowCount;\n if(!exists)await\
+    \ db.query('CREATE ROLE immich_reconciler LOGIN');\n const statement=(await db.query(\"\
+    SELECT format('ALTER ROLE immich_reconciler PASSWORD %L',$1::text) command\",[process.env.ROLE_PASSWORD])).rows[0].command;\n\
     \ await db.query(statement);\n await db.query('GRANT CONNECT ON DATABASE photo_enrichment\
     \ TO immich_reconciler');\n await db.query('GRANT USAGE ON SCHEMA public,catalog\
     \ TO immich_reconciler');\n await db.query('GRANT SELECT ON catalog.gphotos_media,catalog.media_summaries,public.photo_context,public.extracted,public.faces,public.photo_groups,public.group_members\
     \ TO immich_reconciler');\n await db.query('CREATE SCHEMA IF NOT EXISTS immich_sync\
     \ AUTHORIZATION immich_reconciler');\n await db.query('SET LOCAL ROLE immich_reconciler');\n\
-    \ await db.query(await fs.readFile('/code/schema.sql','utf8'));\n await db.query('COMMIT');\n\
-    \ console.log('Scoped reconciliation role and schema ready; source tables are\
-    \ read-only.');\n} catch {await db.query('ROLLBACK');console.error('Bootstrap\
-    \ failed; details suppressed to protect credentials.');process.exitCode=1;}\n\
+    \ phase='schema';\n await db.query(await fs.readFile('/code/schema.sql','utf8'));\n\
+    \ await db.query('COMMIT');\n console.log('Scoped reconciliation role and schema\
+    \ ready; source tables are read-only.');\n} catch(e) {try{await db.query('ROLLBACK');}catch{}console.error(JSON.stringify({event:'bootstrap.failed',phase,code:e.code??'unknown'}));process.exitCode=1;}\n\
     finally{await db.end();}\n"
   core.mjs: "// Pure reconciliation rules. No biometric inference: existing confirmations\
     \ are provenance.\nimport crypto from 'node:crypto';\nimport path from 'node:path';\n\
@@ -383,7 +381,7 @@ data:
     \ from './core.mjs';\nconst require=createRequire('/usr/src/app/server/package.json');\n\
     const {Pool}=require('pg');\nconst sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';\nconst MODE=process.env.SYNC_MODE??'dry-run';\n\
-    const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\nlet counters={source:0,summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};\n\
+    const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\nlet counters={source:0,available_summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};\n\
     let gauges='',active=false;\nconst log=(event,fields={})=>console.log(JSON.stringify({time:new\
     \ Date().toISOString(),event,...fields}));\nasync function api(route,method='GET',body)\
     \ {\n  const key=(await fs.readFile('/credentials/api-key','utf8')).trim();\n\
@@ -411,7 +409,7 @@ data:
     \ URL('./source.sql',import.meta.url),'utf8');\n  await db.query('BEGIN ISOLATION\
     \ LEVEL REPEATABLE READ');\n  try {\n    // Source tables are SELECT-only for\
     \ this role. Job discovery commits with its checkpoint.\n    const result=await\
-    \ db.query(query);\n    const cycle=crypto.randomUUID();\n    counters.source=result.rows.length;counters.summaries=result.rows.filter(x=>x.summary).length;\n\
+    \ db.query(query);\n    const cycle=crypto.randomUUID();\n    counters.source=result.rows.length;counters.available_summaries=result.rows.filter(x=>x.summary).length;\n\
     \    for(let offset=0;offset<result.rows.length;offset+=250){\n      const jobs=[];\n\
     \      for(const source of result.rows.slice(offset,offset+250)){\n        if(!eligible(source))continue;\n\
     \        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);\n\
@@ -428,13 +426,13 @@ data:
     \ OR immich_sync.jobs.state IN ('missing','excluded') THEN excluded.state ELSE\
     \ immich_sync.jobs.state END,\n        reason=CASE WHEN immich_sync.jobs.asset_id\
     \ IS NOT NULL AND immich_sync.jobs.asset_id IS DISTINCT FROM excluded.asset_id\
-    \ THEN 'asset_identity_changed' ELSE excluded.reason END,\n        updated_at=CASE\
-    \ WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at\
-    \ END`,[JSON.stringify(jobs)]);\n    }\n    await db.query(\"UPDATE immich_sync.jobs\
-    \ SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded'\"\
-    ,[cycle]);\n    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.summaries,capturedAt:new\
+    \ THEN 'asset_identity_changed' WHEN immich_sync.jobs.state='conflict' THEN immich_sync.jobs.reason\
+    \ ELSE excluded.reason END,\n        updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash\
+    \ THEN now() ELSE immich_sync.jobs.updated_at END`,[JSON.stringify(jobs)]);\n\
+    \    }\n    await db.query(\"UPDATE immich_sync.jobs SET state='conflict',reason='source_removed'\
+    \ WHERE cycle_id<>$1 AND state<>'excluded'\",[cycle]);\n    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new\
     \ Date().toISOString()});\n    await db.query('COMMIT');counters.last_discovery=Date.now()/1000;\n\
-    \    log('sync.discovery',{source:counters.source,available_summaries:counters.summaries});\n\
+    \    log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});\n\
     \  } catch(e){await db.query('ROLLBACK');throw e;}\n}\nasync function checksum(file)\
     \ {\n  const hash=crypto.createHash('sha256');for await(const chunk of createReadStream(file))hash.update(chunk);return\
     \ hash.digest('hex');\n}\nasync function verifyFile(job) {\n  const file=await\
@@ -545,13 +543,13 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: immich-sync-schema-v1
+  name: immich-sync-schema-v2
   namespace: database
 spec:
   backoffLimit: 3
   template:
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       automountServiceAccountToken: false
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
@@ -621,7 +619,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 56937f416c04d2bde3436ce9a89d8035289a8f00787e9ad4a1381d5ea855157e
+        checksum/code: 67fec17499de46782e1deab4be166caaf7ce796dad7e9cf4260c08a12df56d6f
     spec:
       restartPolicy: Always
       automountServiceAccountToken: false

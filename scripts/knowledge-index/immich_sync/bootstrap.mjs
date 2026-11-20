@@ -2,8 +2,9 @@
 import {createRequire} from 'node:module';
 import fs from 'node:fs/promises';
 const {Client}=createRequire('/usr/src/app/server/package.json')('pg');
-const db=new Client();await db.connect();
+const db=new Client();let phase="connect";
 try {
+ await db.connect();
  await db.query("SET log_statement='none'");
  await db.query('BEGIN');
  await db.query('SELECT pg_advisory_xact_lock(217,8000)');
@@ -16,8 +17,9 @@ try {
  await db.query('GRANT SELECT ON catalog.gphotos_media,catalog.media_summaries,public.photo_context,public.extracted,public.faces,public.photo_groups,public.group_members TO immich_reconciler');
  await db.query('CREATE SCHEMA IF NOT EXISTS immich_sync AUTHORIZATION immich_reconciler');
  await db.query('SET LOCAL ROLE immich_reconciler');
+ phase='schema';
  await db.query(await fs.readFile('/code/schema.sql','utf8'));
  await db.query('COMMIT');
  console.log('Scoped reconciliation role and schema ready; source tables are read-only.');
-} catch {await db.query('ROLLBACK');console.error('Bootstrap failed; details suppressed to protect credentials.');process.exitCode=1;}
+} catch(e) {try{await db.query('ROLLBACK');}catch{}console.error(JSON.stringify({event:'bootstrap.failed',phase,code:e.code??'unknown'}));process.exitCode=1;}
 finally{await db.end();}
