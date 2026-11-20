@@ -90,3 +90,21 @@ with `force:false`, through the bundled BullMQ client. It never clears jobs or
 writes Immich tables. Its fixed job ID and retained completion record make a
 repeat reconciliation idempotent. It runs behind existing FIFO work and discovers
 only missing OCR results. This avoids creating new administrator credentials.
+
+Final verification at 23:40 UTC: the missing-only recovery scan completed and
+processed 302 additional assets. A read-only database audit found 75,727 of
+75,728 eligible assets with `ocrAt` set. The remaining asset
+`a8326034-31bb-48c7-8249-721a96830738` has no `asset_file` preview; the native OCR
+handler returns Failed before calling ML in that case. It is not a GPU failure.
+The cumulative failed-attempt counter was 413 (including maintenance failures
+and the missing-preview retry), so do not report the rollout as error-free.
+Use `audit-immich-ocr.py` to distinguish missing results from an empty queue.
+
+The measured peak five-minute success rate was approximately 367 jobs/minute
+after warm-up; this is not a controlled CPU/GPU speedup benchmark. Both OCR models
+selected `nv_tensorrt_rtx` again during recovery. The ML worker's 22:54 shutdown
+was its documented inactivity unload, not a container crash. Final ML container
+restart count was zero, GPU memory usage about 3 GiB, and all three service
+deployments were available. Frigate retained its two active source streams and
+Ollama returned `OK` from a real chat request. All 46 dashboard queries passed
+live validation; the OCR/GPU panels were also checked in Chrome.

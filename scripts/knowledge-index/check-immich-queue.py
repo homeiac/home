@@ -14,7 +14,11 @@ queries = [
     {'name':'current_states', 'expr':selector},
     {'name':'states_five_minutes_ago', 'expr':selector+' offset 5m'},
     {'name':'telemetry_age_seconds', 'expr':'time()-immich_observer_last_success_timestamp_seconds{source="queues"}'},
-    {'name':'ocr_completed_last_five_minutes', 'expr':'sum by(__name__)(increase({__name__=~"immich_jobs_.*ocr.*success_total",namespace="immich-pilot"}[5m]))'},
+    {'name':'ocr_completed_last_five_minutes', 'expr':'sum(increase(immich_jobs_ocr_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'},
+    {'name':'ocr_success_counter', 'expr':'sum(immich_jobs_ocr_success_total{namespace="immich-pilot",endpoint="metrics-ms"})'},
+    {'name':'ocr_failed_counter', 'expr':'sum(immich_jobs_ocr_failed_total{namespace="immich-pilot",endpoint="metrics-ms"})'},
+    {'name':'ocr_failed_last_five_minutes', 'expr':'sum(increase(immich_jobs_ocr_failed_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'},
+    {'name':'ocr_peak_success_per_minute_two_hours', 'expr':'max_over_time((sum(rate(immich_jobs_ocr_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))*60)[2h:1m])'},
 ]
 code = """let input='';for await(const c of process.stdin)input+=c;
 for(const q of JSON.parse(input)){
