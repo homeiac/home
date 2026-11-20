@@ -74,8 +74,10 @@ spec:
                       name: immich-database
                       key: password
               resources:
-                requests: {cpu: 500m, memory: 1Gi}
-                limits: {cpu: '2', memory: 4Gi}
+                # The initial 89k-asset scan saturates 2 CPUs and approaches 4Gi.
+                # Give image workers headroom; the scheduler still shares the node.
+                requests: {cpu: '1', memory: 2Gi}
+                limits: {cpu: '4', memory: 6Gi}
     machine-learning:
       controllers:
         main:
