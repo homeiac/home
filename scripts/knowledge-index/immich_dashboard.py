@@ -11,7 +11,8 @@ QUEUES = ['library', 'sidecar', 'metadata', 'thumbnail_generation', 'face_detect
 OCR_RATE = 'sum(rate(immich_jobs_ocr_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
 OCR_BACKLOG = 'sum(immich_queue_jobs{queue="ocr",state=~"waiting|delayed|prioritized|paused"})'
 GPU = '{Hostname="k3s-vm-pumped-piglet-gpu"}'
-OVERVIEW_HEIGHT = 100
+OCR_FAILURE_RATE = 'sum(rate(immich_jobs_ocr_failed_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
+OVERVIEW_HEIGHT = 104
 
 
 def add_panels(panel, panels):
@@ -76,6 +77,8 @@ def add_panels(panel, panels):
     p = add('Shared RTX 3070 memory', 'max(DCGM_FI_DEV_FB_USED'+GPU+') * 1024 * 1024', 8, 89, 8, 7, unit='bytes', legend='Used')
     p['targets'].append({'refId':'B','expr':'max(DCGM_FI_DEV_FB_FREE'+GPU+') * 1024 * 1024','legendFormat':'Free'})
     add('GPU service replicas ready', 'kube_deployment_status_replicas_available{namespace=~"immich-pilot|frigate|ollama",deployment=~"immich-machine-learning|frigate|ollama-gpu"}', 16, 89, 8, 7, legend='{{deployment}}', description='Availability only. CUDA provider logs and real OCR/camera/generation checks verify processing.')
+    add('OCR failed attempts / minute', OCR_FAILURE_RATE+' * 60', 0, 96, 12, 6, legend='Failed attempts/min', description='Actual worker errors. Immich may discard failed jobs, so a zero retained failed queue does not mean zero errors. Requeue missing OCR after recovery.')
+    add('Immich ML restarts', 'sum by(pod)(kube_pod_container_status_restarts_total{namespace="immich-pilot",container="main",pod=~"immich-machine-learning-.*"})', 12, 96, 12, 6, legend='{{pod}}', description='Correlate restarts with failed attempts, memory and throughput.')
     return OVERVIEW_HEIGHT
 
 
@@ -86,7 +89,8 @@ def add_graph(graph, node):
         graph['targets'][0]['expr'] += ' or '+node(expr, 'immich_'+queue, 'Immich '+queue.replace('_', ' ')+' (queued jobs)')
     graph['targets'][0]['expr'] += ' or '+node('('+RATE+') * 60', 'immich_gallery', 'Immich thumbnail completions (jobs/min)')
     graph['targets'][0]['expr'] += ' or '+node(OCR_RATE+' * 60', 'immich_ocr_completed', 'Immich OCR completions (jobs/min)')
-    for source, target in [('ocr','ocr_completed'),('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion')]:
+    graph['targets'][0]['expr'] += ' or '+node(OCR_FAILURE_RATE+' * 60', 'immich_ocr_errors', 'Immich OCR failed attempts (/min)')
+    for source, target in [('ocr','ocr_errors'),('ocr','ocr_completed'),('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion')]:
         expr='vector(1)'
         for label, value in [('id', 'immich_'+source+'_'+target),('source','immich_'+source),('target','immich_'+target)]:
             expr = f'label_replace({expr}, "{label}", "{value}", "", "")'

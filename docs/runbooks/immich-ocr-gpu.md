@@ -71,7 +71,10 @@ Immich v3.4.2-cuda automatically selects `nv_tensorrt_rtx` for both PP-OCRv5_mob
 models. It compiles/cache-specializes different image and text-box dimensions;
 initial throughput includes these warm-up stalls. The existing cache PVC retains
 those artifacts. Do not claim steady-state speed from the initial warm-up rate.
-The OCR failed queue stayed at zero during the rollout.
+The retained OCR failed queue stayed at zero, but the native failed-attempt counter
+recorded worker-outage errors. A zero retained queue must not be treated as no
+errors. The dashboard now shows the actual failed-attempt rate, and recovery
+requires a missing-only OCR scan after the worker is healthy.
 
 An empty thumbnail queue can have no completion counter immediately after a
 server restart. The dashboard shows zero throughput only when telemetry confirms
