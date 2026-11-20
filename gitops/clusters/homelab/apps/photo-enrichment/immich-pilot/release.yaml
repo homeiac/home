@@ -94,6 +94,8 @@ spec:
                 MACHINE_LEARNING_REQUEST_THREADS: '2'
                 MACHINE_LEARNING_MODEL_INTER_OP_THREADS: '1'
                 MACHINE_LEARNING_MODEL_INTRA_OP_THREADS: '2'
+                # Reuse fixed-shape TensorRT engines and bound shared RTX 3070 memory.
+                MACHINE_LEARNING_MAX_BATCH_SIZE__OCR: '1'
               resources:
                 requests: {cpu: 500m, memory: 1Gi, nvidia.com/gpu: '1'}
                 limits: {cpu: '2', memory: 4Gi, nvidia.com/gpu: '1'}

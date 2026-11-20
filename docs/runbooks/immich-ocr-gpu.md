@@ -76,3 +76,8 @@ The OCR failed queue stayed at zero during the rollout.
 An empty thumbnail queue can have no completion counter immediately after a
 server restart. The dashboard shows zero throughput only when telemetry confirms
 the backlog is empty; otherwise an absent counter remains unknown.
+
+OCR batch size is capped at 1 via `MACHINE_LEARNING_MAX_BATCH_SIZE__OCR`. The
+initial default of 6 spent minutes compiling batch/width variants and completed
+only a handful of jobs. A fixed batch reuses already warmed graphs and bounds
+memory on the shared 8 GB GPU; model weights and recognition thresholds are unchanged.
