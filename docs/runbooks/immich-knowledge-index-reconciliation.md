@@ -51,7 +51,8 @@ python3 scripts/knowledge-index/check-immich-observability.py
 
 # Regenerate desired state, review, commit with #217, push, and reconcile Flux.
 python3 scripts/knowledge-index/gen-immich-sync.py --mode dry-run
-python3 scripts/knowledge-index/gen-immich-sync.py --mode apply
+python3 scripts/knowledge-index/gen-immich-sync.py --mode apply --max-preserved 1 # bounded canary
+python3 scripts/knowledge-index/gen-immich-sync.py --mode apply # continuous batches
 python3 scripts/knowledge-index/gen-photo-app-dashboard.py > gitops/clusters/homelab/apps/photo-enrichment/dashboard.yaml
 python3 scripts/knowledge-index/gen-dashboard.py > gitops/clusters/homelab/apps/photo-enrichment/knowledge-index-dashboard.yaml
 ```
@@ -80,4 +81,8 @@ in the PostgreSQL snapshot and 89,997 Immich assets. Of the source media, 86,209
 matched by path/size, 10 imported-scope videos were missing, one size differed, and
 32,767 were outside the year-folder import scope. 3,787 target assets had no source
 match (including managed pilot assets). Of matched assets, 8,617 had a summary.
+The corrected API dry run queued 13,861 enriched assets and excluded 9,111
+enriched records outside that scope. The one-record worker canary passed API
+readback, original content hashing and unchanged native description/GPS/date checks.
+The live worker now runs batches of 25, resuming its durable checkpoint on restart.
 These are audit-time counts; source catalog snapshots can lag Parquet generation.

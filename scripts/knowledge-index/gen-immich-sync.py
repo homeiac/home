@@ -44,6 +44,7 @@ def generate(mode='dry-run', max_preserved=0):
     sm=obj('monitoring.coreos.com/v1','ServiceMonitor','immich-sync','immich-pilot',{'selector':{'matchLabels':labels},'endpoints':[{'port':'metrics','interval':'30s'}]});sm['metadata']['labels']={'release':'kube-prometheus-stack'}
     rule=obj('monitoring.coreos.com/v1','PrometheusRule','immich-sync','immich-pilot',{'groups':[{'name':'immich.reconciliation','rules':[
       {'alert':'ImmichReconciliationUnavailable','expr':'immich_sync_api_ready == 0 or absent(immich_sync_api_ready)','for':'10m','labels':{'severity':'warning'},'annotations':{'summary':'Knowledge Index to Immich reconciliation is unavailable'}},
+      {'alert':'ImmichReconciliationStalled','expr':'(sum(immich_sync_assets{state="pending"}) > 0) and on() (immich_sync_mode{mode="apply"} == 1) and on() (time()-immich_sync_last_success > 900)','for':'5m','labels':{'severity':'warning'},'annotations':{'summary':'Immich preservation queue is not making progress'}},
       {'alert':'ImmichReconciliationFailures','expr':'sum(immich_sync_assets{state="error"}) > 0','for':'10m','labels':{'severity':'warning'},'annotations':{'summary':'Immich enrichment transfers require diagnosis','description':'Inspect structured immich-sync pod logs. Failed transfers retry with bounded backoff; originals are read-only.'}}
     ]}]});rule['metadata']['labels']={'release':'kube-prometheus-stack'}
     OUT.mkdir(parents=True,exist_ok=True)

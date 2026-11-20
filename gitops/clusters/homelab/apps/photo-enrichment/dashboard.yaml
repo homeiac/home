@@ -237,7 +237,8 @@ data:
     \ show logical processing dependencies, not measured transfer rates or elapsed\
     \ time. Immich uses its own ML service; Frigate is not its face engine. Knowledge\
     \ Index enrichment flows through a durable reconciliation queue into verified\
-    \ Immich custom metadata. These are counts, not timing percentages. Native descriptions\
+    \ Immich custom metadata. These are counts, not timing percentages. The enrichment\
+    \ queue also includes face and group context without a summary. Native descriptions\
     \ and face assignments remain gated; preserved provenance is not native UI promotion.\
     \ See Photo App for CPU throttling, queue states, throughput and VPA recommendations.\"\
     ,\n      \"targets\": [\n        {\n          \"refId\": \"nodes\",\n        \

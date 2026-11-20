@@ -767,7 +767,7 @@ spec:
         - name: SYNC_BATCH_SIZE
           value: '25'
         - name: SYNC_MAX_PRESERVED
-          value: '1'
+          value: '0'
         resources:
           requests:
             cpu: 100m
@@ -849,6 +849,14 @@ spec:
         severity: warning
       annotations:
         summary: Knowledge Index to Immich reconciliation is unavailable
+    - alert: ImmichReconciliationStalled
+      expr: (sum(immich_sync_assets{state="pending"}) > 0) and on() (immich_sync_mode{mode="apply"}
+        == 1) and on() (time()-immich_sync_last_success > 900)
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Immich preservation queue is not making progress
     - alert: ImmichReconciliationFailures
       expr: sum(immich_sync_assets{state="error"}) > 0
       for: 10m
