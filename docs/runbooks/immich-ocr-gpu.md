@@ -40,7 +40,7 @@ prior kernel from GRUB, not another blind driver installation.
 Run `scripts/knowledge-index/check-immich-acceleration.sh` to inspect ONNX Runtime
 providers, OCR model provider logs, VRAM, utilization, pressure and allocation.
 CUDA being available alone does not prove OCR is using it: verify the OCR model
-session selected CUDAExecutionProvider and that jobs complete without CUDA/OOM
+session selected CUDAExecutionProvider or nv_tensorrt_rtx and that jobs complete without CUDA/OOM
 errors. Keep a single ML worker and existing concurrency initially.
 
 Run `scripts/knowledge-index/verify-shared-gpu-services.py --generate` before and
@@ -58,3 +58,21 @@ jobs and measured completions/minute; edges represent dependencies, not timing.
 `check-immich-observability.py` validates live dashboard queries. Dashboard sources
 are `immich_dashboard.py`, `gen-photo-app-dashboard.py` and `gen-dashboard.py`;
 regenerate both ConfigMaps after editing. Never hand-edit Grafana's stored copy.
+
+## Validated rollout (2026-11-20)
+
+Driver 580.178.04 loaded on kernel 6.8.0-100 after a guarded guest-agent reboot.
+Both the current and next-boot DKMS modules were verified before the reboot.
+Frigate's two previously active streams recovered; Ollama `gemma4:e2b` returned
+`OK` through `/api/chat` both before and after enabling Immich. Its cold model
+load took several minutes, then photo summaries resumed.
+
+Immich v3.4.2-cuda automatically selects `nv_tensorrt_rtx` for both PP-OCRv5_mobile
+models. It compiles/cache-specializes different image and text-box dimensions;
+initial throughput includes these warm-up stalls. The existing cache PVC retains
+those artifacts. Do not claim steady-state speed from the initial warm-up rate.
+The OCR failed queue stayed at zero during the rollout.
+
+An empty thumbnail queue can have no completion counter immediately after a
+server restart. The dashboard shows zero throughput only when telemetry confirms
+the backlog is empty; otherwise an absent counter remains unknown.

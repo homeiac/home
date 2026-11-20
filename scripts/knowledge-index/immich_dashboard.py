@@ -1,7 +1,7 @@
 """Shared verified Immich PromQL for dashboards and alerts (#217)."""
 QUEUE = 'immich_queue_jobs{queue="thumbnail_generation",state=~"waiting|delayed|prioritized|paused"}'
 BACKLOG = f'sum({QUEUE})'
-RATE = 'sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
+RATE = f'((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{{namespace="immich-pilot",endpoint="metrics-ms"}}[5m]))) or ({BACKLOG} == 0))'
 THROTTLE = '100 * sum by(pod)(rate(container_cpu_cfs_throttled_periods_total{namespace="immich-pilot",container!="",container!="POD"}[5m])) / sum by(pod)(rate(container_cpu_cfs_periods_total{namespace="immich-pilot",container!="",container!="POD"}[5m]))'
 ETA = f'({BACKLOG} / ({RATE} > 0)) or ({BACKLOG} == 0)'
 CPU = 'sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilot",container!="",container!="POD"}[5m]))'
@@ -23,7 +23,7 @@ def add_panels(panel, panels):
             panels[-1]['targets'][0].update(instant=True, range=False)
         return panels[-1]
     add('Immich thumbnails waiting', BACKLOG, 0, 0, 6, 4, 'stat', description='Waiting + delayed + prioritized + paused BullMQ jobs. Missing telemetry is not zero. Active jobs are shown separately.')
-    add('Immich thumbnails completed / minute', RATE+' * 60', 6, 0, 6, 4, 'stat', description='Successful asset thumbnail jobs over the last five minutes; not individual image variants.')
+    add('Immich thumbnails completed / minute', '('+RATE+') * 60', 6, 0, 6, 4, 'stat', description='Successful asset thumbnail jobs over the last five minutes; not individual image variants.')
     add('Immich thumbnail drain estimate', ETA, 12, 0, 6, 4, 'stat', 's', description='Backlog divided by five-minute completion rate. Assumes no new arrivals; no estimate while stalled. Zero means empty queue.')
     add('Immich telemetry source health', 'immich_observer_source_up', 18, 0, 6, 4, 'stat', legend='{{source}}', description='1 = latest collection succeeded; 0 = failed. VPA starts reporting after policies are installed.')
     add('Immich queue backlog over time', 'sum by(queue)(immich_queue_jobs{state=~"waiting|delayed|prioritized|paused"})', 0, 4, 12, 7, legend='{{queue}}')
@@ -33,7 +33,7 @@ def add_panels(panel, panels):
     add('Immich CPU throttled periods', THROTTLE, 12, 11, 12, 7, unit='percent', legend='{{pod}}', description='Share of CPU scheduling periods throttled by a hard limit; not percent CPU utilization. Correlate with backlog and throughput.')
     p = add('Immich memory usage and hard limits', MEMORY, 0, 18, 12, 7, unit='bytes', legend='{{pod}} usage')
     p['targets'].append({'refId':'B','expr':'sum by(pod)(kube_pod_container_resource_limits{namespace="immich-pilot",resource="memory"})','legendFormat':'{{pod}} limit'})
-    add('Immich successful thumbnails / minute over time', RATE+' * 60', 12, 18, 12, 7, description='Zero throughput with positive backlog means waiting or stalled, even if no job has failed.')
+    add('Immich successful thumbnails / minute over time', '('+RATE+') * 60', 12, 18, 12, 7, description='Zero throughput with positive backlog means waiting or stalled, even if no job has failed.')
     for x, resource, unit in [(0, 'cpu', 'cores'), (12, 'memory', 'bytes')]:
         add('VPA recommended '+resource+' requests', f'immich_vpa_recommendation{{resource="{resource}"}}', x, 25, 12, 7, unit=unit, legend='{{workload}} · {{bound}}', description='Recommendation only (Off). These are requests, not hard limits; no pod is resized or restarted. Early recommendations need a representative workload baseline.')
     add('VPA update mode', 'immich_vpa_policy_info', 0, 32, 8, 4, 'stat', legend='{{workload}} · {{mode}}')
@@ -68,7 +68,7 @@ def add_panels(panel, panels):
     add('Reconciliation measured stage duration', 'immich_sync_stage_seconds', 0, 71, 24, 6, unit='s', legend='{{stage}}', description='Last completed inventory scan, source query, or individual asset preservation duration. Counts in the value stream map are separate from these measured timings.')
     add('OCR jobs waiting', OCR_BACKLOG, 0, 78, 6, 4, 'stat')
     add('OCR completed / minute', OCR_RATE+' * 60', 6, 78, 6, 4, 'stat', description='Successful OCR jobs, including photos with no text. Five-minute rate; compare before and after CUDA warm-up.')
-    add('OCR drain estimate', f'({OCR_BACKLOG} / ({OCR_RATE} > 0)) or ({OCR_BACKLOG} == 0)', 12, 78, 6, 4, 'stat', 's', description='Assumes no new arrivals. Blank while stalled; zero only when queue is empty.')
+    add('OCR drain estimate', f'({OCR_BACKLOG} / ({OCR_RATE} > 0)) or ({OCR_BACKLOG} == 0)', 12, 78, 6, 4, 'stat', 's', description='Assumes no new arrivals. Initial TensorRT engine compilation can inflate this estimate. Blank while stalled; zero only when queue is empty.')
     add('Shared GPU driver', 'max by(DCGM_FI_DRIVER_VERSION)(DCGM_FI_DEV_GPU_UTIL'+GPU+' * 0 + 1)', 18, 78, 6, 4, 'stat', legend='{{DCGM_FI_DRIVER_VERSION}}', description='Loaded driver reported by DCGM; value 1 means present.')['options']['textMode'] = 'name'
     add('OCR throughput over time', OCR_RATE+' * 60', 0, 82, 12, 7, legend='OCR jobs/min', description='Jobs per minute. The driver and CUDA rollout briefly interrupt processing; use sustained rates after model warm-up.')
     add('OCR queue states over time', 'sum by(state)(immich_queue_jobs{queue="ocr"})', 12, 82, 12, 7, legend='{{state}}')
@@ -84,7 +84,7 @@ def add_graph(graph, node):
     for queue in QUEUES:
         expr = f'sum(immich_queue_jobs{{queue="{queue}",state=~"waiting|delayed|prioritized|paused"}})'
         graph['targets'][0]['expr'] += ' or '+node(expr, 'immich_'+queue, 'Immich '+queue.replace('_', ' ')+' (queued jobs)')
-    graph['targets'][0]['expr'] += ' or '+node(RATE+' * 60', 'immich_gallery', 'Immich thumbnail completions (jobs/min)')
+    graph['targets'][0]['expr'] += ' or '+node('('+RATE+') * 60', 'immich_gallery', 'Immich thumbnail completions (jobs/min)')
     graph['targets'][0]['expr'] += ' or '+node(OCR_RATE+' * 60', 'immich_ocr_completed', 'Immich OCR completions (jobs/min)')
     for source, target in [('ocr','ocr_completed'),('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion')]:
         expr='vector(1)'

@@ -32,53 +32,55 @@ data:
     type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\"\
     : {\n        \"x\": 6,\n        \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n\
     \      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n    \
-    \      \"expr\": \"sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60\",\n          \"legendFormat\"\
+    \      \"expr\": \"(((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m]))) or (sum(immich_queue_jobs{queue=\\\
+    \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
+    \ == 0))) * 60\",\n          \"legendFormat\": \"\",\n          \"instant\": true,\n\
+    \          \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n \
+    \       \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
+    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
+    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
+    \n          ]\n        }\n      },\n      \"description\": \"Successful asset\
+    \ thumbnail jobs over the last five minutes; not individual image variants.\"\n\
+    \    },\n    {\n      \"id\": 3,\n      \"title\": \"Immich thumbnail drain estimate\"\
+    ,\n      \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
+    x\": 12,\n        \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n \
+    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"(sum(immich_queue_jobs{queue=\\\"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\
+    \"}) / (((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m]))) or (sum(immich_queue_jobs{queue=\\\
+    \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
+    \ == 0)) > 0)) or (sum(immich_queue_jobs{queue=\\\"thumbnail_generation\\\",state=~\\\
+    \"waiting|delayed|prioritized|paused\\\"}) == 0)\",\n          \"legendFormat\"\
     : \"\",\n          \"instant\": true,\n          \"range\": false\n        }\n\
     \      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\"\
-    : \"short\"\n        },\n        \"overrides\": []\n      },\n      \"options\"\
-    : {\n        \"legend\": {\n          \"displayMode\": \"list\",\n          \"\
-    placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"\
-    calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n      },\n  \
-    \    \"description\": \"Successful asset thumbnail jobs over the last five minutes;\
-    \ not individual image variants.\"\n    },\n    {\n      \"id\": 3,\n      \"\
-    title\": \"Immich thumbnail drain estimate\",\n      \"type\": \"stat\",\n   \
-    \   \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"\
-    prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\"\
-    : 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n  \
-    \      {\n          \"refId\": \"A\",\n          \"expr\": \"(sum(immich_queue_jobs{queue=\\\
-    \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
-    \ / (sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) > 0)) or (sum(immich_queue_jobs{queue=\\\
-    \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
-    \ == 0)\",\n          \"legendFormat\": \"\",\n          \"instant\": true,\n\
+    : \"s\"\n        },\n        \"overrides\": []\n      },\n      \"options\": {\n\
+    \        \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\"\
+    : \"Backlog divided by five-minute completion rate. Assumes no new arrivals; no\
+    \ estimate while stalled. Zero means empty queue.\"\n    },\n    {\n      \"id\"\
+    : 4,\n      \"title\": \"Immich telemetry source health\",\n      \"type\": \"\
+    stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"\
+    uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 18,\n  \
+    \      \"y\": 0,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"immich_observer_source_up\"\
+    ,\n          \"legendFormat\": \"{{source}}\",\n          \"instant\": true,\n\
     \          \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n \
-    \       \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"overrides\"\
-    : []\n      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
-    : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
-    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      },\n      \"description\": \"Backlog divided by five-minute completion\
-    \ rate. Assumes no new arrivals; no estimate while stalled. Zero means empty queue.\"\
-    \n    },\n    {\n      \"id\": 4,\n      \"title\": \"Immich telemetry source\
-    \ health\",\n      \"type\": \"stat\",\n      \"datasource\": {\n        \"type\"\
-    : \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\"\
-    : {\n        \"x\": 18,\n        \"y\": 0,\n        \"w\": 6,\n        \"h\":\
-    \ 4\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n\
-    \          \"expr\": \"immich_observer_source_up\",\n          \"legendFormat\"\
-    : \"{{source}}\",\n          \"instant\": true,\n          \"range\": false\n\
-    \        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n    \
-    \      \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n\
-    \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
-    ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
-    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      },\n      \"description\": \"1 = latest collection succeeded; 0 =\
-    \ failed. VPA starts reporting after policies are installed.\"\n    },\n    {\n\
-    \      \"id\": 5,\n      \"title\": \"Immich queue backlog over time\",\n    \
-    \  \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
-    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
-    x\": 0,\n        \"y\": 4,\n        \"w\": 12,\n        \"h\": 7\n      },\n \
-    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
-    : \"sum by(queue)(immich_queue_jobs{state=~\\\"waiting|delayed|prioritized|paused\\\
+    \       \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
+    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
+    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
+    \n          ]\n        }\n      },\n      \"description\": \"1 = latest collection\
+    \ succeeded; 0 = failed. VPA starts reporting after policies are installed.\"\n\
+    \    },\n    {\n      \"id\": 5,\n      \"title\": \"Immich queue backlog over\
+    \ time\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"\
+    type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\"\
+    : {\n        \"x\": 0,\n        \"y\": 4,\n        \"w\": 12,\n        \"h\":\
+    \ 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n\
+    \          \"expr\": \"sum by(queue)(immich_queue_jobs{state=~\\\"waiting|delayed|prioritized|paused\\\
     \"})\",\n          \"legendFormat\": \"{{queue}}\"\n        }\n      ],\n    \
     \  \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\n\
     \        },\n        \"overrides\": []\n      },\n      \"options\": {\n     \
@@ -151,45 +153,46 @@ data:
     ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
     x\": 12,\n        \"y\": 18,\n        \"w\": 12,\n        \"h\": 7\n      },\n\
     \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
-    : \"sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\"\
-    immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60\",\n          \"legendFormat\"\
-    : \"\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n\
-    \          \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n\
+    : \"(((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m]))) or (sum(immich_queue_jobs{queue=\\\
+    \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
+    \ == 0))) * 60\",\n          \"legendFormat\": \"\"\n        }\n      ],\n   \
+    \   \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\
+    \n        },\n        \"overrides\": []\n      },\n      \"options\": {\n    \
+    \    \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\"\
+    : \"Zero throughput with positive backlog means waiting or stalled, even if no\
+    \ job has failed.\"\n    },\n    {\n      \"id\": 11,\n      \"title\": \"VPA\
+    \ recommended cpu requests\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
+    : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
+    \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 25,\n        \"\
+    w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n      \
+    \    \"refId\": \"A\",\n          \"expr\": \"immich_vpa_recommendation{resource=\\\
+    \"cpu\\\"}\",\n          \"legendFormat\": \"{{workload}} \\u00b7 {{bound}}\"\n\
+    \        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n    \
+    \      \"unit\": \"cores\"\n        },\n        \"overrides\": []\n      },\n\
     \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
     ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      },\n      \"description\": \"Zero throughput with positive backlog\
-    \ means waiting or stalled, even if no job has failed.\"\n    },\n    {\n    \
-    \  \"id\": 11,\n      \"title\": \"VPA recommended cpu requests\",\n      \"type\"\
-    : \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
-    \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
-    : 0,\n        \"y\": 25,\n        \"w\": 12,\n        \"h\": 7\n      },\n   \
-    \   \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
-    : \"immich_vpa_recommendation{resource=\\\"cpu\\\"}\",\n          \"legendFormat\"\
-    : \"{{workload}} \\u00b7 {{bound}}\"\n        }\n      ],\n      \"fieldConfig\"\
-    : {\n        \"defaults\": {\n          \"unit\": \"cores\"\n        },\n    \
-    \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
-    \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
-    \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
-    \ \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\": \"\
-    Recommendation only (Off). These are requests, not hard limits; no pod is resized\
-    \ or restarted. Early recommendations need a representative workload baseline.\"\
-    \n    },\n    {\n      \"id\": 12,\n      \"title\": \"VPA recommended memory\
-    \ requests\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n    \
-    \    \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n  \
-    \    \"gridPos\": {\n        \"x\": 12,\n        \"y\": 25,\n        \"w\": 12,\n\
-    \        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\"\
-    : \"A\",\n          \"expr\": \"immich_vpa_recommendation{resource=\\\"memory\\\
-    \"}\",\n          \"legendFormat\": \"{{workload}} \\u00b7 {{bound}}\"\n     \
-    \   }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n         \
-    \ \"unit\": \"bytes\"\n        },\n        \"overrides\": []\n      },\n     \
-    \ \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\",\n\
-    \          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n\
-    \          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n\
-    \      },\n      \"description\": \"Recommendation only (Off). These are requests,\
-    \ not hard limits; no pod is resized or restarted. Early recommendations need\
-    \ a representative workload baseline.\"\n    },\n    {\n      \"id\": 13,\n  \
-    \    \"title\": \"VPA update mode\",\n      \"type\": \"stat\",\n      \"datasource\"\
+    \  }\n      },\n      \"description\": \"Recommendation only (Off). These are\
+    \ requests, not hard limits; no pod is resized or restarted. Early recommendations\
+    \ need a representative workload baseline.\"\n    },\n    {\n      \"id\": 12,\n\
+    \      \"title\": \"VPA recommended memory requests\",\n      \"type\": \"timeseries\"\
+    ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
+    : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n       \
+    \ \"y\": 25,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"immich_vpa_recommendation{resource=\\\
+    \"memory\\\"}\",\n          \"legendFormat\": \"{{workload}} \\u00b7 {{bound}}\"\
+    \n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n   \
+    \       \"unit\": \"bytes\"\n        },\n        \"overrides\": []\n      },\n\
+    \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
+    ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      },\n      \"description\": \"Recommendation only (Off). These are\
+    \ requests, not hard limits; no pod is resized or restarted. Early recommendations\
+    \ need a representative workload baseline.\"\n    },\n    {\n      \"id\": 13,\n\
+    \      \"title\": \"VPA update mode\",\n      \"type\": \"stat\",\n      \"datasource\"\
     : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
     \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 32,\n        \"\
     w\": 8,\n        \"h\": 4\n      },\n      \"targets\": [\n        {\n       \
@@ -273,10 +276,12 @@ data:
     , \\\"Immich video conversion (queued jobs)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\\\
     \"duplicate_detection\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})),\
     \ \\\"id\\\", \\\"immich_duplicate_detection\\\", \\\"\\\", \\\"\\\"), \\\"title\\\
-    \", \\\"Immich duplicate detection (queued jobs)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60), \\\"id\\\", \\\"\
-    immich_gallery\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich thumbnail completions\
-    \ (jobs/min)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(rate(immich_jobs_ocr_success_total{namespace=\\\
+    \", \\\"Immich duplicate detection (queued jobs)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(((((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m]))) or (sum(immich_queue_jobs{queue=\\\
+    \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
+    \ == 0))) * 60), \\\"id\\\", \\\"immich_gallery\\\", \\\"\\\", \\\"\\\"), \\\"\
+    title\\\", \\\"Immich thumbnail completions (jobs/min)\\\", \\\"\\\", \\\"\\\"\
+    ) or label_replace(label_replace((sum(rate(immich_jobs_ocr_success_total{namespace=\\\
     \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60), \\\"id\\\", \\\"\
     immich_ocr_completed\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich OCR completions\
     \ (jobs/min)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((immich_sync_available_summaries),\
@@ -574,13 +579,14 @@ data:
     \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
     ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      },\n      \"description\": \"Assumes no new arrivals. Blank while\
-    \ stalled; zero only when queue is empty.\"\n    },\n    {\n      \"id\": 33,\n\
-    \      \"title\": \"Shared GPU driver\",\n      \"type\": \"stat\",\n      \"\
-    datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\
-    \n      },\n      \"gridPos\": {\n        \"x\": 18,\n        \"y\": 78,\n   \
-    \     \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n        {\n\
-    \          \"refId\": \"A\",\n          \"expr\": \"max by(DCGM_FI_DRIVER_VERSION)(DCGM_FI_DEV_GPU_UTIL{Hostname=\\\
+    \  }\n      },\n      \"description\": \"Assumes no new arrivals. Initial TensorRT\
+    \ engine compilation can inflate this estimate. Blank while stalled; zero only\
+    \ when queue is empty.\"\n    },\n    {\n      \"id\": 33,\n      \"title\": \"\
+    Shared GPU driver\",\n      \"type\": \"stat\",\n      \"datasource\": {\n   \
+    \     \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n \
+    \     \"gridPos\": {\n        \"x\": 18,\n        \"y\": 78,\n        \"w\": 6,\n\
+    \        \"h\": 4\n      },\n      \"targets\": [\n        {\n          \"refId\"\
+    : \"A\",\n          \"expr\": \"max by(DCGM_FI_DRIVER_VERSION)(DCGM_FI_DEV_GPU_UTIL{Hostname=\\\
     \"k3s-vm-pumped-piglet-gpu\\\"} * 0 + 1)\",\n          \"legendFormat\": \"{{DCGM_FI_DRIVER_VERSION}}\"\
     ,\n          \"instant\": true,\n          \"range\": false\n        }\n     \
     \ ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"\
