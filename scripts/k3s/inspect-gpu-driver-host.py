@@ -16,6 +16,9 @@ df -h /boot /
 command -v mokutil >/dev/null && mokutil --sb-state || true
 '''
 command=shlex.join(['qm','guest','exec','105','--','bash','-lc',script])
-result=subprocess.run(['ssh','-o','BatchMode=yes',host,command],text=True,capture_output=True,check=True)
+result=subprocess.run(['ssh','-o','BatchMode=yes',host,command],text=True,capture_output=True,timeout=40)
+if result.returncode:
+    print(result.stderr.strip())
+    raise SystemExit(result.returncode)
 parsed=json.loads(result.stdout)
 print(json.dumps(parsed))

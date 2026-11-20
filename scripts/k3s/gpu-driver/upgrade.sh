@@ -65,13 +65,16 @@ EOF
   dkms status
   touch "$state/installed"
   if [[ ! -f $state/reboot-scheduled ]]; then
-    systemd-run --unit=homelab-nvidia-580-reboot --on-active=30s /usr/bin/systemctl reboot
-    touch "$state/reboot-scheduled"
+    if systemd-run --unit=homelab-nvidia-580-reboot --on-active=30s /usr/bin/systemctl reboot; then
+      touch "$state/reboot-scheduled"
+    else
+      echo 'Host bus unavailable: use the guarded reboot-guest.py helper.'
+    fi
   fi
-  echo 'INSTALLED: VM reboot scheduled in 30 seconds to load the pinned driver.'
+  echo 'INSTALLED: modules verified; reboot is required to load the pinned driver.'
 elif [[ $phase == rollback ]]; then
   [[ -f $state/prepared ]]
-  if [[ $(cat /sys/module/nvidia/version) == 535.288.01 ]]; then
+  if [[ $(cat /sys/module/nvidia/version) == 535.288.01 && $(dpkg-query -W -f='${Version}' nvidia-utils-535) == 535.288.01-0ubuntu0.24.04.1 ]]; then
     echo 'Rollback driver is already loaded'; exit 0
   fi
   rm -f /etc/apt/preferences.d/homelab-nvidia-driver

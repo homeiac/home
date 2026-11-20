@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
-p=argparse.ArgumentParser();p.add_argument('--generate',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--generate',action='store_true');p.add_argument('--model', help='Previously verified installed model to reload after reboot');a=p.parse_args()
 base=['kubectl','--kubeconfig',os.environ.get('KUBECONFIG',str(Path.home()/'kubeconfig'))]
 def execute(ns,dep,args,data=None):
     r=subprocess.run(base+['-n',ns,'exec','-i','deployment/'+dep,'--']+args,input=data,text=True,capture_output=True,timeout=190)
@@ -17,8 +17,8 @@ node="const r=await fetch('http://ollama-lb.ollama.svc.cluster.local/api/ps',{si
 ps=execute('immich-pilot','immich-server',['node','--input-type=module','-e',node])
 print(json.dumps({'service':'ollama','models':[{'name':m['name'],'size_vram':m.get('size_vram')} for m in ps['models']]}),flush=True)
 if a.generate:
-    if not ps['models']:raise RuntimeError('No loaded model; do not load an arbitrary model')
-    name=ps['models'][0]['name']
+    if not ps['models'] and not a.model:raise RuntimeError('No loaded model; pass the verified pre-reboot model explicitly')
+    name=a.model or ps['models'][0]['name']
     body={'model':name,'messages':[{'role':'user','content':'Reply with the single word OK.'}],'stream':False,'think':False,'options':{'num_predict':8,'num_ctx':8192}}
     node="let input='';for await(const c of process.stdin)input+=c;const r=await fetch('http://ollama-lb.ollama.svc.cluster.local/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:input,signal:AbortSignal.timeout(180000)});console.log(JSON.stringify(await r.json()));"
     result=execute('immich-pilot','immich-server',['node','--input-type=module','-e',node],json.dumps(body))

@@ -45,12 +45,14 @@ data:
     \ -F version nvidia) == \"$module_version\" ]]\n  # The repaired pending kernel\
     \ will be selected by GRUB on reboot.\n  [[ $(modinfo -k 6.8.0-100-generic -F\
     \ version nvidia) == \"$module_version\" ]]\n  dkms status\n  touch \"$state/installed\"\
-    \n  if [[ ! -f $state/reboot-scheduled ]]; then\n    systemd-run --unit=homelab-nvidia-580-reboot\
-    \ --on-active=30s /usr/bin/systemctl reboot\n    touch \"$state/reboot-scheduled\"\
-    \n  fi\n  echo 'INSTALLED: VM reboot scheduled in 30 seconds to load the pinned\
-    \ driver.'\nelif [[ $phase == rollback ]]; then\n  [[ -f $state/prepared ]]\n\
-    \  if [[ $(cat /sys/module/nvidia/version) == 535.288.01 ]]; then\n    echo 'Rollback\
-    \ driver is already loaded'; exit 0\n  fi\n  rm -f /etc/apt/preferences.d/homelab-nvidia-driver\n\
+    \n  if [[ ! -f $state/reboot-scheduled ]]; then\n    if systemd-run --unit=homelab-nvidia-580-reboot\
+    \ --on-active=30s /usr/bin/systemctl reboot; then\n      touch \"$state/reboot-scheduled\"\
+    \n    else\n      echo 'Host bus unavailable: use the guarded reboot-guest.py\
+    \ helper.'\n    fi\n  fi\n  echo 'INSTALLED: modules verified; reboot is required\
+    \ to load the pinned driver.'\nelif [[ $phase == rollback ]]; then\n  [[ -f $state/prepared\
+    \ ]]\n  if [[ $(cat /sys/module/nvidia/version) == 535.288.01 && $(dpkg-query\
+    \ -W -f='${Version}' nvidia-utils-535) == 535.288.01-0ubuntu0.24.04.1 ]]; then\n\
+    \    echo 'Rollback driver is already loaded'; exit 0\n  fi\n  rm -f /etc/apt/preferences.d/homelab-nvidia-driver\n\
     \  apt-get -y --allow-downgrades install \"$state\"/rollback/*.deb\n  [[ $(modinfo\
     \ -k \"$(uname -r)\" -F version nvidia) == 535.288.01 ]]\n  systemd-run --unit=homelab-nvidia-535-rollback\
     \ --on-active=30s /usr/bin/systemctl reboot\nelse\n  echo 'Unknown phase' ; exit\
@@ -59,7 +61,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: piglet-driver-580-install-v4
+  name: piglet-driver-580-install-v5
   namespace: gpu-operator
 spec:
   backoffLimit: 0
