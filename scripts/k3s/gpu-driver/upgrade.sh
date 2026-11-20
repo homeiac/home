@@ -15,6 +15,10 @@ flock -n 9
 export DEBIAN_FRONTEND=noninteractive
 if [[ $phase == prepare ]]; then
   if [[ -f $state/prepared ]]; then echo "Preparation already saved"; exit 0; fi
+  apt-get update
+  apt-cache policy nvidia-driver-580
+  apt-cache madison nvidia-driver-580 | grep -F "$version" >/dev/null || { echo "Pinned target no longer on mirror; refresh Git desired version first"; exit 42; }
+  apt-get -y install dpkg-repack
   dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\n' > "$state/packages-before.txt"
   apt-mark showmanual > "$state/manual-before.txt"
   cp -a /etc/apt/preferences.d "$state/preferences-before"
@@ -25,7 +29,7 @@ if [[ $phase == prepare ]]; then
   cd "$state/rollback"
   while read -r package installed status; do
     if [[ $status == installed && $installed == 535.288.01-0ubuntu0.24.04.1 ]]; then
-      apt-get download "$package=$installed"
+      apt-get download "$package=$installed" || dpkg-repack "$package"
     fi
   done < "$state/packages-before.txt"
   apt-get -s install "nvidia-driver-580=$version" | tee "$state/apt-plan.txt"

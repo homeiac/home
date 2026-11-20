@@ -11,7 +11,10 @@ data:
     [[ $(hostname) == k3s-vm-pumped-piglet-gpu ]]\n. /etc/os-release\n[[ $VERSION_ID\
     \ == 24.04 ]]\nexport DEBIAN_FRONTEND=noninteractive\nif [[ $phase == prepare\
     \ ]]; then\n  if [[ -f $state/prepared ]]; then echo \"Preparation already saved\"\
-    ; exit 0; fi\n  dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\\\
+    ; exit 0; fi\n  apt-get update\n  apt-cache policy nvidia-driver-580\n  apt-cache\
+    \ madison nvidia-driver-580 | grep -F \"$version\" >/dev/null || { echo \"Pinned\
+    \ target no longer on mirror; refresh Git desired version first\"; exit 42; }\n\
+    \  apt-get -y install dpkg-repack\n  dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\\\
     n' > \"$state/packages-before.txt\"\n  apt-mark showmanual > \"$state/manual-before.txt\"\
     \n  cp -a /etc/apt/preferences.d \"$state/preferences-before\"\n  cp -a /etc/default/grub\
     \ \"$state/grub-before\"\n  uname -r > \"$state/kernel-before.txt\"\n  nvidia-smi\
@@ -19,8 +22,8 @@ data:
     \ driver binaries available even if the Ubuntu mirror changes.\n  cd \"$state/rollback\"\
     \n  while read -r package installed status; do\n    if [[ $status == installed\
     \ && $installed == 535.288.01-0ubuntu0.24.04.1 ]]; then\n      apt-get download\
-    \ \"$package=$installed\"\n    fi\n  done < \"$state/packages-before.txt\"\n \
-    \ apt-get -s install \"nvidia-driver-580=$version\" | tee \"$state/apt-plan.txt\"\
+    \ \"$package=$installed\" || dpkg-repack \"$package\"\n    fi\n  done < \"$state/packages-before.txt\"\
+    \n  apt-get -s install \"nvidia-driver-580=$version\" | tee \"$state/apt-plan.txt\"\
     \n  # Refuse unrelated removals. Review the saved plan before the install phase.\n\
     \  if awk '/^Remv / && $2 !~ /nvidia/ {bad=1} END {exit !bad}' \"$state/apt-plan.txt\"\
     ; then\n    echo 'Refusing unrelated package removals'; exit 1\n  fi\n  apt-get\
@@ -41,7 +44,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: piglet-driver-580-prepare-v1
+  name: piglet-driver-580-prepare-v2
   namespace: gpu-operator
 spec:
   backoffLimit: 0
