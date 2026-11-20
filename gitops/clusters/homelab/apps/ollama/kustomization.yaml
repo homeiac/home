@@ -8,3 +8,4 @@ resources:
   - ingress.yaml
   - job-model-update.yaml
   - secrets/ghcr-creds.sops.yaml
+  - vpa
