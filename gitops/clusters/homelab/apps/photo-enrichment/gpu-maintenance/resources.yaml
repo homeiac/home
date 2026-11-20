@@ -5,8 +5,8 @@ metadata:
   namespace: gpu-operator
 data:
   driver.sh: "#!/bin/bash\n# Runs inside VM 105's root through the GitOps maintenance\
-    \ Job. No VM SSH.\nset -euo pipefail\nphase=${1:?prepare or install}\nversion=580.178.04-0ubuntu0.24.04.1\n\
-    module_version=580.178.04\nstate=/var/lib/homelab-gpu-driver/$module_version\n\
+    \ Job. No VM SSH.\nset -euo pipefail\nphase=${1:?prepare, install or rollback}\n\
+    version=580.178.04-0ubuntu0.24.04.1\nmodule_version=580.178.04\nstate=/var/lib/homelab-gpu-driver/$module_version\n\
     umask 077\nmkdir -p \"$state/rollback\"\nexec 9>\"$state/lock\"\nflock -n 9\n\
     [[ $(hostname) == k3s-vm-pumped-piglet-gpu ]]\n. /etc/os-release\n[[ $VERSION_ID\
     \ == 24.04 ]]\nexport DEBIAN_FRONTEND=noninteractive\nif [[ $phase == prepare\
@@ -35,21 +35,31 @@ data:
     \ package removals'; exit 1\n  fi\n  apt-get --download-only -y install \"nvidia-driver-580=$version\"\
     \n  touch \"$state/prepared\"\n  echo 'PREPARED: rollback packages saved; target\
     \ packages downloaded; no driver changed.'\nelif [[ $phase == install ]]; then\n\
-    \  [[ -f $state/prepared ]]\n  if [[ $(cat /sys/module/nvidia/version) == \"$module_version\"\
-    \ ]]; then\n    echo 'Desired driver is already loaded'; exit 0\n  fi\n  apt-get\
-    \ -y --no-download install \"nvidia-driver-580=$version\"\n  cat > /etc/apt/preferences.d/homelab-nvidia-driver\
-    \ <<EOF\nPackage: src:nvidia-graphics-drivers-580:any\nPin: version $version\n\
-    Pin-Priority: 1001\nEOF\n  [[ $(modinfo -k \"$(uname -r)\" -F version nvidia)\
-    \ == \"$module_version\" ]]\n  dkms status\n  touch \"$state/installed\"\n  if\
-    \ [[ ! -f $state/reboot-scheduled ]]; then\n    systemd-run --unit=homelab-nvidia-580-reboot\
+    \  [[ -f $state/prepared ]]\n  for package in \"$state\"/rollback/*.deb; do dpkg-deb\
+    \ --info \"$package\" >/dev/null; done\n  sha256sum \"$state\"/rollback/*.deb\
+    \ > \"$state/rollback-sha256.txt\"\n  if [[ $(cat /sys/module/nvidia/version)\
+    \ == \"$module_version\" ]]; then\n    echo 'Desired driver is already loaded';\
+    \ exit 0\n  fi\n  apt-get -y --no-download install \"nvidia-driver-580=$version\"\
+    \n  cat > /etc/apt/preferences.d/homelab-nvidia-driver <<EOF\nPackage: src:nvidia-graphics-drivers-580:any\n\
+    Pin: version $version\nPin-Priority: 1001\nEOF\n  [[ $(modinfo -k \"$(uname -r)\"\
+    \ -F version nvidia) == \"$module_version\" ]]\n  # The repaired pending kernel\
+    \ will be selected by GRUB on reboot.\n  [[ $(modinfo -k 6.8.0-100-generic -F\
+    \ version nvidia) == \"$module_version\" ]]\n  dkms status\n  touch \"$state/installed\"\
+    \n  if [[ ! -f $state/reboot-scheduled ]]; then\n    systemd-run --unit=homelab-nvidia-580-reboot\
     \ --on-active=30s /usr/bin/systemctl reboot\n    touch \"$state/reboot-scheduled\"\
     \n  fi\n  echo 'INSTALLED: VM reboot scheduled in 30 seconds to load the pinned\
-    \ driver.'\nelse\n  echo 'Unknown phase'; exit 1\nfi\n"
+    \ driver.'\nelif [[ $phase == rollback ]]; then\n  [[ -f $state/prepared ]]\n\
+    \  if [[ $(cat /sys/module/nvidia/version) == 535.288.01 ]]; then\n    echo 'Rollback\
+    \ driver is already loaded'; exit 0\n  fi\n  rm -f /etc/apt/preferences.d/homelab-nvidia-driver\n\
+    \  apt-get -y --allow-downgrades install \"$state\"/rollback/*.deb\n  [[ $(modinfo\
+    \ -k \"$(uname -r)\" -F version nvidia) == 535.288.01 ]]\n  systemd-run --unit=homelab-nvidia-535-rollback\
+    \ --on-active=30s /usr/bin/systemctl reboot\nelse\n  echo 'Unknown phase' ; exit\
+    \ 1\nfi\n"
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: piglet-driver-580-prepare-v4
+  name: piglet-driver-580-install-v4
   namespace: gpu-operator
 spec:
   backoffLimit: 0
@@ -68,7 +78,7 @@ spec:
         command:
         - bash
         - -c
-        - exec chroot /host /bin/bash -s -- prepare < /scripts/driver.sh
+        - exec chroot /host /bin/bash -s -- install < /scripts/driver.sh
         securityContext:
           privileged: true
         resources:

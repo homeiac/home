@@ -48,6 +48,8 @@ if [[ $phase == prepare ]]; then
   echo 'PREPARED: rollback packages saved; target packages downloaded; no driver changed.'
 elif [[ $phase == install ]]; then
   [[ -f $state/prepared ]]
+  for package in "$state"/rollback/*.deb; do dpkg-deb --info "$package" >/dev/null; done
+  sha256sum "$state"/rollback/*.deb > "$state/rollback-sha256.txt"
   if [[ $(cat /sys/module/nvidia/version) == "$module_version" ]]; then
     echo 'Desired driver is already loaded'; exit 0
   fi

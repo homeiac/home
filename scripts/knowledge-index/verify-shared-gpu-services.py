@@ -19,7 +19,7 @@ print(json.dumps({'service':'ollama','models':[{'name':m['name'],'size_vram':m.g
 if a.generate:
     if not ps['models']:raise RuntimeError('No loaded model; do not load an arbitrary model')
     name=ps['models'][0]['name']
-    body={'model':name,'prompt':'Reply with the single word OK.','stream':False,'options':{'num_predict':8}}
-    node="let input='';for await(const c of process.stdin)input+=c;const r=await fetch('http://ollama-lb.ollama.svc.cluster.local/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:input,signal:AbortSignal.timeout(180000)});console.log(JSON.stringify(await r.json()));"
+    body={'model':name,'messages':[{'role':'user','content':'Reply with the single word OK.'}],'stream':False,'think':False,'options':{'num_predict':8,'num_ctx':8192}}
+    node="let input='';for await(const c of process.stdin)input+=c;const r=await fetch('http://ollama-lb.ollama.svc.cluster.local/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:input,signal:AbortSignal.timeout(180000)});console.log(JSON.stringify(await r.json()));"
     result=execute('immich-pilot','immich-server',['node','--input-type=module','-e',node],json.dumps(body))
-    print(json.dumps({'service':'ollama_generation','model':name,'done':result.get('done'),'response':result.get('response'),'eval_count':result.get('eval_count')}))
+    print(json.dumps({'service':'ollama_generation','model':name,'done':result.get('done'),'response':result.get('message',{}).get('content'),'eval_count':result.get('eval_count')}))

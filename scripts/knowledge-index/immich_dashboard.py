@@ -70,9 +70,9 @@ def add_panels(panel, panels):
     add('OCR completed / minute', OCR_RATE+' * 60', 6, 78, 6, 4, 'stat', description='Successful OCR jobs, including photos with no text. Five-minute rate; compare before and after CUDA warm-up.')
     add('OCR drain estimate', f'({OCR_BACKLOG} / ({OCR_RATE} > 0)) or ({OCR_BACKLOG} == 0)', 12, 78, 6, 4, 'stat', 's', description='Assumes no new arrivals. Blank while stalled; zero only when queue is empty.')
     add('Shared GPU driver', 'max by(DCGM_FI_DRIVER_VERSION)(DCGM_FI_DEV_GPU_UTIL'+GPU+' * 0 + 1)', 18, 78, 6, 4, 'stat', legend='{{DCGM_FI_DRIVER_VERSION}}', description='Loaded driver reported by DCGM; value 1 means present.')['options']['textMode'] = 'name'
-    add('OCR throughput over time', OCR_RATE+' * 60', 0, 82, 12, 7, description='Jobs per minute. The driver and CUDA rollout briefly interrupt processing; use sustained rates after model warm-up.')
+    add('OCR throughput over time', OCR_RATE+' * 60', 0, 82, 12, 7, legend='OCR jobs/min', description='Jobs per minute. The driver and CUDA rollout briefly interrupt processing; use sustained rates after model warm-up.')
     add('OCR queue states over time', 'sum by(state)(immich_queue_jobs{queue="ocr"})', 12, 82, 12, 7, legend='{{state}}')
-    add('Shared RTX 3070 utilization', 'max(DCGM_FI_DEV_GPU_UTIL'+GPU+')', 0, 89, 8, 7, unit='percent', description='Whole GPU shared by Immich, Frigate and Ollama. This is not attribution to OCR.')
+    add('Shared RTX 3070 utilization', 'max(DCGM_FI_DEV_GPU_UTIL'+GPU+')', 0, 89, 8, 7, unit='percent', legend='GPU busy', description='Whole GPU shared by Immich, Frigate and Ollama. This is not attribution to OCR.')
     p = add('Shared RTX 3070 memory', 'max(DCGM_FI_DEV_FB_USED'+GPU+') * 1024 * 1024', 8, 89, 8, 7, unit='bytes', legend='Used')
     p['targets'].append({'refId':'B','expr':'max(DCGM_FI_DEV_FB_FREE'+GPU+') * 1024 * 1024','legendFormat':'Free'})
     add('GPU service replicas ready', 'kube_deployment_status_replicas_available{namespace=~"immich-pilot|frigate|ollama",deployment=~"immich-machine-learning|frigate|ollama-gpu"}', 16, 89, 8, 7, legend='{{deployment}}', description='Availability only. CUDA provider logs and real OCR/camera/generation checks verify processing.')

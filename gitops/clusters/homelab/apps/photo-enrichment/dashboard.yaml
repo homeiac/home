@@ -596,10 +596,10 @@ data:
     w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n      \
     \    \"refId\": \"A\",\n          \"expr\": \"sum(rate(immich_jobs_ocr_success_total{namespace=\\\
     \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60\",\n          \"legendFormat\"\
-    : \"\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n\
-    \          \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n\
-    \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
-    ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : \"OCR jobs/min\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"\
+    defaults\": {\n          \"unit\": \"short\"\n        },\n        \"overrides\"\
+    : []\n      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
+    : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
     \  }\n      },\n      \"description\": \"Jobs per minute. The driver and CUDA\
     \ rollout briefly interrupt processing; use sustained rates after model warm-up.\"\
@@ -621,13 +621,13 @@ data:
     : {\n        \"x\": 0,\n        \"y\": 89,\n        \"w\": 8,\n        \"h\":\
     \ 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n\
     \          \"expr\": \"max(DCGM_FI_DEV_GPU_UTIL{Hostname=\\\"k3s-vm-pumped-piglet-gpu\\\
-    \"})\",\n          \"legendFormat\": \"\"\n        }\n      ],\n      \"fieldConfig\"\
-    : {\n        \"defaults\": {\n          \"unit\": \"percent\"\n        },\n  \
-    \      \"overrides\": []\n      },\n      \"options\": {\n        \"legend\":\
-    \ {\n          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\
-    \n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n         \
-    \   \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\":\
-    \ \"Whole GPU shared by Immich, Frigate and Ollama. This is not attribution to\
+    \"})\",\n          \"legendFormat\": \"GPU busy\"\n        }\n      ],\n     \
+    \ \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"percent\"\
+    \n        },\n        \"overrides\": []\n      },\n      \"options\": {\n    \
+    \    \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\"\
+    : \"Whole GPU shared by Immich, Frigate and Ollama. This is not attribution to\
     \ OCR.\"\n    },\n    {\n      \"id\": 37,\n      \"title\": \"Shared RTX 3070\
     \ memory\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n      \
     \  \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n    \
