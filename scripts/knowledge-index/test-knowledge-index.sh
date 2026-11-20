@@ -92,7 +92,7 @@ check "latest unit"                         "$(q "SELECT unit FROM files WHERE p
 
 echo "-- enrichment hook: GPU summaries slot in without touching the facts"
 check "summaries view empty and typed"     "$(q "SELECT count(*) FROM media_summaries")" 0
-Q0="$(q "SELECT count(*) FROM gphotos_to_summarize")"
+Q0="$(q "SELECT count(*) FROM gphotos_to_summarize('vlm-v1')")"
 check "queue = all media (kind media)"     "$Q0" "$(q "SELECT count(*) FROM gphotos_media WHERE kind='media'")"
 "$PYTHON" - "$IDX" <<'PY'
 import duckdb, sys
@@ -106,12 +106,12 @@ c.execute("COPY s TO '%s/summaries/vlm-v1/batch1.parquet' (FORMAT parquet)" % id
 PY
 "$PYTHON" "$HERE/kidx.py" rebuild "$IDX" >/dev/null
 check "summary stored and readable"        "$(q "SELECT summary FROM media_summaries")" "a red car"
-check "summarized file leaves the queue"   "$(q "SELECT count(*) FROM gphotos_to_summarize WHERE enricher='vlm-v1'")" "$((Q0 - 1))"
+check "summarized file leaves the queue"   "$(q "SELECT count(*) FROM gphotos_to_summarize('vlm-v1')")" "$((Q0 - 1))"
 
 echo "-- ingest hook (index-unit.sh): success clears pending, failure never touches library/ledger"
 H="$W/hook"; mkdir -p "$H/ds" "$H/idx" "$H/ki/adapters"
 cp -R "$LIB" "$H/ds/library"; echo "ledger-line" > "$H/ds/_ingested.tsv"
-cp "$HERE/kidx.py" "$HERE/knowledge.sql" "$H/ki/"; cp "$HERE/adapters/gphotos.py" "$H/ki/adapters/"
+cp "$HERE/kidx.py" "$HERE/knowledge.sql" "$HERE/progress.py" "$H/ki/"; cp "$HERE/adapters/gphotos.py" "$H/ki/adapters/"
 printf 'takeout-x\told\n' > "$H/ds/_index_pending.tsv"
 ( cd "$H/ds/library" && find . -type f | sed 's|^\./||' ) > "$H/moved"
 before_lib="$(find "$H/ds/library" -type f | wc -l | tr -d ' ')"

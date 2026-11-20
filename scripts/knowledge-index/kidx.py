@@ -70,7 +70,7 @@ def query(index, sql):
 def status(index):
     con = _con(index)
     for name in ("files", "gphotos_sidecars", "copies", "gphotos_files", "gphotos_versions", "gphotos_media",
-                 "gphotos_album_dup", "gphotos_quota", "media_summaries", "gphotos_to_summarize"):
+                 "gphotos_album_dup", "gphotos_quota", "media_summaries"):
         print("%-18s %d" % (name, con.execute("SELECT count(*) FROM %s" % name).fetchone()[0]))
     for d in ("files/*", "gphotos_sidecars", "copies"):
         print("parquet %-18s %d" % (d, len(glob.glob(os.path.join(index, d, "*.parquet")))))

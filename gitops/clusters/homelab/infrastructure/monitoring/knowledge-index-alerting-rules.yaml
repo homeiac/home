@@ -1,0 +1,144 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: knowledge-index-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: knowledge-index
+      rules:
+        - alert: KnowledgeIndexExporterStale
+          expr: (time() - knowledge_index_last_run_timestamp_seconds) > 1800 or knowledge_index_exporter_success == 0
+          for: 15m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Knowledge index metrics on {{ $labels.instance }} are stale or the index cannot be read"
+            description: "export-metrics.py has not produced fresh metrics (or reported success=0) for 15 minutes. Check: systemctl status knowledge-index-metrics.service, scripts/knowledge-index/knowledge-index-ctl.sh status"
+
+        - alert: KnowledgeIndexUnitsPending
+          expr: knowledge_index_pending_units > 0
+          for: 10m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "{{ $value }} ingested Takeout unit(s) are not in the knowledge index"
+            description: "Indexing failed after an ingest (index_pending). Photos are safe; fix with: scripts/knowledge-index/knowledge-index-ctl.sh backfill start"
+
+        - alert: KnowledgeIndexBackfillStuck
+          expr: (knowledge_index_backfill_running == 1 and (time() - knowledge_index_backfill_updated_timestamp_seconds) > 600) or (knowledge_index_backfill_active == 1 and increase(knowledge_index_backfill_process_read_bytes[15m]) == 0)
+          for: 10m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Knowledge index backfill on {{ $labels.instance }} has made no progress for 10+ minutes"
+            description: "The backfill unit is active but its progress file is stale or it reads nothing from disk. A failing or hung USB disk is a likely cause. Check: scripts/knowledge-index/knowledge-index-ctl.sh backfill status and dmesg on the host."
+
+        - alert: KnowledgeIndexBackfillFailed
+          expr: knowledge_index_backfill_phase{phase="failed"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Knowledge index backfill {{ $labels.unit }} failed"
+            description: "Nothing was lost (it is idempotent). See journalctl -u knowledge-index-backfill on the host, then re-run: scripts/knowledge-index/knowledge-index-ctl.sh backfill start"
+
+        - alert: MediaSummariesStalled
+          expr: knowledge_index_enrich_active == 1 and increase(media_summaries_rows[30m]) == 0
+          for: 30m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "Summary enricher is running but produced no rows for 30 minutes"
+            description: "The model server may be down or the GPU taken. Check: scripts/knowledge-index/knowledge-index-ctl.sh enrich status and the ollama-gpu pod."
+
+        - alert: MediaSummariesHighErrorRate
+          expr: sum by (instance, enricher) (media_summaries_rows{status="error"}) / sum by (instance, enricher) (media_summaries_rows) > 0.2 and sum by (instance, enricher) (media_summaries_rows) > 50
+          for: 30m
+          labels:
+            severity: warning
+            service: knowledge-index
+          annotations:
+            summary: "More than 20% of summaries by {{ $labels.enricher }} failed"
+            description: "Errors keep their files in the queue (retried next run). Look at the error column of media_summaries for the pattern (decode failures vs model server)."
+
+    - name: gpu-and-ollama
+      rules:
+        - alert: GpuXidErrors
+          expr: sum by (gpu) (DCGM_FI_DEV_XID_ERRORS) > 0
+          for: 1m
+          labels:
+            severity: critical
+            service: gpu
+          annotations:
+            summary: "NVIDIA driver reported a GPU error (Xid {{ $value }}) on GPU {{ $labels.gpu }}"
+            description: "Check dmesg on the Proxmox host and the GPU VM; a GPU fault can hang the host (see the 2026-11-17 pumped-piglet outage)."
+
+        - alert: GpuHot
+          expr: max(DCGM_FI_DEV_GPU_TEMP) > 85
+          for: 10m
+          labels:
+            severity: warning
+            service: gpu
+          annotations:
+            summary: "GPU at {{ $value }} C for 10 minutes"
+            description: "Check fans and airflow; sustained summary runs keep the GPU busy for days."
+
+        - alert: OllamaDown
+          expr: ollama_up == 0
+          for: 10m
+          labels:
+            severity: warning
+            service: gpu
+          annotations:
+            summary: "Ollama API on the GPU node is not answering"
+            description: "Summaries cannot run. Check the ollama-gpu pod and the GPU operator (kubectl get pods -n ollama, -n gpu-operator)."
+
+        - alert: OllamaModelMostlyOnCpu
+          expr: ollama_model_gpu_fraction < 0.5
+          for: 15m
+          labels:
+            severity: warning
+            service: gpu
+          annotations:
+            summary: "Ollama model {{ $labels.model }} is only {{ $value | humanizePercentage }} in GPU memory"
+            description: "Part of the model runs on the CPU, which is several times slower. Another workload may hold GPU memory; check the GPU memory panel and scripts/k3s/gpu-tenants.sh status."
+
+    - name: proxmox-host-health
+      rules:
+        - alert: DiskSmartPendingSectors
+          expr: smart_pending_sectors > 0 or smart_offline_uncorrectable > 0
+          for: 10m
+          labels:
+            severity: warning
+            service: proxmox-storage
+          annotations:
+            summary: "Disk {{ $labels.device }} ({{ $labels.model }}) on {{ $labels.instance }} has pending or uncorrectable sectors"
+            description: "SMART shows {{ $value }} bad sectors. The disk is starting to fail: verify the data on it is copied elsewhere (the SSK is the secondary photo copy)."
+
+        - alert: DiskSmartFailed
+          expr: smart_passed == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: proxmox-storage
+          annotations:
+            summary: "SMART overall health FAILED on {{ $labels.device }} ({{ $labels.model }}) on {{ $labels.instance }}"
+            description: "Replace the disk; copy data off it first."
+
+        - alert: ProxmoxHostRebooted
+          expr: changes(node_boot_time_seconds{job="proxmox-node-exporter"}[15m]) > 0
+          labels:
+            severity: warning
+            service: proxmox-host
+          annotations:
+            summary: "{{ $labels.instance }} rebooted in the last 15 minutes"
+            description: "Unexpected reboot or power loss (pumped-piglet went down abruptly on 2026-11-17, see openspec/changes/add-media-summaries-enricher). Check journalctl -b -1 on the host."

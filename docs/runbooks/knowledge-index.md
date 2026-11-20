@@ -84,31 +84,116 @@ and ledger are untouched, and the unit is appended to `<photos dataset>/_index_p
 re-walks the whole library (latest unit wins, no duplicates) and clears the list. `gphotos-ingest-ctl.sh start` installs the
 index files first.
 
-## AI enrichment: photo/video summaries on the local GPU (extension point, runner not built yet)
+## AI enrichment: photo/video summaries from a local vision model
 
-The index is ready for model-generated summaries without changing any fact table. An **enricher** is a job that reads
-files from the primary (read-only), runs a vision-language model on the GPU, and writes
-`summaries/<enricher>/<batch>.parquet` (atomic tmp + rename, like adapters). Schema of `media_summaries`:
+Spec and design: `openspec/changes/add-media-summaries-enricher/` (OpenSpec; `npx @fission-ai/openspec@1.16.0 validate --strict`).
+`scripts/knowledge-index/enrichers/media_summary.py` reads photos and videos read-only on the Proxmox host, asks an
+OpenAI-compatible vision server on the LAN (Ollama / llama.cpp serving Qwen2.5-VL on the RTX 3070 in the GPU VM) for a summary
+and tags, and writes `summaries/<enricher>/<batch>.parquet` (tmp + rename; ~200 files per batch, so a stop loses little).
+Photo = one image (long edge 1024) + context (date, album, people, has-GPS). Video = up to 8 frames across the clip + a
+faster-whisper transcript when that package is installed and the clip has audio. A file that cannot be decoded or answered gets
+a `status='error'` row and stays queued.
 
-| column | meaning |
-|---|---|
-| source, path | the file, as in `files` |
-| size_bytes | bytes that were summarized; a changed file re-enters the queue |
-| enricher, model, prompt_version | what produced it (bump `enricher` or `prompt_version` to re-run with a better model/prompt; old rows stay) |
-| summary, tags[] | the text and keywords |
-| frames_sampled, duration_s | video: how many frames were sampled, clip length |
-| status, error | `ok` or a failure that keeps the file in the queue |
-| created_at | latest row per (source, path, enricher) wins |
+```bash
+export CB_HOST=root@<host> KI_ENDPOINT=http://<gpu-vm>:11434     # model server on the LAN (no IPs in the repo)
+scripts/knowledge-index/knowledge-index-ctl.sh enrich sample 20   # print 20 summaries, write nothing: judge quality first
+scripts/knowledge-index/knowledge-index-ctl.sh enrich start       # background unit knowledge-index-enrich (nice, idle I/O)
+scripts/knowledge-index/knowledge-index-ctl.sh enrich status      # unit state, last log lines, rows per enricher/status
+scripts/knowledge-index/knowledge-index-ctl.sh enrich stop
+```
+Prerequisites: `ffmpeg` on the host (`apt-get install ffmpeg`: not installed by the scripts), the model pulled on the GPU VM.
+Re-run with a better model or prompt by changing `KI_ENRICHER` (e.g. `qwen25vl-7b-p2`): the whole library is queued again and the old
+summaries stay under their own id. **GPU sharing with Frigate:** the 3070 (8 GB) also runs Frigate's detector. The guard
+(`--min-free-mib`, via `nvidia-smi`) only works where `nvidia-smi` exists; the host has no driver access (GPU is passed to the VM), so it warns and
+continues. Measure Frigate's VRAM first (task 1.1 in the OpenSpec change) and decide how to guard before the full run.
 
-Work queue: `SELECT path FROM gphotos_to_summarize WHERE enricher = 'vlm-v1' LIMIT 500` (media with no `ok` summary for its
-current bytes; `ORDER BY taken_ts DESC` to do recent photos first). Results are SQL-searchable alongside the facts, e.g.
-`SELECT f.path FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`; semantic search or
-DuckDB full-text search over `summary` can follow (Phase 3 machinery).
+`media_summaries` columns: source, path, `size_bytes` (bytes that were summarized: a changed file re-queues), enricher, model, prompt_version,
+summary, tags[], frames_sampled, duration_s, status (`ok`/`error`), error, created_at; latest row per (source, path, enricher) wins.
+Queue: `SELECT path FROM gphotos_to_summarize('qwen25vl-3b-p1') LIMIT 500` (a table macro, so a brand-new enricher id works).
+Search: `SELECT f.path, s.summary FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`.
 
-Constraints for the future runner: it reads photos from the host dataset (never write bulk data inside K3s VM 105); batch in
-a few hundred files per Parquet so a crash loses little; it must not touch the cloud. **Which GPU:** this repo's
-docs record an RTX 3070 on the Proxmox host that runs Frigate, while the request was for an RTX 3090. Confirm the card, which
-machine hosts it, and how it is reached (passthrough to a VM vs. a host service such as Ollama) before building the runner.
+## Metrics, dashboard and alerts (as code)
+
+`export-metrics.py` runs on the host every 5 minutes (systemd timer `knowledge-index-metrics`, installed by `ctl install`) and writes
+`/var/lib/prometheus/node-exporter/knowledge_index.prom`; the host's node-exporter (already scraped by Prometheus, job
+`proxmox-node-exporter`) serves it. `ctl metrics` runs it now and prints the key series. It exports index counts and bytes, the quota
+selection (also by year taken, UTC), pending units, ingest ledger/last run, enrichment rows/queue/last batch, backfill/enricher unit state,
+and SMART health per USB/SATA disk (labelled by model: Linux device letters change between boots).
+
+- Dashboard: Grafana > Homelab > **Knowledge Index** (ConfigMap `infrastructure/monitoring/dashboards/knowledge-index.yaml`).
+  It is GENERATED: edit `scripts/knowledge-index/gen-dashboard.py`, then `python3 scripts/knowledge-index/gen-dashboard.py > <that yaml>`.
+- **Value delivered** (top row): files indexed per minute, summaries per minute, how long the quota question takes now versus the ~38 min
+  sidecar scan it replaced (`baseline_s`), index size versus library size, photos and video minutes described, and an **illustrative**
+  cloud-equivalent cost. No cloud service does this for a Google Photos library, so the cost prices the same work per photo and per video
+  minute with editable assumptions (`price_photo`, `price_video_min` dashboard variables: not quotes).
+- **Backfill progress**: `ctl backfill start` passes `--prom` and `--expected` (ledger file count) to the adapter, which writes live phase, files
+  listed/read, rate and ETA every ~2 s (`progress.py`); process stats (elapsed, bytes read, CPU) work for any backfill, instrumented or not.
+  `ctl backfill status` prints the same numbers. `scripts/knowledge-index/check-promql.sh` runs every dashboard/alert expression against the live Prometheus.
+- **GPU and Ollama** section: DCGM exporter metrics (utilization, memory, power, temperature, Xid errors, energy; the `pod` label shows which workload
+  holds the GPU), the exporter's reading of Ollama's `/api/ps` (model loaded, share in GPU memory, time until unload: Ollama has no `/metrics`),
+  and whether Frigate, Stable Diffusion and `ollama-gpu` are running (a deliberate pause shows as STOPPED). GPU energy x the `kwh_price` variable is an
+  illustrative electricity cost to set against the cloud-equivalent cost. The exporter finds Ollama via `KI_OLLAMA_URL` in `/etc/default/knowledge-index` on the host
+  (written by `ctl install` from the cluster; not stored in Git).
+- Alerts: `infrastructure/monitoring/knowledge-index-alerting-rules.yaml` (exporter stale, units pending, backfill stuck/failed, enrichment stalled / >20% errors, GPU Xid errors / hot GPU, Ollama down / model mostly on CPU,
+  disk pending sectors or SMART failed, Proxmox host rebooted).
+- `scripts/knowledge-index/test-metrics.sh` checks the exposition format, the numbers, that the committed dashboard equals the generated one,
+  and that every metric used by the dashboard and alerts exists. Flux applies dashboard and rules after the change is merged to master.
+
+## Pipeline bottlenecks dashboard
+
+The **Pipeline bottlenecks** row measures the sequential worker itself: select a batch → read/decode → optional
+audio transcription → build prompt → Ollama request → parse → next item → write Parquet at the batch boundary.
+Use the **Pipeline enricher** filter to select a model/prompt run. Existing totals remain in the Summaries row.
+
+The pipeline row now sits directly below **Value delivered**, followed by **Photo enrichment — parallel CPU branch**
+and **Frigate processing — shared service**. These optional panels and map nodes match the live dashboard from
+[PR #218](https://github.com/homeiac/home/pull/218), revision `e73a110`. Their photo worker and Frigate stats exporter
+are delivered by that PR, independently of the caption worker in #216. Without those exporters, the panels show
+**Not instrumented**. The Host filter applies to all components; Pipeline enricher selects only caption runs.
+
+Photo panels show EXIF/face/review backlogs, durable facts, stage durations, operation rates, errors and current
+operation age (zero while idle). Each worker's map percentages use its own measured time as the denominator;
+do not add percentages across components. Human review measures database saves, not time spent deciding labels.
+Frigate nodes show API reachability (1/0) and native camera-service processing time (milliseconds), with units in
+the titles. They expire after 60 seconds without polling; they do not measure uploaded-photo throughput or prove
+identity recognition readiness. Existing panel IDs and the summary-count line graph are preserved.
+
+- **Value stream map / time by stage:** percentage of measured wall time in each stage, including in-flight work.
+  Edges describe control flow, not independently queued workers. Inference includes request encoding, transport,
+  server waiting and inference; it is not a GPU-utilization measurement.
+- **Worker activity:** stage and time in that stage. The timeline is sampled at Prometheus scrape cadence; short
+  stages may be missed visually, but their duration counters are still recorded. A heartbeat older than 60 seconds
+  becomes “No recent telemetry”, including after an abrupt kill. A missing series means no instrumented run yet.
+- **Photo/video stage duration:** mean seconds per completed operation, including failed attempts. Queue lookup and
+  Parquet write durations are shown separately **per batch**. In-flight durations are excluded from these means.
+- **Ollama timings:** native `/api/chat` load, prompt processing, generation and total durations, converted from
+  nanoseconds. Total overlaps its components; never add them together. Unsupported/missing response fields stay
+  absent. Token throughput is tokens divided by the associated model processing time, not end-to-end throughput.
+- **Attempted vs saved items:** attempted items include errors; saved counts advance only after the atomic Parquet
+  rename. Normal batching creates bursts in the saved line. Counters reset when the worker restarts; queries use
+  `rate()` to handle resets. No per-file paths, transcripts, prompts or summaries enter metric labels.
+
+`enrich start` now supplies `--prom /var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom`.
+`enrichers/pipeline_metrics.py` writes that file atomically at stage boundaries and every five seconds, independently
+of the five-minute index scan. Publication failures log an error and leave summary processing running. The node-exporter
+directory must already exist and be writable by the worker. `enrich sample` writes no metrics, even with `--prom`.
+
+Deployment: merge the generator and generated ConfigMap through GitOps, install both enricher Python files on the host,
+then restart the resumable worker with its existing endpoint/model/enricher settings plus `--prom`. A running Python
+process does not pick up replaced source files. A forced restart can discard an unfinished in-memory batch; saved Parquet
+is retained and those unfinished items remain queued. Do not merge unrelated draft work or stop GPU tenants just to
+publish the dashboard. Inspect the deployment first with:
+
+```bash
+CB_HOST=root@<inventory-host> bash scripts/knowledge-index/check-pipeline-rollout.sh
+python3 scripts/knowledge-index/test-pipeline-metrics.py
+bash scripts/knowledge-index/test-enricher.sh
+bash scripts/knowledge-index/test-metrics.sh
+bash scripts/knowledge-index/check-promql.sh
+```
+
+When diagnosing gaps, correlate stage time with CPU saturation, disk latency, GPU activity and memory on both the
+Proxmox host and GPU VM; the map identifies where the worker spends time, not which resource caused the delay.
 
 ## Example queries (these double as checks)
 
@@ -116,22 +201,48 @@ machine hosts it, and how it is reached (passthrough to a VM vs. a host service 
 -- quota set, same as gphotos-quota-list.py (library-relative paths: the oracle prints them with a "gphotos/library/" prefix)
 SELECT path FROM gphotos_quota ORDER BY path;
 -- what would deleting a year free (counted media, GB)
-SELECT strftime(to_timestamp(taken_ts),'%Y') y, count(*) n, round(sum(size_bytes)/1e9,2) gb FROM gphotos_quota WHERE kind='media' GROUP BY 1 ORDER BY 1;
+SELECT regexp_extract(path,'Photos from ([0-9]{4})',1) y, count(*) n, round(sum(size_bytes)/1e9,2) gb FROM gphotos_quota WHERE kind<>'sidecar' AND regexp_matches(path,'/Photos from [0-9]{4}/') GROUP BY 1 ORDER BY 1;
 -- media without a sidecar
 SELECT count(*) FROM gphotos_media WHERE upload_ts IS NULL;
 -- counted by Google but missing on the SSK (the pre-delete safety check; needs Phase 2 copies)
 SELECT q.path FROM gphotos_quota q LEFT JOIN copies c ON c.source='gphotos' AND c.path=q.path AND c.location='ssk' WHERE c.path IS NULL;
 ```
 
-Note: the per-year query groups by `taken_ts`; the issue's "Photos from YYYY" year table (`scripts/backup/gphotos-quota-by-year.sh`)
-groups by folder. To reproduce that table: `GROUP BY regexp_extract(path, 'Photos from ([0-9]{4})', 1)`.
+Per-year uses the "Photos from YYYY" folder and every non-sidecar file, the same definition as `scripts/backup/gphotos-quota-by-year.sh`.
 
-## Golden numbers (2026-11-16, for the real-library acceptance run)
+## Golden numbers (2026-11-16) and their verification (2026-11-17)
 
 Library 243,088 files + `.versions` 6,753 = ledger 249,841; media 118,987; `.json` 119,670. Quota selection 18,264 paths / 88,693 MB;
 2023 counted media 1,940 files / 26.55 GB.
 
+**Verified on the real library 2026-11-17** (backfill `backfill-20261117`, 249,841 rows in 41 min = the ledger total; index 8.7 MB for 331 GB): library 243,088 + `.versions` 6,753; media 118,987; sidecars 119,670 (0 parse errors); quota 18,264 paths / 88,693 MB; year-folder files 10,633 / 83.35 GB; 2017 1.71, 2018 1.34, 2019 2.20, 2021 2.81, 2022 1.19, 2023 26.55 (1,940 files), 2024 15.07, 2025 18.59, 2026 13.46 GB, all equal to the table above; `SELECT path FROM gphotos_quota` runs in 3.6 s. Path-for-path diff against `gphotos-quota-list.py` (`ctl quota-diff`): **empty, 18,264 paths each**.
+
 ## Tests
 
+`scripts/knowledge-index/test-enricher.sh` (stub model server + ffmpeg fixtures, 21 checks) and
 `scripts/knowledge-index/test-knowledge-index.sh` (local, python3 + duckdb): same fixture as `test-gphotos-quota-list.sh`
 plus cross-archive sidecars, corrupt sidecar, re-run idempotency, later-unit-wins, and the hook's forced-failure path.
+
+### Duplicate inference reuse
+
+The summary worker stores successful parsed answers in `<index>/summary-cache.sqlite3`.
+A SHA-256 key covers the exact decoded images/video frames, prompt (including
+metadata and transcript), endpoint, model, enricher ID, API and inference options.
+Renamed copies with matching inputs reuse the caption while retaining a separate
+Parquet row for each source path. Same-name/same-size files with different pixels
+never match. Changed album/person/date context gets its own inference, because
+that context can change the caption. This is conservative model-input reuse,
+not a claim that every album copy is deduplicated.
+
+Errors are not cached. Successful answers survive process restarts and retries
+of an unfinished Parquet batch. Dry runs bypass the cache and write nothing.
+Existing historical captions are not backfilled into the cache: their exact
+model inputs were not recorded. Bump the enricher ID when changing model weights
+behind an existing model tag. Cache data contains captions and stays beside the
+local Parquet data, never in Git. `media_pipeline_cache_hits_total` counts avoided
+model calls by photo/video; it does not inflate inference timing samples.
+
+Test with `python3 scripts/knowledge-index/test-summary-cache.py` and
+`scripts/knowledge-index/test-enricher.sh`. The approved preview installer accepts
+`--worker-only` to preserve concurrent dashboard changes; it validates the old
+worker hash, backs up code and settings, and rolls back on startup failure.

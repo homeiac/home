@@ -88,12 +88,12 @@ CREATE OR REPLACE VIEW media_summaries AS
 SELECT * FROM read_parquet('@INDEX@/summaries/*/*.parquet', union_by_name = true)
 QUALIFY row_number() OVER (PARTITION BY source, path, enricher ORDER BY created_at DESC) = 1;
 
--- ---- work queue for an enricher: media with no successful summary for the current bytes. Filter by enricher:
--- ----   SELECT path FROM gphotos_to_summarize WHERE enricher = 'vlm-v1' LIMIT 500
-CREATE OR REPLACE VIEW gphotos_to_summarize AS
-SELECT e.enricher, m.path, m.name, m.ext, m.size_bytes, m.taken_ts
+-- ---- work queue for an enricher: media with no successful summary for their current bytes, with the context the
+-- ---- prompt needs. A table macro (not a view) so a brand-new enricher id works before it has any rows:
+-- ----   SELECT path FROM gphotos_to_summarize('qwen25vl-3b-p1') ORDER BY taken_ts DESC LIMIT 500
+CREATE OR REPLACE MACRO gphotos_to_summarize(enr) AS TABLE
+SELECT m.path, m.name, m.ext, m.size_bytes, m.taken_ts, m.album, m.has_geo, m.people, m.description
 FROM gphotos_media m
-CROSS JOIN (SELECT DISTINCT enricher FROM media_summaries UNION SELECT 'vlm-v1') e
 LEFT JOIN media_summaries s
-  ON s.source = 'gphotos' AND s.path = m.path AND s.enricher = e.enricher AND s.size_bytes = m.size_bytes AND s.status = 'ok'
+  ON s.source = 'gphotos' AND s.path = m.path AND s.enricher = enr AND s.size_bytes = m.size_bytes AND s.status = 'ok'
 WHERE m.kind = 'media' AND s.path IS NULL;
