@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-ocr-gpu-recovery-v1
+  namespace: immich-pilot
+data:
+  recovery.mjs: "// One-shot recovery after GPU maintenance. Native Immich handler,\
+    \ no DB writes.\nimport {createRequire} from 'node:module';\nconst require = createRequire('/usr/src/app/server/package.json');\n\
+    const {Queue} = require('bullmq');\nconst queue = new Queue('ocr', {prefix:'immich_bull',\
+    \ connection:{host:'immich-valkey',port:6379}});\nconst id = 'gpu-driver-580-missing-ocr-v1';\n\
+    try {\n  let job = await queue.getJob(id);\n  if (!job && process.env.APPLY ===\
+    \ 'true') {\n    // FIFO: scan after the existing OCR work. Completed results\
+    \ are never reset.\n    job = await queue.add('OcrQueueAll', {force:false}, {\n\
+    \      jobId:id, lifo:false, attempts:3, backoff:{type:'fixed',delay:5000},\n\
+    \      removeOnComplete:false, removeOnFail:false,\n    });\n  }\n  console.log(JSON.stringify({event:'ocr.missing_recovery',\
+    \ apply:process.env.APPLY === 'true',\n    scan:job ? await job.getState() : 'not_queued',\
+    \ force:false,\n    counts:await queue.getJobCounts('waiting','active','failed','paused')}));\n\
+    } finally {\n  await queue.close();\n}\n"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: immich-ocr-gpu-recovery-v1
+  namespace: immich-pilot
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      containers:
+      - name: recovery
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        command:
+        - node
+        - /scripts/recovery.mjs
+        env:
+        - name: APPLY
+          value: 'true'
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 256Mi
+        volumeMounts:
+        - name: code
+          mountPath: /scripts
+          readOnly: true
+      volumes:
+      - name: code
+        configMap:
+          name: immich-ocr-gpu-recovery-v1

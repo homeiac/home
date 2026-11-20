@@ -84,3 +84,9 @@ OCR batch size is capped at 1 via `MACHINE_LEARNING_MAX_BATCH_SIZE__OCR`. The
 initial default of 6 spent minutes compiling batch/width variants and completed
 only a handful of jobs. A fixed batch reuses already warmed graphs and bounds
 memory on the shared 8 GB GPU; model weights and recognition thresholds are unchanged.
+
+The GitOps `immich-ocr-recovery` Job schedules one native `OcrQueueAll` handler
+with `force:false`, through the bundled BullMQ client. It never clears jobs or
+writes Immich tables. Its fixed job ID and retained completion record make a
+repeat reconciliation idempotent. It runs behind existing FIFO work and discovers
+only missing OCR results. This avoids creating new administrator credentials.

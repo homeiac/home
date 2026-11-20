@@ -11,3 +11,4 @@ resources:
   - vpa/policies
   - immich-sync
   - gpu-maintenance
+  - immich-ocr-recovery
