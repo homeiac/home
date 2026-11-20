@@ -28,7 +28,8 @@ export function mapAsset(source, candidates, ownerId, libraryId) {
   const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal!==false && a.libraryId!=null && a.ownerId===ownerId && a.libraryId===libraryId);
   if(exact.length!==1)return {reason:exact.length?'ambiguous_mapping':'missing_asset'};
   const a=exact[0];
-  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};
+  if(a.isTrashed)return {reason:'trashed_asset'};
+  if(a.isOffline)return {reason:'offline_asset'};
   if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return {reason:'size_mismatch'};
   // Immich external checksums hash "path:" + absolute pathname, not image bytes.
   const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');

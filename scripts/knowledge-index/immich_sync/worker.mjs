@@ -166,7 +166,10 @@ async function apply(db,job) {
   const identity=await state(db,'identity');
   const current=await api('/assets/'+job.asset_id);
   const mapped=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[current],identity.ownerId,identity.libraryId);
-  if(!mapped.asset)throw Error('Target identity changed');
+  if(!mapped.asset){
+    await db.query("UPDATE immich_sync.jobs SET state='conflict',reason=$2,updated_at=now() WHERE source_path=$1",[job.source_path,mapped.reason]);
+    log('sync.asset_conflict',{source_id:digest(job.source_path).slice(0,16),reason:mapped.reason});return;
+  }
   const file=await verifyFile(job);
   const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};
   const metadata=await api('/assets/'+job.asset_id+'/metadata');

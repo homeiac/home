@@ -44,10 +44,10 @@ data:
     \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal!==false\
     \ && a.libraryId!=null && a.ownerId===ownerId && a.libraryId===libraryId);\n \
     \ if(exact.length!==1)return {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n\
-    \  const a=exact[0];\n  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n\
-    \  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return {reason:'size_mismatch'};\n\
-    \  // Immich external checksums hash \"path:\" + absolute pathname, not image\
-    \ bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
+    \  const a=exact[0];\n  if(a.isTrashed)return {reason:'trashed_asset'};\n  if(a.isOffline)return\
+    \ {reason:'offline_asset'};\n  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return\
+    \ {reason:'size_mismatch'};\n  // Immich external checksums hash \"path:\" + absolute\
+    \ pathname, not image bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
     \  if(a.checksum && a.checksum!==expected)return {reason:'path_checksum_mismatch'};\n\
     \  return {asset:a};\n}\nexport function metadataDecision(current, desired, previous,\
     \ intent) {\n  if(current && stable(current)===stable(desired))return 'unchanged';\n\
@@ -66,6 +66,19 @@ data:
     \  if(!matches.length || matches[0].score<0.5)return {reason:'no_spatial_match'};\n\
     \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
     \  return matches[0];\n}\n"
+  diagnose-errors.mjs: "// Read-only diagnosis using mounted credentials; no keys\
+    \ or photo metadata printed.\nimport {createRequire} from 'node:module';\nimport\
+    \ fs from 'node:fs/promises';\nimport {mapAsset} from '/code/core.mjs';\nconst\
+    \ {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst db=new\
+    \ Client();await db.connect();\ntry {\n const identity=(await db.query(\"SELECT\
+    \ value FROM immich_sync.state WHERE key='identity'\")).rows[0].value;\n const\
+    \ jobs=(await db.query(\"SELECT source_path,asset_id,payload FROM immich_sync.jobs\
+    \ WHERE state='error' LIMIT 10\")).rows;\n const key=(await fs.readFile('/credentials/api-key','utf8')).trim();\n\
+    \ for(const job of jobs){\n  const response=await fetch('http://immich-server:2283/api/assets/'+job.asset_id,{headers:{'x-api-key':key}});\n\
+    \  if(!response.ok){console.log(JSON.stringify({http:response.status}));continue;}\n\
+    \  const asset=await response.json();\n  const match=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[asset],identity.ownerId,identity.libraryId);\n\
+    \  console.log(JSON.stringify({reason:match.reason??'matched',offline:asset.isOffline,trashed:asset.isTrashed,sourceSize:job.payload.sizeBytes,targetSize:asset.exifInfo?.fileSizeInByte}));\n\
+    \ }\n}finally{await db.end();}\n"
   probe.mjs: '// Read-only API shape check. No credentials, file paths or names in
     output.
 
@@ -249,8 +262,9 @@ data:
     \ SET face_id=excluded.face_id,person_id=excluded.person_id,source_hash=excluded.source_hash,state='applied',reason=NULL,updated_at=now()`,[old.id,job.source_path,job.asset_id,face.id,personId,version]);\n\
     \  }\n}\nasync function apply(db,job) {\n  const identity=await state(db,'identity');\n\
     \  const current=await api('/assets/'+job.asset_id);\n  const mapped=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[current],identity.ownerId,identity.libraryId);\n\
-    \  if(!mapped.asset)throw Error('Target identity changed');\n  const file=await\
-    \ verifyFile(job);\n  const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};\n\
+    \  if(!mapped.asset){\n    await db.query(\"UPDATE immich_sync.jobs SET state='conflict',reason=$2,updated_at=now()\
+    \ WHERE source_path=$1\",[job.source_path,mapped.reason]);\n    log('sync.asset_conflict',{source_id:digest(job.source_path).slice(0,16),reason:mapped.reason});return;\n\
+    \  }\n  const file=await verifyFile(job);\n  const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};\n\
     \  const metadata=await api('/assets/'+job.asset_id+'/metadata');\n  const existing=metadata.find(x=>x.key===META_KEY)?.value??null;\n\
     \  const decision=metadataDecision(existing,desired,job.applied,job.intent);\n\
     \  if(decision==='conflict'){\n    await db.query(\"UPDATE immich_sync.jobs SET\
@@ -363,10 +377,10 @@ data:
     \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal!==false\
     \ && a.libraryId!=null && a.ownerId===ownerId && a.libraryId===libraryId);\n \
     \ if(exact.length!==1)return {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n\
-    \  const a=exact[0];\n  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n\
-    \  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return {reason:'size_mismatch'};\n\
-    \  // Immich external checksums hash \"path:\" + absolute pathname, not image\
-    \ bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
+    \  const a=exact[0];\n  if(a.isTrashed)return {reason:'trashed_asset'};\n  if(a.isOffline)return\
+    \ {reason:'offline_asset'};\n  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return\
+    \ {reason:'size_mismatch'};\n  // Immich external checksums hash \"path:\" + absolute\
+    \ pathname, not image bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
     \  if(a.checksum && a.checksum!==expected)return {reason:'path_checksum_mismatch'};\n\
     \  return {asset:a};\n}\nexport function metadataDecision(current, desired, previous,\
     \ intent) {\n  if(current && stable(current)===stable(desired))return 'unchanged';\n\
@@ -385,6 +399,19 @@ data:
     \  if(!matches.length || matches[0].score<0.5)return {reason:'no_spatial_match'};\n\
     \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
     \  return matches[0];\n}\n"
+  diagnose-errors.mjs: "// Read-only diagnosis using mounted credentials; no keys\
+    \ or photo metadata printed.\nimport {createRequire} from 'node:module';\nimport\
+    \ fs from 'node:fs/promises';\nimport {mapAsset} from '/code/core.mjs';\nconst\
+    \ {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst db=new\
+    \ Client();await db.connect();\ntry {\n const identity=(await db.query(\"SELECT\
+    \ value FROM immich_sync.state WHERE key='identity'\")).rows[0].value;\n const\
+    \ jobs=(await db.query(\"SELECT source_path,asset_id,payload FROM immich_sync.jobs\
+    \ WHERE state='error' LIMIT 10\")).rows;\n const key=(await fs.readFile('/credentials/api-key','utf8')).trim();\n\
+    \ for(const job of jobs){\n  const response=await fetch('http://immich-server:2283/api/assets/'+job.asset_id,{headers:{'x-api-key':key}});\n\
+    \  if(!response.ok){console.log(JSON.stringify({http:response.status}));continue;}\n\
+    \  const asset=await response.json();\n  const match=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[asset],identity.ownerId,identity.libraryId);\n\
+    \  console.log(JSON.stringify({reason:match.reason??'matched',offline:asset.isOffline,trashed:asset.isTrashed,sourceSize:job.payload.sizeBytes,targetSize:asset.exifInfo?.fileSizeInByte}));\n\
+    \ }\n}finally{await db.end();}\n"
   probe.mjs: '// Read-only API shape check. No credentials, file paths or names in
     output.
 
@@ -568,8 +595,9 @@ data:
     \ SET face_id=excluded.face_id,person_id=excluded.person_id,source_hash=excluded.source_hash,state='applied',reason=NULL,updated_at=now()`,[old.id,job.source_path,job.asset_id,face.id,personId,version]);\n\
     \  }\n}\nasync function apply(db,job) {\n  const identity=await state(db,'identity');\n\
     \  const current=await api('/assets/'+job.asset_id);\n  const mapped=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[current],identity.ownerId,identity.libraryId);\n\
-    \  if(!mapped.asset)throw Error('Target identity changed');\n  const file=await\
-    \ verifyFile(job);\n  const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};\n\
+    \  if(!mapped.asset){\n    await db.query(\"UPDATE immich_sync.jobs SET state='conflict',reason=$2,updated_at=now()\
+    \ WHERE source_path=$1\",[job.source_path,mapped.reason]);\n    log('sync.asset_conflict',{source_id:digest(job.source_path).slice(0,16),reason:mapped.reason});return;\n\
+    \  }\n  const file=await verifyFile(job);\n  const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};\n\
     \  const metadata=await api('/assets/'+job.asset_id+'/metadata');\n  const existing=metadata.find(x=>x.key===META_KEY)?.value??null;\n\
     \  const decision=metadataDecision(existing,desired,job.applied,job.intent);\n\
     \  if(decision==='conflict'){\n    await db.query(\"UPDATE immich_sync.jobs SET\
@@ -715,7 +743,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: e2e8a6a60e96f6ce4c92e64183827257acb536c4861e9797fd3331395702ab3a
+        checksum/code: 6c57f09754b2e27fa578fe24528d4add20046185c4125c6cbc1f33ec994bc279
     spec:
       restartPolicy: Always
       automountServiceAccountToken: false

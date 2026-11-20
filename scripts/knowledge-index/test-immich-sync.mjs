@@ -9,6 +9,8 @@ test('matches only one correctly scoped external asset with compatible size and 
  assert.equal(mapAsset(source,[asset],'owner','library').asset.id,'asset');
  assert.equal(mapAsset(source,[{...asset,isExternal:undefined}],'owner','library').asset.id,'asset');
  assert.equal(mapAsset(source,[{...asset,libraryId:null}],'owner','library').reason,'missing_asset');
+ assert.equal(mapAsset(source,[{...asset,isTrashed:true}],'owner','library').reason,'trashed_asset');
+ assert.equal(mapAsset(source,[{...asset,isOffline:true}],'owner','library').reason,'offline_asset');
  assert.equal(mapAsset(source,[asset,asset],'owner','library').reason,'ambiguous_mapping');
  assert.equal(mapAsset(source,[{...asset,isExternal:false}],'owner','library').reason,'missing_asset');
  assert.equal(mapAsset(source,[{...asset,checksum:'wrong'}],'owner','library').reason,'path_checksum_mismatch');
