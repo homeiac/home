@@ -17,7 +17,7 @@ python3 - "$MON" "$PORT" <<'PY'
 import json, sys, urllib.parse, urllib.request, yaml
 mon, port = sys.argv[1:3]
 exprs = []
-j = json.loads(list(yaml.safe_load(open(mon + "/dashboards/knowledge-index.yaml"))["data"].values())[0])
+j = json.loads(list(yaml.safe_load(open(mon + "/../../apps/photo-enrichment/knowledge-index-dashboard.yaml"))["data"].values())[0])
 for p in j["panels"]:
     for t in p.get("targets", []):
         exprs.append(("panel: " + p["title"], t["expr"]))

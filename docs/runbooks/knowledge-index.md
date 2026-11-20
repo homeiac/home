@@ -120,7 +120,7 @@ Search: `SELECT f.path, s.summary FROM media_summaries s JOIN gphotos_media f US
 selection (also by year taken, UTC), pending units, ingest ledger/last run, enrichment rows/queue/last batch, backfill/enricher unit state,
 and SMART health per USB/SATA disk (labelled by model: Linux device letters change between boots).
 
-- Dashboard: Grafana > Homelab > **Knowledge Index** (ConfigMap `infrastructure/monitoring/dashboards/knowledge-index.yaml`).
+- Dashboard: Grafana > Homelab > **Knowledge Index** (ConfigMap `apps/photo-enrichment/knowledge-index-dashboard.yaml`).
   It is GENERATED: edit `scripts/knowledge-index/gen-dashboard.py`, then `python3 scripts/knowledge-index/gen-dashboard.py > <that yaml>`.
 - **Value delivered** (top row): files indexed per minute, summaries per minute, how long the quota question takes now versus the ~38 min
   sidecar scan it replaced (`baseline_s`), index size versus library size, photos and video minutes described, and an **illustrative**

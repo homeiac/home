@@ -34,7 +34,20 @@ def add_panels(panel, panels):
     add('VPA update mode', 'immich_vpa_policy_info', 0, 32, 8, 4, 'stat', legend='{{workload}} · {{mode}}')
     add('Immich API and worker scrape health', 'up{namespace="immich-pilot"}', 8, 32, 8, 4, 'stat', legend='{{service}} · {{endpoint}}')
     add('Immich queue telemetry age', 'time()-immich_observer_last_success_timestamp_seconds{source="queues"}', 16, 32, 8, 4, 'stat', 's')
-    return 37
+    graph = {'id': len(panels)+1, 'title': 'Immich value stream map', 'type': 'nodeGraph',
+        'datasource': {'type':'prometheus','uid':'prometheus'}, 'gridPos': {'x':0,'y':37,'w':24,'h':12},
+        'description': 'The Immich processing branch, isolated from legacy enrichment so the backlog is easy to locate.',
+        'targets': [{'refId': ref, 'expr': 'vector(0) > 1', 'format':'table','instant':True,'range':False} for ref in ['nodes','edges']],
+        'options': {'nodes': {'mainStatUnit': ''}},
+        'transformations': [
+            {'id':'calculateField','filter':{'id':'byRefId','options':'nodes'},'options':{'mode':'reduceRow','reduce':{'reducer':'sum','include':['Value','Value #nodes']},'alias':'mainstat'}},
+            {'id':'organize','filter':{'id':'byRefId','options':'nodes'},'options':{'excludeByName':{'Time':True,'Value':True,'Value #nodes':True}}},
+            {'id':'organize','filter':{'id':'byRefId','options':'edges'},'options':{'excludeByName':{'Time':True,'Value':True,'Value #edges':True}}}]}
+    def node(expr, node_id, title):
+        return f'label_replace(label_replace(({expr}), "id", "{node_id}", "", ""), "title", "{title}", "", "")'
+    add_graph(graph, node)
+    panels.append(graph)
+    return 50
 
 
 def add_graph(graph, node):
