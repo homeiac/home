@@ -1,0 +1,23 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: ollama-cpu
+  namespace: ollama
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ollama-gpu
+  updatePolicy:
+    updateMode: InPlace
+    minReplicas: 1
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        mode: "Off"
+      - containerName: ollama
+        mode: Auto
+        controlledResources: [cpu]
+        controlledValues: RequestsOnly
+        minAllowed: {cpu: "4"}
+        maxAllowed: {cpu: "5"}
