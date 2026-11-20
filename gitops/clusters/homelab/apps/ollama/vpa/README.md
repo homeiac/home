@@ -11,7 +11,11 @@ requires one restart. A zero-surge rollout stops the existing model pod before
 creating its replacement. Subsequent
 VPA changes use Kubernetes in-place CPU resizing with NotRequired restart policy.
 The updater runs in InPlace mode and has no pod eviction permission. An infeasible
-resize waits rather than restarting the model. Template request remains 4 CPUs
+resize waits rather than restarting the model. The updater can converge to the
+target after a two-minute pod warmup, instead of waiting the default 12 hours
+when the current request is already inside the recommendation bounds. The
+upstream flag name includes "eviction", but InPlace mode and no eviction RBAC
+keep these changes restart-free. Template request remains 4 CPUs
 on later pod replacements; the updater reapplies recommendations afterward.
 
 Requires Kubernetes 1.35+ and existing VPA 1.7.3 CRDs. Those CRDs are currently
