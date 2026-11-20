@@ -235,14 +235,16 @@ data:
     \ is easy to locate. Immich is a separate branch reading the same library. Its\
     \ nodes show queued jobs, and thumbnail completions show jobs/min. Static edges\
     \ show logical processing dependencies, not measured transfer rates or elapsed\
-    \ time. Immich uses its own ML service; Frigate is not its face engine. Custom\
-    \ enrichment is not yet wired into Immich. See Photo App for CPU throttling, queue\
-    \ states, throughput and VPA recommendations.\",\n      \"targets\": [\n     \
-    \   {\n          \"refId\": \"nodes\",\n          \"expr\": \"vector(0) > 1 or\
-    \ label_replace(label_replace((sum(immich_queue_jobs{queue=\\\"library\\\",state=~\\\
-    \"waiting|delayed|prioritized|paused\\\"})), \\\"id\\\", \\\"immich_library\\\"\
-    , \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich library (queued jobs)\\\", \\\
-    \"\\\", \\\"\\\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\\\
+    \ time. Immich uses its own ML service; Frigate is not its face engine. Knowledge\
+    \ Index enrichment flows through a durable reconciliation queue into verified\
+    \ Immich custom metadata. These are counts, not timing percentages. Native descriptions\
+    \ and face assignments remain gated; preserved provenance is not native UI promotion.\
+    \ See Photo App for CPU throttling, queue states, throughput and VPA recommendations.\"\
+    ,\n      \"targets\": [\n        {\n          \"refId\": \"nodes\",\n        \
+    \  \"expr\": \"vector(0) > 1 or label_replace(label_replace((sum(immich_queue_jobs{queue=\\\
+    \"library\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})), \\\"id\\\"\
+    , \\\"immich_library\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich library\
+    \ (queued jobs)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\\\
     \"sidecar\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})), \\\"id\\\"\
     , \\\"immich_sidecar\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich sidecar\
     \ (queued jobs)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\\\
@@ -273,18 +275,30 @@ data:
     \", \\\"Immich duplicate detection (queued jobs)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\\\
     \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60), \\\"id\\\", \\\"\
     immich_gallery\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich thumbnail completions\
-    \ (jobs/min)\\\", \\\"\\\", \\\"\\\")\",\n          \"format\": \"table\",\n \
-    \         \"instant\": true,\n          \"range\": false\n        },\n       \
-    \ {\n          \"refId\": \"edges\",\n          \"expr\": \"vector(0) > 1 or label_replace(label_replace(label_replace(vector(1),\
-    \ \\\"id\\\", \\\"immich_library_metadata\\\", \\\"\\\", \\\"\\\"), \\\"source\\\
-    \", \\\"immich_library\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"immich_metadata\\\
+    \ (jobs/min)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((immich_sync_available_summaries),\
+    \ \\\"id\\\", \\\"sync_source\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Knowledge\
+    \ Index completed summaries\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((immich_sync_assets{state=\\\
+    \"pending\\\"}), \\\"id\\\", \\\"sync_pending\\\", \\\"\\\", \\\"\\\"), \\\"title\\\
+    \", \\\"Enrichment queue (assets)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((immich_sync_assets{state=\\\
+    \"applied\\\"}), \\\"id\\\", \\\"sync_preserved\\\", \\\"\\\", \\\"\\\"), \\\"\
+    title\\\", \\\"Immich custom metadata (assets)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(immich_sync_assets{state=~\\\
+    \"error|conflict\\\"})), \\\"id\\\", \\\"sync_review\\\", \\\"\\\", \\\"\\\"),\
+    \ \\\"title\\\", \\\"Sync errors or conflicts (assets)\\\", \\\"\\\", \\\"\\\"\
+    ) or label_replace(label_replace((sum(immich_sync_assets{state=~\\\"missing|excluded\\\
+    \"})), \\\"id\\\", \\\"sync_unmapped\\\", \\\"\\\", \\\"\\\"), \\\"title\\\",\
+    \ \\\"Missing or excluded (assets)\\\", \\\"\\\", \\\"\\\")\",\n          \"format\"\
+    : \"table\",\n          \"instant\": true,\n          \"range\": false\n     \
+    \   },\n        {\n          \"refId\": \"edges\",\n          \"expr\": \"vector(0)\
+    \ > 1 or label_replace(label_replace(label_replace(vector(1), \\\"id\\\", \\\"\
+    immich_library_metadata\\\", \\\"\\\", \\\"\\\"), \\\"source\\\", \\\"immich_library\\\
+    \", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"immich_metadata\\\", \\\"\\\", \\\
+    \"\\\") or label_replace(label_replace(label_replace(vector(1), \\\"id\\\", \\\
+    \"immich_sidecar_metadata\\\", \\\"\\\", \\\"\\\"), \\\"source\\\", \\\"immich_sidecar\\\
+    \", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"immich_metadata\\\", \\\"\\\", \\\
+    \"\\\") or label_replace(label_replace(label_replace(vector(1), \\\"id\\\", \\\
+    \"immich_metadata_thumbnail_generation\\\", \\\"\\\", \\\"\\\"), \\\"source\\\"\
+    , \\\"immich_metadata\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"immich_thumbnail_generation\\\
     \", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
-    \ \\\"id\\\", \\\"immich_sidecar_metadata\\\", \\\"\\\", \\\"\\\"), \\\"source\\\
-    \", \\\"immich_sidecar\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"immich_metadata\\\
-    \", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
-    \ \\\"id\\\", \\\"immich_metadata_thumbnail_generation\\\", \\\"\\\", \\\"\\\"\
-    ), \\\"source\\\", \\\"immich_metadata\\\", \\\"\\\", \\\"\\\"), \\\"target\\\"\
-    , \\\"immich_thumbnail_generation\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
     \ \\\"id\\\", \\\"immich_thumbnail_generation_gallery\\\", \\\"\\\", \\\"\\\"\
     ), \\\"source\\\", \\\"immich_thumbnail_generation\\\", \\\"\\\", \\\"\\\"), \\\
     \"target\\\", \\\"immich_gallery\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
@@ -305,86 +319,260 @@ data:
     \", \\\"immich_ocr\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
     \ \\\"id\\\", \\\"immich_metadata_video_conversion\\\", \\\"\\\", \\\"\\\"), \\\
     \"source\\\", \\\"immich_metadata\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\
-    \"immich_video_conversion\\\", \\\"\\\", \\\"\\\")\",\n          \"format\": \"\
-    table\",\n          \"instant\": true,\n          \"range\": false\n        }\n\
-    \      ],\n      \"options\": {\n        \"nodes\": {\n          \"mainStatUnit\"\
-    : \"\"\n        }\n      },\n      \"transformations\": [\n        {\n       \
-    \   \"id\": \"calculateField\",\n          \"filter\": {\n            \"id\":\
-    \ \"byRefId\",\n            \"options\": \"nodes\"\n          },\n          \"\
-    options\": {\n            \"mode\": \"reduceRow\",\n            \"reduce\": {\n\
-    \              \"reducer\": \"sum\",\n              \"include\": [\n         \
-    \       \"Value\",\n                \"Value #nodes\"\n              ]\n      \
-    \      },\n            \"alias\": \"mainstat\"\n          }\n        },\n    \
-    \    {\n          \"id\": \"organize\",\n          \"filter\": {\n           \
-    \ \"id\": \"byRefId\",\n            \"options\": \"nodes\"\n          },\n   \
-    \       \"options\": {\n            \"excludeByName\": {\n              \"Time\"\
-    : true,\n              \"Value\": true,\n              \"Value #nodes\": true\n\
-    \            }\n          }\n        },\n        {\n          \"id\": \"organize\"\
+    \"immich_video_conversion\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
+    \ \\\"id\\\", \\\"sync_source_sync_pending\\\", \\\"\\\", \\\"\\\"), \\\"source\\\
+    \", \\\"sync_source\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"sync_pending\\\
+    \", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
+    \ \\\"id\\\", \\\"immich_metadata_sync_pending\\\", \\\"\\\", \\\"\\\"), \\\"\
+    source\\\", \\\"immich_metadata\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"\
+    sync_pending\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
+    \ \\\"id\\\", \\\"sync_pending_sync_preserved\\\", \\\"\\\", \\\"\\\"), \\\"source\\\
+    \", \\\"sync_pending\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"sync_preserved\\\
+    \", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
+    \ \\\"id\\\", \\\"sync_pending_sync_review\\\", \\\"\\\", \\\"\\\"), \\\"source\\\
+    \", \\\"sync_pending\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"sync_review\\\
+    \", \\\"\\\", \\\"\\\") or label_replace(label_replace(label_replace(vector(1),\
+    \ \\\"id\\\", \\\"sync_source_sync_unmapped\\\", \\\"\\\", \\\"\\\"), \\\"source\\\
+    \", \\\"sync_source\\\", \\\"\\\", \\\"\\\"), \\\"target\\\", \\\"sync_unmapped\\\
+    \", \\\"\\\", \\\"\\\")\",\n          \"format\": \"table\",\n          \"instant\"\
+    : true,\n          \"range\": false\n        }\n      ],\n      \"options\": {\n\
+    \        \"nodes\": {\n          \"mainStatUnit\": \"\"\n        }\n      },\n\
+    \      \"transformations\": [\n        {\n          \"id\": \"calculateField\"\
     ,\n          \"filter\": {\n            \"id\": \"byRefId\",\n            \"options\"\
-    : \"edges\"\n          },\n          \"options\": {\n            \"excludeByName\"\
+    : \"nodes\"\n          },\n          \"options\": {\n            \"mode\": \"\
+    reduceRow\",\n            \"reduce\": {\n              \"reducer\": \"sum\",\n\
+    \              \"include\": [\n                \"Value\",\n                \"\
+    Value #nodes\"\n              ]\n            },\n            \"alias\": \"mainstat\"\
+    \n          }\n        },\n        {\n          \"id\": \"organize\",\n      \
+    \    \"filter\": {\n            \"id\": \"byRefId\",\n            \"options\"\
+    : \"nodes\"\n          },\n          \"options\": {\n            \"excludeByName\"\
     : {\n              \"Time\": true,\n              \"Value\": true,\n         \
-    \     \"Value #edges\": true\n            }\n          }\n        }\n      ]\n\
-    \    },\n    {\n      \"id\": 17,\n      \"title\": \"Independent API probe\"\
-    ,\n      \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    \     \"Value #nodes\": true\n            }\n          }\n        },\n       \
+    \ {\n          \"id\": \"organize\",\n          \"filter\": {\n            \"\
+    id\": \"byRefId\",\n            \"options\": \"edges\"\n          },\n       \
+    \   \"options\": {\n            \"excludeByName\": {\n              \"Time\":\
+    \ true,\n              \"Value\": true,\n              \"Value #edges\": true\n\
+    \            }\n          }\n        }\n      ]\n    },\n    {\n      \"id\":\
+    \ 17,\n      \"title\": \"Summaries available in source snapshot\",\n      \"\
+    type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
+    \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
+    : 0,\n        \"y\": 50,\n        \"w\": 6,\n        \"h\": 4\n      },\n    \
+    \  \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"immich_sync_available_summaries\",\n          \"legendFormat\": \"\",\n  \
+    \        \"instant\": true,\n          \"range\": false\n        }\n      ],\n\
+    \      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\
+    \n        },\n        \"overrides\": []\n      },\n      \"options\": {\n    \
+    \    \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\"\
+    : \"Successful summaries in the PostgreSQL catalog snapshot. The original Parquet\
+    \ worker can be ahead until the next catalog refresh.\"\n    },\n    {\n     \
+    \ \"id\": 18,\n      \"title\": \"Enrichment waiting for Immich\",\n      \"type\"\
+    : \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n    \
+    \    \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 6,\n\
+    \        \"y\": 50,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"immich_sync_assets{state=\\\
+    \"pending\\\"}\",\n          \"legendFormat\": \"\",\n          \"instant\": true,\n\
+    \          \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n \
+    \       \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
+    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
+    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
+    \n          ]\n        }\n      },\n      \"description\": \"\"\n    },\n    {\n\
+    \      \"id\": 19,\n      \"title\": \"Enrichment preserved in Immich\",\n   \
+    \   \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
     ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
-    x\": 0,\n        \"y\": 50,\n        \"w\": 6,\n        \"h\": 4\n      },\n \
-    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
-    : \"min(photo_app_probe_success{probe=\\\"api\\\"})\",\n          \"legendFormat\"\
-    : \"{{route}}\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\"\
+    x\": 12,\n        \"y\": 50,\n        \"w\": 6,\n        \"h\": 4\n      },\n\
+    \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"immich_sync_assets{state=\\\"applied\\\"}\",\n          \"legendFormat\":\
+    \ \"\",\n          \"instant\": true,\n          \"range\": false\n        }\n\
+    \      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\"\
+    : \"short\"\n        },\n        \"overrides\": []\n      },\n      \"options\"\
+    : {\n        \"legend\": {\n          \"displayMode\": \"list\",\n          \"\
+    placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"\
+    calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n      },\n  \
+    \    \"description\": \"Custom metadata verified through the Immich API. Includes\
+    \ captions, tags, groups and old face labels; this does not mean native descriptions\
+    \ or people have been changed.\"\n    },\n    {\n      \"id\": 20,\n      \"title\"\
+    : \"Normal captions: gated\",\n      \"type\": \"stat\",\n      \"datasource\"\
+    : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
+    \  },\n      \"gridPos\": {\n        \"x\": 18,\n        \"y\": 50,\n        \"\
+    w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n        {\n       \
+    \   \"refId\": \"A\",\n          \"expr\": \"immich_sync_visible_captions_enabled\"\
+    ,\n          \"legendFormat\": \"\",\n          \"instant\": true,\n         \
+    \ \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n        \"\
+    defaults\": {\n          \"unit\": \"short\",\n          \"mappings\": [\n   \
+    \         {\n              \"type\": \"value\",\n              \"options\": {\n\
+    \                \"0\": {\n                  \"text\": \"Preserve only\",\n  \
+    \                \"color\": \"blue\"\n                }\n              }\n   \
+    \         }\n          ]\n        },\n        \"overrides\": []\n      },\n  \
+    \    \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
+    ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      },\n      \"description\": \"Normal caption/GPS/date writes remain\
+    \ disabled for read-only external libraries. Custom metadata survives metadata\
+    \ extraction.\"\n    },\n    {\n      \"id\": 21,\n      \"title\": \"Enrichment\
+    \ reconciliation over time\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
+    : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
+    \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 54,\n        \"\
+    w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n      \
+    \    \"refId\": \"A\",\n          \"expr\": \"immich_sync_assets\",\n        \
+    \  \"legendFormat\": \"{{state}}\"\n        }\n      ],\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n    \
+    \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
+    \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
+    \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
+    \ \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\": \"\
+    Pending and errors retry incrementally. Conflicts preserve edits. Excluded paths\
+    \ are outside the imported year folders; missing assets are not automatically\
+    \ imported.\"\n    },\n    {\n      \"id\": 22,\n      \"title\": \"Summary preservation\
+    \ over time\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n   \
+    \     \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n \
+    \     \"gridPos\": {\n        \"x\": 12,\n        \"y\": 54,\n        \"w\": 12,\n\
+    \        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\"\
+    : \"A\",\n          \"expr\": \"immich_sync_summaries\",\n          \"legendFormat\"\
+    : \"{{state}}\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\"\
     : {\n          \"unit\": \"short\"\n        },\n        \"overrides\": []\n  \
     \    },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
     : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 18,\n      \"title\": \"Requests waiting\
-    \ for the DB lock\",\n      \"type\": \"stat\",\n      \"datasource\": {\n   \
-    \     \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n \
-    \     \"gridPos\": {\n        \"x\": 6,\n        \"y\": 50,\n        \"w\": 6,\n\
-    \        \"h\": 4\n      },\n      \"targets\": [\n        {\n          \"refId\"\
-    : \"A\",\n          \"expr\": \"max(photo_app_lock_waiters{service_name=\\\"photo-review\\\
-    \"})\",\n          \"legendFormat\": \"{{route}}\"\n        }\n      ],\n    \
-    \  \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\n\
-    \        },\n        \"overrides\": []\n      },\n      \"options\": {\n     \
-    \   \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    \  }\n      },\n      \"description\": \"Counts only reconciliation records containing\
+    \ a summary. Separate from the larger source generation backlog.\"\n    },\n \
+    \   {\n      \"id\": 23,\n      \"title\": \"Source-confirmed face labels preserved\"\
+    ,\n      \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
+    x\": 0,\n        \"y\": 61,\n        \"w\": 6,\n        \"h\": 4\n      },\n \
+    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"immich_sync_confirmed_labels_preserved\",\n          \"legendFormat\": \"\"\
+    ,\n          \"instant\": true,\n          \"range\": false\n        }\n     \
+    \ ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"\
+    short\"\n        },\n        \"overrides\": []\n      },\n      \"options\": {\n\
+    \        \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\"\
+    : \"Labels saved as provenance in custom metadata, not native Immich face assignments.\
+    \ Native face transfer remains disabled.\"\n    },\n    {\n      \"id\": 24,\n\
+    \      \"title\": \"Reconciliation worker ready\",\n      \"type\": \"stat\",\n\
+    \      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\":\
+    \ \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 6,\n        \"\
+    y\": 61,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n\
+    \        {\n          \"refId\": \"A\",\n          \"expr\": \"immich_sync_api_ready\"\
+    ,\n          \"legendFormat\": \"\",\n          \"instant\": true,\n         \
+    \ \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n        \"\
+    defaults\": {\n          \"unit\": \"short\"\n        },\n        \"overrides\"\
+    : []\n      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
+    : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      },\n      \"description\": \"\"\n    },\n    {\n      \"id\": 25,\n\
+    \      \"title\": \"Source discovery age\",\n      \"type\": \"stat\",\n     \
+    \ \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\
+    \n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 61,\n   \
+    \     \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n        {\n\
+    \          \"refId\": \"A\",\n          \"expr\": \"time()-immich_sync_last_discovery\"\
+    ,\n          \"legendFormat\": \"\",\n          \"instant\": true,\n         \
+    \ \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n        \"\
+    defaults\": {\n          \"unit\": \"s\"\n        },\n        \"overrides\": []\n\
+    \      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
+    : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      },\n      \"description\": \"Discovery runs every ten minutes. Zero\
+    \ timestamp means no discovery has succeeded yet.\"\n    },\n    {\n      \"id\"\
+    : 26,\n      \"title\": \"Reconciliation mode\",\n      \"type\": \"stat\",\n\
+    \      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\":\
+    \ \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 18,\n       \
+    \ \"y\": 61,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"immich_sync_mode\"\
+    ,\n          \"legendFormat\": \"{{mode}}\",\n          \"instant\": true,\n \
+    \         \"range\": false\n        }\n      ],\n      \"fieldConfig\": {\n  \
+    \      \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"\
+    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
+    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
+    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
+    \n          ]\n        }\n      },\n      \"description\": \"\"\n    },\n    {\n\
+    \      \"id\": 27,\n      \"title\": \"Reconciliation cycle duration\",\n    \
+    \  \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
+    x\": 0,\n        \"y\": 65,\n        \"w\": 12,\n        \"h\": 6\n      },\n\
+    \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"immich_sync_cycle_seconds\",\n          \"legendFormat\": \"\"\n        }\n\
+    \      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\"\
+    : \"s\"\n        },\n        \"overrides\": []\n      },\n      \"options\": {\n\
+    \        \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      },\n      \"description\"\
+    : \"\"\n    },\n    {\n      \"id\": 28,\n      \"title\": \"Oldest eligible transfer\
+    \ waiting\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n     \
+    \   \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n   \
+    \   \"gridPos\": {\n        \"x\": 12,\n        \"y\": 65,\n        \"w\": 12,\n\
+    \        \"h\": 6\n      },\n      \"targets\": [\n        {\n          \"refId\"\
+    : \"A\",\n          \"expr\": \"immich_sync_oldest_pending_seconds\",\n      \
+    \    \"legendFormat\": \"\"\n        }\n      ],\n      \"fieldConfig\": {\n \
+    \       \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"overrides\"\
+    : []\n      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
+    : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      },\n      \"description\": \"\"\n    },\n    {\n      \"id\": 29,\n\
+    \      \"title\": \"Independent API probe\",\n      \"type\": \"stat\",\n    \
+    \  \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\
+    \n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 72,\n    \
+    \    \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n        {\n\
+    \          \"refId\": \"A\",\n          \"expr\": \"min(photo_app_probe_success{probe=\\\
+    \"api\\\"})\",\n          \"legendFormat\": \"{{route}}\"\n        }\n      ],\n\
+    \      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\
+    \n        },\n        \"overrides\": []\n      },\n      \"options\": {\n    \
+    \    \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
     : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
     \            \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n\
-    \      \"id\": 19,\n      \"title\": \"Oldest unfinished request\",\n      \"\
+    \      \"id\": 30,\n      \"title\": \"Requests waiting for the DB lock\",\n \
+    \     \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
+    x\": 6,\n        \"y\": 72,\n        \"w\": 6,\n        \"h\": 4\n      },\n \
+    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"max(photo_app_lock_waiters{service_name=\\\"photo-review\\\"})\",\n      \
+    \    \"legendFormat\": \"{{route}}\"\n        }\n      ],\n      \"fieldConfig\"\
+    : {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n    \
+    \    \"overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n\
+    \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
+    \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
+    \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
+    : 31,\n      \"title\": \"Oldest unfinished request\",\n      \"type\": \"stat\"\
+    ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
+    : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n       \
+    \ \"y\": 72,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"max(photo_app_oldest_request_seconds{service_name=\\\
+    \"photo-review\\\"})\",\n          \"legendFormat\": \"{{route}}\"\n        }\n\
+    \      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\"\
+    : \"s\"\n        },\n        \"overrides\": []\n      },\n      \"options\": {\n\
+    \        \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
+    : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
+    \            \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n\
+    \      \"id\": 32,\n      \"title\": \"Time since automated triage\",\n      \"\
     type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
     \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
-    : 12,\n        \"y\": 50,\n        \"w\": 6,\n        \"h\": 4\n      },\n   \
+    : 18,\n        \"y\": 72,\n        \"w\": 6,\n        \"h\": 4\n      },\n   \
     \   \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
-    : \"max(photo_app_oldest_request_seconds{service_name=\\\"photo-review\\\"})\"\
-    ,\n          \"legendFormat\": \"{{route}}\"\n        }\n      ],\n      \"fieldConfig\"\
-    : {\n        \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"\
-    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
-    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
-    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
-    \n          ]\n        }\n      }\n    },\n    {\n      \"id\": 20,\n      \"\
-    title\": \"Time since automated triage\",\n      \"type\": \"stat\",\n      \"\
-    datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\
-    \n      },\n      \"gridPos\": {\n        \"x\": 18,\n        \"y\": 50,\n   \
-    \     \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n        {\n\
-    \          \"refId\": \"A\",\n          \"expr\": \"time()-max(photo_app_triage_timestamp_seconds)\"\
-    ,\n          \"legendFormat\": \"{{route}}\"\n        }\n      ],\n      \"fieldConfig\"\
-    : {\n        \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"\
-    overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
-    \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
-    \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
-    \n          ]\n        }\n      }\n    },\n    {\n      \"id\": 21,\n      \"\
-    title\": \"Requests per second\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
-    : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
-    \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 54,\n        \"\
-    w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n      \
-    \    \"refId\": \"A\",\n          \"expr\": \"sum by(route)(rate(photo_app_http_requests_total{service_name=\\\
+    : \"time()-max(photo_app_triage_timestamp_seconds)\",\n          \"legendFormat\"\
+    : \"{{route}}\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\"\
+    : {\n          \"unit\": \"s\"\n        },\n        \"overrides\": []\n      },\n\
+    \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
+    ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
+    : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
+    \  }\n      }\n    },\n    {\n      \"id\": 33,\n      \"title\": \"Requests per\
+    \ second\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n      \
+    \  \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n    \
+    \  \"gridPos\": {\n        \"x\": 0,\n        \"y\": 76,\n        \"w\": 12,\n\
+    \        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\"\
+    : \"A\",\n          \"expr\": \"sum by(route)(rate(photo_app_http_requests_total{service_name=\\\
     \"photo-review\\\"}[5m]))\",\n          \"legendFormat\": \"{{route}}\"\n    \
     \    }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n        \
     \  \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n    \
     \  \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
     ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 22,\n      \"title\": \"Request latency\
+    \  }\n      }\n    },\n    {\n      \"id\": 34,\n      \"title\": \"Request latency\
     \ p95\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"\
     type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\"\
-    : {\n        \"x\": 12,\n        \"y\": 54,\n        \"w\": 12,\n        \"h\"\
+    : {\n        \"x\": 12,\n        \"y\": 76,\n        \"w\": 12,\n        \"h\"\
     : 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n\
     \          \"expr\": \"histogram_quantile(0.95,sum by(le,route)(rate(photo_app_http_duration_seconds_bucket{service_name=\\\
     \"photo-review\\\"}[5m])))\",\n          \"legendFormat\": \"{{route}}\"\n   \
@@ -393,10 +581,10 @@ data:
     options\": {\n        \"legend\": {\n          \"displayMode\": \"list\",\n  \
     \        \"placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n\
     \          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n\
-    \      }\n    },\n    {\n      \"id\": 23,\n      \"title\": \"Errors and busy\
+    \      }\n    },\n    {\n      \"id\": 35,\n      \"title\": \"Errors and busy\
     \ responses\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n   \
     \     \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n \
-    \     \"gridPos\": {\n        \"x\": 0,\n        \"y\": 61,\n        \"w\": 12,\n\
+    \     \"gridPos\": {\n        \"x\": 0,\n        \"y\": 83,\n        \"w\": 12,\n\
     \        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\"\
     : \"A\",\n          \"expr\": \"sum by(route,status)(rate(photo_app_http_requests_total{service_name=\\\
     \"photo-review\\\",status=~\\\"5..\\\"}[5m]))\",\n          \"legendFormat\":\
@@ -406,10 +594,10 @@ data:
     \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
     \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
     \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
-    : 24,\n      \"title\": \"Database time: PostgreSQL vs DuckDB\",\n      \"type\"\
+    : 36,\n      \"title\": \"Database time: PostgreSQL vs DuckDB\",\n      \"type\"\
     : \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
     \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
-    : 12,\n        \"y\": 61,\n        \"w\": 12,\n        \"h\": 7\n      },\n  \
+    : 12,\n        \"y\": 83,\n        \"w\": 12,\n        \"h\": 7\n      },\n  \
     \    \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"sum by(stage)(rate(photo_app_db_duration_seconds_sum{service_name=\\\"photo-review\\\
     \"}[5m]))\",\n          \"legendFormat\": \"{{stage}}\"\n        }\n      ],\n\
@@ -418,10 +606,10 @@ data:
     \   \"legend\": {\n          \"displayMode\": \"list\",\n          \"placement\"\
     : \"bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n\
     \            \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n\
-    \      \"id\": 25,\n      \"title\": \"DB lock wait p95\",\n      \"type\": \"\
+    \      \"id\": 37,\n      \"title\": \"DB lock wait p95\",\n      \"type\": \"\
     timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n  \
     \      \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
-    : 0,\n        \"y\": 68,\n        \"w\": 8,\n        \"h\": 6\n      },\n    \
+    : 0,\n        \"y\": 90,\n        \"w\": 8,\n        \"h\": 6\n      },\n    \
     \  \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"histogram_quantile(0.95,sum by(le)(rate(photo_app_lock_wait_seconds_bucket{service_name=\\\
     \"photo-review\\\"}[5m])))\",\n          \"legendFormat\": \"{{route}}\"\n   \
@@ -430,10 +618,10 @@ data:
     options\": {\n        \"legend\": {\n          \"displayMode\": \"list\",\n  \
     \        \"placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n\
     \          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n\
-    \      }\n    },\n    {\n      \"id\": 26,\n      \"title\": \"In-flight requests\"\
+    \      }\n    },\n    {\n      \"id\": 38,\n      \"title\": \"In-flight requests\"\
     ,\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\"\
     : \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\"\
-    : {\n        \"x\": 8,\n        \"y\": 68,\n        \"w\": 8,\n        \"h\":\
+    : {\n        \"x\": 8,\n        \"y\": 90,\n        \"w\": 8,\n        \"h\":\
     \ 6\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n\
     \          \"expr\": \"max(photo_app_inflight{service_name=\\\"photo-review\\\"\
     })\",\n          \"legendFormat\": \"{{route}}\"\n        }\n      ],\n      \"\
@@ -442,10 +630,10 @@ data:
     legend\": {\n          \"displayMode\": \"list\",\n          \"placement\": \"\
     bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n \
     \           \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n\
-    \      \"id\": 27,\n      \"title\": \"Automatic diagnostic incident\",\n    \
+    \      \"id\": 39,\n      \"title\": \"Automatic diagnostic incident\",\n    \
     \  \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
     ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
-    x\": 16,\n        \"y\": 68,\n        \"w\": 8,\n        \"h\": 6\n      },\n\
+    x\": 16,\n        \"y\": 90,\n        \"w\": 8,\n        \"h\": 6\n      },\n\
     \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"max(photo_app_triage_incident)\",\n          \"legendFormat\": \"{{route}}\"\
     \n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n   \
@@ -453,10 +641,10 @@ data:
     \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
     ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 28,\n      \"title\": \"PostgreSQL\
+    \  }\n      }\n    },\n    {\n      \"id\": 40,\n      \"title\": \"PostgreSQL\
     \ pooled connections in use\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
     : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
-    \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 74,\n        \"\
+    \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 96,\n        \"\
     w\": 8,\n        \"h\": 6\n      },\n      \"targets\": [\n        {\n       \
     \   \"refId\": \"A\",\n          \"expr\": \"photo_app_pg_pool_connections{service_name=\\\
     \"photo-review\\\"}-photo_app_pg_pool_idle{service_name=\\\"photo-review\\\"}\"\
@@ -466,10 +654,10 @@ data:
     \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
     \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
     \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
-    : 29,\n      \"title\": \"PostgreSQL requests waiting for a connection\",\n  \
+    : 41,\n      \"title\": \"PostgreSQL requests waiting for a connection\",\n  \
     \    \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"\
     prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n\
-    \        \"x\": 8,\n        \"y\": 74,\n        \"w\": 8,\n        \"h\": 6\n\
+    \        \"x\": 8,\n        \"y\": 96,\n        \"w\": 8,\n        \"h\": 6\n\
     \      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n    \
     \      \"expr\": \"photo_app_pg_pool_waiting{service_name=\\\"photo-review\\\"\
     }\",\n          \"legendFormat\": \"{{pool}}\"\n        }\n      ],\n      \"\
@@ -478,10 +666,10 @@ data:
     legend\": {\n          \"displayMode\": \"list\",\n          \"placement\": \"\
     bottom\"\n        },\n        \"reduceOptions\": {\n          \"calcs\": [\n \
     \           \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n\
-    \      \"id\": 30,\n      \"title\": \"Connection pool wait p95\",\n      \"type\"\
+    \      \"id\": 42,\n      \"title\": \"Connection pool wait p95\",\n      \"type\"\
     : \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
     \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
-    : 16,\n        \"y\": 74,\n        \"w\": 8,\n        \"h\": 6\n      },\n   \
+    : 16,\n        \"y\": 96,\n        \"w\": 8,\n        \"h\": 6\n      },\n   \
     \   \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"histogram_quantile(0.95,sum by(le,pool)(rate(photo_app_pool_wait_seconds_bucket{service_name=\\\
     \"photo-review\\\"}[5m])))\",\n          \"legendFormat\": \"{{pool}}\"\n    \
@@ -490,21 +678,21 @@ data:
     options\": {\n        \"legend\": {\n          \"displayMode\": \"list\",\n  \
     \        \"placement\": \"bottom\"\n        },\n        \"reduceOptions\": {\n\
     \          \"calcs\": [\n            \"lastNotNull\"\n          ]\n        }\n\
-    \      }\n    },\n    {\n      \"id\": 31,\n      \"title\": \"Slow requests,\
+    \      }\n    },\n    {\n      \"id\": 43,\n      \"title\": \"Slow requests,\
     \ errors and automatic diagnosis \\u00b7 trace IDs link to Photo traces\",\n \
     \     \"type\": \"logs\",\n      \"datasource\": {\n        \"type\": \"loki\"\
     ,\n        \"uid\": \"photo-loki\"\n      },\n      \"gridPos\": {\n        \"\
-    x\": 0,\n        \"y\": 80,\n        \"w\": 24,\n        \"h\": 12\n      },\n\
+    x\": 0,\n        \"y\": 102,\n        \"w\": 24,\n        \"h\": 12\n      },\n\
     \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"{service_name=~\\\"photo-review|photo-triage|photo-context\\\"} | json | event=~\\\
     \"request.slow|request.error|triage.result|matching.finished|context.finished|context.error|context.deferred\\\
     \"\",\n          \"queryType\": \"range\"\n        }\n      ],\n      \"options\"\
     : {\n        \"showTime\": true,\n        \"wrapLogMessage\": true,\n        \"\
     sortOrder\": \"Descending\",\n        \"enableLogDetails\": true\n      }\n  \
-    \  },\n    {\n      \"id\": 32,\n      \"title\": \"Photo context backlog\",\n\
+    \  },\n    {\n      \"id\": 44,\n      \"title\": \"Photo context backlog\",\n\
     \      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"\
     prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n\
-    \        \"x\": 0,\n        \"y\": 92,\n        \"w\": 8,\n        \"h\": 6\n\
+    \        \"x\": 0,\n        \"y\": 114,\n        \"w\": 8,\n        \"h\": 6\n\
     \      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n    \
     \      \"expr\": \"sum by(kind)(photo_context_jobs)\",\n          \"legendFormat\"\
     : \"{{kind}}\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\"\
@@ -512,10 +700,10 @@ data:
     \    },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
     : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 33,\n      \"title\": \"Context lookup\
+    \  }\n      }\n    },\n    {\n      \"id\": 45,\n      \"title\": \"Context lookup\
     \ and local LLM stage time\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
     : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
-    \  },\n      \"gridPos\": {\n        \"x\": 8,\n        \"y\": 92,\n        \"\
+    \  },\n      \"gridPos\": {\n        \"x\": 8,\n        \"y\": 114,\n        \"\
     w\": 8,\n        \"h\": 6\n      },\n      \"targets\": [\n        {\n       \
     \   \"refId\": \"A\",\n          \"expr\": \"sum by(stage)(rate(photo_context_stage_seconds_total[5m]))\"\
     ,\n          \"legendFormat\": \"{{stage}}\"\n        }\n      ],\n      \"fieldConfig\"\
@@ -523,11 +711,11 @@ data:
     overrides\": []\n      },\n      \"options\": {\n        \"legend\": {\n     \
     \     \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n      \
     \  },\n        \"reduceOptions\": {\n          \"calcs\": [\n            \"lastNotNull\"\
-    \n          ]\n        }\n      }\n    },\n    {\n      \"id\": 34,\n      \"\
+    \n          ]\n        }\n      }\n    },\n    {\n      \"id\": 46,\n      \"\
     title\": \"GPS lookup cache use since worker start\",\n      \"type\": \"timeseries\"\
     ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
     : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 16,\n       \
-    \ \"y\": 92,\n        \"w\": 8,\n        \"h\": 6\n      },\n      \"targets\"\
+    \ \"y\": 114,\n        \"w\": 8,\n        \"h\": 6\n      },\n      \"targets\"\
     : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"sum by(kind)(photo_context_inventory)\"\
     ,\n          \"legendFormat\": \"{{kind}}\"\n        }\n      ],\n      \"fieldConfig\"\
     : {\n        \"defaults\": {\n          \"unit\": \"short\"\n        },\n    \
@@ -535,21 +723,21 @@ data:
     \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
     \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
     \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
-    : 35,\n      \"title\": \"Immich API and worker metrics availability\",\n    \
+    : 47,\n      \"title\": \"Immich API and worker metrics availability\",\n    \
     \  \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
     ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
-    x\": 0,\n        \"y\": 98,\n        \"w\": 8,\n        \"h\": 6\n      },\n \
-    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    x\": 0,\n        \"y\": 120,\n        \"w\": 8,\n        \"h\": 6\n      },\n\
+    \      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
     : \"up{namespace=\\\"immich-pilot\\\"}\",\n          \"legendFormat\": \"{{endpoint}}\"\
     \n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n   \
     \       \"unit\": \"short\"\n        },\n        \"overrides\": []\n      },\n\
     \      \"options\": {\n        \"legend\": {\n          \"displayMode\": \"list\"\
     ,\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
-    \  }\n      }\n    },\n    {\n      \"id\": 36,\n      \"title\": \"Immich CPU\
+    \  }\n      }\n    },\n    {\n      \"id\": 48,\n      \"title\": \"Immich CPU\
     \ by pod\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n      \
     \  \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n    \
-    \  \"gridPos\": {\n        \"x\": 8,\n        \"y\": 98,\n        \"w\": 8,\n\
+    \  \"gridPos\": {\n        \"x\": 8,\n        \"y\": 120,\n        \"w\": 8,\n\
     \        \"h\": 6\n      },\n      \"targets\": [\n        {\n          \"refId\"\
     : \"A\",\n          \"expr\": \"sum by(pod)(rate(container_cpu_usage_seconds_total{namespace=\\\
     \"immich-pilot\\\",container!=\\\"POD\\\",container!=\\\"\\\"}[5m]))\",\n    \
@@ -559,10 +747,10 @@ data:
     \          \"displayMode\": \"list\",\n          \"placement\": \"bottom\"\n \
     \       },\n        \"reduceOptions\": {\n          \"calcs\": [\n           \
     \ \"lastNotNull\"\n          ]\n        }\n      }\n    },\n    {\n      \"id\"\
-    : 37,\n      \"title\": \"Immich memory by pod\",\n      \"type\": \"timeseries\"\
+    : 49,\n      \"title\": \"Immich memory by pod\",\n      \"type\": \"timeseries\"\
     ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
     : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 16,\n       \
-    \ \"y\": 98,\n        \"w\": 8,\n        \"h\": 6\n      },\n      \"targets\"\
+    \ \"y\": 120,\n        \"w\": 8,\n        \"h\": 6\n      },\n      \"targets\"\
     : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"sum by(pod)(container_memory_working_set_bytes{namespace=\\\
     \"immich-pilot\\\",container!=\\\"POD\\\",container!=\\\"\\\"})\",\n         \
     \ \"legendFormat\": \"{{pod}}\"\n        }\n      ],\n      \"fieldConfig\": {\n\

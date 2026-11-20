@@ -152,6 +152,7 @@ have.update("photo_review_" + name for name in PHOTO_HELP)
 have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_enrichment/snapshots.py").read_text()))
 have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_enrichment/triage.py").read_text()))
 have.update({"immich_queue_jobs", "immich_jobs_asset_generate_thumbnails_success_total"})
+have.update({"immich_sync_available_summaries", "immich_sync_assets"})
 have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked against the live collector.
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}

@@ -1,5 +1,4 @@
 -- This schema belongs to reconciliation, in photo_enrichment, never Immich's DB.
-CREATE SCHEMA IF NOT EXISTS immich_sync;
 CREATE TABLE IF NOT EXISTS immich_sync.jobs (
  source_path text PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,
  asset_id text, state text NOT NULL DEFAULT 'pending', reason text,

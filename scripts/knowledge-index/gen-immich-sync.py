@@ -29,7 +29,7 @@ def generate(mode='dry-run'):
       'resources':{'requests':{'cpu':'25m','memory':'64Mi'},'limits':{'cpu':'500m','memory':'256Mi'}}})
     boot['restartPolicy']='Never'
     # Stable name: changes to bootstrap are explicitly versioned instead of mutating Job specs.
-    obj('batch/v1','Job','immich-sync-schema-v2','database',{'backoffLimit':3,'template':{'spec':boot}})
+    obj('batch/v1','Job','immich-sync-schema-v3','database',{'backoffLimit':3,'template':{'spec':boot}})
     worker=pod({'command':['node','/code/worker.mjs'],
       'env':[env('PGHOST','postgres-postgresql.database.svc.cluster.local'),env('PGDATABASE','photo_enrichment'),env('PGUSER','immich_reconciler'),env('PGPASSWORD',key='pg-password'),env('SYNC_MODE',mode),env('ENABLE_FACE_TRANSFER','false'),env('SYNC_BATCH_SIZE','25')],
       'resources':{'requests':{'cpu':'100m','memory':'256Mi'},'limits':{'cpu':'1','memory':'2Gi'}},

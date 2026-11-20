@@ -183,6 +183,8 @@ async function metrics(db) {
   const preserved=(await db.query("SELECT count(*)::int n FROM immich_sync.jobs j CROSS JOIN LATERAL jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'")).rows[0].n;
   lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);
   lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode="${MODE}"} 1`);
+  const age=(await db.query("SELECT coalesce(extract(epoch FROM now()-min(discovered_at)),0)::float age FROM immich_sync.jobs WHERE state IN ('pending','error')")).rows[0].age;
+  lines.push(`immich_sync_oldest_pending_seconds ${age}`);
   gauges=lines.join('\n')+'\n';
 }
 async function cycle() {

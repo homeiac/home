@@ -14,7 +14,7 @@ photo = json.loads(yaml.safe_load((app / 'dashboard.yaml').read_text())['data'][
 knowledge = json.loads(next(iter(yaml.safe_load((app / 'knowledge-index-dashboard.yaml').read_text())['data'].values())))
 queries = []
 for panel in photo['panels']:
-    if panel['gridPos']['y'] < 50:
+    if panel['gridPos']['y'] < 72:
         queries.extend({'name': panel['title']+' '+target['refId'], 'expr': target['expr']} for target in panel.get('targets', []))
 for panel in knowledge['panels']:
     if panel['type'] == 'nodeGraph':

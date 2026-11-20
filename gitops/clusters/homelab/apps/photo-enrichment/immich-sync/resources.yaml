@@ -66,14 +66,14 @@ data:
     \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
     \  return matches[0];\n}\n"
   schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
-    \ Immich's DB.\nCREATE SCHEMA IF NOT EXISTS immich_sync;\nCREATE TABLE IF NOT\
-    \ EXISTS immich_sync.jobs (\n source_path text PRIMARY KEY, source_hash text NOT\
-    \ NULL, payload jsonb NOT NULL,\n asset_id text, state text NOT NULL DEFAULT 'pending',\
-    \ reason text,\n applied jsonb, intent jsonb, content_sha256 text, file_mtime_ms\
-    \ double precision,\n attempts integer NOT NULL DEFAULT 0, available_at timestamptz\
-    \ NOT NULL DEFAULT now(),\n discovered_at timestamptz NOT NULL DEFAULT now(),\
-    \ updated_at timestamptz NOT NULL DEFAULT now(),\n applied_at timestamptz, verified_at\
-    \ timestamptz, cycle_id text NOT NULL,\n CHECK(state IN ('pending','applied','conflict','error','excluded','missing'))\n\
+    \ Immich's DB.\nCREATE TABLE IF NOT EXISTS immich_sync.jobs (\n source_path text\
+    \ PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,\n asset_id text,\
+    \ state text NOT NULL DEFAULT 'pending', reason text,\n applied jsonb, intent\
+    \ jsonb, content_sha256 text, file_mtime_ms double precision,\n attempts integer\
+    \ NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT now(),\n discovered_at\
+    \ timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT\
+    \ now(),\n applied_at timestamptz, verified_at timestamptz, cycle_id text NOT\
+    \ NULL,\n CHECK(state IN ('pending','applied','conflict','error','excluded','missing'))\n\
     );\nCREATE TABLE IF NOT EXISTS immich_sync.state (\n key text PRIMARY KEY,value\
     \ jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT now()\n);\nCREATE TABLE\
     \ IF NOT EXISTS immich_sync.people (\n source_person text PRIMARY KEY,person_id\
@@ -239,9 +239,12 @@ data:
     \ jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'\"\
     )).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);\n\
     \  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
-    ${MODE}\"} 1`);\n  gauges=lines.join('\\n')+'\\n';\n}\nasync function cycle()\
-    \ {\n  if(active)return;active=true;const started=Date.now();let db;\n  try {\n\
-    \    db=await pool.connect();\n    const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001)\
+    ${MODE}\"} 1`);\n  const age=(await db.query(\"SELECT coalesce(extract(epoch FROM\
+    \ now()-min(discovered_at)),0)::float age FROM immich_sync.jobs WHERE state IN\
+    \ ('pending','error')\")).rows[0].age;\n  lines.push(`immich_sync_oldest_pending_seconds\
+    \ ${age}`);\n  gauges=lines.join('\\n')+'\\n';\n}\nasync function cycle() {\n\
+    \  if(active)return;active=true;const started=Date.now();let db;\n  try {\n  \
+    \  db=await pool.connect();\n    const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001)\
     \ locked')).rows[0].locked;\n    if(!lock)return;\n    await api('/users/me');counters.api_ready=1;\n\
     \    if(Date.now()/1000-counters.last_discovery>600)await discover(db);\n    if(MODE==='apply'){\n\
     \      const jobs=(await db.query(\"SELECT * FROM immich_sync.jobs WHERE state\
@@ -337,14 +340,14 @@ data:
     \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
     \  return matches[0];\n}\n"
   schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
-    \ Immich's DB.\nCREATE SCHEMA IF NOT EXISTS immich_sync;\nCREATE TABLE IF NOT\
-    \ EXISTS immich_sync.jobs (\n source_path text PRIMARY KEY, source_hash text NOT\
-    \ NULL, payload jsonb NOT NULL,\n asset_id text, state text NOT NULL DEFAULT 'pending',\
-    \ reason text,\n applied jsonb, intent jsonb, content_sha256 text, file_mtime_ms\
-    \ double precision,\n attempts integer NOT NULL DEFAULT 0, available_at timestamptz\
-    \ NOT NULL DEFAULT now(),\n discovered_at timestamptz NOT NULL DEFAULT now(),\
-    \ updated_at timestamptz NOT NULL DEFAULT now(),\n applied_at timestamptz, verified_at\
-    \ timestamptz, cycle_id text NOT NULL,\n CHECK(state IN ('pending','applied','conflict','error','excluded','missing'))\n\
+    \ Immich's DB.\nCREATE TABLE IF NOT EXISTS immich_sync.jobs (\n source_path text\
+    \ PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,\n asset_id text,\
+    \ state text NOT NULL DEFAULT 'pending', reason text,\n applied jsonb, intent\
+    \ jsonb, content_sha256 text, file_mtime_ms double precision,\n attempts integer\
+    \ NOT NULL DEFAULT 0, available_at timestamptz NOT NULL DEFAULT now(),\n discovered_at\
+    \ timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT\
+    \ now(),\n applied_at timestamptz, verified_at timestamptz, cycle_id text NOT\
+    \ NULL,\n CHECK(state IN ('pending','applied','conflict','error','excluded','missing'))\n\
     );\nCREATE TABLE IF NOT EXISTS immich_sync.state (\n key text PRIMARY KEY,value\
     \ jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT now()\n);\nCREATE TABLE\
     \ IF NOT EXISTS immich_sync.people (\n source_person text PRIMARY KEY,person_id\
@@ -510,9 +513,12 @@ data:
     \ jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'\"\
     )).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);\n\
     \  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
-    ${MODE}\"} 1`);\n  gauges=lines.join('\\n')+'\\n';\n}\nasync function cycle()\
-    \ {\n  if(active)return;active=true;const started=Date.now();let db;\n  try {\n\
-    \    db=await pool.connect();\n    const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001)\
+    ${MODE}\"} 1`);\n  const age=(await db.query(\"SELECT coalesce(extract(epoch FROM\
+    \ now()-min(discovered_at)),0)::float age FROM immich_sync.jobs WHERE state IN\
+    \ ('pending','error')\")).rows[0].age;\n  lines.push(`immich_sync_oldest_pending_seconds\
+    \ ${age}`);\n  gauges=lines.join('\\n')+'\\n';\n}\nasync function cycle() {\n\
+    \  if(active)return;active=true;const started=Date.now();let db;\n  try {\n  \
+    \  db=await pool.connect();\n    const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001)\
     \ locked')).rows[0].locked;\n    if(!lock)return;\n    await api('/users/me');counters.api_ready=1;\n\
     \    if(Date.now()/1000-counters.last_discovery>600)await discover(db);\n    if(MODE==='apply'){\n\
     \      const jobs=(await db.query(\"SELECT * FROM immich_sync.jobs WHERE state\
@@ -543,7 +549,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: immich-sync-schema-v2
+  name: immich-sync-schema-v3
   namespace: database
 spec:
   backoffLimit: 3
@@ -619,7 +625,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 67fec17499de46782e1deab4be166caaf7ce796dad7e9cf4260c08a12df56d6f
+        checksum/code: c2860d4c13ef4ef9234f9be4068793f91fbf7007d95d46d8d47367d3914d4ffc
     spec:
       restartPolicy: Always
       automountServiceAccountToken: false

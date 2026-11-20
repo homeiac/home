@@ -47,7 +47,20 @@ def add_panels(panel, panels):
         return f'label_replace(label_replace(({expr}), "id", "{node_id}", "", ""), "title", "{title}", "", "")'
     add_graph(graph, node)
     panels.append(graph)
-    return 50
+    add('Summaries available in source snapshot', 'immich_sync_available_summaries', 0, 50, 6, 4, 'stat', description='Successful summaries in the PostgreSQL catalog snapshot. The original Parquet worker can be ahead until the next catalog refresh.')
+    add('Enrichment waiting for Immich', 'immich_sync_assets{state="pending"}', 6, 50, 6, 4, 'stat')
+    add('Enrichment preserved in Immich', 'immich_sync_assets{state="applied"}', 12, 50, 6, 4, 'stat', description='Custom metadata verified through the Immich API. Includes captions, tags, groups and old face labels; this does not mean native descriptions or people have been changed.')
+    p = add('Normal captions: gated', 'immich_sync_visible_captions_enabled', 18, 50, 6, 4, 'stat', description='Normal caption/GPS/date writes remain disabled for read-only external libraries. Custom metadata survives metadata extraction.')
+    p.setdefault('fieldConfig', {}).setdefault('defaults', {})['mappings'] = [{'type':'value','options':{'0':{'text':'Preserve only','color':'blue'}}}]
+    add('Enrichment reconciliation over time', 'immich_sync_assets', 0, 54, 12, 7, legend='{{state}}', description='Pending and errors retry incrementally. Conflicts preserve edits. Excluded paths are outside the imported year folders; missing assets are not automatically imported.')
+    add('Summary preservation over time', 'immich_sync_summaries', 12, 54, 12, 7, legend='{{state}}', description='Counts only reconciliation records containing a summary. Separate from the larger source generation backlog.')
+    add('Source-confirmed face labels preserved', 'immich_sync_confirmed_labels_preserved', 0, 61, 6, 4, 'stat', description='Labels saved as provenance in custom metadata, not native Immich face assignments. Native face transfer remains disabled.')
+    add('Reconciliation worker ready', 'immich_sync_api_ready', 6, 61, 6, 4, 'stat')
+    add('Source discovery age', 'time()-immich_sync_last_discovery', 12, 61, 6, 4, 'stat', 's', description='Discovery runs every ten minutes. Zero timestamp means no discovery has succeeded yet.')
+    add('Reconciliation mode', 'immich_sync_mode', 18, 61, 6, 4, 'stat', legend='{{mode}}')
+    add('Reconciliation cycle duration', 'immich_sync_cycle_seconds', 0, 65, 12, 6, unit='s')
+    add('Oldest eligible transfer waiting', 'immich_sync_oldest_pending_seconds', 12, 65, 12, 6, unit='s')
+    return 72
 
 
 def add_graph(graph, node):
@@ -61,4 +74,16 @@ def add_graph(graph, node):
         for label, value in [('id', 'immich_'+source+'_'+target),('source','immich_'+source),('target','immich_'+target)]:
             expr = f'label_replace({expr}, "{label}", "{value}", "", "")'
         graph['targets'][1]['expr'] += ' or '+expr
-    graph['description'] += ' Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Custom enrichment is not yet wired into Immich. See Photo App for CPU throttling, queue states, throughput and VPA recommendations.'
+    for suffix, title, expr in [
+        ('source', 'Knowledge Index completed summaries', 'immich_sync_available_summaries'),
+        ('pending', 'Enrichment queue (assets)', 'immich_sync_assets{state="pending"}'),
+        ('preserved', 'Immich custom metadata (assets)', 'immich_sync_assets{state="applied"}'),
+        ('review', 'Sync errors or conflicts (assets)', 'sum(immich_sync_assets{state=~"error|conflict"})'),
+        ('unmapped', 'Missing or excluded (assets)', 'sum(immich_sync_assets{state=~"missing|excluded"})')]:
+        graph['targets'][0]['expr'] += ' or '+node(expr, 'sync_'+suffix, title)
+    for source, target in [('sync_source','sync_pending'), ('immich_metadata','sync_pending'), ('sync_pending','sync_preserved'), ('sync_pending','sync_review'), ('sync_source','sync_unmapped')]:
+        expr='vector(1)'
+        for label, value in [('id', source+'_'+target),('source',source),('target',target)]:
+            expr = f'label_replace({expr}, "{label}", "{value}", "", "")'
+        graph['targets'][1]['expr'] += ' or '+expr
+    graph['description'] += ' Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations.'
