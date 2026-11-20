@@ -7,5 +7,4 @@ resources:
   - proxmox-ve.yaml
   - kubernetes-pvcs.yaml
   - zfs-pool-health.yaml
-  - knowledge-index.yaml
   - nut-ups.yaml

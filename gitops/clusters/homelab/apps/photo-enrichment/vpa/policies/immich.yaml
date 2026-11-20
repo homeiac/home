@@ -1,0 +1,41 @@
+# Off means collect recommendations only. No updater/admission controller exists.
+# Bounds apply to recommended REQUESTS, not resulting CPU/memory limits.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: immich-server
+  namespace: immich-pilot
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: immich-server
+  updatePolicy:
+    updateMode: 'Off'
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        controlledResources: [cpu, memory]
+        controlledValues: RequestsAndLimits
+        minAllowed: {cpu: '1', memory: 2Gi}
+        maxAllowed: {cpu: '4', memory: 6Gi}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: immich-machine-learning
+  namespace: immich-pilot
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: immich-machine-learning
+  updatePolicy:
+    updateMode: 'Off'
+  resourcePolicy:
+    containerPolicies:
+      - containerName: '*'
+        controlledResources: [cpu, memory]
+        controlledValues: RequestsAndLimits
+        minAllowed: {cpu: 500m, memory: 1Gi}
+        maxAllowed: {cpu: '2', memory: 4Gi}

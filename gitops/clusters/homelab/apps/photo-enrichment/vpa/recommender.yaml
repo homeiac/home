@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-vpa-recommender
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: photo-vpa-recommender
+  template:
+    metadata:
+      labels:
+        app: photo-vpa-recommender
+        app.kubernetes.io/name: vertical-pod-autoscaler
+        app.kubernetes.io/component: recommender
+    spec:
+      serviceAccountName: photo-vpa-recommender
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: [k3s-vm-pumped-piglet-gpu]
+      containers:
+        - name: recommender
+          image: registry.k8s.io/autoscaling/vpa-recommender:1.7.3@sha256:3b207e6e719e8a88b96b5777afa6f6fb261e73669fa39f487c04560d85bf2e7d
+          args:
+            - --vpa-object-namespace=immich-pilot
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 50m, memory: 500Mi}
+            limits: {cpu: 200m, memory: 1000Mi}
+          ports:
+            - name: prometheus
+              containerPort: 8942
+          livenessProbe:
+            httpGet: {path: /health-check, port: prometheus}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /health-check, port: prometheus}
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photo-vpa-recommender
+  namespace: kube-system
+  labels:
+    app: photo-vpa-recommender
+spec:
+  selector:
+    app: photo-vpa-recommender
+  ports:
+    - name: prometheus
+      port: 8942
+      targetPort: prometheus
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: photo-vpa-recommender
+  namespace: kube-system
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: photo-vpa-recommender
+  endpoints:
+    - port: prometheus
+      interval: 30s

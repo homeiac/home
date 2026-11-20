@@ -1,0 +1,108 @@
+# Adapted from upstream VPA 1.7.3. Only the recommender is installed.
+# Pod/node/workload access is read-only; VPA state writes are scoped to Immich.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: photo-vpa-recommender
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: photo-vpa-recommender-reader
+rules:
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: ['']
+    resources: [pods, nodes, limitranges, namespaces, events]
+    verbs: [get, list, watch]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+  - apiGroups: ['*']
+    resources: ['*/scale']
+    verbs: [get, watch]
+  - apiGroups: ['']
+    resources: [replicationcontrollers]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [daemonsets, deployments, replicasets, statefulsets]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: photo-vpa-recommender-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: photo-vpa-recommender-reader
+subjects:
+  - kind: ServiceAccount
+    name: photo-vpa-recommender
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: photo-vpa-recommender-state
+  namespace: immich-pilot
+rules:
+  - apiGroups: [autoscaling.k8s.io]
+    resources: [verticalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling.k8s.io]
+    resources: [verticalpodautoscalers/status]
+    verbs: [get, patch]
+  - apiGroups: [autoscaling.k8s.io]
+    resources: [verticalpodautoscalercheckpoints]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: ['', events.k8s.io]
+    resources: [events]
+    verbs: [create, get, list, watch, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: photo-vpa-recommender-state
+  namespace: immich-pilot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: photo-vpa-recommender-state
+subjects:
+  - kind: ServiceAccount
+    name: photo-vpa-recommender
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: photo-vpa-recommender-leader
+  namespace: kube-system
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [vpa-recommender, vpa-recommender-lease]
+    verbs: [get, watch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: photo-vpa-recommender-leader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: photo-vpa-recommender-leader
+subjects:
+  - kind: ServiceAccount
+    name: photo-vpa-recommender
+    namespace: kube-system

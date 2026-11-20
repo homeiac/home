@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Generate the Grafana dashboard ConfigMap for the knowledge index (dashboards as code, issue #212).
 
-Usage: gen-dashboard.py > gitops/clusters/homelab/infrastructure/monitoring/dashboards/knowledge-index.yaml
+Usage: gen-dashboard.py > gitops/clusters/homelab/apps/photo-enrichment/knowledge-index-dashboard.yaml
 Output is deterministic; test-metrics.sh fails if the committed YAML differs from what this prints. Edit THIS file, then regenerate.
 Metrics come from export-metrics.py (node-exporter textfile on the Proxmox host); host/disk panels also use node_boot_time_seconds and nvme_* .
 """
 import json
+from immich_dashboard import add_graph
 
 DS = {"type": "prometheus", "uid": "prometheus"}
 INST = '{instance=~"$instance"}'
@@ -218,6 +219,7 @@ def pipeline_panels():
     graph["description"] += " Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage."
     graph["description"] += " PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them."
     graph["description"] += " Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured."
+    add_graph(graph, node)
     # Node Graph reads field.name, not Organize's display-name override.
     # Copy the sole numeric value into an actual mainstat field.
     graph["transformations"] = [

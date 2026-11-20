@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+data:
+  immich-queue-metrics.mjs: "// Read-only Immich queue/VPA telemetry. No photo content,\
+    \ credentials or IDs exported.\nimport http from 'node:http';\nimport https from\
+    \ 'node:https';\nimport fs from 'node:fs';\nimport {createRequire} from 'node:module';\n\
+    import {pathToFileURL} from 'node:url';\n\nexport const queues = {\n  library:\
+    \ 'library', sidecar: 'sidecar', metadataExtraction: 'metadata',\n  thumbnailGeneration:\
+    \ 'thumbnail_generation', faceDetection: 'face_detection',\n  facialRecognition:\
+    \ 'facial_recognition', smartSearch: 'smart_search',\n  ocr: 'ocr', videoConversion:\
+    \ 'video_conversion', duplicateDetection: 'duplicate_detection',\n};\nexport const\
+    \ states = {waiting: ['llen','wait'], active: ['llen','active'],\n  delayed: ['zcard','delayed'],\
+    \ prioritized: ['zcard','prioritized'],\n  failed: ['zcard','failed'], paused:\
+    \ ['llen','paused']};\n\nexport function quantity(value) {\n  const m = /^([0-9]+(?:\\\
+    .[0-9]+)?)(Ki|Mi|Gi|Ti|n|u|m|k|M|G|T)?$/.exec(String(value));\n  if (!m) throw\
+    \ Error('Unsupported resource quantity');\n  return Number(m[1])*({Ki:1024,Mi:1024**2,Gi:1024**3,Ti:1024**4,n:1e-9,u:1e-6,m:1e-3,k:1e3,M:1e6,G:1e9,T:1e12}[m[2]]??1);\n\
+    }\nconst labels = value => JSON.stringify(String(value));\nexport function queueMetrics(results)\
+    \ {\n  const lines=['# HELP immich_queue_jobs Jobs currently held in each BullMQ\
+    \ state.',\n    '# TYPE immich_queue_jobs gauge'];\n  let index=0;\n  for (const\
+    \ queue of Object.values(queues)) {\n    for (const state of Object.keys(states))\
+    \ {\n      const [error,value]=results[index++];\n      if (error || !Number.isFinite(Number(value)))\
+    \ throw Error('Queue read failed');\n      lines.push(`immich_queue_jobs{queue=${labels(queue)},state=${labels(state)}}\
+    \ ${Number(value)}`);\n    }\n  }\n  return lines.join('\\n');\n}\nexport function\
+    \ recommendationMetrics(items) {\n  const lines=['# HELP immich_vpa_recommendation\
+    \ Recommended requests in CPU cores or memory bytes.',\n    '# TYPE immich_vpa_recommendation\
+    \ gauge','# HELP immich_vpa_policy_info VPA policy update mode.',\n    '# TYPE\
+    \ immich_vpa_policy_info gauge'];\n  for (const item of items) {\n    const workload=item.spec.targetRef.name;\n\
+    \    lines.push(`immich_vpa_policy_info{workload=${labels(workload)},mode=${labels(item.spec.updatePolicy.updateMode)}}\
+    \ 1`);\n    for (const c of item.status?.recommendation?.containerRecommendations??[])\
+    \ {\n      for (const bound of ['target','lowerBound','upperBound','uncappedTarget'])\
+    \ {\n        for (const resource of ['cpu','memory']) {\n          if(c[bound]?.[resource]!==undefined)\
+    \ lines.push(`immich_vpa_recommendation{workload=${labels(workload)},container=${labels(c.containerName)},bound=${labels(bound)},resource=${labels(resource)}}\
+    \ ${quantity(c[bound][resource])}`);\n        }\n      }\n    }\n  }\n  return\
+    \ lines.join('\\n');\n}\n\nfunction readVpa(name) {\n  const root='/var/run/secrets/kubernetes.io/serviceaccount/';\n\
+    \  return new Promise((resolve,reject)=>{\n    const req=https.get({hostname:'kubernetes.default.svc',port:443,\n\
+    \      path:'/apis/autoscaling.k8s.io/v1/namespaces/immich-pilot/verticalpodautoscalers/'+name,\n\
+    \      ca:fs.readFileSync(root+'ca.crt'),headers:{Authorization:'Bearer '+fs.readFileSync(root+'token','utf8').trim()}},r=>{\n\
+    \        let body=''; r.setEncoding('utf8'); r.on('data',c=>body+=c);\n      \
+    \  r.on('end',()=>{try {if(r.statusCode!==200)throw Error('VPA read failed');resolve(JSON.parse(body));}catch(e){reject(e);}});\n\
+    \      });\n    req.setTimeout(5000,()=>req.destroy(Error('VPA read timed out')));req.on('error',reject);\n\
+    \  });\n}\n\nasync function main() {\n  const require=createRequire('/usr/src/app/server/package.json');\n\
+    \  const Redis=require('ioredis');\n  const redis=new Redis({host:'immich-valkey',port:6379,maxRetriesPerRequest:1,\n\
+    \    connectTimeout:3000,commandTimeout:5000,enableReadyCheck:false});\n  redis.on('error',()=>{});\
+    \ // Errors surface as health metrics without private connection details.\n  let\
+    \ output='',queueUp=0,vpaUp=0,lastQueue=0,lastVpa=0,busy=false;\n  async function\
+    \ collect() {\n    if(busy)return;busy=true;\n    const lines=[];\n    try {\n\
+    \      const batch=redis.pipeline();\n      for(const key of Object.keys(queues))for(const\
+    \ [method,suffix] of Object.values(states))batch[method](`immich_bull:${key}:${suffix}`);\n\
+    \      lines.push(queueMetrics(await batch.exec()));queueUp=1;lastQueue=Date.now()/1000;\n\
+    \    } catch {queueUp=0;}\n    try {\n      lines.push(recommendationMetrics(await\
+    \ Promise.all(['immich-server','immich-machine-learning'].map(readVpa))));\n \
+    \     vpaUp=1;lastVpa=Date.now()/1000;\n    } catch {vpaUp=0;}\n    lines.push('#\
+    \ HELP immich_observer_source_up Whether the last collection succeeded.','# TYPE\
+    \ immich_observer_source_up gauge',\n      `immich_observer_source_up{source=\"\
+    queues\"} ${queueUp}`,`immich_observer_source_up{source=\"vpa\"} ${vpaUp}`,\n\
+    \      '# HELP immich_observer_last_success_timestamp_seconds Time of last successful\
+    \ collection.','# TYPE immich_observer_last_success_timestamp_seconds gauge',\n\
+    \      `immich_observer_last_success_timestamp_seconds{source=\"queues\"} ${lastQueue}`,`immich_observer_last_success_timestamp_seconds{source=\"\
+    vpa\"} ${lastVpa}`);\n    output=lines.join('\\n')+'\\n';busy=false;\n  }\n  await\
+    \ collect();setInterval(collect,15000);\n  http.createServer((req,res)=>{\n  \
+    \  if(req.url==='/healthz'){res.end('ok');return;}\n    if(req.url!=='/metrics'){res.writeHead(404);res.end();return;}\n\
+    \    res.setHeader('Content-Type','text/plain; version=0.0.4');res.end(output);\n\
+    \  }).listen(9199,'0.0.0.0');\n}\nif(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)await\
+    \ main();\n"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+rules:
+- apiGroups:
+  - autoscaling.k8s.io
+  resources:
+  - verticalpodautoscalers
+  resourceNames:
+  - immich-server
+  - immich-machine-learning
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: immich-observer
+subjects:
+- kind: ServiceAccount
+  name: immich-observer
+  namespace: immich-pilot
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &id001
+      app: immich-observer
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        checksum/config: 2cd06d81479b03a350e13f1efd4944ba10e42b6a7b0f9ce9bdc2623b359213f4
+    spec:
+      serviceAccountName: immich-observer
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: observer
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        command:
+        - node
+        - /observer/immich-queue-metrics.mjs
+        ports:
+        - name: metrics
+          containerPort: 9199
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: code
+          mountPath: /observer
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 20
+      volumes:
+      - name: code
+        configMap:
+          name: immich-observer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+  labels: &id001
+    app: immich-observer
+spec:
+  selector: *id001
+  ports:
+  - name: metrics
+    port: 9199
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: immich-observer
+  endpoints:
+  - port: metrics
+    interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: immich-observer
+  namespace: immich-pilot
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: immich.bottlenecks
+    rules:
+    - alert: ImmichThumbnailQueueStalled
+      expr: (sum(immich_queue_jobs{queue="thumbnail_generation",state=~"waiting|delayed|prioritized|paused"})
+        > 0) and (sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))
+        == 0)
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Immich thumbnail backlog is not draining
+        description: Queued thumbnails with zero successful jobs for 10 minutes. Inspect
+          CPU throttling, memory, worker errors and storage before retrying jobs.
+        dashboard_url: https://grafana.app.home.panderosystems.com/d/photo-app/photo-app
+    - alert: ImmichCpuThrottledWithThumbnailBacklog
+      expr: (100 * sum by(pod)(rate(container_cpu_cfs_throttled_periods_total{namespace="immich-pilot",container!="",container!="POD"}[5m]))
+        / sum by(pod)(rate(container_cpu_cfs_periods_total{namespace="immich-pilot",container!="",container!="POD"}[5m]))
+        > 25) and on() (sum(immich_queue_jobs{queue="thumbnail_generation",state=~"waiting|delayed|prioritized|paused"})
+        > 0)
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Immich CPU limit is throttling while thumbnails are queued
+        description: More than 25% of CPU periods throttled for 10 minutes. Compare
+          actual CPU, hard limits, VPA recommendations and node headroom.
+    - alert: ImmichQueueTelemetryUnavailable
+      expr: min(immich_observer_source_up{source="queues"}) == 0 or absent(immich_observer_source_up{source="queues"})
+      for: 3m
+      labels:
+        severity: warning
+      annotations:
+        summary: Immich queue depth is unknown
+        description: Queue telemetry is unavailable. Missing data must not be read
+          as an empty queue.

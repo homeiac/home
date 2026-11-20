@@ -2,6 +2,7 @@
 """Generate the photo GUI latency, live-request and automated-triage dashboard."""
 import json
 import yaml
+from immich_dashboard import add_panels
 
 PROM={'type':'prometheus','uid':'prometheus'}
 panels=[]
@@ -40,7 +41,14 @@ def dashboard():
     panel('Immich API and worker metrics availability','up{namespace="immich-pilot"}',0,48,8,6,'stat',legend='{{endpoint}}')
     panel('Immich CPU by pod','sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilot",container!="POD",container!=""}[5m]))',8,48,8,6,legend='{{pod}}')
     panel('Immich memory by pod','sum by(pod)(container_memory_working_set_bytes{namespace="immich-pilot",container!="POD",container!=""})',16,48,8,6,unit='bytes',legend='{{pod}}')
-    return {'uid':'photo-app','title':'Photo App · Requests, traces & triage','schemaVersion':39,'version':1,
+    legacy = list(panels)
+    panels.clear()
+    height = add_panels(panel, panels)
+    for item in legacy:
+        item['id'] = len(panels) + 1
+        item['gridPos']['y'] += height
+        panels.append(item)
+    return {'uid':'photo-app','title':'Photo App · Immich bottlenecks & triage','schemaVersion':39,'version':1,
       'tags':['photos','otel'],'refresh':'10s','time':{'from':'now-1h','to':'now'},'timezone':'browser','panels':panels,
       'description':'Request telemetry from OpenTelemetry; independent health checks run every minute. Slow requests are logged before their spans finish. DuckDB queries use Parquet snapshots plus live PostgreSQL review edits.',
       'links':[{'title':'Photo GUI','url':'https://photos.app.home.panderosystems.com'},

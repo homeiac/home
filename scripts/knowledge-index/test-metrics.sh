@@ -138,7 +138,7 @@ PY
 
 echo "-- dashboard and alerts (as code)"
 "$PYTHON" "$HERE/gen-dashboard.py" > "$W/dash.yaml"
-D="$REPO/gitops/clusters/homelab/infrastructure/monitoring/dashboards/knowledge-index.yaml"
+D="$REPO/gitops/clusters/homelab/apps/photo-enrichment/knowledge-index-dashboard.yaml"
 diff -q "$W/dash.yaml" "$D" >/dev/null && ok "committed dashboard == generated" || bad "committed dashboard differs (run: gen-dashboard.py > $D)"
 "$PYTHON" - "$HERE" "$REPO" "$W" <<'PY' && ok "dashboard + alert metrics all exist" || bad "unknown metric in dashboard/alerts"
 import json, re, runpy, subprocess, sys, yaml
@@ -151,19 +151,20 @@ have.update("photo_enrichment_" + name for name in PHOTO_HELP)
 have.update("photo_review_" + name for name in PHOTO_HELP)
 have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_enrichment/snapshots.py").read_text()))
 have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_enrichment/triage.py").read_text()))
+have.update({"immich_queue_jobs", "immich_jobs_asset_generate_thumbnails_success_total"})
 have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked against the live collector.
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
 mon = repo + "/gitops/clusters/homelab/infrastructure/monitoring/"
 exprs = []
-d = yaml.safe_load(open(mon + "dashboards/knowledge-index.yaml"))
+d = yaml.safe_load(open(repo + "/gitops/clusters/homelab/apps/photo-enrichment/knowledge-index-dashboard.yaml"))
 j = json.loads(list(d["data"].values())[0])
 for p in j["panels"]:
     exprs += [t["expr"] for t in p.get("targets", [])]
 r = yaml.safe_load(open(mon + "knowledge-index-alerting-rules.yaml"))
 exprs += [x["expr"] for g in r["spec"]["groups"] for x in g["rules"]]
 names = {n for e in exprs for n in re.findall(r"[a-zA-Z_:][a-zA-Z0-9_:]*(?=\s*[{\[(]|\s|$|\)|,)", e)}
-metrics = {n for n in names if re.match(r"^(knowledge_index_|gphotos_|media_summaries_|media_pipeline_|photo_enrichment_|photo_review_|photo_snapshot_|photo_pipeline_|photo_frigate_|photo_app_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
+metrics = {n for n in names if re.match(r"^(immich_|knowledge_index_|gphotos_|media_summaries_|media_pipeline_|photo_enrichment_|photo_review_|photo_snapshot_|photo_pipeline_|photo_frigate_|photo_app_|smart_|node_|nvme_|ollama_|DCGM_|kube_|up$)", n)}
 missing = {m for m in metrics - have - external if not m.startswith("DCGM_FI_DEV_")}   # DCGM names come from the NVIDIA exporter (checked live by check-promql.sh)
 if missing:
     print("  missing:", sorted(missing)); sys.exit(1)
