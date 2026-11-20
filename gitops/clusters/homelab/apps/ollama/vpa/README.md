@@ -7,7 +7,8 @@ There is no CPU limit; memory and GPU allocations are not controlled by VPA.
 This improves contention priority, not physical host capacity.
 
 The initial deployment rollout changes QoS from BestEffort to Burstable and
-requires one restart. Recreate prevents overlapping model servers. Subsequent
+requires one restart. A zero-surge rollout stops the existing model pod before
+creating its replacement. Subsequent
 VPA changes use Kubernetes in-place CPU resizing with NotRequired restart policy.
 The updater runs in InPlace mode and has no pod eviction permission. An infeasible
 resize waits rather than restarting the model. Template request remains 4 CPUs

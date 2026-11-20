@@ -8,7 +8,10 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate  # One model server owns the GPU during rollouts.
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0  # Stop the existing model pod before its replacement.
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: ollama-gpu
