@@ -41,12 +41,13 @@ data:
     \ Photos\\/Photos from [0-9]{4}\\//.test(source.path) && !source.path.split('/').includes('..')\
     \ && !path.isAbsolute(source.path);\n}\nexport function mapAsset(source, candidates,\
     \ ownerId, libraryId) {\n  if(!scope(source))return {reason:'outside_import_scope'};\n\
-    \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal\
-    \ && a.ownerId===ownerId && a.libraryId===libraryId);\n  if(exact.length!==1)return\
-    \ {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n  const a=exact[0];\n\
-    \  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return\
-    \ {reason:'size_mismatch'};\n  // Immich external checksums hash \"path:\" + absolute\
-    \ pathname, not image bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
+    \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal!==false\
+    \ && a.libraryId!=null && a.ownerId===ownerId && a.libraryId===libraryId);\n \
+    \ if(exact.length!==1)return {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n\
+    \  const a=exact[0];\n  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n\
+    \  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return {reason:'size_mismatch'};\n\
+    \  // Immich external checksums hash \"path:\" + absolute pathname, not image\
+    \ bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
     \  if(a.checksum && a.checksum!==expected)return {reason:'path_checksum_mismatch'};\n\
     \  return {asset:a};\n}\nexport function metadataDecision(current, desired, previous,\
     \ intent) {\n  if(current && stable(current)===stable(desired))return 'unchanged';\n\
@@ -65,6 +66,30 @@ data:
     \  if(!matches.length || matches[0].score<0.5)return {reason:'no_spatial_match'};\n\
     \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
     \  return matches[0];\n}\n"
+  probe.mjs: '// Read-only API shape check. No credentials, file paths or names in
+    output.
+
+    import fs from ''node:fs/promises'';
+
+    const key=(await fs.readFile(''/credentials/api-key'',''utf8'')).trim();
+
+    const api=async(path,body)=>{const r=await fetch(''http://immich-server:2283/api''+path,{method:body?''POST'':''GET'',headers:{''x-api-key'':key,''Content-Type'':''application/json''},body:body?JSON.stringify(body):undefined});if(!r.ok)throw
+    Error(''HTTP ''+r.status);return r.json();};
+
+    const me=await api(''/users/me''), libraries=await api(''/libraries'');
+
+    const lib=libraries.find(l=>l.name===''Existing Google Photos'');
+
+    const result=await api(''/search/metadata'',{libraryId:lib.id,withExif:true,size:1000,page:1});
+
+    const a=result.assets.items[0];
+
+    console.log(JSON.stringify({libraryOwnerMatches:lib.ownerId===me.id,items:result.assets.items.length,assetKeys:Object.keys(a),external:a.isExternal,libraryMatches:a.libraryId===lib.id,ownerMatches:a.ownerId===me.id,pathPrefix:a.originalPath?.startsWith(''/external/gphotos/Google
+    Photos/Photos from ''),sizePresent:a.exifInfo?.fileSizeInByte!==undefined,paginationKeys:Object.keys(result.assets).filter(k=>k!==''items''),nextPage:result.assets.nextPage,nextCursorPresent:!!result.assets.nextCursor}));
+
+    const detail=await api(''/assets/''+a.id);console.log(JSON.stringify({detailKeys:Object.keys(detail),detailExternal:detail.isExternal,detailLibraryMatches:detail.libraryId===lib.id,detailOwnerMatches:detail.ownerId===me.id}));
+
+    '
   schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
     \ Immich's DB.\nCREATE TABLE IF NOT EXISTS immich_sync.jobs (\n source_path text\
     \ PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,\n asset_id text,\
@@ -122,7 +147,7 @@ data:
     \  await db.query('INSERT INTO immich_sync.state(key,value) VALUES($1,$2) ON CONFLICT(key)\
     \ DO UPDATE SET value=excluded.value,updated_at=now()',[key,value]);\n}\nasync\
     \ function inventory(libraryId) {\n  const byPath=new Map();let cursor, page=1;\n\
-    \  do {\n    const result=await api('/search/metadata','POST',cursor?{libraryId,size:1000,cursor}:{libraryId,size:1000,page});\n\
+    \  do {\n    const result=await api('/search/metadata','POST',cursor?{libraryId,withExif:true,size:1000,cursor}:{libraryId,withExif:true,size:1000,page});\n\
     \    for(const item of result.assets.items){\n      const a={id:item.id,ownerId:item.ownerId,libraryId:item.libraryId,isExternal:item.isExternal,isOffline:item.isOffline,isTrashed:item.isTrashed,originalPath:item.originalPath,checksum:item.checksum,exifInfo:{fileSizeInByte:item.exifInfo?.fileSizeInByte}};\n\
     \      if(!byPath.has(a.originalPath))byPath.set(a.originalPath,[]);\n      byPath.get(a.originalPath).push(a);\n\
     \    }\n    cursor=result.assets.nextCursor;\n    if(!cursor && !result.assets.nextPage)break;\n\
@@ -143,7 +168,7 @@ data:
     \      for(const source of result.rows.slice(offset,offset+250)){\n        if(!eligible(source))continue;\n\
     \        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);\n\
     \        jobs.push({source_path:source.path,source_hash:digest(packet),payload:packet,asset_id:match.asset?.id??null,\n\
-    \          state:match.asset?'pending':scope(source)?'missing':'excluded',reason:match.reason??null,cycle_id:cycle});\n\
+    \          state:match.asset?'pending':!scope(source)?'excluded':match.reason==='missing_asset'?'missing':'conflict',reason:match.reason??null,cycle_id:cycle});\n\
     \      }\n      if(jobs.length)await db.query(`INSERT INTO immich_sync.jobs(source_path,source_hash,payload,asset_id,state,reason,cycle_id)\n\
     \        SELECT source_path,source_hash,payload,asset_id,state,reason,cycle_id\
     \ FROM jsonb_to_recordset($1::jsonb)\n        AS x(source_path text,source_hash\
@@ -315,12 +340,13 @@ data:
     \ Photos\\/Photos from [0-9]{4}\\//.test(source.path) && !source.path.split('/').includes('..')\
     \ && !path.isAbsolute(source.path);\n}\nexport function mapAsset(source, candidates,\
     \ ownerId, libraryId) {\n  if(!scope(source))return {reason:'outside_import_scope'};\n\
-    \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal\
-    \ && a.ownerId===ownerId && a.libraryId===libraryId);\n  if(exact.length!==1)return\
-    \ {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n  const a=exact[0];\n\
-    \  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return\
-    \ {reason:'size_mismatch'};\n  // Immich external checksums hash \"path:\" + absolute\
-    \ pathname, not image bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
+    \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal!==false\
+    \ && a.libraryId!=null && a.ownerId===ownerId && a.libraryId===libraryId);\n \
+    \ if(exact.length!==1)return {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n\
+    \  const a=exact[0];\n  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n\
+    \  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return {reason:'size_mismatch'};\n\
+    \  // Immich external checksums hash \"path:\" + absolute pathname, not image\
+    \ bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
     \  if(a.checksum && a.checksum!==expected)return {reason:'path_checksum_mismatch'};\n\
     \  return {asset:a};\n}\nexport function metadataDecision(current, desired, previous,\
     \ intent) {\n  if(current && stable(current)===stable(desired))return 'unchanged';\n\
@@ -339,6 +365,30 @@ data:
     \  if(!matches.length || matches[0].score<0.5)return {reason:'no_spatial_match'};\n\
     \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
     \  return matches[0];\n}\n"
+  probe.mjs: '// Read-only API shape check. No credentials, file paths or names in
+    output.
+
+    import fs from ''node:fs/promises'';
+
+    const key=(await fs.readFile(''/credentials/api-key'',''utf8'')).trim();
+
+    const api=async(path,body)=>{const r=await fetch(''http://immich-server:2283/api''+path,{method:body?''POST'':''GET'',headers:{''x-api-key'':key,''Content-Type'':''application/json''},body:body?JSON.stringify(body):undefined});if(!r.ok)throw
+    Error(''HTTP ''+r.status);return r.json();};
+
+    const me=await api(''/users/me''), libraries=await api(''/libraries'');
+
+    const lib=libraries.find(l=>l.name===''Existing Google Photos'');
+
+    const result=await api(''/search/metadata'',{libraryId:lib.id,withExif:true,size:1000,page:1});
+
+    const a=result.assets.items[0];
+
+    console.log(JSON.stringify({libraryOwnerMatches:lib.ownerId===me.id,items:result.assets.items.length,assetKeys:Object.keys(a),external:a.isExternal,libraryMatches:a.libraryId===lib.id,ownerMatches:a.ownerId===me.id,pathPrefix:a.originalPath?.startsWith(''/external/gphotos/Google
+    Photos/Photos from ''),sizePresent:a.exifInfo?.fileSizeInByte!==undefined,paginationKeys:Object.keys(result.assets).filter(k=>k!==''items''),nextPage:result.assets.nextPage,nextCursorPresent:!!result.assets.nextCursor}));
+
+    const detail=await api(''/assets/''+a.id);console.log(JSON.stringify({detailKeys:Object.keys(detail),detailExternal:detail.isExternal,detailLibraryMatches:detail.libraryId===lib.id,detailOwnerMatches:detail.ownerId===me.id}));
+
+    '
   schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
     \ Immich's DB.\nCREATE TABLE IF NOT EXISTS immich_sync.jobs (\n source_path text\
     \ PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,\n asset_id text,\
@@ -396,7 +446,7 @@ data:
     \  await db.query('INSERT INTO immich_sync.state(key,value) VALUES($1,$2) ON CONFLICT(key)\
     \ DO UPDATE SET value=excluded.value,updated_at=now()',[key,value]);\n}\nasync\
     \ function inventory(libraryId) {\n  const byPath=new Map();let cursor, page=1;\n\
-    \  do {\n    const result=await api('/search/metadata','POST',cursor?{libraryId,size:1000,cursor}:{libraryId,size:1000,page});\n\
+    \  do {\n    const result=await api('/search/metadata','POST',cursor?{libraryId,withExif:true,size:1000,cursor}:{libraryId,withExif:true,size:1000,page});\n\
     \    for(const item of result.assets.items){\n      const a={id:item.id,ownerId:item.ownerId,libraryId:item.libraryId,isExternal:item.isExternal,isOffline:item.isOffline,isTrashed:item.isTrashed,originalPath:item.originalPath,checksum:item.checksum,exifInfo:{fileSizeInByte:item.exifInfo?.fileSizeInByte}};\n\
     \      if(!byPath.has(a.originalPath))byPath.set(a.originalPath,[]);\n      byPath.get(a.originalPath).push(a);\n\
     \    }\n    cursor=result.assets.nextCursor;\n    if(!cursor && !result.assets.nextPage)break;\n\
@@ -417,7 +467,7 @@ data:
     \      for(const source of result.rows.slice(offset,offset+250)){\n        if(!eligible(source))continue;\n\
     \        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);\n\
     \        jobs.push({source_path:source.path,source_hash:digest(packet),payload:packet,asset_id:match.asset?.id??null,\n\
-    \          state:match.asset?'pending':scope(source)?'missing':'excluded',reason:match.reason??null,cycle_id:cycle});\n\
+    \          state:match.asset?'pending':!scope(source)?'excluded':match.reason==='missing_asset'?'missing':'conflict',reason:match.reason??null,cycle_id:cycle});\n\
     \      }\n      if(jobs.length)await db.query(`INSERT INTO immich_sync.jobs(source_path,source_hash,payload,asset_id,state,reason,cycle_id)\n\
     \        SELECT source_path,source_hash,payload,asset_id,state,reason,cycle_id\
     \ FROM jsonb_to_recordset($1::jsonb)\n        AS x(source_path text,source_hash\
@@ -625,7 +675,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: c2860d4c13ef4ef9234f9be4068793f91fbf7007d95d46d8d47367d3914d4ffc
+        checksum/code: 0a86f7c4805c7102932979a420194e1155b1c72f322b29ab123891958afc917c
     spec:
       restartPolicy: Always
       automountServiceAccountToken: false

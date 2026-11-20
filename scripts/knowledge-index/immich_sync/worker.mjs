@@ -29,7 +29,7 @@ async function state(db,key,value) {
 async function inventory(libraryId) {
   const byPath=new Map();let cursor, page=1;
   do {
-    const result=await api('/search/metadata','POST',cursor?{libraryId,size:1000,cursor}:{libraryId,size:1000,page});
+    const result=await api('/search/metadata','POST',cursor?{libraryId,withExif:true,size:1000,cursor}:{libraryId,withExif:true,size:1000,page});
     for(const item of result.assets.items){
       const a={id:item.id,ownerId:item.ownerId,libraryId:item.libraryId,isExternal:item.isExternal,isOffline:item.isOffline,isTrashed:item.isTrashed,originalPath:item.originalPath,checksum:item.checksum,exifInfo:{fileSizeInByte:item.exifInfo?.fileSizeInByte}};
       if(!byPath.has(a.originalPath))byPath.set(a.originalPath,[]);
@@ -64,7 +64,7 @@ async function discover(db) {
         if(!eligible(source))continue;
         const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);
         jobs.push({source_path:source.path,source_hash:digest(packet),payload:packet,asset_id:match.asset?.id??null,
-          state:match.asset?'pending':scope(source)?'missing':'excluded',reason:match.reason??null,cycle_id:cycle});
+          state:match.asset?'pending':!scope(source)?'excluded':match.reason==='missing_asset'?'missing':'conflict',reason:match.reason??null,cycle_id:cycle});
       }
       if(jobs.length)await db.query(`INSERT INTO immich_sync.jobs(source_path,source_hash,payload,asset_id,state,reason,cycle_id)
         SELECT source_path,source_hash,payload,asset_id,state,reason,cycle_id FROM jsonb_to_recordset($1::jsonb)

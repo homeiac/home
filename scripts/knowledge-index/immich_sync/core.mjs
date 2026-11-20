@@ -25,7 +25,7 @@ export function scope(source) {
 }
 export function mapAsset(source, candidates, ownerId, libraryId) {
   if(!scope(source))return {reason:'outside_import_scope'};
-  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal && a.ownerId===ownerId && a.libraryId===libraryId);
+  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal!==false && a.libraryId!=null && a.ownerId===ownerId && a.libraryId===libraryId);
   if(exact.length!==1)return {reason:exact.length?'ambiguous_mapping':'missing_asset'};
   const a=exact[0];
   if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};

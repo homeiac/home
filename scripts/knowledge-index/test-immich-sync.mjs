@@ -7,6 +7,8 @@ const asset={id:'asset',ownerId:'owner',libraryId:'library',isExternal:true,orig
 asset.checksum=crypto.createHash('sha1').update('path:'+asset.originalPath).digest('base64');
 test('matches only one correctly scoped external asset with compatible size and path checksum',()=>{
  assert.equal(mapAsset(source,[asset],'owner','library').asset.id,'asset');
+ assert.equal(mapAsset(source,[{...asset,isExternal:undefined}],'owner','library').asset.id,'asset');
+ assert.equal(mapAsset(source,[{...asset,libraryId:null}],'owner','library').reason,'missing_asset');
  assert.equal(mapAsset(source,[asset,asset],'owner','library').reason,'ambiguous_mapping');
  assert.equal(mapAsset(source,[{...asset,isExternal:false}],'owner','library').reason,'missing_asset');
  assert.equal(mapAsset(source,[{...asset,checksum:'wrong'}],'owner','library').reason,'path_checksum_mismatch');
