@@ -21,6 +21,10 @@ Generate the `install` phase, review, commit and reconcile. Installation pins th
 NVIDIA source packages, checks modules for the running and next boot kernel, and
 schedules one reboot after 30 seconds. Do not deploy Immich's CUDA image until
 `nvidia-smi` confirms the new loaded driver and existing GPU services recover.
+If the container cannot reach the host systemd bus, run the guarded
+`reboot-guest.py` helper with `CB_HOST` set from the inventory. It checks the
+GitOps install marker and both modules before requesting the reboot through the
+existing Proxmox guest agent; it adds no persistent process-namespace access.
 The maintenance Job is privileged and node-pinned; it has no service account token.
 
 If the driver fails, revert the Immich HelmRelease to its prior CPU image first.
