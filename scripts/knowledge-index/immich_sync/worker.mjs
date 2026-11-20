@@ -11,10 +11,17 @@ const {Pool}=require('pg');
 const sharp=require('sharp');
 const pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
 const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';
+const DISCOVERY_VERSION=1; // Bump whenever mapping rules change.
 const MODE=process.env.SYNC_MODE??'dry-run';
+const MAX_PRESERVED=Number(process.env.SYNC_MAX_PRESERVED??0);
 const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);
 let counters={source:0,available_summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};
-let gauges='',active=false;
+let gauges='',active=false,phase='idle';
+const stageSeconds={};
+async function measured(stage, fn) {
+ phase=stage;const start=Date.now();log('sync.stage_start',{stage});
+ try{return await fn();}finally{stageSeconds[stage]=(Date.now()-start)/1000;log('sync.stage_end',{stage,seconds:stageSeconds[stage]});}
+}
 const log=(event,fields={})=>console.log(JSON.stringify({time:new Date().toISOString(),event,...fields}));
 async function api(route,method='GET',body) {
   const key=(await fs.readFile('/credentials/api-key','utf8')).trim();
@@ -27,10 +34,16 @@ async function state(db,key,value) {
   await db.query('INSERT INTO immich_sync.state(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()',[key,value]);
 }
 async function inventory(libraryId) {
-  const byPath=new Map();let cursor, page=1;
+  const byPath=new Map();let cursor, page=1, pages=0;
+  const seen=new Set();
   do {
     const result=await api('/search/metadata','POST',cursor?{libraryId,withExif:true,size:1000,cursor}:{libraryId,withExif:true,size:1000,page});
+    pages++;
+    if(pages>1000)throw Error('Inventory pagination overflow');
+    if(pages%10===0)log('sync.inventory_progress',{pages,assets:byPath.size});
     for(const item of result.assets.items){
+      if(seen.has(item.id))throw Error('Inventory pagination repeated asset');
+      seen.add(item.id);
       const a={id:item.id,ownerId:item.ownerId,libraryId:item.libraryId,isExternal:item.isExternal,isOffline:item.isOffline,isTrashed:item.isTrashed,originalPath:item.originalPath,checksum:item.checksum,exifInfo:{fileSizeInByte:item.exifInfo?.fileSizeInByte}};
       if(!byPath.has(a.originalPath))byPath.set(a.originalPath,[]);
       byPath.get(a.originalPath).push(a);
@@ -50,12 +63,13 @@ async function discover(db) {
   const configured=await state(db,'identity');
   if(configured && (configured.ownerId!==me.id || configured.libraryId!==libraryId))throw Error('Library identity changed');
   await state(db,'identity',{ownerId:me.id,libraryId});
-  const targets=await inventory(libraryId);
+  const targets=await measured('inventory',()=>inventory(libraryId));
   const query=await fs.readFile(new URL('./source.sql',import.meta.url),'utf8');
   await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
   try {
     // Source tables are SELECT-only for this role. Job discovery commits with its checkpoint.
-    const result=await db.query(query);
+    const result=await measured('source_query',()=>db.query(query));
+    phase='enqueue';
     const cycle=crypto.randomUUID();
     counters.source=result.rows.length;counters.available_summaries=result.rows.filter(x=>x.summary).length;
     for(let offset=0;offset<result.rows.length;offset+=250){
@@ -77,7 +91,7 @@ async function discover(db) {
         updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at END`,[JSON.stringify(jobs)]);
     }
     await db.query("UPDATE immich_sync.jobs SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded'",[cycle]);
-    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new Date().toISOString()});
+    await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new Date().toISOString()});
     await db.query('COMMIT');counters.last_discovery=Date.now()/1000;
     log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});
   } catch(e){await db.query('ROLLBACK');throw e;}
@@ -193,12 +207,22 @@ async function cycle() {
     db=await pool.connect();
     const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001) locked')).rows[0].locked;
     if(!lock)return;
-    await api('/users/me');counters.api_ready=1;
+    phase='connect';await api('/users/me');counters.api_ready=1;
+    if(!counters.last_discovery){
+      const checkpoint=await state(db,'checkpoint');
+      if(checkpoint && (checkpoint.version??1)===DISCOVERY_VERSION){
+        counters.last_discovery=Date.parse(checkpoint.capturedAt)/1000;
+        counters.source=checkpoint.sourceRows;counters.available_summaries=checkpoint.successfulSummaries;
+      }
+    }
+    await metrics(db);
     if(Date.now()/1000-counters.last_discovery>600)await discover(db);
     if(MODE==='apply'){
-      const jobs=(await db.query("SELECT * FROM immich_sync.jobs WHERE state IN ('pending','error') AND available_at<=now() ORDER BY (payload->>'summary' IS NOT NULL) DESC,discovered_at,source_path LIMIT $1",[BATCH])).rows;
+      const preserved=MAX_PRESERVED?(await db.query("SELECT count(*)::int n FROM immich_sync.jobs WHERE state='applied'")).rows[0].n:0;
+      const limit=MAX_PRESERVED?Math.max(0,Math.min(BATCH,MAX_PRESERVED-preserved)):BATCH;
+      const jobs=(await db.query("SELECT * FROM immich_sync.jobs WHERE state IN ('pending','error') AND available_at<=now() ORDER BY (payload->>'summary' IS NOT NULL) DESC,discovered_at,source_path LIMIT $1",[limit])).rows;
       for(const job of jobs){
-        try{await apply(db,job);}catch(e){
+        try{await measured('preserve',()=>apply(db,job));}catch(e){
           const reason=e.status?'http_'+e.status:e.message?.replace(/[^a-zA-Z0-9 _-]/g,'').slice(0,80)??'unknown';
           await db.query("UPDATE immich_sync.jobs SET state='error',reason=$2,attempts=attempts+1,available_at=now()+least(3600,power(2,least(attempts,10))*30)*interval '1 second',updated_at=now() WHERE source_path=$1",[job.source_path,reason]);
           log('sync.asset_error',{source_id:digest(job.source_path).slice(0,16),reason});
@@ -214,13 +238,13 @@ async function cycle() {
       }
     }
     await metrics(db);
-  } catch(e){counters.api_ready=0;log('sync.cycle_error',{reason:e.code??(e.status?'http_'+e.status:'unavailable')});}
+  } catch(e){counters.api_ready=0;log('sync.cycle_error',{phase,reason:e.code??(e.status?'http_'+e.status:'unavailable')});}
   finally{if(db){try{await db.query('SELECT pg_advisory_unlock(217,8001)');}catch{}db.release();}counters.cycle_seconds=(Date.now()-started)/1000;active=false;}
 }
 http.createServer((req,res)=>{
  if(req.url==='/healthz'){res.end('ok');return;}
  if(req.url!=='/metrics'){res.writeHead(404);res.end();return;}
  res.setHeader('Content-Type','text/plain; version=0.0.4');
- res.end(gauges+Object.entries(counters).map(([k,v])=>`immich_sync_${k} ${v}`).join('\n')+'\n');
+ res.end(gauges+Object.entries(stageSeconds).map(([stage,v])=>`immich_sync_stage_seconds{stage="${stage}"} ${v}`).join('\n')+'\n'+Object.entries(counters).map(([k,v])=>`immich_sync_${k} ${v}`).join('\n')+'\n');
 }).listen(9200,'0.0.0.0');
 await cycle();setInterval(cycle,15000);

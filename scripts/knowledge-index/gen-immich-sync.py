@@ -7,7 +7,7 @@ HERE=Path(__file__).resolve().parent
 OUT=HERE.parents[1]/'gitops/clusters/homelab/apps/photo-enrichment/immich-sync'
 # Reuse the exact already running official image; it contains pg and Sharp.
 IMAGE='ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd'
-def generate(mode='dry-run'):
+def generate(mode='dry-run', max_preserved=0):
     code={p.name:p.read_text() for p in sorted((HERE/'immich_sync').glob('*')) if p.suffix in ('.mjs','.sql') and p.name!='target-audit.sql'}
     checksum=hashlib.sha256(str(code).encode()).hexdigest()
     docs=[]
@@ -31,7 +31,7 @@ def generate(mode='dry-run'):
     # Stable name: changes to bootstrap are explicitly versioned instead of mutating Job specs.
     obj('batch/v1','Job','immich-sync-schema-v3','database',{'backoffLimit':3,'template':{'spec':boot}})
     worker=pod({'command':['node','/code/worker.mjs'],
-      'env':[env('PGHOST','postgres-postgresql.database.svc.cluster.local'),env('PGDATABASE','photo_enrichment'),env('PGUSER','immich_reconciler'),env('PGPASSWORD',key='pg-password'),env('SYNC_MODE',mode),env('ENABLE_FACE_TRANSFER','false'),env('SYNC_BATCH_SIZE','25')],
+      'env':[env('PGHOST','postgres-postgresql.database.svc.cluster.local'),env('PGDATABASE','photo_enrichment'),env('PGUSER','immich_reconciler'),env('PGPASSWORD',key='pg-password'),env('SYNC_MODE',mode),env('ENABLE_FACE_TRANSFER','false'),env('SYNC_BATCH_SIZE','25'),env('SYNC_MAX_PRESERVED',str(max_preserved))],
       'resources':{'requests':{'cpu':'100m','memory':'256Mi'},'limits':{'cpu':'1','memory':'2Gi'}},
       'ports':[{'name':'metrics','containerPort':9200}],
       'readinessProbe':{'httpGet':{'path':'/healthz','port':'metrics'}},
@@ -51,4 +51,4 @@ def generate(mode='dry-run'):
     (OUT/'kustomization.yaml').write_text('apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - credentials.sops.yaml\n  - resources.yaml\n')
 if __name__=='__main__':
     import argparse
-    p=argparse.ArgumentParser();p.add_argument('--mode',choices=['dry-run','apply'],default='dry-run');generate(p.parse_args().mode)
+    p=argparse.ArgumentParser();p.add_argument('--mode',choices=['dry-run','apply'],default='dry-run');p.add_argument('--max-preserved',type=int,default=0);args=p.parse_args();generate(args.mode,args.max_preserved)

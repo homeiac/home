@@ -60,7 +60,8 @@ def add_panels(panel, panels):
     add('Reconciliation mode', 'immich_sync_mode', 18, 61, 6, 4, 'stat', legend='{{mode}}')
     add('Reconciliation cycle duration', 'immich_sync_cycle_seconds', 0, 65, 12, 6, unit='s')
     add('Oldest eligible transfer waiting', 'immich_sync_oldest_pending_seconds', 12, 65, 12, 6, unit='s')
-    return 72
+    add('Reconciliation measured stage duration', 'immich_sync_stage_seconds', 0, 71, 24, 6, unit='s', legend='{{stage}}', description='Last completed inventory scan, source query, or individual asset preservation duration. Counts in the value stream map are separate from these measured timings.')
+    return 78
 
 
 def add_graph(graph, node):
