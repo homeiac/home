@@ -9,3 +9,4 @@ resources:
   - immich-observer.yaml
   - vpa
   - vpa/policies
+  - immich-sync

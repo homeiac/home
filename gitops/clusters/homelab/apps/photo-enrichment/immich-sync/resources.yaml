@@ -1,0 +1,764 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-sync-code
+  namespace: database
+data:
+  bootstrap.mjs: "// Executed only by the GitOps bootstrap Job in namespace database.\n\
+    import {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
+    const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
+    \ db=new Client();await db.connect();\ntry {\n await db.query(\"SET log_statement='none'\"\
+    );\n await db.query('BEGIN');\n await db.query('SELECT pg_advisory_xact_lock(217,8000)');\n\
+    \ const exists=(await db.query(\"SELECT 1 FROM pg_roles WHERE rolname='immich_reconciler'\"\
+    )).rowCount;\n if(!exists)await db.query('CREATE ROLE immich_reconciler LOGIN');\n\
+    \ const statement=(await db.query(\"SELECT format('ALTER ROLE immich_reconciler\
+    \ PASSWORD %L',$1::text) command\",[process.env.ROLE_PASSWORD])).rows[0].command;\n\
+    \ await db.query(statement);\n await db.query('GRANT CONNECT ON DATABASE photo_enrichment\
+    \ TO immich_reconciler');\n await db.query('GRANT USAGE ON SCHEMA public,catalog\
+    \ TO immich_reconciler');\n await db.query('GRANT SELECT ON catalog.gphotos_media,catalog.media_summaries,public.photo_context,public.extracted,public.faces,public.photo_groups,public.group_members\
+    \ TO immich_reconciler');\n await db.query('CREATE SCHEMA IF NOT EXISTS immich_sync\
+    \ AUTHORIZATION immich_reconciler');\n await db.query('SET LOCAL ROLE immich_reconciler');\n\
+    \ await db.query(await fs.readFile('/code/schema.sql','utf8'));\n await db.query('COMMIT');\n\
+    \ console.log('Scoped reconciliation role and schema ready; source tables are\
+    \ read-only.');\n} catch {await db.query('ROLLBACK');console.error('Bootstrap\
+    \ failed; details suppressed to protect credentials.');process.exitCode=1;}\n\
+    finally{await db.end();}\n"
+  core.mjs: "// Pure reconciliation rules. No biometric inference: existing confirmations\
+    \ are provenance.\nimport crypto from 'node:crypto';\nimport path from 'node:path';\n\
+    export const META_KEY = 'home.knowledge-index.v1';\nexport const ROOT = '/external/gphotos/';\n\
+    export const stable = value => JSON.stringify(value, (_,v) => v && typeof v==='object'\
+    \ && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)))\
+    \ : v);\nexport const digest = value => crypto.createHash('sha256').update(stable(value)).digest('hex');\n\
+    export function sourcePacket(source) {\n  const faces=(source.faces??[]).map(f=>({id:f.id,person:f.person,box:f.box,model:f.model,revision:f.revision,label_source:f.label_source}));\n\
+    \  return {schemaVersion:1,sourcePath:source.path,sizeBytes:Number(source.size_bytes),sourceMtime:source.mtime,\n\
+    \    summary:source.context_summary || source.summary || null,\n    summaryModel:source.context_summary\
+    \ ? source.context_model : source.summary_model,\n    summaryCreatedAt:source.summary_created_at,\n\
+    \    tags:[...new Set([...(source.summary_tags??[]),...(source.context_tags??[])])].sort(),\n\
+    \    locationContext:source.location_context??null,\n    capture:{timestamp:source.capture_ts??source.taken_ts,source:source.capture_source??'takeout.photoTakenTime'},\n\
+    \    gps:{latitude:source.latitude,longitude:source.longitude,source:source.gps_source},\n\
+    \    faces,groups:source.groups??[]};\n}\nexport function eligible(source) {\n\
+    \  return Boolean(source.summary || source.context_summary || source.faces?.length\
+    \ || source.groups?.length);\n}\nexport function scope(source) {\n  return /^Google\
+    \ Photos\\/Photos from [0-9]{4}\\//.test(source.path) && !source.path.split('/').includes('..')\
+    \ && !path.isAbsolute(source.path);\n}\nexport function mapAsset(source, candidates,\
+    \ ownerId, libraryId) {\n  if(!scope(source))return {reason:'outside_import_scope'};\n\
+    \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal\
+    \ && a.ownerId===ownerId && a.libraryId===libraryId);\n  if(exact.length!==1)return\
+    \ {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n  const a=exact[0];\n\
+    \  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return\
+    \ {reason:'size_mismatch'};\n  // Immich external checksums hash \"path:\" + absolute\
+    \ pathname, not image bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
+    \  if(a.checksum && a.checksum!==expected)return {reason:'path_checksum_mismatch'};\n\
+    \  return {asset:a};\n}\nexport function metadataDecision(current, desired, previous,\
+    \ intent) {\n  if(current && stable(current)===stable(desired))return 'unchanged';\n\
+    \  if(current && intent && stable(current)===stable(intent))return 'resume';\n\
+    \  // Never reclaim a key cleared/edited by someone after our previous successful\
+    \ write.\n  if(previous && stable(current??null)!==stable(previous))return 'conflict';\n\
+    \  if(!previous && current)return 'conflict';\n  return 'write';\n}\nexport function\
+    \ normalizedBox(face) {\n  if(!(face.imageWidth>0 && face.imageHeight>0))return\
+    \ null;\n  return [face.boundingBoxX1/face.imageWidth,face.boundingBoxY1/face.imageHeight,face.boundingBoxX2/face.imageWidth,face.boundingBoxY2/face.imageHeight];\n\
+    }\nexport function overlap(a,b) {\n  if(!a || !b || [...a,...b].some(x=>!Number.isFinite(x)||x<0||x>1))return\
+    \ 0;\n  const intersection=Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));\n\
+    \  const union=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-intersection;\n\
+    \  return union>0?intersection/union:0;\n}\nexport function faceCandidate(sourceFace,\
+    \ faces, used=new Set()) {\n  if(sourceFace.label_source!=='user')return {reason:'not_human_confirmed'};\n\
+    \  const matches=faces.filter(f=>!used.has(f.id)).map(f=>({face:f,score:overlap(sourceFace.box,normalizedBox(f))})).sort((a,b)=>b.score-a.score);\n\
+    \  if(!matches.length || matches[0].score<0.5)return {reason:'no_spatial_match'};\n\
+    \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
+    \  return matches[0];\n}\n"
+  schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
+    \ Immich's DB.\nCREATE SCHEMA IF NOT EXISTS immich_sync;\nCREATE TABLE IF NOT\
+    \ EXISTS immich_sync.jobs (\n source_path text PRIMARY KEY, source_hash text NOT\
+    \ NULL, payload jsonb NOT NULL,\n asset_id text, state text NOT NULL DEFAULT 'pending',\
+    \ reason text,\n applied jsonb, intent jsonb, content_sha256 text, file_mtime_ms\
+    \ double precision,\n attempts integer NOT NULL DEFAULT 0, available_at timestamptz\
+    \ NOT NULL DEFAULT now(),\n discovered_at timestamptz NOT NULL DEFAULT now(),\
+    \ updated_at timestamptz NOT NULL DEFAULT now(),\n applied_at timestamptz, verified_at\
+    \ timestamptz, cycle_id text NOT NULL,\n CHECK(state IN ('pending','applied','conflict','error','excluded','missing'))\n\
+    );\nCREATE TABLE IF NOT EXISTS immich_sync.state (\n key text PRIMARY KEY,value\
+    \ jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT now()\n);\nCREATE TABLE\
+    \ IF NOT EXISTS immich_sync.people (\n source_person text PRIMARY KEY,person_id\
+    \ text NOT NULL,evidence jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT\
+    \ now()\n);\nCREATE TABLE IF NOT EXISTS immich_sync.faces (\n source_face text\
+    \ PRIMARY KEY,source_path text NOT NULL,asset_id text NOT NULL,face_id text,\n\
+    \ person_id text,source_hash text NOT NULL,state text NOT NULL,reason text,updated_at\
+    \ timestamptz NOT NULL DEFAULT now()\n);\nCREATE TABLE IF NOT EXISTS immich_sync.albums\
+    \ (\n source_group text PRIMARY KEY,album_id text,source_hash text,state text\
+    \ NOT NULL,\n intent jsonb,updated_at timestamptz NOT NULL DEFAULT now()\n);\n\
+    CREATE TABLE IF NOT EXISTS immich_sync.operations (\n source_path text NOT NULL,kind\
+    \ text NOT NULL,version text NOT NULL,intent jsonb NOT NULL,\n result jsonb,verified_at\
+    \ timestamptz,PRIMARY KEY(source_path,kind,version)\n);\nCREATE INDEX IF NOT EXISTS\
+    \ immich_sync_jobs_pending ON immich_sync.jobs(state,available_at);\n"
+  source.sql: "SELECT m.path,m.size_bytes,m.ext,m.mtime,m.taken_ts,\n       s.summary,s.tags\
+    \ AS summary_tags,s.model AS summary_model,s.created_at AS summary_created_at,\n\
+    \       c.summary AS context_summary,c.tags AS context_tags,c.model AS context_model,c.context\
+    \ AS location_context,\n       e.capture_ts,e.capture_source,e.latitude,e.longitude,e.gps_source,e.width,e.height,\n\
+    \       coalesce((SELECT jsonb_agg(jsonb_build_object('id',f.id,'person',f.person,'box',f.box,'model',f.model,'revision',f.updated_at,'label_source',f.label_source)\
+    \ ORDER BY f.id)\n                 FROM faces f WHERE f.path=m.path AND f.size_bytes=m.size_bytes\
+    \ AND f.person IS NOT NULL),'[]'::jsonb) AS faces,\n       coalesce((SELECT jsonb_agg(to_jsonb(g)\
+    \ ORDER BY g.id) FROM photo_groups g JOIN group_members gm ON gm.group_id=g.id\
+    \ WHERE gm.path=m.path),'[]'::jsonb) AS groups\nFROM catalog.gphotos_media m\n\
+    LEFT JOIN (SELECT DISTINCT ON (path,size_bytes) path,size_bytes,summary,tags,model,created_at\
+    \ FROM catalog.media_summaries WHERE status='ok' ORDER BY path,size_bytes,created_at\
+    \ DESC,enricher DESC) s ON s.path=m.path AND s.size_bytes=m.size_bytes\nLEFT JOIN\
+    \ photo_context c ON c.path=m.path AND c.size_bytes=m.size_bytes AND c.status='done'\n\
+    LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes\nWHERE m.kind='media'\n"
+  worker.mjs: "// Incremental, API-only Immich writes; reconciliation state belongs\
+    \ to its own PG schema.\nimport fs from 'node:fs/promises';\nimport {createReadStream}\
+    \ from 'node:fs';\nimport crypto from 'node:crypto';\nimport http from 'node:http';\n\
+    import {createRequire} from 'node:module';\nimport {fileURLToPath} from 'node:url';\n\
+    import {META_KEY,ROOT,stable,digest,sourcePacket,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap}\
+    \ from './core.mjs';\nconst require=createRequire('/usr/src/app/server/package.json');\n\
+    const {Pool}=require('pg');\nconst sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
+    const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';\nconst MODE=process.env.SYNC_MODE??'dry-run';\n\
+    const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\nlet counters={source:0,summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};\n\
+    let gauges='',active=false;\nconst log=(event,fields={})=>console.log(JSON.stringify({time:new\
+    \ Date().toISOString(),event,...fields}));\nasync function api(route,method='GET',body)\
+    \ {\n  const key=(await fs.readFile('/credentials/api-key','utf8')).trim();\n\
+    \  const response=await fetch(BASE+route,{method,headers:{'x-api-key':key,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(45000)});\n\
+    \  if(!response.ok){const e=Error('Immich HTTP '+response.status);e.status=response.status;throw\
+    \ e;}\n  const text=await response.text();return text?JSON.parse(text):null;\n\
+    }\nasync function state(db,key,value) {\n  if(value===undefined)return (await\
+    \ db.query('SELECT value FROM immich_sync.state WHERE key=$1',[key])).rows[0]?.value;\n\
+    \  await db.query('INSERT INTO immich_sync.state(key,value) VALUES($1,$2) ON CONFLICT(key)\
+    \ DO UPDATE SET value=excluded.value,updated_at=now()',[key,value]);\n}\nasync\
+    \ function inventory(libraryId) {\n  const byPath=new Map();let cursor, page=1;\n\
+    \  do {\n    const result=await api('/search/metadata','POST',cursor?{libraryId,size:1000,cursor}:{libraryId,size:1000,page});\n\
+    \    for(const item of result.assets.items){\n      const a={id:item.id,ownerId:item.ownerId,libraryId:item.libraryId,isExternal:item.isExternal,isOffline:item.isOffline,isTrashed:item.isTrashed,originalPath:item.originalPath,checksum:item.checksum,exifInfo:{fileSizeInByte:item.exifInfo?.fileSizeInByte}};\n\
+    \      if(!byPath.has(a.originalPath))byPath.set(a.originalPath,[]);\n      byPath.get(a.originalPath).push(a);\n\
+    \    }\n    cursor=result.assets.nextCursor;\n    if(!cursor && !result.assets.nextPage)break;\n\
+    \    if(!cursor)page=Number(result.assets.nextPage);\n    if(page>1000)throw Error('Inventory\
+    \ pagination overflow');\n  } while(true);\n  return byPath;\n}\nasync function\
+    \ discover(db) {\n  const me=await api('/users/me');\n  const libraries=(await\
+    \ api('/libraries')).filter(x=>x.name==='Existing Google Photos' && x.ownerId===me.id);\n\
+    \  if(libraries.length!==1)throw Error('Library identity ambiguous');\n  const\
+    \ libraryId=libraries[0].id;\n  const configured=await state(db,'identity');\n\
+    \  if(configured && (configured.ownerId!==me.id || configured.libraryId!==libraryId))throw\
+    \ Error('Library identity changed');\n  await state(db,'identity',{ownerId:me.id,libraryId});\n\
+    \  const targets=await inventory(libraryId);\n  const query=await fs.readFile(new\
+    \ URL('./source.sql',import.meta.url),'utf8');\n  await db.query('BEGIN ISOLATION\
+    \ LEVEL REPEATABLE READ');\n  try {\n    // Source tables are SELECT-only for\
+    \ this role. Job discovery commits with its checkpoint.\n    const result=await\
+    \ db.query(query);\n    const cycle=crypto.randomUUID();\n    counters.source=result.rows.length;counters.summaries=result.rows.filter(x=>x.summary).length;\n\
+    \    for(let offset=0;offset<result.rows.length;offset+=250){\n      const jobs=[];\n\
+    \      for(const source of result.rows.slice(offset,offset+250)){\n        if(!eligible(source))continue;\n\
+    \        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);\n\
+    \        jobs.push({source_path:source.path,source_hash:digest(packet),payload:packet,asset_id:match.asset?.id??null,\n\
+    \          state:match.asset?'pending':scope(source)?'missing':'excluded',reason:match.reason??null,cycle_id:cycle});\n\
+    \      }\n      if(jobs.length)await db.query(`INSERT INTO immich_sync.jobs(source_path,source_hash,payload,asset_id,state,reason,cycle_id)\n\
+    \        SELECT source_path,source_hash,payload,asset_id,state,reason,cycle_id\
+    \ FROM jsonb_to_recordset($1::jsonb)\n        AS x(source_path text,source_hash\
+    \ text,payload jsonb,asset_id text,state text,reason text,cycle_id text)\n   \
+    \     ON CONFLICT(source_path) DO UPDATE SET source_hash=excluded.source_hash,payload=excluded.payload,\n\
+    \        asset_id=excluded.asset_id,cycle_id=excluded.cycle_id,\n        state=CASE\
+    \ WHEN immich_sync.jobs.asset_id IS NOT NULL AND immich_sync.jobs.asset_id IS\
+    \ DISTINCT FROM excluded.asset_id THEN 'conflict'\n          WHEN immich_sync.jobs.source_hash<>excluded.source_hash\
+    \ OR immich_sync.jobs.state IN ('missing','excluded') THEN excluded.state ELSE\
+    \ immich_sync.jobs.state END,\n        reason=CASE WHEN immich_sync.jobs.asset_id\
+    \ IS NOT NULL AND immich_sync.jobs.asset_id IS DISTINCT FROM excluded.asset_id\
+    \ THEN 'asset_identity_changed' ELSE excluded.reason END,\n        updated_at=CASE\
+    \ WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at\
+    \ END`,[JSON.stringify(jobs)]);\n    }\n    await db.query(\"UPDATE immich_sync.jobs\
+    \ SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded'\"\
+    ,[cycle]);\n    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.summaries,capturedAt:new\
+    \ Date().toISOString()});\n    await db.query('COMMIT');counters.last_discovery=Date.now()/1000;\n\
+    \    log('sync.discovery',{source:counters.source,available_summaries:counters.summaries});\n\
+    \  } catch(e){await db.query('ROLLBACK');throw e;}\n}\nasync function checksum(file)\
+    \ {\n  const hash=crypto.createHash('sha256');for await(const chunk of createReadStream(file))hash.update(chunk);return\
+    \ hash.digest('hex');\n}\nasync function verifyFile(job) {\n  const file=await\
+    \ fs.realpath(ROOT+job.source_path);\n  if(!file.startsWith(ROOT))throw Error('File\
+    \ escaped library');\n  const stat=await fs.stat(file);\n  if(stat.size!==job.payload.sizeBytes)throw\
+    \ Error('Source size changed');\n  const sourceTime=new Date(job.payload.sourceMtime).getTime();\n\
+    \  if(!Number.isFinite(sourceTime) || Math.abs(sourceTime-stat.mtimeMs)>1500)throw\
+    \ Error('Source timestamp changed');\n  const hash=await checksum(file);\n  if(job.content_sha256\
+    \ && job.content_sha256!==hash)throw Error('Source content changed');\n  return\
+    \ {contentSha256:hash,mtimeMs:stat.mtimeMs};\n}\nasync function sourcePerson(db,name)\
+    \ {\n  const saved=(await db.query('SELECT person_id FROM immich_sync.people WHERE\
+    \ source_person=$1',[name])).rows[0];\n  if(saved)return saved.person_id;\n  //\
+    \ Name equality alone does not prove an existing Immich person's identity.\n \
+    \ // Seed proven mappings from pilot source-face provenance before this step.\n\
+    \  const people=await api('/people?withHidden=true&size=1000');\n  if((people.people??people).some(p=>p.name===name))return\
+    \ null;\n  // An intent marker makes an interrupted creation reviewable instead\
+    \ of duplicating people.\n  const marker=await state(db,'person-intent:'+name);\n\
+    \  if(marker)return null;\n  await state(db,'person-intent:'+name,{startedAt:new\
+    \ Date().toISOString()});\n  const person=await api('/people','POST',{name});\n\
+    \  await db.query('INSERT INTO immich_sync.people VALUES($1,$2,$3,now()) ON CONFLICT\
+    \ DO NOTHING',[name,person.id,{origin:'new_from_confirmed_source'}]);\n  return\
+    \ person.id;\n}\nasync function syncFaces(db,job) {\n  const confirmed=job.payload.faces.filter(x=>x.label_source==='user'\
+    \ && x.person);\n  if(!confirmed.length)return;\n  const dimensions=await sharp(ROOT+job.source_path).metadata();\n\
+    \  const rotated=(dimensions.orientation??1)>=5;\n  const width=rotated?dimensions.height:dimensions.width,height=rotated?dimensions.width:dimensions.height;\n\
+    \  let current=await api('/faces?id='+encodeURIComponent(job.asset_id));\n  const\
+    \ used=new Set();\n  for(const old of confirmed){\n    const previous=(await db.query('SELECT\
+    \ * FROM immich_sync.faces WHERE source_face=$1',[old.id])).rows[0];\n    const\
+    \ version=digest(old);let candidate=faceCandidate(old,current,used),reason=candidate.reason;\n\
+    \    if(candidate.face && Math.abs(candidate.face.imageWidth/candidate.face.imageHeight-width/height)>0.03)reason='orientation_mismatch';\n\
+    \    const personId=await sourcePerson(db,old.person);\n    if(!personId)reason='person_mapping_required';\n\
+    \    if(previous?.state==='applied') {\n      const actual=current.find(f=>f.id===previous.face_id);\n\
+    \      if(!actual || actual.person?.id!==previous.person_id)reason='human_face_edit';\n\
+    \    }\n    // Never reassign a named target to a different person based on a\
+    \ source label.\n    if(candidate.face?.person?.name && candidate.face.person.id!==personId)reason='named_target_conflict';\n\
+    \    if(reason){\n      await db.query(`INSERT INTO immich_sync.faces(source_face,source_path,asset_id,source_hash,state,reason)\
+    \ VALUES($1,$2,$3,$4,'conflict',$5)\n        ON CONFLICT(source_face) DO UPDATE\
+    \ SET state='conflict',reason=excluded.reason,updated_at=now()`,[old.id,job.source_path,job.asset_id,version,reason]);continue;\n\
+    \    }\n    const face=candidate.face;used.add(face.id);\n    if(face.person?.id!==personId){\n\
+    \      await db.query(`INSERT INTO immich_sync.faces(source_face,source_path,asset_id,face_id,person_id,source_hash,state)\
+    \ VALUES($1,$2,$3,$4,$5,$6,'pending')\n        ON CONFLICT(source_face) DO UPDATE\
+    \ SET face_id=excluded.face_id,person_id=excluded.person_id,source_hash=excluded.source_hash,state='pending'`,[old.id,job.source_path,job.asset_id,face.id,personId,version]);\n\
+    \      await api('/faces/'+personId,'PUT',{id:face.id});\n      const after=await\
+    \ api('/faces?id='+job.asset_id);\n      if(after.find(f=>f.id===face.id)?.person?.id!==personId)throw\
+    \ Error('Face readback mismatch');\n      current=after;\n    }\n    await db.query(`INSERT\
+    \ INTO immich_sync.faces(source_face,source_path,asset_id,face_id,person_id,source_hash,state)\
+    \ VALUES($1,$2,$3,$4,$5,$6,'applied')\n      ON CONFLICT(source_face) DO UPDATE\
+    \ SET face_id=excluded.face_id,person_id=excluded.person_id,source_hash=excluded.source_hash,state='applied',reason=NULL,updated_at=now()`,[old.id,job.source_path,job.asset_id,face.id,personId,version]);\n\
+    \  }\n}\nasync function apply(db,job) {\n  const identity=await state(db,'identity');\n\
+    \  const current=await api('/assets/'+job.asset_id);\n  const mapped=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[current],identity.ownerId,identity.libraryId);\n\
+    \  if(!mapped.asset)throw Error('Target identity changed');\n  const file=await\
+    \ verifyFile(job);\n  const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};\n\
+    \  const metadata=await api('/assets/'+job.asset_id+'/metadata');\n  const existing=metadata.find(x=>x.key===META_KEY)?.value??null;\n\
+    \  const decision=metadataDecision(existing,desired,job.applied,job.intent);\n\
+    \  if(decision==='conflict'){\n    await db.query(\"UPDATE immich_sync.jobs SET\
+    \ state='conflict',reason='machine_metadata_edited',updated_at=now() WHERE source_path=$1\"\
+    ,[job.source_path]);return;\n  }\n  await db.query('UPDATE immich_sync.jobs SET\
+    \ intent=$2,content_sha256=$3,file_mtime_ms=$4 WHERE source_path=$1',[job.source_path,desired,file.contentSha256,file.mtimeMs]);\n\
+    \  if(decision!=='unchanged')await api('/assets/'+job.asset_id+'/metadata','PUT',{items:[{key:META_KEY,value:desired}]});\n\
+    \  const after=await api('/assets/'+job.asset_id+'/metadata');\n  if(stable(after.find(x=>x.key===META_KEY)?.value)!==stable(desired))throw\
+    \ Error('Metadata readback mismatch');\n  // Human-visible description/GPS/date\
+    \ writes deliberately gated for RO libraries.\n  // Source groups, tags and every\
+    \ old label are preserved in the owned metadata record.\n  if(process.env.ENABLE_FACE_TRANSFER==='true')await\
+    \ syncFaces(db,job);\n  await db.query(\"UPDATE immich_sync.jobs SET applied=$2,intent=NULL,state='applied',reason=NULL,attempts=0,applied_at=now(),verified_at=now(),updated_at=now()\
+    \ WHERE source_path=$1\",[job.source_path,desired]);\n  counters.last_success=Date.now()/1000;\n\
+    }\nasync function metrics(db) {\n  const rows=(await db.query('SELECT state,count(*)::int\
+    \ n,count(*) FILTER(WHERE payload->>\\'summary\\' IS NOT NULL)::int summaries\
+    \ FROM immich_sync.jobs GROUP BY state')).rows;\n  const lines=['# TYPE immich_sync_assets\
+    \ gauge','# TYPE immich_sync_summaries gauge'];\n  for(const status of ['pending','applied','conflict','error','excluded','missing']){\n\
+    \    const row=rows.find(x=>x.state===status);\n    lines.push(`immich_sync_assets{state=\"\
+    ${status}\"} ${row?.n??0}`,`immich_sync_summaries{state=\"${status}\"} ${row?.summaries??0}`);\n\
+    \  }\n  const faces=(await db.query('SELECT state,count(*)::int n FROM immich_sync.faces\
+    \ GROUP BY state')).rows;\n  for(const status of ['pending','applied','conflict'])lines.push(`immich_sync_faces{state=\"\
+    ${status}\"} ${faces.find(x=>x.state===status)?.n??0}`);\n  const preserved=(await\
+    \ db.query(\"SELECT count(*)::int n FROM immich_sync.jobs j CROSS JOIN LATERAL\
+    \ jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'\"\
+    )).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);\n\
+    \  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
+    ${MODE}\"} 1`);\n  gauges=lines.join('\\n')+'\\n';\n}\nasync function cycle()\
+    \ {\n  if(active)return;active=true;const started=Date.now();let db;\n  try {\n\
+    \    db=await pool.connect();\n    const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001)\
+    \ locked')).rows[0].locked;\n    if(!lock)return;\n    await api('/users/me');counters.api_ready=1;\n\
+    \    if(Date.now()/1000-counters.last_discovery>600)await discover(db);\n    if(MODE==='apply'){\n\
+    \      const jobs=(await db.query(\"SELECT * FROM immich_sync.jobs WHERE state\
+    \ IN ('pending','error') AND available_at<=now() ORDER BY (payload->>'summary'\
+    \ IS NOT NULL) DESC,discovered_at,source_path LIMIT $1\",[BATCH])).rows;\n   \
+    \   for(const job of jobs){\n        try{await apply(db,job);}catch(e){\n    \
+    \      const reason=e.status?'http_'+e.status:e.message?.replace(/[^a-zA-Z0-9\
+    \ _-]/g,'').slice(0,80)??'unknown';\n          await db.query(\"UPDATE immich_sync.jobs\
+    \ SET state='error',reason=$2,attempts=attempts+1,available_at=now()+least(3600,power(2,least(attempts,10))*30)*interval\
+    \ '1 second',updated_at=now() WHERE source_path=$1\",[job.source_path,reason]);\n\
+    \          log('sync.asset_error',{source_id:digest(job.source_path).slice(0,16),reason});\n\
+    \        }\n      }\n      log('sync.batch',{attempted:jobs.length});\n      //\
+    \ Detect subsequent user edits/removals without restoring them.\n      const audit=(await\
+    \ db.query(\"SELECT source_path,asset_id,applied FROM immich_sync.jobs WHERE state='applied'\
+    \ AND (verified_at IS NULL OR verified_at<now()-interval '24 hours') ORDER BY\
+    \ verified_at NULLS FIRST LIMIT 5\")).rows;\n      for(const job of audit){\n\
+    \        const current=await api('/assets/'+job.asset_id+'/metadata');\n     \
+    \   const matches=stable(current.find(x=>x.key===META_KEY)?.value)===stable(job.applied);\n\
+    \        await db.query(\"UPDATE immich_sync.jobs SET verified_at=now(),state=$2,reason=$3\
+    \ WHERE source_path=$1\",[job.source_path,matches?'applied':'conflict',matches?null:'machine_metadata_edited']);\n\
+    \      }\n    }\n    await metrics(db);\n  } catch(e){counters.api_ready=0;log('sync.cycle_error',{reason:e.code??(e.status?'http_'+e.status:'unavailable')});}\n\
+    \  finally{if(db){try{await db.query('SELECT pg_advisory_unlock(217,8001)');}catch{}db.release();}counters.cycle_seconds=(Date.now()-started)/1000;active=false;}\n\
+    }\nhttp.createServer((req,res)=>{\n if(req.url==='/healthz'){res.end('ok');return;}\n\
+    \ if(req.url!=='/metrics'){res.writeHead(404);res.end();return;}\n res.setHeader('Content-Type','text/plain;\
+    \ version=0.0.4');\n res.end(gauges+Object.entries(counters).map(([k,v])=>`immich_sync_${k}\
+    \ ${v}`).join('\\n')+'\\n');\n}).listen(9200,'0.0.0.0');\nawait cycle();setInterval(cycle,15000);\n"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-sync-code
+  namespace: immich-pilot
+data:
+  bootstrap.mjs: "// Executed only by the GitOps bootstrap Job in namespace database.\n\
+    import {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
+    const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
+    \ db=new Client();await db.connect();\ntry {\n await db.query(\"SET log_statement='none'\"\
+    );\n await db.query('BEGIN');\n await db.query('SELECT pg_advisory_xact_lock(217,8000)');\n\
+    \ const exists=(await db.query(\"SELECT 1 FROM pg_roles WHERE rolname='immich_reconciler'\"\
+    )).rowCount;\n if(!exists)await db.query('CREATE ROLE immich_reconciler LOGIN');\n\
+    \ const statement=(await db.query(\"SELECT format('ALTER ROLE immich_reconciler\
+    \ PASSWORD %L',$1::text) command\",[process.env.ROLE_PASSWORD])).rows[0].command;\n\
+    \ await db.query(statement);\n await db.query('GRANT CONNECT ON DATABASE photo_enrichment\
+    \ TO immich_reconciler');\n await db.query('GRANT USAGE ON SCHEMA public,catalog\
+    \ TO immich_reconciler');\n await db.query('GRANT SELECT ON catalog.gphotos_media,catalog.media_summaries,public.photo_context,public.extracted,public.faces,public.photo_groups,public.group_members\
+    \ TO immich_reconciler');\n await db.query('CREATE SCHEMA IF NOT EXISTS immich_sync\
+    \ AUTHORIZATION immich_reconciler');\n await db.query('SET LOCAL ROLE immich_reconciler');\n\
+    \ await db.query(await fs.readFile('/code/schema.sql','utf8'));\n await db.query('COMMIT');\n\
+    \ console.log('Scoped reconciliation role and schema ready; source tables are\
+    \ read-only.');\n} catch {await db.query('ROLLBACK');console.error('Bootstrap\
+    \ failed; details suppressed to protect credentials.');process.exitCode=1;}\n\
+    finally{await db.end();}\n"
+  core.mjs: "// Pure reconciliation rules. No biometric inference: existing confirmations\
+    \ are provenance.\nimport crypto from 'node:crypto';\nimport path from 'node:path';\n\
+    export const META_KEY = 'home.knowledge-index.v1';\nexport const ROOT = '/external/gphotos/';\n\
+    export const stable = value => JSON.stringify(value, (_,v) => v && typeof v==='object'\
+    \ && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)))\
+    \ : v);\nexport const digest = value => crypto.createHash('sha256').update(stable(value)).digest('hex');\n\
+    export function sourcePacket(source) {\n  const faces=(source.faces??[]).map(f=>({id:f.id,person:f.person,box:f.box,model:f.model,revision:f.revision,label_source:f.label_source}));\n\
+    \  return {schemaVersion:1,sourcePath:source.path,sizeBytes:Number(source.size_bytes),sourceMtime:source.mtime,\n\
+    \    summary:source.context_summary || source.summary || null,\n    summaryModel:source.context_summary\
+    \ ? source.context_model : source.summary_model,\n    summaryCreatedAt:source.summary_created_at,\n\
+    \    tags:[...new Set([...(source.summary_tags??[]),...(source.context_tags??[])])].sort(),\n\
+    \    locationContext:source.location_context??null,\n    capture:{timestamp:source.capture_ts??source.taken_ts,source:source.capture_source??'takeout.photoTakenTime'},\n\
+    \    gps:{latitude:source.latitude,longitude:source.longitude,source:source.gps_source},\n\
+    \    faces,groups:source.groups??[]};\n}\nexport function eligible(source) {\n\
+    \  return Boolean(source.summary || source.context_summary || source.faces?.length\
+    \ || source.groups?.length);\n}\nexport function scope(source) {\n  return /^Google\
+    \ Photos\\/Photos from [0-9]{4}\\//.test(source.path) && !source.path.split('/').includes('..')\
+    \ && !path.isAbsolute(source.path);\n}\nexport function mapAsset(source, candidates,\
+    \ ownerId, libraryId) {\n  if(!scope(source))return {reason:'outside_import_scope'};\n\
+    \  const exact=candidates.filter(a=>a.originalPath===ROOT+source.path && a.isExternal\
+    \ && a.ownerId===ownerId && a.libraryId===libraryId);\n  if(exact.length!==1)return\
+    \ {reason:exact.length?'ambiguous_mapping':'missing_asset'};\n  const a=exact[0];\n\
+    \  if(a.isOffline || a.isTrashed)return {reason:'unavailable_asset'};\n  if(Number(a.exifInfo?.fileSizeInByte)!==Number(source.size_bytes))return\
+    \ {reason:'size_mismatch'};\n  // Immich external checksums hash \"path:\" + absolute\
+    \ pathname, not image bytes.\n  const expected=crypto.createHash('sha1').update('path:'+a.originalPath).digest('base64');\n\
+    \  if(a.checksum && a.checksum!==expected)return {reason:'path_checksum_mismatch'};\n\
+    \  return {asset:a};\n}\nexport function metadataDecision(current, desired, previous,\
+    \ intent) {\n  if(current && stable(current)===stable(desired))return 'unchanged';\n\
+    \  if(current && intent && stable(current)===stable(intent))return 'resume';\n\
+    \  // Never reclaim a key cleared/edited by someone after our previous successful\
+    \ write.\n  if(previous && stable(current??null)!==stable(previous))return 'conflict';\n\
+    \  if(!previous && current)return 'conflict';\n  return 'write';\n}\nexport function\
+    \ normalizedBox(face) {\n  if(!(face.imageWidth>0 && face.imageHeight>0))return\
+    \ null;\n  return [face.boundingBoxX1/face.imageWidth,face.boundingBoxY1/face.imageHeight,face.boundingBoxX2/face.imageWidth,face.boundingBoxY2/face.imageHeight];\n\
+    }\nexport function overlap(a,b) {\n  if(!a || !b || [...a,...b].some(x=>!Number.isFinite(x)||x<0||x>1))return\
+    \ 0;\n  const intersection=Math.max(0,Math.min(a[2],b[2])-Math.max(a[0],b[0]))*Math.max(0,Math.min(a[3],b[3])-Math.max(a[1],b[1]));\n\
+    \  const union=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-intersection;\n\
+    \  return union>0?intersection/union:0;\n}\nexport function faceCandidate(sourceFace,\
+    \ faces, used=new Set()) {\n  if(sourceFace.label_source!=='user')return {reason:'not_human_confirmed'};\n\
+    \  const matches=faces.filter(f=>!used.has(f.id)).map(f=>({face:f,score:overlap(sourceFace.box,normalizedBox(f))})).sort((a,b)=>b.score-a.score);\n\
+    \  if(!matches.length || matches[0].score<0.5)return {reason:'no_spatial_match'};\n\
+    \  if(matches[1] && matches[0].score-matches[1].score<0.2)return {reason:'ambiguous_spatial_match'};\n\
+    \  return matches[0];\n}\n"
+  schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
+    \ Immich's DB.\nCREATE SCHEMA IF NOT EXISTS immich_sync;\nCREATE TABLE IF NOT\
+    \ EXISTS immich_sync.jobs (\n source_path text PRIMARY KEY, source_hash text NOT\
+    \ NULL, payload jsonb NOT NULL,\n asset_id text, state text NOT NULL DEFAULT 'pending',\
+    \ reason text,\n applied jsonb, intent jsonb, content_sha256 text, file_mtime_ms\
+    \ double precision,\n attempts integer NOT NULL DEFAULT 0, available_at timestamptz\
+    \ NOT NULL DEFAULT now(),\n discovered_at timestamptz NOT NULL DEFAULT now(),\
+    \ updated_at timestamptz NOT NULL DEFAULT now(),\n applied_at timestamptz, verified_at\
+    \ timestamptz, cycle_id text NOT NULL,\n CHECK(state IN ('pending','applied','conflict','error','excluded','missing'))\n\
+    );\nCREATE TABLE IF NOT EXISTS immich_sync.state (\n key text PRIMARY KEY,value\
+    \ jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT now()\n);\nCREATE TABLE\
+    \ IF NOT EXISTS immich_sync.people (\n source_person text PRIMARY KEY,person_id\
+    \ text NOT NULL,evidence jsonb NOT NULL,updated_at timestamptz NOT NULL DEFAULT\
+    \ now()\n);\nCREATE TABLE IF NOT EXISTS immich_sync.faces (\n source_face text\
+    \ PRIMARY KEY,source_path text NOT NULL,asset_id text NOT NULL,face_id text,\n\
+    \ person_id text,source_hash text NOT NULL,state text NOT NULL,reason text,updated_at\
+    \ timestamptz NOT NULL DEFAULT now()\n);\nCREATE TABLE IF NOT EXISTS immich_sync.albums\
+    \ (\n source_group text PRIMARY KEY,album_id text,source_hash text,state text\
+    \ NOT NULL,\n intent jsonb,updated_at timestamptz NOT NULL DEFAULT now()\n);\n\
+    CREATE TABLE IF NOT EXISTS immich_sync.operations (\n source_path text NOT NULL,kind\
+    \ text NOT NULL,version text NOT NULL,intent jsonb NOT NULL,\n result jsonb,verified_at\
+    \ timestamptz,PRIMARY KEY(source_path,kind,version)\n);\nCREATE INDEX IF NOT EXISTS\
+    \ immich_sync_jobs_pending ON immich_sync.jobs(state,available_at);\n"
+  source.sql: "SELECT m.path,m.size_bytes,m.ext,m.mtime,m.taken_ts,\n       s.summary,s.tags\
+    \ AS summary_tags,s.model AS summary_model,s.created_at AS summary_created_at,\n\
+    \       c.summary AS context_summary,c.tags AS context_tags,c.model AS context_model,c.context\
+    \ AS location_context,\n       e.capture_ts,e.capture_source,e.latitude,e.longitude,e.gps_source,e.width,e.height,\n\
+    \       coalesce((SELECT jsonb_agg(jsonb_build_object('id',f.id,'person',f.person,'box',f.box,'model',f.model,'revision',f.updated_at,'label_source',f.label_source)\
+    \ ORDER BY f.id)\n                 FROM faces f WHERE f.path=m.path AND f.size_bytes=m.size_bytes\
+    \ AND f.person IS NOT NULL),'[]'::jsonb) AS faces,\n       coalesce((SELECT jsonb_agg(to_jsonb(g)\
+    \ ORDER BY g.id) FROM photo_groups g JOIN group_members gm ON gm.group_id=g.id\
+    \ WHERE gm.path=m.path),'[]'::jsonb) AS groups\nFROM catalog.gphotos_media m\n\
+    LEFT JOIN (SELECT DISTINCT ON (path,size_bytes) path,size_bytes,summary,tags,model,created_at\
+    \ FROM catalog.media_summaries WHERE status='ok' ORDER BY path,size_bytes,created_at\
+    \ DESC,enricher DESC) s ON s.path=m.path AND s.size_bytes=m.size_bytes\nLEFT JOIN\
+    \ photo_context c ON c.path=m.path AND c.size_bytes=m.size_bytes AND c.status='done'\n\
+    LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes\nWHERE m.kind='media'\n"
+  worker.mjs: "// Incremental, API-only Immich writes; reconciliation state belongs\
+    \ to its own PG schema.\nimport fs from 'node:fs/promises';\nimport {createReadStream}\
+    \ from 'node:fs';\nimport crypto from 'node:crypto';\nimport http from 'node:http';\n\
+    import {createRequire} from 'node:module';\nimport {fileURLToPath} from 'node:url';\n\
+    import {META_KEY,ROOT,stable,digest,sourcePacket,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap}\
+    \ from './core.mjs';\nconst require=createRequire('/usr/src/app/server/package.json');\n\
+    const {Pool}=require('pg');\nconst sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
+    const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';\nconst MODE=process.env.SYNC_MODE??'dry-run';\n\
+    const BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\nlet counters={source:0,summaries:0,last_discovery:0,last_success:0,api_ready:0,cycle_seconds:0};\n\
+    let gauges='',active=false;\nconst log=(event,fields={})=>console.log(JSON.stringify({time:new\
+    \ Date().toISOString(),event,...fields}));\nasync function api(route,method='GET',body)\
+    \ {\n  const key=(await fs.readFile('/credentials/api-key','utf8')).trim();\n\
+    \  const response=await fetch(BASE+route,{method,headers:{'x-api-key':key,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(45000)});\n\
+    \  if(!response.ok){const e=Error('Immich HTTP '+response.status);e.status=response.status;throw\
+    \ e;}\n  const text=await response.text();return text?JSON.parse(text):null;\n\
+    }\nasync function state(db,key,value) {\n  if(value===undefined)return (await\
+    \ db.query('SELECT value FROM immich_sync.state WHERE key=$1',[key])).rows[0]?.value;\n\
+    \  await db.query('INSERT INTO immich_sync.state(key,value) VALUES($1,$2) ON CONFLICT(key)\
+    \ DO UPDATE SET value=excluded.value,updated_at=now()',[key,value]);\n}\nasync\
+    \ function inventory(libraryId) {\n  const byPath=new Map();let cursor, page=1;\n\
+    \  do {\n    const result=await api('/search/metadata','POST',cursor?{libraryId,size:1000,cursor}:{libraryId,size:1000,page});\n\
+    \    for(const item of result.assets.items){\n      const a={id:item.id,ownerId:item.ownerId,libraryId:item.libraryId,isExternal:item.isExternal,isOffline:item.isOffline,isTrashed:item.isTrashed,originalPath:item.originalPath,checksum:item.checksum,exifInfo:{fileSizeInByte:item.exifInfo?.fileSizeInByte}};\n\
+    \      if(!byPath.has(a.originalPath))byPath.set(a.originalPath,[]);\n      byPath.get(a.originalPath).push(a);\n\
+    \    }\n    cursor=result.assets.nextCursor;\n    if(!cursor && !result.assets.nextPage)break;\n\
+    \    if(!cursor)page=Number(result.assets.nextPage);\n    if(page>1000)throw Error('Inventory\
+    \ pagination overflow');\n  } while(true);\n  return byPath;\n}\nasync function\
+    \ discover(db) {\n  const me=await api('/users/me');\n  const libraries=(await\
+    \ api('/libraries')).filter(x=>x.name==='Existing Google Photos' && x.ownerId===me.id);\n\
+    \  if(libraries.length!==1)throw Error('Library identity ambiguous');\n  const\
+    \ libraryId=libraries[0].id;\n  const configured=await state(db,'identity');\n\
+    \  if(configured && (configured.ownerId!==me.id || configured.libraryId!==libraryId))throw\
+    \ Error('Library identity changed');\n  await state(db,'identity',{ownerId:me.id,libraryId});\n\
+    \  const targets=await inventory(libraryId);\n  const query=await fs.readFile(new\
+    \ URL('./source.sql',import.meta.url),'utf8');\n  await db.query('BEGIN ISOLATION\
+    \ LEVEL REPEATABLE READ');\n  try {\n    // Source tables are SELECT-only for\
+    \ this role. Job discovery commits with its checkpoint.\n    const result=await\
+    \ db.query(query);\n    const cycle=crypto.randomUUID();\n    counters.source=result.rows.length;counters.summaries=result.rows.filter(x=>x.summary).length;\n\
+    \    for(let offset=0;offset<result.rows.length;offset+=250){\n      const jobs=[];\n\
+    \      for(const source of result.rows.slice(offset,offset+250)){\n        if(!eligible(source))continue;\n\
+    \        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);\n\
+    \        jobs.push({source_path:source.path,source_hash:digest(packet),payload:packet,asset_id:match.asset?.id??null,\n\
+    \          state:match.asset?'pending':scope(source)?'missing':'excluded',reason:match.reason??null,cycle_id:cycle});\n\
+    \      }\n      if(jobs.length)await db.query(`INSERT INTO immich_sync.jobs(source_path,source_hash,payload,asset_id,state,reason,cycle_id)\n\
+    \        SELECT source_path,source_hash,payload,asset_id,state,reason,cycle_id\
+    \ FROM jsonb_to_recordset($1::jsonb)\n        AS x(source_path text,source_hash\
+    \ text,payload jsonb,asset_id text,state text,reason text,cycle_id text)\n   \
+    \     ON CONFLICT(source_path) DO UPDATE SET source_hash=excluded.source_hash,payload=excluded.payload,\n\
+    \        asset_id=excluded.asset_id,cycle_id=excluded.cycle_id,\n        state=CASE\
+    \ WHEN immich_sync.jobs.asset_id IS NOT NULL AND immich_sync.jobs.asset_id IS\
+    \ DISTINCT FROM excluded.asset_id THEN 'conflict'\n          WHEN immich_sync.jobs.source_hash<>excluded.source_hash\
+    \ OR immich_sync.jobs.state IN ('missing','excluded') THEN excluded.state ELSE\
+    \ immich_sync.jobs.state END,\n        reason=CASE WHEN immich_sync.jobs.asset_id\
+    \ IS NOT NULL AND immich_sync.jobs.asset_id IS DISTINCT FROM excluded.asset_id\
+    \ THEN 'asset_identity_changed' ELSE excluded.reason END,\n        updated_at=CASE\
+    \ WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at\
+    \ END`,[JSON.stringify(jobs)]);\n    }\n    await db.query(\"UPDATE immich_sync.jobs\
+    \ SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded'\"\
+    ,[cycle]);\n    await state(db,'checkpoint',{cycle,sourceRows:counters.source,successfulSummaries:counters.summaries,capturedAt:new\
+    \ Date().toISOString()});\n    await db.query('COMMIT');counters.last_discovery=Date.now()/1000;\n\
+    \    log('sync.discovery',{source:counters.source,available_summaries:counters.summaries});\n\
+    \  } catch(e){await db.query('ROLLBACK');throw e;}\n}\nasync function checksum(file)\
+    \ {\n  const hash=crypto.createHash('sha256');for await(const chunk of createReadStream(file))hash.update(chunk);return\
+    \ hash.digest('hex');\n}\nasync function verifyFile(job) {\n  const file=await\
+    \ fs.realpath(ROOT+job.source_path);\n  if(!file.startsWith(ROOT))throw Error('File\
+    \ escaped library');\n  const stat=await fs.stat(file);\n  if(stat.size!==job.payload.sizeBytes)throw\
+    \ Error('Source size changed');\n  const sourceTime=new Date(job.payload.sourceMtime).getTime();\n\
+    \  if(!Number.isFinite(sourceTime) || Math.abs(sourceTime-stat.mtimeMs)>1500)throw\
+    \ Error('Source timestamp changed');\n  const hash=await checksum(file);\n  if(job.content_sha256\
+    \ && job.content_sha256!==hash)throw Error('Source content changed');\n  return\
+    \ {contentSha256:hash,mtimeMs:stat.mtimeMs};\n}\nasync function sourcePerson(db,name)\
+    \ {\n  const saved=(await db.query('SELECT person_id FROM immich_sync.people WHERE\
+    \ source_person=$1',[name])).rows[0];\n  if(saved)return saved.person_id;\n  //\
+    \ Name equality alone does not prove an existing Immich person's identity.\n \
+    \ // Seed proven mappings from pilot source-face provenance before this step.\n\
+    \  const people=await api('/people?withHidden=true&size=1000');\n  if((people.people??people).some(p=>p.name===name))return\
+    \ null;\n  // An intent marker makes an interrupted creation reviewable instead\
+    \ of duplicating people.\n  const marker=await state(db,'person-intent:'+name);\n\
+    \  if(marker)return null;\n  await state(db,'person-intent:'+name,{startedAt:new\
+    \ Date().toISOString()});\n  const person=await api('/people','POST',{name});\n\
+    \  await db.query('INSERT INTO immich_sync.people VALUES($1,$2,$3,now()) ON CONFLICT\
+    \ DO NOTHING',[name,person.id,{origin:'new_from_confirmed_source'}]);\n  return\
+    \ person.id;\n}\nasync function syncFaces(db,job) {\n  const confirmed=job.payload.faces.filter(x=>x.label_source==='user'\
+    \ && x.person);\n  if(!confirmed.length)return;\n  const dimensions=await sharp(ROOT+job.source_path).metadata();\n\
+    \  const rotated=(dimensions.orientation??1)>=5;\n  const width=rotated?dimensions.height:dimensions.width,height=rotated?dimensions.width:dimensions.height;\n\
+    \  let current=await api('/faces?id='+encodeURIComponent(job.asset_id));\n  const\
+    \ used=new Set();\n  for(const old of confirmed){\n    const previous=(await db.query('SELECT\
+    \ * FROM immich_sync.faces WHERE source_face=$1',[old.id])).rows[0];\n    const\
+    \ version=digest(old);let candidate=faceCandidate(old,current,used),reason=candidate.reason;\n\
+    \    if(candidate.face && Math.abs(candidate.face.imageWidth/candidate.face.imageHeight-width/height)>0.03)reason='orientation_mismatch';\n\
+    \    const personId=await sourcePerson(db,old.person);\n    if(!personId)reason='person_mapping_required';\n\
+    \    if(previous?.state==='applied') {\n      const actual=current.find(f=>f.id===previous.face_id);\n\
+    \      if(!actual || actual.person?.id!==previous.person_id)reason='human_face_edit';\n\
+    \    }\n    // Never reassign a named target to a different person based on a\
+    \ source label.\n    if(candidate.face?.person?.name && candidate.face.person.id!==personId)reason='named_target_conflict';\n\
+    \    if(reason){\n      await db.query(`INSERT INTO immich_sync.faces(source_face,source_path,asset_id,source_hash,state,reason)\
+    \ VALUES($1,$2,$3,$4,'conflict',$5)\n        ON CONFLICT(source_face) DO UPDATE\
+    \ SET state='conflict',reason=excluded.reason,updated_at=now()`,[old.id,job.source_path,job.asset_id,version,reason]);continue;\n\
+    \    }\n    const face=candidate.face;used.add(face.id);\n    if(face.person?.id!==personId){\n\
+    \      await db.query(`INSERT INTO immich_sync.faces(source_face,source_path,asset_id,face_id,person_id,source_hash,state)\
+    \ VALUES($1,$2,$3,$4,$5,$6,'pending')\n        ON CONFLICT(source_face) DO UPDATE\
+    \ SET face_id=excluded.face_id,person_id=excluded.person_id,source_hash=excluded.source_hash,state='pending'`,[old.id,job.source_path,job.asset_id,face.id,personId,version]);\n\
+    \      await api('/faces/'+personId,'PUT',{id:face.id});\n      const after=await\
+    \ api('/faces?id='+job.asset_id);\n      if(after.find(f=>f.id===face.id)?.person?.id!==personId)throw\
+    \ Error('Face readback mismatch');\n      current=after;\n    }\n    await db.query(`INSERT\
+    \ INTO immich_sync.faces(source_face,source_path,asset_id,face_id,person_id,source_hash,state)\
+    \ VALUES($1,$2,$3,$4,$5,$6,'applied')\n      ON CONFLICT(source_face) DO UPDATE\
+    \ SET face_id=excluded.face_id,person_id=excluded.person_id,source_hash=excluded.source_hash,state='applied',reason=NULL,updated_at=now()`,[old.id,job.source_path,job.asset_id,face.id,personId,version]);\n\
+    \  }\n}\nasync function apply(db,job) {\n  const identity=await state(db,'identity');\n\
+    \  const current=await api('/assets/'+job.asset_id);\n  const mapped=mapAsset({path:job.source_path,size_bytes:job.payload.sizeBytes},[current],identity.ownerId,identity.libraryId);\n\
+    \  if(!mapped.asset)throw Error('Target identity changed');\n  const file=await\
+    \ verifyFile(job);\n  const desired={...job.payload,sourceRevision:job.source_hash,contentSha256:file.contentSha256};\n\
+    \  const metadata=await api('/assets/'+job.asset_id+'/metadata');\n  const existing=metadata.find(x=>x.key===META_KEY)?.value??null;\n\
+    \  const decision=metadataDecision(existing,desired,job.applied,job.intent);\n\
+    \  if(decision==='conflict'){\n    await db.query(\"UPDATE immich_sync.jobs SET\
+    \ state='conflict',reason='machine_metadata_edited',updated_at=now() WHERE source_path=$1\"\
+    ,[job.source_path]);return;\n  }\n  await db.query('UPDATE immich_sync.jobs SET\
+    \ intent=$2,content_sha256=$3,file_mtime_ms=$4 WHERE source_path=$1',[job.source_path,desired,file.contentSha256,file.mtimeMs]);\n\
+    \  if(decision!=='unchanged')await api('/assets/'+job.asset_id+'/metadata','PUT',{items:[{key:META_KEY,value:desired}]});\n\
+    \  const after=await api('/assets/'+job.asset_id+'/metadata');\n  if(stable(after.find(x=>x.key===META_KEY)?.value)!==stable(desired))throw\
+    \ Error('Metadata readback mismatch');\n  // Human-visible description/GPS/date\
+    \ writes deliberately gated for RO libraries.\n  // Source groups, tags and every\
+    \ old label are preserved in the owned metadata record.\n  if(process.env.ENABLE_FACE_TRANSFER==='true')await\
+    \ syncFaces(db,job);\n  await db.query(\"UPDATE immich_sync.jobs SET applied=$2,intent=NULL,state='applied',reason=NULL,attempts=0,applied_at=now(),verified_at=now(),updated_at=now()\
+    \ WHERE source_path=$1\",[job.source_path,desired]);\n  counters.last_success=Date.now()/1000;\n\
+    }\nasync function metrics(db) {\n  const rows=(await db.query('SELECT state,count(*)::int\
+    \ n,count(*) FILTER(WHERE payload->>\\'summary\\' IS NOT NULL)::int summaries\
+    \ FROM immich_sync.jobs GROUP BY state')).rows;\n  const lines=['# TYPE immich_sync_assets\
+    \ gauge','# TYPE immich_sync_summaries gauge'];\n  for(const status of ['pending','applied','conflict','error','excluded','missing']){\n\
+    \    const row=rows.find(x=>x.state===status);\n    lines.push(`immich_sync_assets{state=\"\
+    ${status}\"} ${row?.n??0}`,`immich_sync_summaries{state=\"${status}\"} ${row?.summaries??0}`);\n\
+    \  }\n  const faces=(await db.query('SELECT state,count(*)::int n FROM immich_sync.faces\
+    \ GROUP BY state')).rows;\n  for(const status of ['pending','applied','conflict'])lines.push(`immich_sync_faces{state=\"\
+    ${status}\"} ${faces.find(x=>x.state===status)?.n??0}`);\n  const preserved=(await\
+    \ db.query(\"SELECT count(*)::int n FROM immich_sync.jobs j CROSS JOIN LATERAL\
+    \ jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'\"\
+    )).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);\n\
+    \  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
+    ${MODE}\"} 1`);\n  gauges=lines.join('\\n')+'\\n';\n}\nasync function cycle()\
+    \ {\n  if(active)return;active=true;const started=Date.now();let db;\n  try {\n\
+    \    db=await pool.connect();\n    const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001)\
+    \ locked')).rows[0].locked;\n    if(!lock)return;\n    await api('/users/me');counters.api_ready=1;\n\
+    \    if(Date.now()/1000-counters.last_discovery>600)await discover(db);\n    if(MODE==='apply'){\n\
+    \      const jobs=(await db.query(\"SELECT * FROM immich_sync.jobs WHERE state\
+    \ IN ('pending','error') AND available_at<=now() ORDER BY (payload->>'summary'\
+    \ IS NOT NULL) DESC,discovered_at,source_path LIMIT $1\",[BATCH])).rows;\n   \
+    \   for(const job of jobs){\n        try{await apply(db,job);}catch(e){\n    \
+    \      const reason=e.status?'http_'+e.status:e.message?.replace(/[^a-zA-Z0-9\
+    \ _-]/g,'').slice(0,80)??'unknown';\n          await db.query(\"UPDATE immich_sync.jobs\
+    \ SET state='error',reason=$2,attempts=attempts+1,available_at=now()+least(3600,power(2,least(attempts,10))*30)*interval\
+    \ '1 second',updated_at=now() WHERE source_path=$1\",[job.source_path,reason]);\n\
+    \          log('sync.asset_error',{source_id:digest(job.source_path).slice(0,16),reason});\n\
+    \        }\n      }\n      log('sync.batch',{attempted:jobs.length});\n      //\
+    \ Detect subsequent user edits/removals without restoring them.\n      const audit=(await\
+    \ db.query(\"SELECT source_path,asset_id,applied FROM immich_sync.jobs WHERE state='applied'\
+    \ AND (verified_at IS NULL OR verified_at<now()-interval '24 hours') ORDER BY\
+    \ verified_at NULLS FIRST LIMIT 5\")).rows;\n      for(const job of audit){\n\
+    \        const current=await api('/assets/'+job.asset_id+'/metadata');\n     \
+    \   const matches=stable(current.find(x=>x.key===META_KEY)?.value)===stable(job.applied);\n\
+    \        await db.query(\"UPDATE immich_sync.jobs SET verified_at=now(),state=$2,reason=$3\
+    \ WHERE source_path=$1\",[job.source_path,matches?'applied':'conflict',matches?null:'machine_metadata_edited']);\n\
+    \      }\n    }\n    await metrics(db);\n  } catch(e){counters.api_ready=0;log('sync.cycle_error',{reason:e.code??(e.status?'http_'+e.status:'unavailable')});}\n\
+    \  finally{if(db){try{await db.query('SELECT pg_advisory_unlock(217,8001)');}catch{}db.release();}counters.cycle_seconds=(Date.now()-started)/1000;active=false;}\n\
+    }\nhttp.createServer((req,res)=>{\n if(req.url==='/healthz'){res.end('ok');return;}\n\
+    \ if(req.url!=='/metrics'){res.writeHead(404);res.end();return;}\n res.setHeader('Content-Type','text/plain;\
+    \ version=0.0.4');\n res.end(gauges+Object.entries(counters).map(([k,v])=>`immich_sync_${k}\
+    \ ${v}`).join('\\n')+'\\n');\n}).listen(9200,'0.0.0.0');\nawait cycle();setInterval(cycle,15000);\n"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: immich-sync-schema-v1
+  namespace: database
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: sync
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: code
+          mountPath: /code
+          readOnly: true
+        command:
+        - node
+        - /code/bootstrap.mjs
+        env:
+        - name: PGHOST
+          value: postgres-postgresql.database.svc.cluster.local
+        - name: PGDATABASE
+          value: photo_enrichment
+        - name: PGUSER
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: postgres-password
+        - name: ROLE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: immich-sync-bootstrap
+              key: password
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      volumes:
+      - name: code
+        configMap:
+          name: immich-sync-code
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-sync
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: &id001
+      app: immich-sync
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        checksum/code: 56937f416c04d2bde3436ce9a89d8035289a8f00787e9ad4a1381d5ea855157e
+    spec:
+      restartPolicy: Always
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: sync
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: code
+          mountPath: /code
+          readOnly: true
+        - name: credentials
+          mountPath: /credentials
+          readOnly: true
+        - name: originals
+          mountPath: /external/gphotos
+          readOnly: true
+        command:
+        - node
+        - /code/worker.mjs
+        env:
+        - name: PGHOST
+          value: postgres-postgresql.database.svc.cluster.local
+        - name: PGDATABASE
+          value: photo_enrichment
+        - name: PGUSER
+          value: immich_reconciler
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: immich-sync
+              key: pg-password
+        - name: SYNC_MODE
+          value: dry-run
+        - name: ENABLE_FACE_TRANSFER
+          value: 'false'
+        - name: SYNC_BATCH_SIZE
+          value: '25'
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+        ports:
+        - name: metrics
+          containerPort: 9200
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 30
+      volumes:
+      - name: code
+        configMap:
+          name: immich-sync-code
+      - name: credentials
+        secret:
+          secretName: immich-sync
+          items:
+          - key: api-key
+            path: api-key
+      - name: originals
+        hostPath:
+          path: /mnt/gphotos/library
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-sync
+  namespace: immich-pilot
+  labels: &id001
+    app: immich-sync
+spec:
+  selector: *id001
+  ports:
+  - name: metrics
+    port: 9200
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: immich-sync
+  namespace: immich-pilot
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: immich-sync
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: immich-sync
+  namespace: immich-pilot
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: immich.reconciliation
+    rules:
+    - alert: ImmichReconciliationUnavailable
+      expr: immich_sync_api_ready == 0 or absent(immich_sync_api_ready)
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Knowledge Index to Immich reconciliation is unavailable
+    - alert: ImmichReconciliationFailures
+      expr: sum(immich_sync_assets{state="error"}) > 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Immich enrichment transfers require diagnosis
+        description: Inspect structured immich-sync pod logs. Failed transfers retry
+          with bounded backoff; originals are read-only.
