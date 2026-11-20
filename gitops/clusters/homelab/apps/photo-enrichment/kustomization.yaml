@@ -10,3 +10,4 @@ resources:
   - vpa
   - vpa/policies
   - immich-sync
+  - gpu-maintenance

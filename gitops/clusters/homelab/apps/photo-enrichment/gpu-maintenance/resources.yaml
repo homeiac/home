@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: piglet-driver-580-code
+  namespace: gpu-operator
+data:
+  driver.sh: "#!/bin/bash\n# Runs inside VM 105's root through the GitOps maintenance\
+    \ Job. No VM SSH.\nset -euo pipefail\nphase=${1:?prepare or install}\nversion=580.126.09-0ubuntu0.24.04.1\n\
+    module_version=580.126.09\nstate=/var/lib/homelab-gpu-driver/$module_version\n\
+    umask 077\nmkdir -p \"$state/rollback\"\nexec 9>\"$state/lock\"\nflock -n 9\n\
+    [[ $(hostname) == k3s-vm-pumped-piglet-gpu ]]\n. /etc/os-release\n[[ $VERSION_ID\
+    \ == 24.04 ]]\nexport DEBIAN_FRONTEND=noninteractive\nif [[ $phase == prepare\
+    \ ]]; then\n  if [[ -f $state/prepared ]]; then echo \"Preparation already saved\"\
+    ; exit 0; fi\n  dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\\\
+    n' > \"$state/packages-before.txt\"\n  apt-mark showmanual > \"$state/manual-before.txt\"\
+    \n  cp -a /etc/apt/preferences.d \"$state/preferences-before\"\n  cp -a /etc/default/grub\
+    \ \"$state/grub-before\"\n  uname -r > \"$state/kernel-before.txt\"\n  nvidia-smi\
+    \ --query-gpu=name,driver_version,memory.total --format=csv\n  # Keep exact old\
+    \ driver binaries available even if the Ubuntu mirror changes.\n  cd \"$state/rollback\"\
+    \n  while read -r package installed status; do\n    if [[ $status == installed\
+    \ && $installed == 535.288.01-0ubuntu0.24.04.1 ]]; then\n      apt-get download\
+    \ \"$package=$installed\"\n    fi\n  done < \"$state/packages-before.txt\"\n \
+    \ apt-get -s install \"nvidia-driver-580=$version\" | tee \"$state/apt-plan.txt\"\
+    \n  # Refuse unrelated removals. Review the saved plan before the install phase.\n\
+    \  if awk '/^Remv / && $2 !~ /nvidia/ {bad=1} END {exit !bad}' \"$state/apt-plan.txt\"\
+    ; then\n    echo 'Refusing unrelated package removals'; exit 1\n  fi\n  apt-get\
+    \ --download-only -y install \"nvidia-driver-580=$version\"\n  touch \"$state/prepared\"\
+    \n  echo 'PREPARED: rollback packages saved; target packages downloaded; no driver\
+    \ changed.'\nelif [[ $phase == install ]]; then\n  [[ -f $state/prepared ]]\n\
+    \  if [[ $(cat /sys/module/nvidia/version) == \"$module_version\" ]]; then\n \
+    \   echo 'Desired driver is already loaded'; exit 0\n  fi\n  apt-get -y --no-download\
+    \ install \"nvidia-driver-580=$version\"\n  cat > /etc/apt/preferences.d/homelab-nvidia-driver\
+    \ <<EOF\nPackage: src:nvidia-graphics-drivers-580:any\nPin: version $version\n\
+    Pin-Priority: 1001\nEOF\n  [[ $(modinfo -k \"$(uname -r)\" -F version nvidia)\
+    \ == \"$module_version\" ]]\n  dkms status\n  touch \"$state/installed\"\n  if\
+    \ [[ ! -f $state/reboot-scheduled ]]; then\n    systemd-run --unit=homelab-nvidia-580-reboot\
+    \ --on-active=30s /usr/bin/systemctl reboot\n    touch \"$state/reboot-scheduled\"\
+    \n  fi\n  echo 'INSTALLED: VM reboot scheduled in 30 seconds to load the pinned\
+    \ driver.'\nelse\n  echo 'Unknown phase'; exit 1\nfi\n"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: piglet-driver-580-prepare-v1
+  namespace: gpu-operator
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    spec:
+      restartPolicy: Never
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      containers:
+      - name: maintenance
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        command:
+        - bash
+        - -c
+        - exec chroot /host /bin/bash -s -- prepare < /scripts/driver.sh
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+        volumeMounts:
+        - name: host
+          mountPath: /host
+        - name: code
+          mountPath: /scripts
+          readOnly: true
+      volumes:
+      - name: host
+        hostPath:
+          path: /
+          type: Directory
+      - name: code
+        configMap:
+          name: piglet-driver-580-code
