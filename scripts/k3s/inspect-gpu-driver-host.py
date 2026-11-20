@@ -7,6 +7,8 @@ import subprocess
 host=os.environ.get('CB_HOST','root@pumped-piglet.maas')
 script='''cat /etc/os-release
 uname -r
+dpkg --audit
+ps -eo pid,comm | grep -E "apt|dpkg|unattended" || true
 apt-cache policy nvidia-driver-535 nvidia-driver-550 nvidia-driver-570 nvidia-driver-580
  dpkg-query -W -f='${Package} ${Version}\\n' '*nvidia*' 'linux-headers*' 2>/dev/null
 apt-mark showhold

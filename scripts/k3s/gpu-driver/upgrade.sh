@@ -19,6 +19,11 @@ if [[ $phase == prepare ]]; then
   apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update
   apt-cache policy nvidia-driver-580
   apt-cache madison nvidia-driver-580 | grep -F "$version" >/dev/null || { echo "Pinned target no longer on mirror; refresh Git desired version first"; exit 42; }
+  # Existing interrupted kernel post-install blocks every apt operation.
+  # Configure only the audited pending package; do not run a general upgrade.
+  if [[ $(dpkg-query -W -f='${db:Status-Status}' linux-image-6.8.0-100-generic) == half-configured ]]; then
+    dpkg --configure linux-image-6.8.0-100-generic
+  fi
   apt-get -y install dpkg-repack
   dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\n' > "$state/packages-before.txt"
   apt-mark showmanual > "$state/manual-before.txt"

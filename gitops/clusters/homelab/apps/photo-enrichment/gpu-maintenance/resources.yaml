@@ -15,8 +15,12 @@ data:
     \ Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=-\
     \ update\n  apt-cache policy nvidia-driver-580\n  apt-cache madison nvidia-driver-580\
     \ | grep -F \"$version\" >/dev/null || { echo \"Pinned target no longer on mirror;\
-    \ refresh Git desired version first\"; exit 42; }\n  apt-get -y install dpkg-repack\n\
-    \  dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\\n' > \"$state/packages-before.txt\"\
+    \ refresh Git desired version first\"; exit 42; }\n  # Existing interrupted kernel\
+    \ post-install blocks every apt operation.\n  # Configure only the audited pending\
+    \ package; do not run a general upgrade.\n  if [[ $(dpkg-query -W -f='${db:Status-Status}'\
+    \ linux-image-6.8.0-100-generic) == half-configured ]]; then\n    dpkg --configure\
+    \ linux-image-6.8.0-100-generic\n  fi\n  apt-get -y install dpkg-repack\n  dpkg-query\
+    \ -W -f='${Package} ${Version} ${db:Status-Status}\\n' > \"$state/packages-before.txt\"\
     \n  apt-mark showmanual > \"$state/manual-before.txt\"\n  cp -a /etc/apt/preferences.d\
     \ \"$state/preferences-before\"\n  cp -a /etc/default/grub \"$state/grub-before\"\
     \n  uname -r > \"$state/kernel-before.txt\"\n  nvidia-smi --query-gpu=name,driver_version,memory.total\
@@ -45,7 +49,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: piglet-driver-580-prepare-v3
+  name: piglet-driver-580-prepare-v4
   namespace: gpu-operator
 spec:
   backoffLimit: 0
