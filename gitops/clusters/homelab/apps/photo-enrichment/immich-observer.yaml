@@ -7,16 +7,18 @@ data:
   immich-queue-metrics.mjs: "// Read-only Immich queue/VPA telemetry. No photo content,\
     \ credentials or IDs exported.\nimport http from 'node:http';\nimport https from\
     \ 'node:https';\nimport fs from 'node:fs';\nimport {createRequire} from 'node:module';\n\
-    import {pathToFileURL} from 'node:url';\n\nexport const queues = {\n  library:\
-    \ 'library', sidecar: 'sidecar', metadataExtraction: 'metadata',\n  thumbnailGeneration:\
-    \ 'thumbnail_generation', faceDetection: 'face_detection',\n  facialRecognition:\
-    \ 'facial_recognition', smartSearch: 'smart_search',\n  ocr: 'ocr', videoConversion:\
-    \ 'video_conversion', duplicateDetection: 'duplicate_detection',\n};\nexport const\
-    \ states = {waiting: ['llen','wait'], active: ['llen','active'],\n  delayed: ['zcard','delayed'],\
-    \ prioritized: ['zcard','prioritized'],\n  failed: ['zcard','failed'], paused:\
-    \ ['llen','paused']};\n\nexport function quantity(value) {\n  const m = /^([0-9]+(?:\\\
-    .[0-9]+)?)(Ki|Mi|Gi|Ti|n|u|m|k|M|G|T)?$/.exec(String(value));\n  if (!m) throw\
-    \ Error('Unsupported resource quantity');\n  return Number(m[1])*({Ki:1024,Mi:1024**2,Gi:1024**3,Ti:1024**4,n:1e-9,u:1e-6,m:1e-3,k:1e3,M:1e6,G:1e9,T:1e12}[m[2]]??1);\n\
+    import {pathToFileURL} from 'node:url';\n\n// ConfigMap volumes use symlinks;\
+    \ Node resolves the module URL to the real path.\nexport const isEntryPoint =\
+    \ (file, url) => Boolean(file) && url === pathToFileURL(fs.realpathSync(file)).href;\n\
+    \nexport const queues = {\n  library: 'library', sidecar: 'sidecar', metadataExtraction:\
+    \ 'metadata',\n  thumbnailGeneration: 'thumbnail_generation', faceDetection: 'face_detection',\n\
+    \  facialRecognition: 'facial_recognition', smartSearch: 'smart_search',\n  ocr:\
+    \ 'ocr', videoConversion: 'video_conversion', duplicateDetection: 'duplicate_detection',\n\
+    };\nexport const states = {waiting: ['llen','wait'], active: ['llen','active'],\n\
+    \  delayed: ['zcard','delayed'], prioritized: ['zcard','prioritized'],\n  failed:\
+    \ ['zcard','failed'], paused: ['llen','paused']};\n\nexport function quantity(value)\
+    \ {\n  const m = /^([0-9]+(?:\\.[0-9]+)?)(Ki|Mi|Gi|Ti|n|u|m|k|M|G|T)?$/.exec(String(value));\n\
+    \  if (!m) throw Error('Unsupported resource quantity');\n  return Number(m[1])*({Ki:1024,Mi:1024**2,Gi:1024**3,Ti:1024**4,n:1e-9,u:1e-6,m:1e-3,k:1e3,M:1e6,G:1e9,T:1e12}[m[2]]??1);\n\
     }\nconst labels = value => JSON.stringify(String(value));\nexport function queueMetrics(results)\
     \ {\n  const lines=['# HELP immich_queue_jobs Jobs currently held in each BullMQ\
     \ state.',\n    '# TYPE immich_queue_jobs gauge'];\n  let index=0;\n  for (const\
@@ -63,7 +65,7 @@ data:
     \ collect();setInterval(collect,15000);\n  http.createServer((req,res)=>{\n  \
     \  if(req.url==='/healthz'){res.end('ok');return;}\n    if(req.url!=='/metrics'){res.writeHead(404);res.end();return;}\n\
     \    res.setHeader('Content-Type','text/plain; version=0.0.4');res.end(output);\n\
-    \  }).listen(9199,'0.0.0.0');\n}\nif(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)await\
+    \  }).listen(9199,'0.0.0.0');\n}\nif(isEntryPoint(process.argv[1], import.meta.url))await\
     \ main();\n"
 ---
 apiVersion: v1
@@ -116,7 +118,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/config: 2cd06d81479b03a350e13f1efd4944ba10e42b6a7b0f9ce9bdc2623b359213f4
+        checksum/config: 8822002218f16473c86f256e365e1d14902194476c43d1afc9fdccf70df5064b
     spec:
       serviceAccountName: immich-observer
       nodeSelector:

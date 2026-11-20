@@ -1,7 +1,7 @@
 // Verify failure handling and Kubernetes quantity conversion without Redis or a cluster.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {quantity, queueMetrics, recommendationMetrics, queues, states} from './immich-queue-metrics.mjs';
+import {quantity, queueMetrics, recommendationMetrics, queues, states, isEntryPoint} from './immich-queue-metrics.mjs';
 test('resource quantities retain CPU cores and memory bytes', () => {
   for(const [input, expected] of [['500m',0.5],['250000000n',0.25],['2Gi',2147483648],['1536Mi',1610612736],['4',4]])assert.equal(quantity(input), expected);
   assert.throws(()=>quantity('invalid'));
@@ -22,4 +22,18 @@ test('missing VPA recommendation is not synthesized as zero', () => {
   item.status={recommendation:{containerRecommendations:[{containerName:'main',target:{cpu:'1500m',memory:'2Gi'}}]}};
   assert.match(recommendationMetrics([item]),/bound="target",resource="cpu"\} 1.5/);
   assert.match(recommendationMetrics([item]),/mode="Off"\} 1/);
+});
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+test('ConfigMap symlink is recognized as an executable entry point', () => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'immich-entry-'));
+  try {
+    const real=path.join(dir,'source.mjs'), link=path.join(dir,'mounted.mjs');
+    fs.writeFileSync(real,'');fs.symlinkSync(real,link);
+    assert.equal(isEntryPoint(link,pathToFileURL(fs.realpathSync(real)).href),true);
+    assert.equal(isEntryPoint(link,import.meta.url),false);
+  } finally {fs.rmSync(dir,{recursive:true});}
 });

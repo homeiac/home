@@ -23,10 +23,11 @@ automatic resizing is enabled.
 
 ## Reconciliation order
 
-Reconcile this directory first. Wait for both CRDs to become `Established` and
-the recommender deployment to become ready. Reconcile `policies/` afterwards,
-using a separate Flux Kustomization with `dependsOn` on the controller installation.
-This prevents server-side dry-run failures for unknown VPA kinds on first install.
+The preview installed the controller/CRDs in one Git revision, verified both
+CRDs `Established` and the recommender ready, then added `policies/` in the next
+revision. Both are now included by the parent photo-enrichment Kustomization.
+Flux applies CRDs before custom resources; on a fresh cluster, wait for CRD
+discovery and the following reconciliation if the first dry-run is not ready.
 The namespace `immich-pilot` must already exist for its scoped Role and RoleBinding.
 
 ## Before enabling updates

@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
+// ConfigMap volumes use symlinks; Node resolves the module URL to the real path.
+export const isEntryPoint = (file, url) => Boolean(file) && url === pathToFileURL(fs.realpathSync(file)).href;
+
 export const queues = {
   library: 'library', sidecar: 'sidecar', metadataExtraction: 'metadata',
   thumbnailGeneration: 'thumbnail_generation', faceDetection: 'face_detection',
@@ -97,4 +100,4 @@ async function main() {
     res.setHeader('Content-Type','text/plain; version=0.0.4');res.end(output);
   }).listen(9199,'0.0.0.0');
 }
-if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)await main();
+if(isEntryPoint(process.argv[1], import.meta.url))await main();
