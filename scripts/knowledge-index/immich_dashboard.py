@@ -8,10 +8,11 @@ CPU = 'sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilo
 MEMORY = 'sum by(pod)(container_memory_working_set_bytes{namespace="immich-pilot",container!="",container!="POD"})'
 QUEUES = ['library', 'sidecar', 'metadata', 'thumbnail_generation', 'face_detection', 'facial_recognition', 'smart_search', 'ocr', 'video_conversion', 'duplicate_detection']
 
-OCR_RATE = 'sum(rate(immich_jobs_ocr_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
 OCR_BACKLOG = 'sum(immich_queue_jobs{queue="ocr",state=~"waiting|delayed|prioritized|paused"})'
+OCR_IDLE = 'sum(immich_queue_jobs{queue="ocr",state!="failed"}) == 0'
+OCR_RATE = f'(sum(rate(immich_jobs_ocr_success_total{{namespace="immich-pilot",endpoint="metrics-ms"}}[5m])) or ({OCR_IDLE}))'
 GPU = '{Hostname="k3s-vm-pumped-piglet-gpu"}'
-OCR_FAILURE_RATE = 'sum(rate(immich_jobs_ocr_failed_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
+OCR_FAILURE_RATE = f'(sum(rate(immich_jobs_ocr_failed_total{{namespace="immich-pilot",endpoint="metrics-ms"}}[5m])) or ({OCR_IDLE}))'
 VIDEO_QUEUE = 'immich_queue_jobs{queue="video_conversion"}'
 VIDEO_BACKLOG = 'sum(immich_queue_jobs{queue="video_conversion",state=~"waiting|delayed|prioritized|paused"})'
 VIDEO_IDLE = 'sum(immich_queue_jobs{queue="video_conversion",state!="failed"}) == 0'

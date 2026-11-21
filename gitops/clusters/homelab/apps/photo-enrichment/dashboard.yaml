@@ -281,13 +281,15 @@ data:
     \"thumbnail_generation\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"})\
     \ == 0))) * 60), \\\"id\\\", \\\"immich_gallery\\\", \\\"\\\", \\\"\\\"), \\\"\
     title\\\", \\\"Immich thumbnail completions (jobs/min)\\\", \\\"\\\", \\\"\\\"\
-    ) or label_replace(label_replace((sum(rate(immich_jobs_ocr_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60), \\\"id\\\", \\\"\
-    immich_ocr_completed\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich OCR completions\
-    \ (jobs/min)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace((sum(rate(immich_jobs_ocr_failed_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60), \\\"id\\\", \\\"\
-    immich_ocr_errors\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich OCR failed\
-    \ attempts (/min)\\\", \\\"\\\", \\\"\\\") or label_replace(label_replace(((sum(rate(immich_jobs_asset_encode_video_success_total{namespace=\\\
+    ) or label_replace(label_replace(((sum(rate(immich_jobs_ocr_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\
+    \"ocr\\\",state!=\\\"failed\\\"}) == 0)) * 60), \\\"id\\\", \\\"immich_ocr_completed\\\
+    \", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich OCR completions (jobs/min)\\\
+    \", \\\"\\\", \\\"\\\") or label_replace(label_replace(((sum(rate(immich_jobs_ocr_failed_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\
+    \"ocr\\\",state!=\\\"failed\\\"}) == 0)) * 60), \\\"id\\\", \\\"immich_ocr_errors\\\
+    \", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich OCR failed attempts (/min)\\\
+    \", \\\"\\\", \\\"\\\") or label_replace(label_replace(((sum(rate(immich_jobs_asset_encode_video_success_total{namespace=\\\
     \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\
     \"video_conversion\\\",state!=\\\"failed\\\"}) == 0)) * 60), \\\"id\\\", \\\"\
     immich_video_completed\\\", \\\"\\\", \\\"\\\"), \\\"title\\\", \\\"Immich video\
@@ -575,9 +577,10 @@ data:
     \   \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"\
     prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 6,\n        \"y\"\
     : 78,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n \
-    \       {\n          \"refId\": \"A\",\n          \"expr\": \"sum(rate(immich_jobs_ocr_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60\",\n          \"legendFormat\"\
-    : \"\",\n          \"instant\": true,\n          \"range\": false\n        }\n\
+    \       {\n          \"refId\": \"A\",\n          \"expr\": \"(sum(rate(immich_jobs_ocr_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\
+    \"ocr\\\",state!=\\\"failed\\\"}) == 0)) * 60\",\n          \"legendFormat\":\
+    \ \"\",\n          \"instant\": true,\n          \"range\": false\n        }\n\
     \      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\"\
     : \"short\"\n        },\n        \"overrides\": []\n      },\n      \"options\"\
     : {\n        \"legend\": {\n          \"displayMode\": \"list\",\n          \"\
@@ -590,8 +593,9 @@ data:
     prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\"\
     : 78,\n        \"w\": 6,\n        \"h\": 4\n      },\n      \"targets\": [\n \
     \       {\n          \"refId\": \"A\",\n          \"expr\": \"(sum(immich_queue_jobs{queue=\\\
-    \"ocr\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"}) / (sum(rate(immich_jobs_ocr_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) > 0)) or (sum(immich_queue_jobs{queue=\\\
+    \"ocr\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"}) / ((sum(rate(immich_jobs_ocr_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\
+    \"ocr\\\",state!=\\\"failed\\\"}) == 0)) > 0)) or (sum(immich_queue_jobs{queue=\\\
     \"ocr\\\",state=~\\\"waiting|delayed|prioritized|paused\\\"}) == 0)\",\n     \
     \     \"legendFormat\": \"\",\n          \"instant\": true,\n          \"range\"\
     : false\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\":\
@@ -620,9 +624,10 @@ data:
     : {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n    \
     \  },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 82,\n        \"\
     w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n      \
-    \    \"refId\": \"A\",\n          \"expr\": \"sum(rate(immich_jobs_ocr_success_total{namespace=\\\
-    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) * 60\",\n          \"legendFormat\"\
-    : \"OCR jobs/min\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"\
+    \    \"refId\": \"A\",\n          \"expr\": \"(sum(rate(immich_jobs_ocr_success_total{namespace=\\\
+    \"immich-pilot\\\",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\
+    \"ocr\\\",state!=\\\"failed\\\"}) == 0)) * 60\",\n          \"legendFormat\":\
+    \ \"OCR jobs/min\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"\
     defaults\": {\n          \"unit\": \"short\"\n        },\n        \"overrides\"\
     : []\n      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
     : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
@@ -687,11 +692,12 @@ data:
     : \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\"\
     : {\n        \"x\": 0,\n        \"y\": 96,\n        \"w\": 12,\n        \"h\"\
     : 6\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n\
-    \          \"expr\": \"sum(rate(immich_jobs_ocr_failed_total{namespace=\\\"immich-pilot\\\
-    \",endpoint=\\\"metrics-ms\\\"}[5m])) * 60\",\n          \"legendFormat\": \"\
-    Failed attempts/min\"\n        }\n      ],\n      \"fieldConfig\": {\n       \
-    \ \"defaults\": {\n          \"unit\": \"short\"\n        },\n        \"overrides\"\
-    : []\n      },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
+    \          \"expr\": \"(sum(rate(immich_jobs_ocr_failed_total{namespace=\\\"immich-pilot\\\
+    \",endpoint=\\\"metrics-ms\\\"}[5m])) or (sum(immich_queue_jobs{queue=\\\"ocr\\\
+    \",state!=\\\"failed\\\"}) == 0)) * 60\",\n          \"legendFormat\": \"Failed\
+    \ attempts/min\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\"\
+    : {\n          \"unit\": \"short\"\n        },\n        \"overrides\": []\n  \
+    \    },\n      \"options\": {\n        \"legend\": {\n          \"displayMode\"\
     : \"list\",\n          \"placement\": \"bottom\"\n        },\n        \"reduceOptions\"\
     : {\n          \"calcs\": [\n            \"lastNotNull\"\n          ]\n      \
     \  }\n      },\n      \"description\": \"Actual worker errors. Immich may discard\
