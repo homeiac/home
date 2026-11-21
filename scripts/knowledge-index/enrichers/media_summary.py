@@ -273,20 +273,32 @@ def mac_route(args):
     return 0, None
 
 
-def split_batch(rows, primary_slots, mac_slots, primary, metal):
-    """Yield each item once. Retry interrupted Mac work on the primary worker."""
+def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None):
+    """Keep slots fed across queue reads. Retry interrupted Mac work on the RTX."""
     pending = deque(rows)
     retry = deque()
     disabled = False
+    prefer_photos = refill is not None
     with ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:
         active = {}
 
         def submit(backend):
+            nonlocal refill
             if backend == "metal" and disabled:
                 return
+            if not pending and not retry and refill is not None and not disabled:
+                pending.extend(refill())
+                if not pending:
+                    refill = None
             candidates = retry if backend == "primary" and retry else pending
             if candidates:
-                row = candidates.popleft()
+                if backend == "metal" and prefer_photos:
+                    # Long visual prompts take substantially longer on the Mac.
+                    photo = next((i for i, row in enumerate(candidates) if row["ext"] not in VIDEO_EXTS), 0)
+                    row = candidates[photo]
+                    del candidates[photo]
+                else:
+                    row = candidates.popleft()
                 task = metal if backend == "metal" else primary
                 active[pool.submit(task, row)] = (backend, row)
 
@@ -301,22 +313,25 @@ def split_batch(rows, primary_slots, mac_slots, primary, metal):
                 if backend == "metal" and result["status"] != "ok" and result.get("_model_failure"):
                     disabled = True
                     retry.append(row)
+                    submit(backend)
                 else:
+                    submit(backend)
                     yield row, result
-                submit(backend)
             # Primary slots may already have drained when a late Mac request fails.
             primary_active = sum(backend == "primary" for backend, _ in active.values())
             for _ in range(min(len(retry), primary_slots - primary_active)):
                 submit("primary")
 
 
-def persist(batch, args, metrics):
+def persist(batch, args, metrics, seen):
     """Only the host writes Parquet and advances durable counters."""
     with metrics.measure("write"):
         write_batch([result for _, result in batch], args.index, args.enricher)
     for row, result in batch:
         kind = "video" if row["ext"] in VIDEO_EXTS else "photo"
         metrics.item(kind, result["status"], persisted=True, backend=result.get("inference_backend", "primary"))
+        if result["status"] == "ok":
+            seen.discard(row["path"])
 
 
 def run(a):
@@ -346,13 +361,28 @@ def run(a):
             mac_slots, metal_args.model_headers = mac_route(a)
             metrics.mac_capacity(mac_slots)
             fetch_size = max(a.batch_size, 4 * (a.parallel + mac_slots)) if mac_slots else a.batch_size
-            with metrics.measure("queue"):
-                rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics)
+            def fetch():
+                nonlocal remaining
+                if remaining <= 0:
+                    return []
+                with metrics.measure("queue"):
+                    rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics)
+                seen.update(r["path"] for r in rows)
+                remaining -= len(rows)
+                return rows
+
+            rows = fetch()
             if not rows:
                 break
-            seen.update(r["path"] for r in rows)
+            previous_errors = errors
             batch = []
-            for row, result in split_batch(rows, a.parallel, mac_slots, primary, metal):
+            # Keep the existing single-write cadence while refilling slots independently.
+            def refill():
+                # Drain the initial work before pulling more if all attempts have failed.
+                return [] if errors and not done else fetch()
+
+            for row, result in split_batch(rows, a.parallel, mac_slots, primary, metal,
+                                           refill=refill if mac_slots else None):
                 done += result["status"] == "ok"
                 errors += result["status"] != "ok"
                 if a.dry_run:
@@ -360,14 +390,13 @@ def run(a):
                     continue
                 batch.append((row, result))
                 if len(batch) == a.batch_size:
-                    persist(batch, a, metrics)
+                    persist(batch, a, metrics, seen)
                     batch.clear()
             if a.dry_run:
                 break
             if batch:
-                persist(batch, a, metrics)
-            remaining -= len(rows)
-            if errors and not done and len(rows) == errors:   # a whole batch failed: the model server is probably down, stop
+                persist(batch, a, metrics, seen)
+            if errors > previous_errors and not done:   # no working backend
                 print("whole batch failed; stopping", file=sys.stderr)
                 break
     n = done + errors

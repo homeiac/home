@@ -185,6 +185,26 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(sorted(row for row, _ in results), list(range(19)))
             self.assertEqual(any(result["status"] == "error" for _, result in results), bool(mac_slots))
 
+    def test_refill_keeps_rtx_busy_and_mac_prefers_photos(self):
+        rtx_refilled = threading.Event()
+        pages = iter([[{"path": "next", "ext": "jpg"}], []])
+
+        def primary(row):
+            if row["path"] == "next":
+                rtx_refilled.set()
+            return {"status": "ok", "backend": "RTX"}
+
+        def metal(row):
+            self.assertEqual(row["path"], "photo")
+            self.assertTrue(rtx_refilled.wait(5))
+            return {"status": "ok", "backend": "Mac"}
+
+        rows = [{"path": "video1", "ext": "mp4"}, {"path": "video2", "ext": "mov"},
+                {"path": "photo", "ext": "jpg"}]
+        results = media_summary.split_batch(rows, 1, 1, primary, metal, refill=lambda: next(pages))
+        self.assertEqual({row["path"]: result["backend"] for row, result in results},
+                         {"video1": "RTX", "video2": "RTX", "photo": "Mac", "next": "RTX"})
+
     @patch.object(media_summary, "mac_headers", return_value={})
     def test_mac_sleep_and_mismatched_model_fall_back(self, headers):
         import io
