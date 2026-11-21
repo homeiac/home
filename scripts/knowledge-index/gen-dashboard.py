@@ -72,13 +72,14 @@ def shift(items, dy):
 
 SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
-# Recorded rollout times in UTC. Both reference windows end on Nov 20 Pacific.
-GEMMA_REFERENCE = 1795240800
-STANDALONE_REFERENCE = 1795242330
+# Observed production transitions in UTC.
 GEMMA_END = 1795241400
 STANDALONE_START = 1795241606
 STANDALONE_END = 1795242360
 NATIVE_START = 1795242820
+ONE_SLOT_REFERENCE = 1795280280  # Last clean 10-minute window ending Nov 21 16:58 UTC.
+TWO_SLOT_START = 1795280415      # Runner accepted work Nov 21 17:00:14 UTC.
+TWO_SLOT_WINDOW = TWO_SLOT_START + 600
 
 
 def summary_pace(at=None):
@@ -90,28 +91,34 @@ def summary_pace(at=None):
 
 
 def throughput_panels():
-    labels = ("Gemma in Ollama", "Standalone Bonsai", "Bonsai in Ollama")
+    labels = ("Gemma in Ollama", "Standalone Bonsai", "Bonsai before backfill", "Bonsai · two slots, summaries only")
     live = f'({summary_pace()}) * 60'
-    comparisons = [(f'({summary_pace(GEMMA_REFERENCE)}) * 60', labels[0]),
-                   (f'({summary_pace(STANDALONE_REFERENCE)}) * 60', labels[1]),
-                   (f'({live}) and on() (vector(time()) >= {NATIVE_START})', labels[2] + ' · live')]
-    comparison = _panel('stat', 'Saved summaries/min · before and after', comparisons, 0, 5, 10, 7,
-                        decimals=1, extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
-                                                       'reduceOptions': {'calcs': ['lastNotNull']}}},
-                        description='All three values use ten minutes of successful Parquet writes. Reference windows ended Nov 20 at 10:00 pm and 10:25:30 pm Pacific. The live value feeds the ETA. Workload mix and shared-server traffic vary.')
+    after = f'({live}) and on() (vector(time()) >= {TWO_SLOT_WINDOW})'
+    # The recorded observation survives TSDB retention. Scope its fallback to
+    # the same host and enricher as the pinned Prometheus sample.
+    observed = (f'max by(enricher) (media_pipeline_queue{{{SUMMARY_SELECTION},'
+                'instance="pumped-piglet",enricher="gemma4-e2b-p1"}) * 0 + 11.789473684210524')
+    before = f'(({summary_pace(ONE_SLOT_REFERENCE)}) * 60) or ({observed})'
+    comparison = _panel('stat', 'Parquet summaries/min · one slot vs two',
+                        [(before, 'Before · one slot, shared'), (after, 'Now · two slots, summaries only')],
+                        0, 5, 10, 7, decimals=1,
+                        extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
+                                           'reduceOptions': {'calcs': ['lastNotNull']}}},
+                        description='Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48–16:58 UTC on Nov 21 with photo context active. The live ten-minute rate starts after a full window with two slots reserved for summaries. Media mix and cache hits can affect the rate.')
     for target in comparison['targets']:
         target.update(instant=True, range=False)
-    comparison['fieldConfig']['defaults']['noValue'] = 'No sample'
+    comparison['fieldConfig']['defaults']['noValue'] = 'Awaiting sample'
     phases = [f'(vector(time()) < {GEMMA_END})',
               f'((vector(time()) >= {STANDALONE_START}) and (vector(time()) < {STANDALONE_END}))',
-              f'(vector(time()) >= {NATIVE_START})']
+              f'((vector(time()) >= {NATIVE_START}) and (vector(time()) <= {ONE_SLOT_REFERENCE}))',
+              f'(vector(time()) >= {TWO_SLOT_WINDOW})']
     history = series('Summary throughput over time', [(f'({live}) and on() {phase}', label)
                      for phase, label in zip(phases, labels)], 10, 5, 14, 7, decimals=1,
-                     description='Ten-minute rate of successful Parquet writes. Gaps separate rollout phases. Early points after a cutover can still include pauses from the previous ten minutes.')
+                     description='Successful Parquet writes per minute in rolling ten-minute windows. The gap at the two-slot rollout excludes windows containing both configurations.')
     for target in history['targets']:
         target.update(instant=False, range=True, interval='30s')
     history['fieldConfig']['defaults'].update(min=0, custom={'drawStyle': 'line', 'lineWidth': 2, 'showPoints': 'never', 'spanNulls': False})
-    for label, color in zip(labels, ('orange', 'blue', 'green')):
+    for label, color in zip(labels, ('orange', 'blue', 'purple', 'green')):
         history['fieldConfig']['overrides'].append({'matcher': {'id': 'byName', 'options': label},
             'properties': [{'id': 'color', 'value': {'mode': 'fixed', 'fixedColor': color}}]})
     return [comparison, history]
@@ -129,9 +136,12 @@ def work_remaining_panels():
                       f'and on(instance,job) ({fresh}))')
     queue = f'({worker_queue} or {exported_queue})'
     pace = summary_pace()
+    window_ready = f'((vector(time()) < {TWO_SLOT_START}) or (vector(time()) >= {TWO_SLOT_WINDOW}))'
+    warming = f'((vector(time()) >= {TWO_SLOT_START}) and (vector(time()) < {TWO_SLOT_WINDOW}))'
     running = (f'max by(enricher) (media_pipeline_running{{{selection}}} and on(instance,enricher,job) '
                f'{heartbeat})')
-    eta = (f'(({queue} / ({pace} > 0)) and ({running} == 1)) or ({queue} == 0) '
+    eta = (f'((({queue} / ({pace} > 0)) and ({running} == 1)) and on() {window_ready}) or ({queue} == 0) '
+           f'or ((({queue} > 0) and ({running} == 1)) and on() {warming}) * 0 - 4 '
            f'or (({queue} > 0) and ({running} == 0)) * 0 - 2 '
            f'or (({queue} > 0) unless {running}) * 0 - 3 '
            f'or ({queue} > 0) * 0 - 1')
@@ -140,17 +150,22 @@ def work_remaining_panels():
 
     context = 'sum(photo_context_jobs{instance=~"$instance",kind=~"ready|running|retry"})'
     context_pace = 'sum(deriv(photo_context_jobs{instance=~"$instance",kind="done"}[1h]))'
-    no_eta = {"-1": {"text": "No recent progress", "color": "orange"},
+    context_active = 'max(node_systemd_unit_state{instance="pumped-piglet",name="photo-enrichment-context.service",state="active"})'
+    context_eta = (f'({context} / ({context_pace} > 0) and on() ({context_active} == 1)) '
+                   f'or ({context} == 0) or (({context} > 0) and on() ({context_active} == 0)) * 0 - 2 '
+                   f'or ({context} > 0) * 0 - 1')
+    no_eta = {"-4": {"text": "Collecting two-slot writes", "color": "blue"},
+              "-1": {"text": "No recent progress", "color": "orange"},
               "-2": {"text": "Worker stopped", "color": "orange"},
               "-3": {"text": "Worker status unknown", "color": "gray"},
               "0": {"text": "Queue clear", "color": "green"}}
     p = [row("Work remaining & bottleneck", 0),
          stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="The worker counts pending items during batch selection and updates the count after successful Parquet writes. If the worker is offline, this falls back to the five-minute index export."),
-         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
+         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes after the two-slot cutover. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
          stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Successful rows saved to Parquet over the last ten minutes."),
          stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference.")]
     p += [stat("Photo context still to do", context, 0, 5, w=5, unit="locale"),
-          stat("Photo context finish estimate", f'({context} / ({context_pace} > 0)) or ({context} == 0) or ({context} > 0) * 0 - 1', 5, 5, w=5, unit="s", mappings=no_eta, description="Backlog divided by the last hour’s increase in completed jobs. New arrivals and retries can extend the estimate."),
+          stat("Photo context finish estimate", context_eta, 5, 5, w=5, unit="s", mappings=no_eta, description="The context worker pauses during the summaries-only backfill. While active, its ETA uses the last hour of completed jobs."),
           stat("Photo extraction jobs left", 'sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|running|retry"})', 10, 5, w=5, unit="locale", description="Includes delayed retries. See the PostgreSQL queue section for age and retry counts."),
           stat("Immich jobs outstanding", 'sum(immich_queue_jobs{state=~"waiting|active|delayed|prioritized|paused"})', 15, 5, w=5, unit="locale", description="All native Immich queues. Open Photo App for per-queue throughput and estimates."),
           stat("Immich sync", 'sum by(state)(immich_sync_assets{state=~"pending|conflict"})', 20, 5, w=4, unit="locale", legend="{{state}}", extra_opts={"textMode": "value_and_name"}, description="Pending assets are ready for transfer. Conflicts require review and do not contribute to automatic queue drain.")]
@@ -344,7 +359,7 @@ def pipeline_panels():
     graph["targets"][0]["expr"] += ' or label_replace(((100 * sum by(id,title) ('+context_rate+') / scalar(sum('+context_rate+')) >= 0) or sum by(id,title)(photo_context_stage_seconds_total'+INST+') * 0), "title", "$1 (%)", "title", "(.+)")'
     graph["targets"][0]["expr"] += ' or '+node('sum(photo_context_jobs{instance=~"$instance",kind=~"ready|retry"})','photo_context_jobs','Photo context queue (photos)')
     graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_context_edge_info'+INST+')'
-    graph["description"] += " Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup."
+    graph["description"] += " During the backfill, two Ollama slots serve summaries and one writer commits batches to Parquet. The context worker resumes when the summary queue drains. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup."
     graph["targets"][0]["expr"] += ' or '+node('max(photo_snapshot_index_rows{instance=~"$instance",kind="photos"})','photo_search','Search/group index (photos)')
     graph["description"] += " Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage."
     graph["description"] += " PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them."

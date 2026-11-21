@@ -106,7 +106,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) / (max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m]))) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) or ((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) == 0) or (((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or (((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or ((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) * 0 - 1",
+              "expr": "((((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) / (max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m]))) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) and on() ((vector(time()) < 1795280415) or (vector(time()) >= 1795281015))) or ((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) == 0) or ((((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) and on() ((vector(time()) >= 1795280415) and (vector(time()) < 1795281015))) * 0 - 4 or (((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or (((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or ((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) * 0 - 1",
               "legendFormat": "{{enricher}}",
               "refId": "A",
               "instant": true,
@@ -132,6 +132,10 @@ data:
                 {
                   "type": "value",
                   "options": {
+                    "-4": {
+                      "text": "Collecting two-slot writes",
+                      "color": "blue"
+                    },
                     "-1": {
                       "text": "No recent progress",
                       "color": "orange"
@@ -164,7 +168,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Current backlog divided by the last ten minutes of successful Parquet writes. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
+          "description": "Current backlog divided by the last ten minutes of successful Parquet writes after the two-slot cutover. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
         },
         {
           "id": 140,
@@ -278,7 +282,7 @@ data:
         {
           "id": 152,
           "type": "stat",
-          "title": "Saved summaries/min \u00b7 before and after",
+          "title": "Parquet summaries/min \u00b7 one slot vs two",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -291,23 +295,16 @@ data:
           },
           "targets": [
             {
-              "expr": "(max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795240800)))) * 60",
-              "legendFormat": "Gemma in Ollama",
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795280280)))) * 60) or (max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",instance=\"pumped-piglet\",enricher=\"gemma4-e2b-p1\"}) * 0 + 11.789473684210524)",
+              "legendFormat": "Before \u00b7 one slot, shared",
               "refId": "A",
               "instant": true,
               "range": false
             },
             {
-              "expr": "(max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795242330)))) * 60",
-              "legendFormat": "Standalone Bonsai",
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
+              "legendFormat": "Now \u00b7 two slots, summaries only",
               "refId": "B",
-              "instant": true,
-              "range": false
-            },
-            {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795242820)",
-              "legendFormat": "Bonsai in Ollama \u00b7 live",
-              "refId": "C",
               "instant": true,
               "range": false
             }
@@ -328,7 +325,7 @@ data:
                 "mode": "palette-classic"
               },
               "decimals": 1,
-              "noValue": "No sample"
+              "noValue": "Awaiting sample"
             },
             "overrides": []
           },
@@ -341,7 +338,7 @@ data:
               ]
             }
           },
-          "description": "All three values use ten minutes of successful Parquet writes. Reference windows ended Nov 20 at 10:00 pm and 10:25:30 pm Pacific. The live value feeds the ETA. Workload mix and shared-server traffic vary."
+          "description": "Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48\u201316:58 UTC on Nov 21 with photo context active. The live ten-minute rate starts after a full window with two slots reserved for summaries. Media mix and cache hits can affect the rate."
         },
         {
           "id": 153,
@@ -375,9 +372,17 @@ data:
               "interval": "30s"
             },
             {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795242820)",
-              "legendFormat": "Bonsai in Ollama",
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() ((vector(time()) >= 1795242820) and (vector(time()) <= 1795280280))",
+              "legendFormat": "Bonsai before backfill",
               "refId": "C",
+              "instant": false,
+              "range": true,
+              "interval": "30s"
+            },
+            {
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
+              "legendFormat": "Bonsai \u00b7 two slots, summaries only",
+              "refId": "D",
               "instant": false,
               "range": true,
               "interval": "30s"
@@ -441,7 +446,22 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Bonsai in Ollama"
+                  "options": "Bonsai before backfill"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "purple"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Bonsai \u00b7 two slots, summaries only"
                 },
                 "properties": [
                   {
@@ -464,7 +484,7 @@ data:
               "mode": "multi"
             }
           },
-          "description": "Ten-minute rate of successful Parquet writes. Gaps separate rollout phases. Early points after a cutover can still include pauses from the previous ten minutes."
+          "description": "Successful Parquet writes per minute in rolling ten-minute windows. The gap at the two-slot rollout excludes windows containing both configurations."
         },
         {
           "id": 142,
@@ -534,7 +554,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) / (sum(deriv(photo_context_jobs{instance=~\"$instance\",kind=\"done\"}[1h])) > 0)) or (sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) == 0) or (sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) > 0) * 0 - 1",
+              "expr": "(sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) / (sum(deriv(photo_context_jobs{instance=~\"$instance\",kind=\"done\"}[1h])) > 0) and on() (max(node_systemd_unit_state{instance=\"pumped-piglet\",name=\"photo-enrichment-context.service\",state=\"active\"}) == 1)) or (sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) == 0) or ((sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) > 0) and on() (max(node_systemd_unit_state{instance=\"pumped-piglet\",name=\"photo-enrichment-context.service\",state=\"active\"}) == 0)) * 0 - 2 or (sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) > 0) * 0 - 1",
               "legendFormat": "",
               "refId": "A",
               "instant": true,
@@ -560,6 +580,10 @@ data:
                 {
                   "type": "value",
                   "options": {
+                    "-4": {
+                      "text": "Collecting two-slot writes",
+                      "color": "blue"
+                    },
                     "-1": {
                       "text": "No recent progress",
                       "color": "orange"
@@ -592,7 +616,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Backlog divided by the last hour\u2019s increase in completed jobs. New arrivals and retries can extend the estimate."
+          "description": "The context worker pauses during the summaries-only backfill. While active, its ETA uses the last hour of completed jobs."
         },
         {
           "id": 144,
@@ -2010,7 +2034,7 @@ data:
             },
             "overrides": []
           },
-          "description": "Share of measured operation time by stage in the rate window. Concurrent stages each contribute time. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
+          "description": "Share of measured operation time by stage in the rate window. Concurrent stages each contribute time. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. During the backfill, two Ollama slots serve summaries and one writer commits batches to Parquet. The context worker resumes when the summary queue drains. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
           "transformations": [
             {
               "id": "calculateField",

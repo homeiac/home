@@ -157,7 +157,7 @@ have.update({"immich_sync_available_summaries", "immich_sync_assets"})
 have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked against the live collector.
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
-external.update({"node_cpu_seconds_total", "node_disk_io_time_seconds_total",
+external.update({"node_systemd_unit_state", "node_cpu_seconds_total", "node_disk_io_time_seconds_total",
                  "node_memory_MemAvailable_bytes", "node_memory_MemTotal_bytes",
                  "node_uname_info", "node_textfile_mtime_seconds"})
 external.update(f"node_pressure_{resource}_waiting_seconds_total" for resource in ("cpu", "memory", "io"))
