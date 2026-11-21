@@ -43,7 +43,8 @@ class GalleryReader:
             names=[c[0] for c in result.description]
             return [dict(zip(names,row)) for row in result.fetchall()]
 
-    def faces(self,person,status,offset,limit,matches):
+    def faces(self,person,status,offset,limit,matches,review=None,grouped=False,group="",scope="repeated"):
+        review=review or {}
         if status not in ('all','unreviewed','named','suggested') or offset<0 or not 1<=limit<=100:
             raise ValueError('Invalid face filter')
         base="""FROM reviewed_faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
@@ -56,7 +57,14 @@ class GalleryReader:
         matches={key:value for key,value in matches.items() if key in visible}
         fields='SELECT f.id,f.path,f.box,f.confidence,f.person,f.label_source,f.updated_at AS revision,m.capture_ts,m.latitude,m.longitude,m.summary '
         filters,params='',[]
-        if status=='suggested':
+        page={}
+        if status=='unreviewed' and (grouped or group):
+            from .matching import review_page
+            page=review_page(visible,review,offset,limit,group,scope)
+            ids=page.pop('ids');total=page['total']
+            faces=self.rows(fields+base+' AND f.id=ANY(?) AND f.person IS NULL',[ids]) if ids else []
+            faces.sort(key=lambda face:ids.index(face['id']))
+        elif status=='suggested':
             selected=sorted((key for key,value in matches.items() if not person or value['person']==person),
                 key=lambda key:(matches[key]['person'],-matches[key]['score'],key))
             total=len(selected);ids=selected[offset:offset+limit]
@@ -69,10 +77,16 @@ class GalleryReader:
             total=self.rows('SELECT count(*) n '+base+filters,params)[0]['n']
             faces=self.rows(fields+base+filters+' ORDER BY m.capture_ts DESC NULLS LAST,f.id LIMIT ? OFFSET ?',[*params,limit,offset])
         groups={}
-        for face in faces:face['suggestion']=matches.get(face['id']) if face['person'] is None else None
+        for face in faces:
+            face['suggestion']=matches.get(face['id']) if face['person'] is None else None
+            face['match_details']=review.get('details',{}).get(face['id'],dict(reason='pending',score=None,person=None,qualified=False))
+            if page and not group:face['review_group']=page['group_cards'].get(face['id'])
         for match in matches.values():groups[match['person']]=groups.get(match['person'],0)+1
         counts['suggested']=len(matches)
-        return dict(faces=faces,total=total,offset=offset,people=people,counts=counts,
+        from .matching import review_group_counts
+        counts.update(review_group_counts(visible,review))
+        page.pop('group_cards',None);page.pop('total',None)
+        return dict(faces=faces,total=total,offset=offset,people=people,counts=counts,**page,grouping_refreshing='groups' not in review,
             suggested_people=[dict(person=name,faces=count) for name,count in sorted(groups.items())],
             query_backend='duckdb',captured_at=self.manifest['captured_at'])
 

@@ -247,6 +247,10 @@ class PostgresStore(Store):
 
     def detail(self,path):
         photo=super().detail(path)
+        self.matching_pass()
+        review=getattr(getattr(self,'suggestion_source',self),'_matching_cache',None) or {}
+        for face in photo['faces']:
+            face['match_details']=review.get('details',{}).get(face['id'],dict(reason='pending',score=None,person=None,qualified=False))
         if self.rows("SELECT to_regclass('public.photo_context') IS NOT NULL AS present")[0]['present']:
             context=self.rows("SELECT summary AS context_summary,context AS location_context,model AS context_model FROM photo_context WHERE path=? AND size_bytes=? AND status='done'",[path,photo['size_bytes']])
             if context:
@@ -268,7 +272,7 @@ class PostgresStore(Store):
         Cache until faces, reviews or the analytical generation change.
         A repeatable-read snapshot keeps references/candidates coherent during a pass.
         """
-        from .matching import match_batch
+        from .matching import rank_batch, ReviewGroups, vectors
         if hasattr(self,'suggestion_source'):
             # HTTP requests consume the last completed pass. Never run a whole
             # library embedding comparison while a browser waits for its page.
@@ -287,6 +291,8 @@ class PostgresStore(Store):
                 WHERE EXISTS (SELECT 1 FROM catalog.gphotos_media m WHERE m.path=f.path AND m.size_bytes=f.size_bytes)
                 AND NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=f.path)"""
             matches={}
+            details={}
+            review_groups=ReviewGroups()
             reader=None
             try:
                 if manifest.exists():
@@ -298,27 +304,38 @@ class PostgresStore(Store):
                 with self.metrics.measure('match'),self.connection.transaction():
                     self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
                     references=read('SELECT f.id,f.person,f.model,f.embedding '+base+" AND f.person IS NOT NULL AND f.label_source='user'")
+                    reference_groups=vectors(references)
                     last=''
-                    if references:
-                        while True:
-                            candidates=read('SELECT f.id,f.model,f.embedding '+base+
-                                ' AND f.person IS NULL AND f.id>? ORDER BY f.id LIMIT 256',[last])
-                            if not candidates:break
-                            rejected=self.rows('SELECT face_id,reference_id FROM rejected_matches WHERE face_id=ANY(?)',
-                                [[r['id'] for r in candidates]])
-                            matches.update(match_batch(candidates,references,{(r['face_id'],r['reference_id']) for r in rejected}))
-                            last=candidates[-1]['id']
+                    while True:
+                        candidates=read('SELECT f.id,f.person,f.model,f.embedding '+base+
+                            ' AND f.id>? ORDER BY f.id LIMIT 256',[last])
+                        if not candidates:break
+                        rejected=self.rows('SELECT face_id,reference_id FROM rejected_matches WHERE face_id=ANY(?)',
+                            [[r['id'] for r in candidates]])
+                        ranked=rank_batch(candidates,references,{(r['face_id'],r['reference_id']) for r in rejected},reference_groups=reference_groups)
+                        details.update(ranked)
+                        for row in candidates:
+                            match=ranked[row['id']]
+                            if row['person'] is None and match['qualified']:
+                                matches[row['id']]={key:match[key] for key in ('person','reference_id','score')}
+                        review_groups.add(candidates,ranked)
+                        last=candidates[-1]['id']
             finally:
                 if reader:reader.close()
-            self._matching_cache=dict(signature=signature,at=time.monotonic(),matches=matches)
+            self._matching_cache=dict(signature=signature,at=time.monotonic(),matches=matches,
+                details=details,groups=review_groups.groups,generation=uuid.uuid4().hex)
             return matches
 
-    def face_library(self, person: str = '', status: str = 'unreviewed', offset: int = 0, limit: int = 48) -> dict:
+    def face_library(self, person: str = '', status: str = 'unreviewed', offset: int = 0, limit: int = 48,
+                     grouped: bool = False, group: str = '', scope: str = 'repeated') -> dict:
         """Group previously processed unnamed faces into bulk-review suggestions."""
         if status not in ('all','unreviewed','named','suggested') or offset<0 or not 1<=limit<=100:
             raise ValueError('Invalid face filter')
+        matches=self.matching_pass()
+        source=getattr(self,'suggestion_source',self)
+        review=getattr(source,'_matching_cache',None) or {}
         if (self.state/'analytics/current.json').exists():
-            result=self.gallery_query('faces',person,status,offset,limit,self.matching_pass())
+            result=self.gallery_query('faces',person,status,offset,limit,matches,review,grouped,group,scope)
             result['suggestions_refreshing']=hasattr(self,'suggestion_source') and not getattr(self.suggestion_source,'_matching_cache',None)
             return result
         with self.lock:
@@ -333,7 +350,14 @@ class PostgresStore(Store):
             counts=self.rows('SELECT count(*) AS total,count(*) FILTER(WHERE f.person IS NULL) AS unreviewed '+base)[0]
             people=self.rows('SELECT f.person,count(*) AS faces '+base+' AND f.person IS NOT NULL GROUP BY f.person ORDER BY lower(f.person)')
             data=dict(counts=counts,people=people,offset=offset)
-            if status!='suggested':
+            visible={r['id'] for r in self.rows('SELECT f.id '+base+' AND f.person IS NULL')}
+            review_page=None
+            if status=='unreviewed' and (grouped or group):
+                from .matching import review_page as select_review_page
+                review_page=select_review_page(visible,review,offset,limit,group,scope)
+                ids=review_page.pop('ids')
+                data.update(review_page)
+            elif status!='suggested':
                 filters,params='',[]
                 if status=='unreviewed':filters+=' AND f.person IS NULL'
                 if status=='named':filters+=' AND f.person IS NOT NULL'
@@ -367,7 +391,32 @@ class PostgresStore(Store):
             data['counts']['suggested']=len(matches)
             for face in data['faces']:
                 face['suggestion']=matches.get(face['id']) if face['person'] is None else None
+                face['match_details']=review.get('details',{}).get(face['id'],dict(reason='pending',score=None,person=None,qualified=False))
+                if review_page and not group:
+                    face['review_group']=data['group_cards'].get(face['id'])
+            from .matching import review_group_counts
+            data['counts'].update(review_group_counts(visible,review))
+            data['grouping_refreshing']='groups' not in review
+            data.pop('group_cards',None)
             return data
+
+    def group_selection(self, group: str, generation: str) -> dict:
+        """Snapshot explicitly selected group members; never propagate a name here."""
+        self.matching_pass()
+        review=getattr(getattr(self,'suggestion_source',self),'_matching_cache',None) or {}
+        if not generation or generation != review.get('generation'):
+            raise ValueError('Face groups changed; refresh the group before selecting it')
+        ids=review.get('groups',{}).get(group,[])
+        if not ids:raise ValueError('Face group is no longer available; refresh')
+        matches=review['matches']
+        faces=[]
+        for offset in range(0,len(ids),1000):
+            rows=self.rows("""SELECT f.id,f.updated_at AS revision FROM faces f
+                JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+                  AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+                WHERE f.id=ANY(?) AND f.person IS NULL ORDER BY f.id""",[ids[offset:offset+1000]])
+            faces.extend(dict(id=row['id'],revision=row['revision'],person=matches.get(row['id'],{}).get('person')) for row in rows)
+        return dict(faces=faces,total=len(faces),generation=generation)
 
     def source_file(self, path: str) -> Path:
         """Validate originals without evaluating captions or other enrichment joins."""

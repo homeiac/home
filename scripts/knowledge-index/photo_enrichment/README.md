@@ -361,3 +361,40 @@ Cached nearby-place results also populate the index for every photo in the same
 rounded coordinate cell, without waiting for its contextual caption. Short search
 terms (such as a one-letter saved name) match whole words, avoiding accidental
 substring matches across file extensions and captions.
+
+### Closest matches and review groups
+
+Every face card and face detail shows its closest manually confirmed candidate,
+cosine similarity and qualification result. Low-score, ambiguous and rejected
+candidates remain visible but cannot enter suggested-name confirmation or automatic
+acceptance. Missing/invalid embeddings, incompatible reference models, no references
+and background calculation have explicit reasons instead of a fabricated zero.
+A confirmed face never compares to itself; its saved identity stays unchanged.
+
+The default **Review groups** collection displays one representative per repeated group,
+with the number of member detections. Single detections remain accessible in the
+separate **Ungrouped faces** collection and in **All faces**, with closest-match
+explanations. Counts distinguish groups, ungrouped faces and total detections. Qualifying suggestions form collections by
+suggested person. Other faces are grouped conservatively using their existing
+embeddings: an exact cosine comparison must reach 0.80 against a fixed anchor.
+Approximate, bounded candidate lookup may split similar appearances into separate
+groups; it does not bypass the threshold or chain distant faces together. Invalid
+vectors remain separate. No inference rerun, deletion or implicit labeling occurs.
+**All faces** retains access to every detection, including named faces.
+
+Open **Review group** to inspect its members. **Select all faces in this group**
+selects current unnamed members across pages; the user must then explicitly
+confirm suggested names or assign a name. Selection carries the current group
+generation and each face's revision. A changed group requires refresh; existing
+per-face write conflict checks still apply. Selecting a representative does not
+silently label its group. Group and detection counts are presented separately.
+
+Ranking and grouping run in the existing background matching pass, not HTTP
+requests. The GUI reads the last completed pass; startup displays a pending state
+until it exists. The cache is invalidated when faces, human reviews, rejections
+or the analytical snapshot change. Existing automatic-acceptance preferences and
+its minimum-score setting are preserved.
+
+Validation: `test-face-review-groups.py`, `test-photo-review.js` and
+`test-photo-postgres.sh`. `audit-face-review.py` reports live aggregate counts
+without outputting names, embeddings, photos or captions.

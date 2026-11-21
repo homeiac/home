@@ -433,6 +433,46 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
         self.assertEqual(self.store.rows('SELECT count(*) n FROM face_scans')[0]['n'],3)
 
+    def test_review_groups_explain_all_faces_and_select_members_safely(self):
+        reference=self.store.face('stable-face')
+        for face_id,vector in [('group-a',[.99,.05]),('group-b',[.97,.1]),('unknown',[0.,1.])]:
+            self.store.db.execute('INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,NULL,NULL,current_timestamp)',
+                [face_id,reference['path'],reference['size_bytes'],reference['mtime_ns'],reference['box'],.9,vector,MODEL_ID])
+        for snapshot in (False,True):
+            if snapshot:export_snapshot(self.state)
+            page=self.store.face_library(grouped=True,scope='all')
+            self.assertEqual(page['total'],2)
+            repeated=self.store.face_library(grouped=True)
+            self.assertEqual(repeated['total'],1)
+            self.assertEqual(repeated['counts']['ungrouped'],1)
+            singles=self.store.face_library(grouped=True,scope='ungrouped')
+            self.assertEqual([face['id'] for face in singles['faces']],['unknown'])
+            self.assertFalse(singles['faces'][0].get('review_group'))
+            self.assertEqual(page['counts']['unreviewed'],3)
+            group=next(face for face in page['faces'] if face['review_group']['count']==2)
+            self.assertEqual(group['match_details']['reason'],'qualified')
+            unknown=next(face for face in page['faces'] if face['id']=='unknown')
+            self.assertEqual(unknown['match_details']['reason'],'below_threshold')
+            self.assertIsNotNone(unknown['match_details']['score'])
+            photo_faces=self.store.detail(reference['path'])['faces']
+            self.assertTrue(all('match_details' in face for face in photo_faces))
+            self.assertEqual(next(face for face in photo_faces if face['id']=='unknown')['match_details']['reason'],'below_threshold')
+            group_id=group['review_group']['id']
+            members=self.store.face_library(group=group_id,limit=1)
+            self.assertEqual(members['total'],2)
+            self.assertEqual(len(members['faces']),1)
+            selection=self.store.group_selection(group_id,page['generation'])
+            self.assertEqual({f['id'] for f in selection['faces']},{'group-a','group-b'})
+            self.assertIsNone(self.store.face('group-a')['person'])
+            with self.assertRaises(ValueError):self.store.group_selection(group_id,'stale-generation')
+        # A later manual edit excludes the named member even from an old group.
+        self.store.label_face('group-a','Another explicit name')
+        updated=self.store.face_library(grouped=True)
+        ids=[face['id'] for face in updated['faces']]
+        self.assertNotIn('group-a',ids)
+        named=self.store.face_library(status='named')
+        self.assertTrue(all('match_details' in face for face in named['faces']))
+
     def test_matching_excludes_ambiguous_and_incompatible_vectors(self):
         from photo_enrichment.matching import match_batch
         references=[dict(id='a1',person='A',model='v1',embedding=[1.,0.]),

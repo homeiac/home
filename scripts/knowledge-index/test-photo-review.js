@@ -13,6 +13,8 @@ function harness(){
     append(...children){this.children.push(...children);}
     replaceChildren(...children){this.children=children;}
     setAttribute(){}
+    showModal(){this.open=true;}
+    close(){this.open=false;}
     querySelector(tag){return this.children.find(child=>child.tag===tag)||this.children.map(child=>child.querySelector?.(tag)).find(Boolean);}
   }
   const html=fs.readFileSync(path.join(__dirname,'photo_enrichment/static/index.html'),'utf8');
@@ -23,6 +25,8 @@ function harness(){
     createElement:tag=>new Element(tag),querySelectorAll:selector=>selector==='.face-tile'?nodes.get('face-grid').children.filter(node=>node.dataset.id):[]};
   const posts=[];
   const offered=[];
+  const reviewMeta={};
+  const groupOffered=[];
   let automatic={enabled:false,threshold:.9,accepted:0};
   const rows=[{id:'a',revision:'r1',person:null,suggestion:{person:'Synthetic G',score:.8},path:'a.jpg',confidence:.9},
     {id:'b',revision:'r2',person:null,suggestion:{person:'Synthetic Asha',score:.8},path:'b.jpg',confidence:.9},
@@ -37,6 +41,8 @@ function harness(){
     }
     else if(url==='/api/config')result={csrf:'synthetic',auto_accept:true};
     else if(url==='/api/auto-accept')result=automatic;
+    else if(url.startsWith('/api/photo?'))result={faces:rows,groups:[],latitude:null,people:[]};
+    else if(url.startsWith('/api/faces/group-selection?'))result={faces:groupOffered,total:groupOffered.length};
     else if(url.startsWith('/api/faces/selection?')){
       const params=new URLSearchParams(url.split('?')[1]);
       const faces=offered.filter(face=>face.score>=Number(params.get('threshold'))&&(!params.get('person')||face.person===params.get('person')));
@@ -45,12 +51,12 @@ function harness(){
     else if(url.startsWith('/api/faces?')){
       const params=new URLSearchParams(url.split('?')[1]);
       const faces=rows.filter(face=>!params.get('person')||face.suggestion?.person===params.get('person'));
-      result={faces,total:faces.length,people:[],counts:{total:3,unreviewed:3,suggested:2},suggested_people:[]};
+      result={faces,total:faces.length,people:[],counts:{total:3,unreviewed:3,suggested:2},suggested_people:[],...reviewMeta};
     }
     return {ok:true,json:async()=>result};
   }});
   vm.runInContext(fs.readFileSync(path.join(__dirname,'photo_enrichment/static/app.js'),'utf8'),context);
-  return {nodes,posts,rows,offered,context,run:code=>vm.runInContext(code,context)};
+  return {nodes,posts,rows,offered,reviewMeta,groupOffered,context,run:code=>vm.runInContext(code,context)};
 }
 async function ready(h){await new Promise(resolve=>setImmediate(resolve));assert.equal(h.run('state.busy'),false);}
 
@@ -141,4 +147,49 @@ test('automatic acceptance starts off, saves a chosen rule and can be paused',as
   await h.nodes.get('auto-accept-toggle').onclick();
   assert.deepEqual(h.posts[1],{enabled:false,threshold:.95});
   assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Enable auto-accept');
+});
+
+function textTree(node){return [node.textContent||'',...(node.children||[]).map(textTree)].join(' ');}
+
+test('every card explains its nearest candidate without inventing probabilities',async()=>{
+  const h=harness();await ready(h);
+  h.rows[0].match_details={person:'Synthetic G',score:.42,reason:'below_threshold',threshold:.55,qualified:false};
+  h.rows[0].suggestion=null;
+  h.rows[1].match_details={person:'Synthetic Asha',score:.72,reason:'ambiguous',margin:.02,required_margin:.08,qualified:false};
+  h.rows[1].suggestion=null;
+  h.rows[2].match_details={person:null,score:null,reason:'no_references',qualified:false};
+  await h.run('loadFaces()');
+  const cards=h.nodes.get('face-grid').children;
+  assert.match(textTree(cards[0]),/Closest candidate: Synthetic G.*Similarity 42.0 \/ 100.*Below the suggestion threshold/);
+  assert.match(textTree(cards[1]),/Similarity 72.0 \/ 100.*Ambiguous.*needs 8 points/);
+  assert.match(textTree(cards[2]),/Similarity: unavailable.*No manually confirmed reference/);
+  await h.run('reviewFace(state.faceItems[0])');
+  assert.match(textTree(h.nodes.get('review-suggestions')),/Closest candidate: Synthetic G.*Similarity 42.0/);
+  await h.run("showPhoto('a.jpg')");
+  assert.match(textTree(h.nodes.get('faces')),/Closest candidate: Synthetic G.*Similarity 42.0.*Below the suggestion threshold/);
+  assert.equal(h.posts.length,0);
+});
+
+test('review groups open members and selecting a whole group never saves automatically',async()=>{
+  const h=harness();await ready(h);
+  h.rows[0].review_group={id:'group-a',count:160};
+  Object.assign(h.reviewMeta,{grouped:true,total:3,generation:'g'});
+  await h.run('loadFaces()');
+  assert.match(h.nodes.get('face-count').textContent,/3 review groups/);
+  const card=h.nodes.get('face-grid').children[0];
+  assert.match(textTree(card),/160 faces in this review group/);
+  assert.equal(card.children.find(node=>node.tag==='label').hidden,true);
+  Object.assign(h.reviewMeta,{grouped:false,total:160});
+  delete h.rows[0].review_group;
+  await h.run("filterFaces('unreviewed','','group-a')");
+  assert.equal(h.nodes.get('face-select-group').hidden,false);
+  h.groupOffered.push({id:'a',revision:'r1',person:'Synthetic G'},{id:'b',revision:'r2',person:null});
+  await h.nodes.get('face-select-group').onclick();
+  assert.equal(h.run('state.faceSelection.size'),2);
+  assert.equal(h.posts.length,0);
+  assert.equal(h.nodes.get('bulk-confirm-suggestions').disabled,true);
+  h.nodes.get('bulk-person').value='Explicit chosen name';
+  await h.nodes.get('bulk-assign').onclick();
+  assert.equal(h.posts[0].person,'Explicit chosen name');
+  assert.equal(h.posts[0].faces.length,2);
 });

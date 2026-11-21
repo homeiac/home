@@ -78,7 +78,10 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 if parsed.path == "/api/status":
                     return self.send(store.status() if hasattr(store,"status") else {"backend":"local"})
                 if parsed.path == "/api/faces":
-                    return self.send(store.face_library(query.get("person",""),query.get("status","unreviewed"),int(query.get("offset",0))))
+                    return self.send(store.face_library(query.get("person",""),query.get("status","unreviewed"),int(query.get("offset",0)),
+                        grouped=query.get("grouped","true")=="true",group=query.get("group",""),scope=query.get("scope","repeated")))
+                if parsed.path == "/api/faces/group-selection":
+                    return self.send(store.group_selection(query.get("group",""),query.get("generation","")))
                 if parsed.path == "/api/faces/selection":
                     return self.send(store.suggested_selection(float(query.get("threshold",".9")),query.get("person","")))
                 if parsed.path == "/api/dates":

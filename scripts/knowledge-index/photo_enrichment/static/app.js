@@ -84,6 +84,7 @@ async function showPhoto(path) {
     const card=element('div',undefined,'face-card');const img=element('img');img.src=query('/api/thumbnail',{path,face:face.id});img.alt='Detected face crop';
     const title=element('strong',face.person||'Unnamed face');const input=element('input');input.value=face.person||'';input.placeholder='Person’s name';input.setAttribute('aria-label','Name this face');
     card.append(img,title,element('p','Label: '+(face.label_source||'unconfirmed'),'muted'),input);
+    appendMatchDetails(card,face);
     card.append(button('Save name',async()=>{await api('/api/faces/label',{id:face.id,person:input.value,revision:face.revision});await showPhoto(path);status('Face label saved from your input.');}));
     const suggestions=element('div');
     card.append(button('Find name suggestions',async()=>{
@@ -162,20 +163,22 @@ function renderPeople() {
     const node=button(person.person,()=>filterFaces('named',person.person),'collection');node.append(element('span',person.faces));node.classList.toggle('active',state.faceStatus==='named'&&state.person===person.person);$('people').append(node);
   }
 }
-async function filterFaces(filter,person='') {state.faceStatus=filter;state.person=person;$('bulk-person').value='';state.faceOffset=0;await loadFaces();}
+async function filterFaces(filter,person='',group='') {state.faceScope=filter==='ungrouped'?'ungrouped':'repeated';state.faceStatus=filter==='ungrouped'?'unreviewed':filter;state.person=person;state.faceGroup=group;$('bulk-person').value='';state.faceOffset=0;await loadFaces();}
 function refreshPendingSuggestions(){
   if(state.view!=='faces')return;
   if(state.busy){state.suggestionRefresh=setTimeout(refreshPendingSuggestions,5000);return;}
   run(loadFaces);
 }
 async function loadFaces() {
-  const data=await api(query('/api/faces',{status:state.faceStatus,person:state.person,offset:state.faceOffset}));
-  state.faceItems=data.faces;state.faceTotal=data.total;state.people=data.people;
+  const data=await api(query('/api/faces',{status:state.faceStatus,person:state.person,offset:state.faceOffset,group:state.faceGroup||'',grouped:state.faceStatus==='unreviewed',scope:state.faceScope||'repeated'}));
+  state.faceItems=data.faces;state.faceTotal=data.total;state.people=data.people;state.groupGeneration=data.generation;
+  $('face-back-groups').hidden=!state.faceGroup;
+  $('face-select-group').hidden=!state.faceGroup;
   if(!data.faces.length&&state.faceOffset>0){state.faceOffset=Math.max(0,state.faceOffset-48);return loadFaces();}
-  $('face-title').textContent=(state.faceStatus==='suggested'?'Suggested matches'+(state.person?' · '+state.person:''):state.person||(state.faceStatus==='unreviewed'?'Needs review':'All faces'));
-  $('face-count').textContent=data.total+' faces · confirm names individually or together';
-  if(data.suggestions_refreshing){
-    $('face-count').textContent+=' · Calculating match similarities in the background…';
+  $('face-title').textContent=(state.faceStatus==='suggested'?'Suggested matches'+(state.person?' · '+state.person:''):state.person||(state.faceStatus==='unreviewed'?(state.faceGroup?'Review this group':state.faceScope==='ungrouped'?'Ungrouped faces':'Face review groups'):'All faces'));
+  $('face-count').textContent=data.grouped?data.total+' review groups · '+(data.counts.ungrouped||0)+' ungrouped faces · '+data.counts.unreviewed+' unnamed detections':data.total+' faces · confirm names individually or together';
+  if(data.suggestions_refreshing||data.grouping_refreshing){
+    $('face-count').textContent+=' · Calculating closest matches and review groups in the background…';
     clearTimeout(state.suggestionRefresh);
     state.suggestionRefresh=setTimeout(refreshPendingSuggestions,5000);
   }
@@ -183,25 +186,45 @@ async function loadFaces() {
   $('suggested-people').replaceChildren();
   for(const group of data.suggested_people||[]){const item=button(group.person,()=>filterFaces('suggested',group.person),'collection');item.append(element('span',group.faces));item.classList.toggle('active',state.faceStatus==='suggested'&&state.person===group.person);$('suggested-people').append(item);}
   $('filter-suggested').classList.toggle('active',state.faceStatus==='suggested');
-  $('face-select-page').hidden=state.faceStatus!=='suggested';
+  $('face-select-page').hidden=data.grouped||(!state.faceGroup&&state.faceStatus!=='suggested');
   $('threshold-selection').hidden=state.faceStatus==='named';
   $('selection-scope').textContent=state.faceStatus==='suggested'&&state.person?'All suggestions for '+state.person:'All suggested matches in the library';
-  $('unreviewed-count').textContent=data.counts.unreviewed;$('face-total').textContent=data.counts.total;
+  $('unreviewed-count').textContent=data.grouping_refreshing?'…':(data.counts.review_groups??data.counts.unreviewed);$('face-total').textContent=data.counts.total;
+  $('ungrouped-count').textContent=data.grouping_refreshing?'…':(data.counts.ungrouped||0);
+  $('filter-ungrouped').classList.toggle('active',state.faceStatus==='unreviewed'&&state.faceScope==='ungrouped');
   $('known-people').replaceChildren(...data.people.map(p=>{const option=element('option');option.value=p.person;return option;}));renderPeople();
-  $('filter-unreviewed').classList.toggle('active',state.faceStatus==='unreviewed');$('filter-all').classList.toggle('active',state.faceStatus==='all');
+  $('filter-unreviewed').classList.toggle('active',state.faceStatus==='unreviewed'&&state.faceScope!=='ungrouped');$('filter-all').classList.toggle('active',state.faceStatus==='all');
   $('face-grid').replaceChildren();
-  if(!data.faces.length)$('face-grid').append(element('p',state.faceStatus==='suggested'?'No clear matches yet. Confirm more examples of a person, then refresh. Ambiguous faces stay unnamed.':state.faceStatus==='unreviewed'?'No faces awaiting review. New detections will appear as the background worker progresses.':'No faces in this collection yet.','empty-state'));
+  if(!data.faces.length&&(data.suggestions_refreshing||data.grouping_refreshing))$('face-grid').append(element('p','Preparing review groups. All detections are retained; this page refreshes automatically.','empty-state'));
+  else if(!data.faces.length)$('face-grid').append(element('p',state.faceStatus==='suggested'?'No clear matches yet. Confirm more examples of a person, then refresh. Ambiguous faces stay unnamed.':state.faceStatus==='unreviewed'?(state.faceGroup?'This group has no unnamed faces left. Return to groups to continue.':state.faceScope==='ungrouped'?'No ungrouped faces.':'No repeated groups ready. Ungrouped faces remain available in their collection.'):'No faces in this collection yet.','empty-state'));
   for(const face of data.faces){
     const card=element('article',undefined,'face-tile');card.dataset.id=face.id;
-    const crop=button('',()=>reviewFace(face),'face-crop');crop.setAttribute('aria-label','Review '+(face.person||'unnamed face'));
+    const crop=button('',()=>face.review_group?filterFaces('unreviewed','',face.review_group.id):reviewFace(face),'face-crop');crop.setAttribute('aria-label','Review '+(face.person||'unnamed face'));
     const img=element('img');img.loading='lazy';img.src=query('/api/thumbnail',{path:face.path,face:face.id});img.alt=face.person||'Unnamed detected face';crop.append(img);
     const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+(face.person||face.suggestion?.person||'unnamed face'));check.onchange=()=>{if(!state.busy){if(check.checked)selectFace(face);else state.faceSelection.delete(face.id);}faceSelection();};
-    const label=element('label',undefined,'face-select');label.append(check);
+    const label=element('label',undefined,'face-select');label.append(check);label.hidden=Boolean(face.review_group);
     const body=element('div',undefined,'face-info');body.append(element('strong',face.person||face.suggestion?.person||'Unnamed face'),element('span',face.person?(face.label_source==='automatic'?'Auto-accepted · editable':'Confirmed by you'):face.suggestion?'Suggested name':'Needs review','badge'),element('p',face.latitude==null?'Location not recorded':'Location available','muted'));
-    if(face.suggestion){body.append(element('p','Match similarity '+(Math.min(1,face.suggestion.score)*100).toFixed(1)+' / 100','muted'),button('Not this person',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:face.suggestion.reference_id});state.faceSelection.delete(face.id);await loadFaces();status('Suggestion rejected; your existing labels are unchanged.');}));}
+    appendMatchDetails(body,face);
+    if(face.review_group){body.append(element('p',face.review_group.count+(face.review_group.count===1?' face in this review group':' faces in this review group'),'group-size'),button('Review group',()=>filterFaces('unreviewed','',face.review_group.id)));}
+    else if(face.suggestion){body.append(button('Not this person',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:face.suggestion.reference_id});state.faceSelection.delete(face.id);await loadFaces();status('Suggestion rejected; your existing labels are unchanged.');}));}
     body.append(element('p',face.capture_ts?new Date(face.capture_ts*1000).toLocaleDateString(undefined,{timeZone:timezone()}):'Date unknown','muted'));card.append(crop,label,body);$('face-grid').append(card);
   }
   faceSelection();facePagination();
+}
+function appendMatchDetails(container,face){
+  const match=face.match_details||(face.suggestion?{...face.suggestion,reason:'qualified',qualified:true}:null);
+  const reasons={pending:'Closest match is still being calculated.',no_references:'No manually confirmed reference faces yet.',
+    no_compatible_references:'No compatible reference faces for this model.',no_other_references:'No other confirmed reference face to compare.',
+    invalid_embedding:'Face embedding is missing or invalid.',rejected:'You rejected this candidate.',
+    below_threshold:'Below the suggestion threshold.',ambiguous:'Ambiguous: another person has a similar score.',qualified:'Qualifies as a suggestion.'};
+  const hasScore=match&&Number.isFinite(match.score);
+  container.append(element('p',match?.person?'Closest candidate: '+match.person:'Closest candidate: unavailable','closest-candidate'));
+  container.append(element('p',hasScore?'Similarity '+(match.score*100).toFixed(1)+' / 100':'Similarity: unavailable','match-score'));
+  let reason=reasons[match?.reason||'pending']||'Match details unavailable.';
+  if(match?.reason==='below_threshold')reason+=' Needs '+(match.threshold*100).toFixed(0)+' / 100.';
+  if(match?.reason==='ambiguous'&&Number.isFinite(match.margin))reason+=' Lead '+(match.margin*100).toFixed(1)+'; needs '+(match.required_margin*100).toFixed(0)+' points.';
+  if(face.person)reason='Saved name retained. '+reason;
+  container.append(element('p',reason,'match-reason'));
 }
 function facePagination(){
   $('face-previous').disabled=state.faceOffset===0;$('face-next').disabled=state.faceOffset+state.faceItems.length>=state.faceTotal;
@@ -214,6 +237,7 @@ async function reviewFace(face){
   $('review-crop').src=query('/api/thumbnail',{path:face.path,face:face.id});$('review-context').src=query('/api/thumbnail',{path:face.path});
   $('review-context-text').textContent=(face.capture_ts?new Date(face.capture_ts*1000).toLocaleString(undefined,{timeZone:timezone()}):'Date unknown')+' · Detection '+Math.round(face.confidence*100)+'%';
   $('review-caption').textContent=face.summary||'No caption available yet.';$('review-suggestions').replaceChildren();$('review-frigate').hidden=!state.frigate;
+  appendMatchDetails($('review-suggestions'),face);
   facePagination();if(!$('face-review').open)$('face-review').showModal();
 }
 async function confirmFace(person){
@@ -263,9 +287,16 @@ $('face-select-threshold').onclick=()=>run(async()=>{
   state.faceSelection=new Map(data.faces.map(face=>[face.id,face]));faceSelection();
   status('Selected '+data.total+' suggestions with similarity '+score+' or above across all pages. Review the name counts, then click Confirm suggested matches to save.');
 });
+$('face-back-groups').onclick=()=>run(()=>filterFaces('unreviewed'));
+$('face-select-group').onclick=()=>run(async()=>{
+  const data=await api(query('/api/faces/group-selection',{group:state.faceGroup,generation:state.groupGeneration}));
+  state.faceSelection=new Map(data.faces.map(face=>[face.id,face]));faceSelection();
+  status('Selected '+data.total+' faces from this group across all pages. Inspect the group and choose a name before assigning; nothing has been saved.');
+});
 $('face-clear').onclick=()=>{state.faceSelection.clear();faceSelection();};
 $('people-search').oninput=renderPeople;
 $('filter-unreviewed').onclick=()=>run(()=>filterFaces('unreviewed'));
+$('filter-ungrouped').onclick=()=>run(()=>filterFaces('ungrouped'));
 $('filter-suggested').onclick=()=>run(()=>filterFaces('suggested'));
 $('face-select-page').onclick=()=>{state.faceItems.forEach(selectFace);faceSelection();};
 $('filter-all').onclick=()=>run(()=>filterFaces('all'));
