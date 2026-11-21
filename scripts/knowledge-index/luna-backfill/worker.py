@@ -1,19 +1,22 @@
 """Submit the Git-controlled Luna sweep. Piglet owns the budget and all writes."""
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import base64
 import fcntl
 import json
-from itertools import islice
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.request
 
 DIR=Path(os.environ.get('KI_LUNA_STATE', Path(__file__).resolve().parent))
 RUNNER=os.environ.get('KI_LUNA_RUNNER','mac')
-POLICY='https://raw.githubusercontent.com/homeiac/home/codex/photo-enrichment-217/scripts/knowledge-index/luna-backfill/policy.json'
+POLICY='https://raw.githubusercontent.com/homeiac/home/{revision}/scripts/knowledge-index/luna-backfill/policy.json'
+REF='refs/heads/codex/photo-enrichment-217'
+BRIDGE_SLOTS=threading.BoundedSemaphore(8)
+FRAME_SLOTS=threading.BoundedSemaphore(4)
 SCHEMA={'type':'object','properties':{'summary':{'type':'string'},'tags':{'type':'array','items':{'type':'string'}}},
         'required':['summary','tags'],'additionalProperties':False}
 PROMPT=("Write a factual searchable caption in one or two sentences and up to eight tags. "
@@ -33,15 +36,19 @@ def host(**request):
     else:
         cmd.extend([os.environ['CB_HOST'],
                     '/opt/photo-enrichment/context/venv/bin/python /opt/knowledge-index/luna-backfill/host.py'])
-    proc=subprocess.run(cmd,
-                        input=json.dumps(request),text=True,capture_output=True,timeout=240)
+    with BRIDGE_SLOTS:
+        proc=subprocess.run(cmd,
+                            input=json.dumps(request),text=True,capture_output=True,timeout=240)
     if proc.returncode:
         raise RuntimeError('Piglet operation failed: '+request['op'])
     return json.loads(proc.stdout)
 
 
 def process(batch,item):
-    response=host(op='frames',batch=batch,id=item['id'])
+    began=time.monotonic()
+    with FRAME_SLOTS:
+        response=host(op='frames',batch=batch,id=item['id'])
+    prepared=time.monotonic()-began
     result={'id':item['id'],'state':'source_error'}
     if 'source_error' not in response:
         with tempfile.TemporaryDirectory(prefix='ki-luna-input-') as folder:
@@ -68,23 +75,58 @@ def process(batch,item):
                     raise ValueError('Invalid caption')
                 result.update(state='ok',summary=answer['summary'],tags=answer['tags'],input=usage['input_tokens'],
                               cached=usage.get('cached_input_tokens',0),output=usage['output_tokens'])
-            except (subprocess.SubprocessError,OSError,ValueError,KeyError,StopIteration):
+            except subprocess.CalledProcessError as exc:
+                diagnostics=(str(exc.stderr)+' '+str(exc.stdout)).lower()
+                result['failure']='rate_limit' if any(marker in diagnostics for marker in
+                    ('rate_limit','rate limit','usage limit','too many requests','http 429')) else 'cli_exit'
+                result['state']='unknown'
+            except subprocess.TimeoutExpired:
+                result.update(state='unknown',failure='timeout')
+            except (OSError,ValueError,KeyError,StopIteration):
+                result['failure']='response_unavailable'
                 result['state']='unknown'
             result['seconds']=time.monotonic()-start
     host(op='finish',batch=batch,results=[result])
-    if result['state']=='unknown':
-        raise RuntimeError('Luna usage or response unavailable; estimated cost recorded, queue resumes on next scheduled run')
-    return result['state']
+    return dict(state=result['state'],kind='video' if item['ext'] in {'mp4','mov','3gp','avi','mpg','m4v'} else 'photo',
+                preparation_seconds=round(prepared,3),request_seconds=round(result.get('seconds',0),3),
+                failure=result.get('failure'),input_tokens=result.get('input',0),
+                cached_tokens=result.get('cached',0),output_tokens=result.get('output',0))
 
 
 def read_policy():
-    with urllib.request.urlopen(POLICY,timeout=20) as resp:
+    revision=subprocess.check_output(['git','ls-remote','--exit-code','https://github.com/homeiac/home.git',REF],
+                                    text=True,timeout=8).split()[0]
+    with urllib.request.urlopen(POLICY.format(revision=revision),timeout=20) as resp:
         policy=json.load(resp)
     if not policy['enabled'] or policy.get('runner','mac')!=RUNNER:
         return None
     if policy['model']!='gpt-6-luna' or not 0<policy['estimated_limit_usd']<=250:
         raise ValueError('Invalid policy')
+    if type(policy['parallel']) is not int or type(policy['batch_size']) is not int or not 1<=policy['parallel']<=20 or not policy['parallel']<=policy['batch_size']<=24:
+        raise ValueError('Invalid concurrency or reserve size')
     return policy
+
+
+def dispatch(pool, items, batch, results, parallel):
+    """Keep slots filled, then drain active requests when an outcome is ambiguous."""
+    pending=iter(items)
+    active=set()
+    had_unknown=False
+
+    def fill():
+        while len(active)<parallel and (item:=next(pending,None)) is not None:
+            active.add(pool.submit(process,batch,item))
+
+    fill()
+    while active:
+        completed, active=wait(active,return_when=FIRST_COMPLETED)
+        for future in completed:
+            result=future.result()
+            results.append(result)
+            had_unknown |= result['state']=='unknown'
+        if not had_unknown:
+            fill()
+    return had_unknown
 
 
 def main():
@@ -101,20 +143,26 @@ def main():
     while True:
         policy=read_policy()
         if not policy:return
-        grant=host(op='reserve',estimated_limit_usd=policy['estimated_limit_usd'],batch_size=policy['batch_size'])
+        started=time.monotonic()
+        parallel=policy['parallel']
+        grant=host(op='reserve',estimated_limit_usd=policy['estimated_limit_usd'],batch_size=policy['batch_size'],parallel=parallel)
+        reserved=time.monotonic()
         if not grant['items']:
             print('Idle, exhausted or blocked. Held plus estimated USD',grant['held_or_used_usd'],flush=True)
             return
-        items=iter(grant['items'])
         batch=grant['batch']
+        results=[]
         try:
-            with ThreadPoolExecutor(min(2,max(1,int(policy['parallel'])))) as pool:
-                # Advance one pair at a time to stop quickly on ambiguous usage.
-                while pair := list(islice(items,2)):
-                    list(pool.map(lambda item:process(batch,item),pair))
+            with ThreadPoolExecutor(parallel) as pool:
+                ambiguous=dispatch(pool,grant['items'],batch,results,parallel)
         finally:
+            completed=time.monotonic()
             host(op='release',batch=batch)
             host(op='publish')
-        print('Settled batch',batch,'items',len(grant['items']),flush=True)
+            print("LUNA_BATCH "+json.dumps(dict(batch=batch,parallel=parallel,
+                  reserve_seconds=round(reserved-started,3), publish_seconds=round(time.monotonic()-completed,3),
+                  total_seconds=round(time.monotonic()-started,3), results=results)),flush=True)
+        if ambiguous:
+            raise RuntimeError('Luna settled an ambiguous request and paused new submissions until the next scheduled run')
 
 if __name__=='__main__':main()

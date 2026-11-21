@@ -422,30 +422,37 @@ data:
               "range": false
             },
             {
+              "expr": "max(knowledge_index_luna_parallel{instance=~\"$instance\"})",
+              "legendFormat": "Request slots",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            },
+            {
               "expr": "max(knowledge_index_luna_jobs{instance=~\"$instance\",state=\"sent\"} and on(instance,job) (time() - knowledge_index_luna_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 240))",
               "legendFormat": "Submitted",
-              "refId": "B",
+              "refId": "C",
               "instant": true,
               "range": false
             },
             {
               "expr": "max(knowledge_index_luna_jobs{instance=~\"$instance\",state=\"reserved\"} and on(instance,job) (time() - knowledge_index_luna_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 240))",
               "legendFormat": "Preparing",
-              "refId": "C",
+              "refId": "D",
               "instant": true,
               "range": false
             },
             {
               "expr": "max(knowledge_index_luna_jobs{instance=~\"$instance\",state=\"unknown\"})",
               "legendFormat": "Requests with projected cost",
-              "refId": "D",
+              "refId": "E",
               "instant": true,
               "range": false
             },
             {
               "expr": "max(knowledge_index_luna_blocked{instance=~\"$instance\"})",
               "legendFormat": "Accounting hold (1 = paused)",
-              "refId": "E",
+              "refId": "F",
               "instant": true,
               "range": false
             }

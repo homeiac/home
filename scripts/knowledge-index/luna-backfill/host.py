@@ -137,10 +137,15 @@ def reserve(db, request):
     used += db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0]
     pilot = int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])
     blocked = db.execute("SELECT value FROM config WHERE key='blocked'").fetchone()
-    limit = min(12,int(request['batch_size']),max(0,(cap-used-pilot)//RESERVE))
+    parallel = int(request.get('parallel', 2))
+    if not 1 <= parallel <= 20:
+        db.rollback()
+        raise ValueError('Invalid Luna concurrency')
+    limit = min(24,int(request['batch_size']),max(0,(cap-used-pilot)//RESERVE))
     rows = [] if blocked else db.execute("SELECT id,path,size_bytes,ext,metadata FROM jobs WHERE state='pending' AND available_after<=unixepoch() ORDER BY id LIMIT ?",[limit]).fetchall()
     batch = uuid.uuid4().hex
     db.executemany("UPDATE jobs SET state='reserved',batch=?,cost=?,started=CURRENT_TIMESTAMP WHERE id=?",[(batch,RESERVE,row[0]) for row in rows])
+    db.execute("INSERT OR REPLACE INTO config VALUES ('parallel',?)",[str(parallel)])
     db.commit()
     return dict(batch=batch,items=[dict(id=r[0],path=r[1],size=r[2],ext=r[3],metadata=json.loads(r[4])) for r in rows],
                 held_or_used_usd=(used+pilot)/1e6,blocked=bool(blocked))
@@ -294,6 +299,8 @@ def export_metrics(db):
     unpublished = db.execute("SELECT count(*) FROM jobs WHERE state='ok' AND published=0").fetchone()[0]
     blocked = db.execute("SELECT EXISTS(SELECT 1 FROM config WHERE key='blocked' AND value!='')").fetchone()[0]
     runner = db.execute("SELECT value FROM config WHERE key='runner'").fetchone()
+    parallel = db.execute("SELECT value FROM config WHERE key='parallel'").fetchone()
+    content.append(f'knowledge_index_luna_parallel {int(parallel[0]) if parallel else 2}')
     content.append(f'knowledge_index_luna_runner {2 if runner and runner[0]=="still-fawn" else 1}')
     content.extend([f'knowledge_index_luna_awaiting_publish {unpublished}', f'knowledge_index_luna_blocked {blocked}',
                     f'knowledge_index_luna_heartbeat_timestamp_seconds {int(time.time())}'])

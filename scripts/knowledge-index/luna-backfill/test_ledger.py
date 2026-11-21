@@ -87,5 +87,13 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(duckdb.sql('SELECT count(*) FROM read_parquet(?)',params=[str(original)]).fetchone()[0],2)
         self.assertEqual(self.claim()['items'],[])
 
+    def test_twenty_slots_reserve_at_most_budget_headroom(self):
+        with self.db:
+            self.db.executemany("INSERT INTO jobs(path,size_bytes,ext,metadata) VALUES (?,1,'jpg','{}')",
+                                [(str(i),) for i in range(30)])
+        grant=self.host.reserve(self.db,dict(estimated_limit_usd=21,batch_size=24,parallel=20))
+        self.assertEqual(len(grant['items']),20)
+        self.assertEqual(self.claim(21)['items'],[])
+
 
 if __name__=='__main__':unittest.main()

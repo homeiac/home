@@ -384,6 +384,7 @@ def panels():
                                       (host_value("media_pipeline_mac_request_limit"), "Available request capacity")], 6,
                  "Piglet sends distinct pending items to the Mac Metal worker. Zero capacity means it is currently unavailable for backfill."),
         location("Submission client → Enterprise Luna", [(luna_value("knowledge_index_luna_runner", fresh=False), "Last active client"),
+                                                (luna_value("knowledge_index_luna_parallel", fresh=False), "Request slots"),
                                                 (luna_value("knowledge_index_luna_jobs", "sent"), "Submitted"),
                                                 (luna_value("knowledge_index_luna_jobs", "reserved"), "Preparing"),
                                                 (luna_value("knowledge_index_luna_jobs", "unknown", False), "Requests with projected cost"),
