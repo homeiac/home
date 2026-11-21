@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -27,7 +28,7 @@ class PipelineTests(unittest.TestCase):
                     raise ValueError("bad media")
         self.assertEqual(m.seconds["decode", "photo"], 5)
         self.assertEqual(m.operations["decode", "photo"], 1)
-        self.assertIsNone(m.active_since)
+        self.assertFalse(m.active)
         self.assertIn('stage="decode",title="Read / decode"} 5.0', m.render())
 
     def test_ollama_units_missing_fields_and_bad_values(self):
@@ -62,7 +63,6 @@ class PipelineTests(unittest.TestCase):
             self.assertFalse(m.thread.is_alive())
 
     def test_background_heartbeat_during_blocking_operation(self):
-        import threading
         with tempfile.TemporaryDirectory() as td:
             path = str(Path(td) / "pipeline.prom")
             published = threading.Event()
@@ -79,6 +79,33 @@ class PipelineTests(unittest.TestCase):
                     self.assertTrue(published.wait(2), "heartbeat stopped while request was in flight")
                     self.assertIn('media_pipeline_worker_stage{enricher="e1"} 5', Path(path).read_text())
             self.assertIn('media_pipeline_running{enricher="e1"} 0', Path(path).read_text())
+
+    def test_parallel_stages_and_durable_backlog(self):
+        barrier = threading.Barrier(3, timeout=5)
+        with PipelineMetrics(None, "e1") as metrics:
+            def measure_request():
+                with metrics.measure("inference", "photo"):
+                    barrier.wait()
+                    barrier.wait()
+
+            workers = [threading.Thread(target=measure_request) for _ in range(2)]
+            for worker in workers:
+                worker.start()
+            try:
+                barrier.wait()
+                self.assertIn('media_pipeline_in_flight{enricher="e1",kind="photo",stage="inference"} 2',
+                              metrics.render())
+            finally:
+                barrier.wait()
+                for worker in workers:
+                    worker.join()
+            self.assertEqual(metrics.operations["inference", "photo"], 2)
+            metrics.queue_size(5)
+            metrics.item("photo", "ok")
+            metrics.item("video", "error", persisted=True)
+            self.assertIn('media_pipeline_queue{enricher="e1"} 5', metrics.render())
+            metrics.item("photo", "ok", persisted=True)
+            self.assertIn('media_pipeline_queue{enricher="e1"} 4', metrics.render())
 
     def test_telemetry_failure_does_not_abort_work(self):
         with tempfile.TemporaryDirectory() as td:
@@ -99,7 +126,7 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             path = str(Path(td) / "pipeline.prom")
             args = SimpleNamespace(min_free_mib=0, limit=1, batch_size=1, index=td, library=td,
-                                   enricher="e1", dry_run=False, prom=path)
+                                   enricher="e1", dry_run=False, prom=path, parallel=1)
             with patch.object(media_summary, "queue", return_value=[{"path": "private.jpg", "ext": "jpg"}]), \
                  patch.object(media_summary, "summarize", return_value={"status": "ok"}), \
                  patch.object(media_summary, "write_batch", side_effect=OSError("disk full")):

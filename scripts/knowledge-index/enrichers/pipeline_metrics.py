@@ -1,4 +1,4 @@
-"""Bounded-label, live textfile telemetry for the single-worker media pipeline.
+"""Bounded-label, live textfile telemetry for the media summary pipeline.
 
 The worker writes this independently of the expensive five-minute index exporter.
 Counters reset on process restart; Prometheus rate/increase handles the reset.
@@ -22,6 +22,7 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
          ("decode", "prompt"), ("prompt", "inference"), ("inference", "parse"),
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
 PIPELINE_HELP = {
+    "media_pipeline_cache_hits_total": ("counter", "Successful captions reused for identical model inputs; inference requests avoided"),
     "media_pipeline_stage_seconds_total": ("counter", "Wall seconds in each stage, including in-flight work; inference includes transport and server time"),
     "media_pipeline_stage_completed_seconds_total": ("counter", "Wall seconds in completed stage operations, including failed attempts"),
     "media_pipeline_stage_operations_total": ("counter", "Completed stage operations including failed attempts; queue/write operate on batches"),
@@ -31,6 +32,8 @@ PIPELINE_HELP = {
     "media_pipeline_stage_started_timestamp_seconds": ("gauge", "Unix time the current stage started"),
     "media_pipeline_heartbeat_timestamp_seconds": ("gauge", "Unix time the worker last published telemetry"),
     "media_pipeline_running": ("gauge", "1 while the instrumented worker runs; check heartbeat for abrupt termination"),
+    "media_pipeline_queue": ("gauge", "Pending items from the last worker queue scan less subsequent successful writes"),
+    "media_pipeline_in_flight": ("gauge", "Operations currently running in each stage and media type"),
     "media_pipeline_ollama_seconds_total": ("counter", "Ollama response timings converted from nanoseconds; total overlaps load/prompt/generation"),
     "media_pipeline_ollama_observations_total": ("counter", "Responses containing each Ollama duration field"),
     "media_pipeline_ollama_tokens_total": ("counter", "Ollama reported prompt or generated token count"),
@@ -50,6 +53,7 @@ class PipelineMetrics:
         self.ollama_seconds = defaultdict(float)
         self.ollama_observations = defaultdict(int)
         self.tokens = defaultdict(int)
+        self.cache_hits = {"photo": 0, "video": 0}
         for stage in TITLES:
             for kind in (("batch",) if stage in ("queue", "write") else ("photo", "video")):
                 self.seconds[stage, kind] = 0.0
@@ -57,7 +61,9 @@ class PipelineMetrics:
         for kind in ("photo", "video"):
             for status in ("ok", "error"):
                 self.items[kind, status] = self.persisted[kind, status] = 0
-        self.stage, self.kind, self.active_since = "idle", "batch", None
+        self.active = {}
+        self.stage = "idle"
+        self.pending = None
         self.started = time.time()
         self.running = 1
         self.lock = threading.RLock()
@@ -89,24 +95,36 @@ class PipelineMetrics:
     @contextmanager
     def measure(self, stage: str, kind: str = "batch"):
         """Account for successful and failed work, including a currently blocked operation."""
+        operation = object()
         with self.lock:
-            self.stage, self.kind = stage, kind
-            self.started, self.active_since = time.time(), time.monotonic()
+            self.active[operation] = stage, kind, time.time(), time.monotonic()
             self.publish()
         try:
             yield
         finally:
             with self.lock:
-                self.seconds[stage, kind] += max(0, time.monotonic() - self.active_since)
+                _, _, _, started = self.active.pop(operation)
+                self.seconds[stage, kind] += max(0, time.monotonic() - started)
                 self.operations[stage, kind] += 1
-                self.active_since = None
                 self.stage, self.started = "idle", time.time()
                 self.publish()
+
+    def queue_size(self, count: int) -> None:
+        """Record a fresh queue snapshot."""
+        with self.lock:
+            self.pending = count
 
     def item(self, kind: str, status: str, persisted: bool = False) -> None:
         """Distinguish completed inference from durable Parquet output."""
         with self.lock:
             (self.persisted if persisted else self.items)[kind, status] += 1
+            if persisted and status == "ok" and self.pending is not None:
+                self.pending = max(0, self.pending - 1)
+
+    def cache_hit(self, kind: str) -> None:
+        """Count a caption reused from the local cache."""
+        with self.lock:
+            self.cache_hits[kind] += 1
 
     def ollama(self, response: dict, kind: str) -> None:
         """Keep only numeric timing and token fields; missing fields remain absent."""
@@ -135,21 +153,34 @@ class PipelineMetrics:
                 lab = ",".join(f"{k}={json.dumps(str(v), ensure_ascii=False)}" for k, v in sorted(labels.items()))
                 rows[name].append(f"{name}{{{lab}}} {value}")
 
+            active_seconds = defaultdict(float)
+            active_counts = defaultdict(int)
+            stage_now, stage_started = self.stage, self.started
+            if self.active:
+                stage_now, _, stage_started, _ = next(iter(self.active.values()))
+                now = time.monotonic()
+                for stage, kind, _, started in self.active.values():
+                    active_seconds[stage, kind] += max(0, now - started)
+                    active_counts[stage, kind] += 1
             for (stage, kind), value in sorted(self.seconds.items()):
                 add("media_pipeline_stage_completed_seconds_total", value, stage=stage, kind=kind)
-                if self.active_since is not None and (stage, kind) == (self.stage, self.kind):
-                    value += max(0, time.monotonic() - self.active_since)
-                add("media_pipeline_stage_seconds_total", value, stage=stage, kind=kind, id=stage, title=TITLES[stage])
+                add("media_pipeline_stage_seconds_total", value + active_seconds[stage, kind],
+                    stage=stage, kind=kind, id=stage, title=TITLES[stage])
                 add("media_pipeline_stage_operations_total", self.operations[stage, kind], stage=stage, kind=kind)
+                add("media_pipeline_in_flight", active_counts[stage, kind], stage=stage, kind=kind)
             for name, values in (("media_pipeline_items_total", self.items), ("media_pipeline_persisted_items_total", self.persisted)):
                 for (kind, status), value in sorted(values.items()):
                     add(name, value, kind=kind, status=status)
-            for name, value in (("worker_stage", STAGES[self.stage]), ("stage_started_timestamp_seconds", self.started),
+            if self.pending is not None:
+                add("media_pipeline_queue", self.pending)
+            for name, value in (("worker_stage", STAGES[stage_now]), ("stage_started_timestamp_seconds", stage_started),
                                 ("heartbeat_timestamp_seconds", time.time()), ("running", self.running)):
                 add("media_pipeline_" + name, value)
             for name, values in (("seconds", self.ollama_seconds), ("observations", self.ollama_observations), ("tokens", self.tokens)):
                 for (phase, kind), value in sorted(values.items()):
                     add(f"media_pipeline_ollama_{name}_total", value, phase=phase, kind=kind)
+            for kind, count in self.cache_hits.items():
+                add("media_pipeline_cache_hits_total", count, kind=kind)
             for source, target in EDGES:
                 add("media_pipeline_edge_info", 1, id=source + "-" + target, source=source, target=target)
             lines = []

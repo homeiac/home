@@ -102,7 +102,7 @@ check "video sent 3 frames natively"     "$(grep -c '^3$' "$W/requests.log")" 1
 
 echo "-- instrumented native run"
 "$PYTHON" "$HERE/enrichers/media_summary.py" run --index "$IDX" --library "$LIB" --endpoint "$EP" --model m --enricher timed --min-free-mib 0 \
-  --api ollama --prom "$W/pipeline.prom" --batch-size 2 >/dev/null
+  --api ollama --prom "$W/pipeline.prom" --batch-size 2 --parallel 2 >/dev/null
 "$PYTHON" - "$W/pipeline.prom" <<'PY' && ok "pipeline timings, durable counts and Ollama units" || bad "pipeline telemetry incorrect"
 import sys
 text = open(sys.argv[1]).read()

@@ -30,7 +30,7 @@ MOUNTS="IDX=\$(zfs get -H -o value mountpoint $IDX_DATASET); PH=\$(zfs get -H -o
 
 install_files() {
   cb_ssh "mkdir -p $KI/adapters $KI/enrichers $KI/oracle"
-  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py enrichers/pipeline_metrics.py kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
+  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py enrichers/pipeline_metrics.py enrichers/summary_cache.py kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"
   # Prometheus textfile exporter: systemd timer every 5 min (node-exporter on the host already reads /var/lib/prometheus/node-exporter)
   for u in knowledge-index-metrics.service knowledge-index-metrics.timer; do

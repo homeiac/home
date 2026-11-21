@@ -3,7 +3,7 @@
 
 Usage:
   media_summary.py run --index DIR --library DIR --endpoint URL --model NAME --enricher ID
-                       [--limit N] [--batch-size 200] [--frames 8] [--min-free-mib 3000] [--dry-run]
+                       [--limit N] [--batch-size 50] [--parallel 1] [--frames 8] [--min-free-mib 3000] [--dry-run]
 
   --index      knowledge-index dataset mount (reads knowledge.duckdb, writes summaries/<enricher>/<batch>.parquet)
   --library    photos library root, read-only: the folder that holds "Google Photos/" (<dataset>/library)
@@ -30,9 +30,13 @@ import subprocess
 import sys
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
+from functools import partial
 
 import duckdb
 from pipeline_metrics import PipelineMetrics
+from summary_cache import SummaryCache
 
 VIDEO_EXTS = {"mp4", "mov", "3gp", "avi", "mpg", "m4v"}
 SCHEMA = ("source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR, prompt_version VARCHAR, "
@@ -155,7 +159,7 @@ def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="open
     return out["message"]["content"] if api == "ollama" else out["choices"][0]["message"]["content"]
 
 
-def summarize(row, library, a, metrics=None):
+def summarize(row, library, a, metrics=None, cache=None):
     """-> dict of result columns for one queue row; never raises (errors become status='error' rows)."""
     base = {"source": "gphotos", "path": row["path"], "size_bytes": row["size_bytes"], "enricher": a.enricher, "model": a.model,
             "prompt_version": PROMPT_VERSION, "summary": None, "tags": None, "frames_sampled": None, "duration_s": None,
@@ -178,11 +182,22 @@ def summarize(row, library, a, metrics=None):
             base.update(frames_sampled=n, duration_s=dur)
         with metrics.measure("prompt", kind):
             prompt = build_prompt(row, kind == "video", len(jpegs), speech)
-        with metrics.measure("inference", kind):
-            answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
-                               num_ctx=a.num_ctx, metrics=metrics, kind=kind)
-        with metrics.measure("parse", kind):
-            summary, tags = parse_answer(answer)
+        cache_key = SummaryCache.key(prompt, jpegs, {
+            "endpoint": a.endpoint, "enricher": a.enricher, "model": a.model,
+            "prompt_version": PROMPT_VERSION, "api": a.api, "num_ctx": a.num_ctx, "extra": a.extra,
+        }) if cache is not None else None
+        cached = cache.get(cache_key) if cache is not None else None
+        if cached is None:
+            with metrics.measure("inference", kind):
+                answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
+                                   num_ctx=a.num_ctx, metrics=metrics, kind=kind)
+            with metrics.measure("parse", kind):
+                summary, tags = parse_answer(answer)
+            if cache is not None:
+                cache.put(cache_key, summary, tags)
+        else:
+            summary, tags = cached
+            metrics.cache_hit(kind)
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
@@ -206,13 +221,16 @@ def write_batch(rows, out_dir, enricher):
     return target
 
 
-def queue(index, enricher, limit, seen=()):
+def queue(index, enricher, limit, seen=(), metrics=None):
     """Next `limit` queue rows, newest first, skipping paths already attempted in this run (failed ones stay queued for the next run)."""
-    con = duckdb.connect(os.path.join(index, "knowledge.duckdb"), read_only=True)
-    cur = con.execute("SELECT * FROM gphotos_to_summarize(?) ORDER BY taken_ts DESC NULLS LAST, path LIMIT ?",
-                      [enricher, limit + len(seen)])
-    names = [d[0] for d in cur.description]
-    return [r for r in (dict(zip(names, x)) for x in cur.fetchall()) if r["path"] not in seen][:limit]
+    with duckdb.connect(os.path.join(index, "knowledge.duckdb"), read_only=True) as con:
+        cur = con.execute("SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) "
+                          "ORDER BY taken_ts DESC NULLS LAST, path LIMIT ?", [enricher, limit + len(seen)])
+        names = [column[0] for column in cur.description[:-1]]
+        rows = cur.fetchall()
+    if metrics is not None:
+        metrics.queue_size(rows[0][-1] if rows else 0)
+    return [r for r in (dict(zip(names, row[:-1])) for row in rows) if r["path"] not in seen][:limit]
 
 
 def run(a):
@@ -227,14 +245,17 @@ def run(a):
     t0 = time.time()
     remaining = a.limit
     seen = set()
-    with PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
+    cache_context = nullcontext(None) if a.dry_run else SummaryCache(os.path.join(a.index, "summary-cache.sqlite3"))
+    with cache_context as cache, PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics, \
+            ThreadPoolExecutor(max_workers=a.parallel) as pool:
+        summarize_item = partial(summarize, library=a.library, a=a, metrics=metrics, cache=cache)
         while remaining > 0:
             with metrics.measure("queue"):
-                rows = queue(a.index, a.enricher, min(a.batch_size, remaining), seen)
+                rows = queue(a.index, a.enricher, min(a.batch_size, remaining), seen, metrics)
             if not rows:
                 break
             seen.update(r["path"] for r in rows)
-            out = [summarize(r, a.library, a, metrics) for r in rows]
+            out = list(pool.map(summarize_item, rows))
             done += sum(r["status"] == "ok" for r in out)
             errors += sum(r["status"] != "ok" for r in out)
             if a.dry_run:
@@ -263,7 +284,9 @@ def main(argv):
     ap.add_argument("--model", required=True)
     ap.add_argument("--enricher", required=True)
     ap.add_argument("--limit", type=int, default=10 ** 9)
-    ap.add_argument("--batch-size", type=int, default=200)
+    ap.add_argument("--batch-size", type=int, default=50)
+    ap.add_argument("--parallel", type=int, default=os.environ.get("KI_SUMMARY_PARALLEL", "1"),
+                    help="Maximum summaries in flight, sharing a single Parquet writer")
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
@@ -274,6 +297,8 @@ def main(argv):
     ap.add_argument("--prom", default=os.environ.get("KI_PIPELINE_PROM"),
                     help="live pipeline metrics textfile for node-exporter (or KI_PIPELINE_PROM); ignored by --dry-run")
     args = ap.parse_args(argv)
+    if args.parallel < 1:
+        ap.error("--parallel must be positive")
     args.extra = json.loads(args.extra_json)
     return run(args)
 

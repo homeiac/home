@@ -25,7 +25,7 @@ data:
       ],
       "panels": [
         {
-          "id": 136,
+          "id": 137,
           "type": "row",
           "title": "Work remaining & bottleneck",
           "collapsed": false,
@@ -38,7 +38,7 @@ data:
           "panels": []
         },
         {
-          "id": 137,
+          "id": 138,
           "type": "stat",
           "title": "Summaries still to do",
           "datasource": {
@@ -53,7 +53,7 @@ data:
           },
           "targets": [
             {
-              "expr": "max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))",
+              "expr": "(max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))))",
               "legendFormat": "{{enricher}}",
               "refId": "A",
               "instant": true,
@@ -88,10 +88,10 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Indexed photos and videos awaiting a summary, by selected enricher. Counts use the latest successful export only."
+          "description": "The worker counts pending items during batch selection and updates the count after successful Parquet writes. If the worker is offline, this falls back to the five-minute index export."
         },
         {
-          "id": 138,
+          "id": 139,
           "type": "stat",
           "title": "Summary finish estimate",
           "datasource": {
@@ -106,7 +106,7 @@ data:
           },
           "targets": [
             {
-              "expr": "((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) / (max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m]))) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) == 0) or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) * 0 - 1",
+              "expr": "(((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) / (max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m]))) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) or ((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) == 0) or (((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or (((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or ((max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) ((time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))) or max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))) > 0) * 0 - 1",
               "legendFormat": "{{enricher}}",
               "refId": "A",
               "instant": true,
@@ -167,7 +167,7 @@ data:
           "description": "Current backlog divided by the last ten minutes of successful Parquet writes. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
         },
         {
-          "id": 139,
+          "id": 140,
           "type": "stat",
           "title": "Summaries saved / minute",
           "datasource": {
@@ -221,7 +221,7 @@ data:
           "description": "Successful rows saved to Parquet over the last ten minutes."
         },
         {
-          "id": 140,
+          "id": 141,
           "type": "stat",
           "title": "Summary bottleneck \u00b7 stage",
           "datasource": {
@@ -273,10 +273,10 @@ data:
             "graphMode": "none",
             "textMode": "value_and_name"
           },
-          "description": "Largest share of measured worker time over 30 minutes. Model requests include queueing, transport and inference. Compare resource signals below before attributing the delay to hardware."
+          "description": "Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference."
         },
         {
-          "id": 151,
+          "id": 152,
           "type": "stat",
           "title": "Saved summaries/min \u00b7 before and after",
           "datasource": {
@@ -344,7 +344,7 @@ data:
           "description": "All three values use ten minutes of successful Parquet writes. Reference windows ended Nov 20 at 10:00 pm and 10:25:30 pm Pacific. The live value feeds the ETA. Workload mix and shared-server traffic vary."
         },
         {
-          "id": 152,
+          "id": 153,
           "type": "timeseries",
           "title": "Summary throughput over time",
           "datasource": {
@@ -467,7 +467,7 @@ data:
           "description": "Ten-minute rate of successful Parquet writes. Gaps separate rollout phases. Early points after a cutover can still include pauses from the previous ten minutes."
         },
         {
-          "id": 141,
+          "id": 142,
           "type": "stat",
           "title": "Photo context still to do",
           "datasource": {
@@ -519,7 +519,7 @@ data:
           }
         },
         {
-          "id": 142,
+          "id": 143,
           "type": "stat",
           "title": "Photo context finish estimate",
           "datasource": {
@@ -595,7 +595,7 @@ data:
           "description": "Backlog divided by the last hour\u2019s increase in completed jobs. New arrivals and retries can extend the estimate."
         },
         {
-          "id": 143,
+          "id": 144,
           "type": "stat",
           "title": "Photo extraction jobs left",
           "datasource": {
@@ -648,7 +648,7 @@ data:
           "description": "Includes delayed retries. See the PostgreSQL queue section for age and retry counts."
         },
         {
-          "id": 144,
+          "id": 145,
           "type": "stat",
           "title": "Immich jobs outstanding",
           "datasource": {
@@ -701,7 +701,7 @@ data:
           "description": "All native Immich queues. Open Photo App for per-queue throughput and estimates."
         },
         {
-          "id": 145,
+          "id": 146,
           "type": "stat",
           "title": "Immich sync",
           "datasource": {
@@ -755,7 +755,7 @@ data:
           "description": "Pending assets are ready for transfer. Conflicts require review and do not contribute to automatic queue drain."
         },
         {
-          "id": 146,
+          "id": 147,
           "type": "row",
           "title": "USE checks \u00b7 Piglet host and GPU VM",
           "collapsed": false,
@@ -768,7 +768,7 @@ data:
           "panels": []
         },
         {
-          "id": 147,
+          "id": 148,
           "type": "stat",
           "title": "Utilization \u00b7 percent busy",
           "datasource": {
@@ -783,7 +783,7 @@ data:
           },
           "targets": [
             {
-              "expr": "avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL{Hostname=\"k3s-vm-pumped-piglet-gpu\"}[5m]))",
+              "expr": "avg_over_time((max(DCGM_FI_DEV_GPU_UTIL{Hostname=\"k3s-vm-pumped-piglet-gpu\"}))[5m:15s])",
               "legendFormat": "Shared GPU",
               "refId": "A",
               "instant": true,
@@ -852,7 +852,7 @@ data:
           "description": "Five-minute utilization where available. GPU activity is shared across Ollama, Frigate and Immich."
         },
         {
-          "id": 148,
+          "id": 149,
           "type": "stat",
           "title": "Saturation \u00b7 percent of time waiting",
           "datasource": {
@@ -929,7 +929,7 @@ data:
           "description": "CPU, RAM and I/O pressure show the worse of the host and GPU VM over five minutes. Ollama request queue depth is not exported."
         },
         {
-          "id": 149,
+          "id": 150,
           "type": "stat",
           "title": "Errors \u00b7 last hour",
           "datasource": {
@@ -1701,7 +1701,7 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 8,
+            "w": 6,
             "x": 0,
             "y": 42
           },
@@ -1804,8 +1804,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 8,
-            "x": 8,
+            "w": 6,
+            "x": 6,
             "y": 42
           },
           "targets": [
@@ -1856,8 +1856,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 8,
-            "x": 16,
+            "w": 6,
+            "x": 12,
             "y": 42
           },
           "targets": [
@@ -1909,6 +1909,59 @@ data:
         },
         {
           "id": 98,
+          "type": "stat",
+          "title": "Model requests in flight",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 42
+          },
+          "targets": [
+            {
+              "expr": "sum by(enricher) (media_pipeline_in_flight{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",stage=\"inference\"} and on(instance,job,enricher) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))",
+              "legendFormat": "{{enricher}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Requests submitted by the summary worker. Ollama may be processing or queueing them."
+        },
+        {
+          "id": 99,
           "type": "nodeGraph",
           "title": "Value stream map",
           "datasource": {
@@ -1957,7 +2010,7 @@ data:
             },
             "overrides": []
           },
-          "description": "Share of measured worker time by stage in the rate window. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
+          "description": "Share of measured operation time by stage in the rate window. Concurrent stages each contribute time. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
           "transformations": [
             {
               "id": "calculateField",
@@ -2013,7 +2066,7 @@ data:
           }
         },
         {
-          "id": 99,
+          "id": 100,
           "type": "bargauge",
           "title": "Time spent by stage",
           "datasource": {
@@ -2067,7 +2120,7 @@ data:
           "description": "Includes in-flight operations, so a stalled decode or model request is visible before it completes. This is wall time, not CPU or GPU utilization."
         },
         {
-          "id": 100,
+          "id": 101,
           "type": "state-timeline",
           "title": "Worker activity (sampled)",
           "datasource": {
@@ -2178,7 +2231,7 @@ data:
           "description": "Sampled at Prometheus scrape cadence: stages shorter than a scrape can be missed. Cumulative timing counters still include every measured stage."
         },
         {
-          "id": 101,
+          "id": 102,
           "type": "timeseries",
           "title": "Photo: seconds per stage operation",
           "datasource": {
@@ -2232,7 +2285,7 @@ data:
           "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
         },
         {
-          "id": 102,
+          "id": 103,
           "type": "timeseries",
           "title": "Video: seconds per stage operation",
           "datasource": {
@@ -2286,7 +2339,7 @@ data:
           "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
         },
         {
-          "id": 103,
+          "id": 104,
           "type": "timeseries",
           "title": "Batch: query / write seconds",
           "datasource": {
@@ -2340,7 +2393,7 @@ data:
           "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
         },
         {
-          "id": 104,
+          "id": 105,
           "type": "timeseries",
           "title": "Ollama: seconds per response",
           "datasource": {
@@ -2402,7 +2455,7 @@ data:
           "description": "Native Ollama API timings for Ollama runs. Server remainder subtracts load, prompt and generation from total. It can include runner wait and request processing. For client wall time, see Model request under Photo or Video: seconds per stage operation."
         },
         {
-          "id": 105,
+          "id": 106,
           "type": "timeseries",
           "title": "Ollama: tokens per second",
           "datasource": {
@@ -2455,7 +2508,7 @@ data:
           }
         },
         {
-          "id": 106,
+          "id": 107,
           "type": "timeseries",
           "title": "Attempted vs saved items per minute",
           "datasource": {
@@ -2517,7 +2570,7 @@ data:
           "description": "Attempted items include errors. Saved items advance only after atomic Parquet writes; batching creates bursts."
         },
         {
-          "id": 107,
+          "id": 108,
           "type": "timeseries",
           "title": "Worker time by stage",
           "datasource": {
@@ -2570,7 +2623,7 @@ data:
           }
         },
         {
-          "id": 108,
+          "id": 109,
           "type": "row",
           "title": "Photo enrichment \u2014 parallel CPU branch",
           "collapsed": false,
@@ -2583,7 +2636,7 @@ data:
           "panels": []
         },
         {
-          "id": 109,
+          "id": 110,
           "type": "stat",
           "title": "Photo worker stage",
           "datasource": {
@@ -2676,7 +2729,7 @@ data:
           }
         },
         {
-          "id": 110,
+          "id": 111,
           "type": "stat",
           "title": "Photo telemetry age",
           "datasource": {
@@ -2737,7 +2790,7 @@ data:
           }
         },
         {
-          "id": 111,
+          "id": 112,
           "type": "stat",
           "title": "Faces awaiting names",
           "datasource": {
@@ -2790,7 +2843,7 @@ data:
           }
         },
         {
-          "id": 112,
+          "id": 113,
           "type": "stat",
           "title": "Photos with GPS",
           "datasource": {
@@ -2843,7 +2896,7 @@ data:
           }
         },
         {
-          "id": 113,
+          "id": 114,
           "type": "timeseries",
           "title": "Enrichment work remaining",
           "datasource": {
@@ -2905,7 +2958,7 @@ data:
           "description": "EXIF/faces count indexed photos without a current successful extraction/scan; review counts unnamed detected faces. Face scans with zero faces still count as completed. Human review is optional. These are backlog snapshots, not queue waiting seconds. Snapshot refreshes at startup and after operations; source catalog refresh runs hourly."
         },
         {
-          "id": 114,
+          "id": 115,
           "type": "timeseries",
           "title": "Enrichment facts over time",
           "datasource": {
@@ -2991,7 +3044,7 @@ data:
           "description": "Authoritative PostgreSQL facts. Counts can decrease after edits. A separate timer publishes coherent Parquet generations."
         },
         {
-          "id": 115,
+          "id": 116,
           "type": "timeseries",
           "title": "Photo stages: seconds per operation",
           "datasource": {
@@ -3046,7 +3099,7 @@ data:
           "description": "EXIF and CPU faces operate on photos; persistence operates on transactions; review measures annotation saves only; export covers a set of tables. Failed operations are included. Optional Frigate includes HTTP and server time."
         },
         {
-          "id": 116,
+          "id": 117,
           "type": "timeseries",
           "title": "Photo stage operations per minute",
           "datasource": {
@@ -3099,7 +3152,7 @@ data:
           }
         },
         {
-          "id": 117,
+          "id": 118,
           "type": "timeseries",
           "title": "CPU branch time by stage",
           "datasource": {
@@ -3153,7 +3206,7 @@ data:
           "description": "Share of measured operation time, including in-flight work. Idle human time and queue residence are unmeasured. A dominant stage indicates where elapsed work occurs, not hardware saturation."
         },
         {
-          "id": 118,
+          "id": 119,
           "type": "timeseries",
           "title": "Photo extraction errors",
           "datasource": {
@@ -3206,7 +3259,7 @@ data:
           }
         },
         {
-          "id": 119,
+          "id": 120,
           "type": "timeseries",
           "title": "Photo current operation age",
           "datasource": {
@@ -3260,7 +3313,7 @@ data:
           "description": "Zero between operations or after a clean stop; missing data means telemetry is absent or older than 60 seconds."
         },
         {
-          "id": 120,
+          "id": 121,
           "type": "row",
           "title": "Frigate processing \u2014 shared service",
           "collapsed": false,
@@ -3273,7 +3326,7 @@ data:
           "panels": []
         },
         {
-          "id": 121,
+          "id": 122,
           "type": "stat",
           "title": "Frigate API reachable",
           "datasource": {
@@ -3342,7 +3395,7 @@ data:
           "description": "Endpoint reachability is not face-classifier readiness."
         },
         {
-          "id": 122,
+          "id": 123,
           "type": "stat",
           "title": "Frigate telemetry age",
           "datasource": {
@@ -3395,7 +3448,7 @@ data:
           }
         },
         {
-          "id": 123,
+          "id": 124,
           "type": "stat",
           "title": "Frigate object processing",
           "datasource": {
@@ -3448,7 +3501,7 @@ data:
           }
         },
         {
-          "id": 124,
+          "id": 125,
           "type": "stat",
           "title": "Frigate face processing",
           "datasource": {
@@ -3502,7 +3555,7 @@ data:
           "description": "Native rolling processing time. Zero means no native face processing recorded; this is not an identity-readiness check."
         },
         {
-          "id": 125,
+          "id": 126,
           "type": "timeseries",
           "title": "Frigate processing time",
           "datasource": {
@@ -3556,7 +3609,7 @@ data:
           "description": "Native camera-service processing. Uploaded-photo requests are timed separately in the optional photo worker."
         },
         {
-          "id": 126,
+          "id": 127,
           "type": "timeseries",
           "title": "Frigate processing rate",
           "datasource": {
@@ -3609,7 +3662,7 @@ data:
           }
         },
         {
-          "id": 127,
+          "id": 128,
           "type": "row",
           "title": "PostgreSQL queue and analytical snapshots",
           "collapsed": false,
@@ -3622,7 +3675,7 @@ data:
           "panels": []
         },
         {
-          "id": 128,
+          "id": 129,
           "type": "timeseries",
           "title": "Photo jobs over time",
           "datasource": {
@@ -3671,7 +3724,7 @@ data:
           }
         },
         {
-          "id": 129,
+          "id": 130,
           "type": "timeseries",
           "title": "Queue and analytics freshness",
           "datasource": {
@@ -3725,7 +3778,7 @@ data:
           }
         },
         {
-          "id": 130,
+          "id": 131,
           "type": "stat",
           "title": "Snapshot export status",
           "datasource": {
@@ -3789,7 +3842,7 @@ data:
           }
         },
         {
-          "id": 131,
+          "id": 132,
           "type": "stat",
           "title": "Parquet export duration",
           "datasource": {
@@ -3838,7 +3891,7 @@ data:
           }
         },
         {
-          "id": 132,
+          "id": 133,
           "type": "stat",
           "title": "Current analytical snapshot",
           "datasource": {
@@ -3887,7 +3940,7 @@ data:
           }
         },
         {
-          "id": 133,
+          "id": 134,
           "type": "stat",
           "title": "Analytical freshness",
           "datasource": {
@@ -3944,7 +3997,7 @@ data:
           }
         },
         {
-          "id": 134,
+          "id": 135,
           "type": "timeseries",
           "title": "GUI review operations",
           "datasource": {
@@ -3993,7 +4046,7 @@ data:
           }
         },
         {
-          "id": 135,
+          "id": 136,
           "type": "timeseries",
           "title": "Snapshot export history",
           "datasource": {
@@ -5695,7 +5748,7 @@ data:
           }
         },
         {
-          "id": 150,
+          "id": 151,
           "type": "stat",
           "title": "Standalone Bonsai",
           "datasource": {

@@ -122,11 +122,15 @@ def work_remaining_panels():
     selection = SUMMARY_SELECTION
     fresh = ('(knowledge_index_exporter_success' + INST + ' == 1) and on(instance,job) '
              '(time() - node_textfile_mtime_seconds{file=~".*/knowledge_index[.]prom",instance=~"$instance"} < 900)')
-    queue = (f'max by(enricher) (media_summaries_queue{{{selection}}} '
-             f'and on(instance,job) ({fresh}))')
+    heartbeat = f'(time() - media_pipeline_heartbeat_timestamp_seconds{{{selection}}} < 60)'
+    worker_queue = (f'max by(enricher) (media_pipeline_queue{{{selection}}} and on(instance,enricher,job) '
+                    f'({heartbeat} and (media_pipeline_running{{{selection}}} == 1)))')
+    exported_queue = (f'max by(enricher) (media_summaries_queue{{{selection}}} '
+                      f'and on(instance,job) ({fresh}))')
+    queue = f'({worker_queue} or {exported_queue})'
     pace = summary_pace()
-    running = ('max by(enricher) (media_pipeline_running{' + selection + '} and on(instance,enricher,job) '
-               '(time() - media_pipeline_heartbeat_timestamp_seconds{' + selection + '} < 60))')
+    running = (f'max by(enricher) (media_pipeline_running{{{selection}}} and on(instance,enricher,job) '
+               f'{heartbeat})')
     eta = (f'(({queue} / ({pace} > 0)) and ({running} == 1)) or ({queue} == 0) '
            f'or (({queue} > 0) and ({running} == 0)) * 0 - 2 '
            f'or (({queue} > 0) unless {running}) * 0 - 3 '
@@ -141,10 +145,10 @@ def work_remaining_panels():
               "-3": {"text": "Worker status unknown", "color": "gray"},
               "0": {"text": "Queue clear", "color": "green"}}
     p = [row("Work remaining & bottleneck", 0),
-         stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="Indexed photos and videos awaiting a summary, by selected enricher. Counts use the latest successful export only."),
+         stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="The worker counts pending items during batch selection and updates the count after successful Parquet writes. If the worker is offline, this falls back to the five-minute index export."),
          stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
          stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Successful rows saved to Parquet over the last ten minutes."),
-         stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured worker time over 30 minutes. Model requests include queueing, transport and inference. Compare resource signals below before attributing the delay to hardware.")]
+         stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference.")]
     p += [stat("Photo context still to do", context, 0, 5, w=5, unit="locale"),
           stat("Photo context finish estimate", f'({context} / ({context_pace} > 0)) or ({context} == 0) or ({context} > 0) * 0 - 1', 5, 5, w=5, unit="s", mappings=no_eta, description="Backlog divided by the last hour’s increase in completed jobs. New arrivals and retries can extend the estimate."),
           stat("Photo extraction jobs left", 'sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|running|retry"})', 10, 5, w=5, unit="locale", description="Includes delayed retries. See the PostgreSQL queue section for age and retry counts."),
@@ -164,7 +168,7 @@ def work_remaining_panels():
 
     p.append(row("USE checks · Piglet host and GPU VM", 9))
     p.append(latest("Utilization · percent busy", [
-        (f'avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL{gpu}[5m]))', 'Shared GPU'),
+        (f'avg_over_time((max(DCGM_FI_DEV_GPU_UTIL{gpu}))[5m:15s])', 'Shared GPU'),
         ('100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle",job="proxmox-node-exporter",instance="pumped-piglet"}[5m])))', 'Host CPU'),
         (f'100 * (1 - sum(node_memory_MemAvailable_bytes {vm}) / sum(node_memory_MemTotal_bytes {vm}))', 'VM RAM'),
         ('100 * max(rate(node_disk_io_time_seconds_total' + host + '[5m]))', 'Busiest host disk'),
@@ -303,13 +307,15 @@ def pipeline_panels():
         (5, "Model request", "green"), (6, "Parsing answer", "light-purple"), (7, "Writing Parquet", "orange"),
         (8, "Finished", "dark-green"), (9, "Failed", "red")]}
     p = [row("Pipeline bottlenecks", 0)]
-    p += [stat("Worker stage", current, 0, 1, w=8, mappings=states, legend="{{instance}} / {{enricher}}"),
+    p += [stat("Worker stage", current, 0, 1, w=6, mappings=states, legend="{{instance}} / {{enricher}}"),
           stat("Time in current stage", '(time() - media_pipeline_stage_started_timestamp_seconds' + sel + ') and (' + heartbeat + ' < 60) and (media_pipeline_running' + sel + ' == 1)',
-               8, 1, w=8, unit="s", legend="{{instance}} / {{enricher}}"),
-          stat("Worker telemetry age", heartbeat, 16, 1, w=8, unit="s", thresholds=[("green", None), ("orange", 30), ("red", 60)],
-               description="Published every 5 s by the instrumented worker. Missing data means it has not published yet. After 60 s, the state becomes unknown rather than claiming it is still busy.")]
+               6, 1, w=6, unit="s", legend="{{instance}} / {{enricher}}"),
+          stat("Worker telemetry age", heartbeat, 12, 1, w=6, unit="s", thresholds=[("green", None), ("orange", 30), ("red", 60)],
+               description="Published every 5 s by the instrumented worker. Missing data means it has not published yet. After 60 s, the state becomes unknown rather than claiming it is still busy."),
+          stat("Model requests in flight", 'sum by(enricher) (media_pipeline_in_flight' + sel[:-1] + ',stage="inference"} and on(instance,job,enricher) (' + heartbeat + ' < 60))',
+               18, 1, w=6, legend="{{enricher}}", description="Requests submitted by the summary worker. Ollama may be processing or queueing them.")]
     graph = _panel("nodeGraph", "Value stream map", [], 0, 5, 24, 10,
-                   description="Share of measured worker time by stage in the rate window. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow.")
+                   description="Share of measured operation time by stage in the rate window. Concurrent stages each contribute time. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow.")
     graph["targets"] = [
         {"refId": "nodes", "expr": '(100 * sum by (id, title) (' + stage_rate + ') / scalar(sum(' + stage_rate + ')) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total' + sel + ') * 0)', "format": "table", "instant": True, "range": False},
         {"refId": "edges", "expr": 'max by (id, source, target) (media_pipeline_edge_info' + sel + ')', "format": "table", "instant": True, "range": False}]

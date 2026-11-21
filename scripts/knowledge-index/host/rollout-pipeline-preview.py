@@ -28,7 +28,11 @@ def main() -> None:
     subprocess.run(["systemctl", "is-active", "--quiet", unit], check=True)
     if not metrics.parent.is_dir():
         raise RuntimeError("node-exporter textfile directory is missing")
-    files = {source: payload["media_summary.py"], root / "enrichers/pipeline_metrics.py": payload["pipeline_metrics.py"]}
+    files = {root / "enrichers" / name: payload[name]
+             for name in ("media_summary.py", "pipeline_metrics.py", "summary_cache.py")}
+    parallel = int(payload.get("parallel", 1))
+    if parallel < 1:
+        raise ValueError("Parallel summary count must be positive")
     for path, text in files.items():
         compile(text, str(path), "exec")
     backup = root / "backups" / ("pipeline-" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
@@ -52,7 +56,9 @@ def main() -> None:
     try:
         for path, text in files.items():
             replace(path, text.encode(), 0o755 if path == source else 0o644)
-        replace(dropin, b"[Service]\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\n", 0o644)
+        replace(dropin, ("[Service]\n"
+                         "Environment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\n"
+                         f"Environment=KI_SUMMARY_PARALLEL={parallel}\n").encode(), 0o644)
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         started = time.time()
         subprocess.run(["systemctl", "restart", unit], check=True, timeout=45)
