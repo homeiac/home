@@ -16,7 +16,6 @@ RUNNER=os.environ.get('KI_LUNA_RUNNER','mac')
 POLICY='https://raw.githubusercontent.com/homeiac/home/{revision}/scripts/knowledge-index/luna-backfill/policy.json'
 REF='refs/heads/codex/photo-enrichment-217'
 BRIDGE_SLOTS=threading.BoundedSemaphore(8)
-FRAME_SLOTS=threading.BoundedSemaphore(4)
 SCHEMA={'type':'object','properties':{'summary':{'type':'string'},'tags':{'type':'array','items':{'type':'string'}}},
         'required':['summary','tags'],'additionalProperties':False}
 PROMPT=("Write a factual searchable caption in one or two sentences and up to eight tags. "
@@ -44,9 +43,9 @@ def host(**request):
     return json.loads(proc.stdout)
 
 
-def process(batch,item):
+def process(batch,item,frames):
     began=time.monotonic()
-    with FRAME_SLOTS:
+    with frames:
         response=host(op='frames',batch=batch,id=item['id'])
     prepared=time.monotonic()-began
     result={'id':item['id'],'state':'source_error'}
@@ -104,18 +103,22 @@ def read_policy():
         raise ValueError('Invalid policy')
     if type(policy['parallel']) is not int or type(policy['batch_size']) is not int or not 1<=policy['parallel']<=20 or not policy['parallel']<=policy['batch_size']<=24:
         raise ValueError('Invalid concurrency or reserve size')
+    policy.setdefault('frame_slots',4)
+    if type(policy['frame_slots']) is not int or not 1<=policy['frame_slots']<=6:
+        raise ValueError('Invalid frame preparation concurrency')
     return policy
 
 
-def dispatch(pool, items, batch, results, parallel):
+def dispatch(pool, items, batch, results, parallel, frame_slots=4):
     """Keep slots filled, then drain active requests when an outcome is ambiguous."""
     pending=iter(items)
+    frames=threading.BoundedSemaphore(frame_slots)
     active=set()
     had_unknown=False
 
     def fill():
         while len(active)<parallel and (item:=next(pending,None)) is not None:
-            active.add(pool.submit(process,batch,item))
+            active.add(pool.submit(process,batch,item,frames))
 
     fill()
     while active:
@@ -145,6 +148,7 @@ def main():
         if not policy:return
         started=time.monotonic()
         parallel=policy['parallel']
+        frame_slots=policy['frame_slots']
         grant=host(op='reserve',estimated_limit_usd=policy['estimated_limit_usd'],batch_size=policy['batch_size'],parallel=parallel)
         reserved=time.monotonic()
         if not grant['items']:
@@ -154,12 +158,12 @@ def main():
         results=[]
         try:
             with ThreadPoolExecutor(parallel) as pool:
-                ambiguous=dispatch(pool,grant['items'],batch,results,parallel)
+                ambiguous=dispatch(pool,grant['items'],batch,results,parallel,frame_slots)
         finally:
             completed=time.monotonic()
             host(op='release',batch=batch)
             host(op='publish')
-            print("LUNA_BATCH "+json.dumps(dict(batch=batch,parallel=parallel,
+            print("LUNA_BATCH "+json.dumps(dict(batch=batch,parallel=parallel,frame_slots=frame_slots,
                   reserve_seconds=round(reserved-started,3), publish_seconds=round(time.monotonic()-completed,3),
                   total_seconds=round(time.monotonic()-started,3), results=results)),flush=True)
         if ambiguous:

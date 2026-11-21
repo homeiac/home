@@ -1,8 +1,9 @@
 {
-  "enabled": true,
+  "enabled": false,
   "runner": "still-fawn",
   "model": "gpt-6-luna",
   "estimated_limit_usd": 250,
   "batch_size": 24,
-  "parallel": 20
+  "parallel": 20,
+  "frame_slots": 4
 }

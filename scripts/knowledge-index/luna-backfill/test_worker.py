@@ -11,7 +11,7 @@ class DispatchTest(unittest.TestCase):
     def test_fills_slot_while_the_other_request_is_running(self):
         third_started = threading.Event()
 
-        def process(_, item):
+        def process(_, item, frames):
             if item == 1:
                 self.assertTrue(third_started.wait(3))
             if item == 3:
