@@ -141,7 +141,7 @@ def reserve(db, request):
     if not 1 <= parallel <= 20:
         db.rollback()
         raise ValueError('Invalid Luna concurrency')
-    limit = min(24,int(request['batch_size']),max(0,(cap-used-pilot)//RESERVE))
+    limit = min(48,int(request['batch_size']),max(0,(cap-used-pilot)//RESERVE))
     rows = [] if blocked else db.execute("SELECT id,path,size_bytes,ext,metadata FROM jobs WHERE state='pending' AND available_after<=unixepoch() ORDER BY id LIMIT ?",[limit]).fetchall()
     batch = uuid.uuid4().hex
     db.executemany("UPDATE jobs SET state='reserved',batch=?,cost=?,started=CURRENT_TIMESTAMP WHERE id=?",[(batch,RESERVE,row[0]) for row in rows])

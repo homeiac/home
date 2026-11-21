@@ -101,7 +101,7 @@ def read_policy():
         return None
     if policy['model']!='gpt-6-luna' or not 0<policy['estimated_limit_usd']<=250:
         raise ValueError('Invalid policy')
-    if type(policy['parallel']) is not int or type(policy['batch_size']) is not int or not 1<=policy['parallel']<=20 or not policy['parallel']<=policy['batch_size']<=24:
+    if type(policy['parallel']) is not int or type(policy['batch_size']) is not int or not 1<=policy['parallel']<=20 or not policy['parallel']<=policy['batch_size']<=48:
         raise ValueError('Invalid concurrency or reserve size')
     policy.setdefault('frame_slots',4)
     if type(policy['frame_slots']) is not int or not 1<=policy['frame_slots']<=6:
@@ -164,6 +164,7 @@ def main():
             host(op='release',batch=batch)
             host(op='publish')
             print("LUNA_BATCH "+json.dumps(dict(batch=batch,parallel=parallel,frame_slots=frame_slots,
+                  batch_size=policy['batch_size'],
                   reserve_seconds=round(reserved-started,3), publish_seconds=round(time.monotonic()-completed,3),
                   total_seconds=round(time.monotonic()-started,3), results=results)),flush=True)
         if ambiguous:

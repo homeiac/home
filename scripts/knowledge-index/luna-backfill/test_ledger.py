@@ -91,7 +91,7 @@ class LedgerTest(unittest.TestCase):
         with self.db:
             self.db.executemany("INSERT INTO jobs(path,size_bytes,ext,metadata) VALUES (?,1,'jpg','{}')",
                                 [(str(i),) for i in range(30)])
-        grant=self.host.reserve(self.db,dict(estimated_limit_usd=21,batch_size=24,parallel=20))
+        grant=self.host.reserve(self.db,dict(estimated_limit_usd=21,batch_size=48,parallel=20))
         self.assertEqual(len(grant['items']),20)
         self.assertEqual(self.claim(21)['items'],[])
 

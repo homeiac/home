@@ -38,10 +38,10 @@ def main():
     for line in sys.stdin:
         if line.startswith("LUNA_BATCH "):
             batch = json.loads(line.removeprefix("LUNA_BATCH "))
-            setting = batch["parallel"], batch.get("frame_slots",4)
+            setting = batch["parallel"], batch.get("frame_slots",4), batch.get("batch_size",24)
             levels.setdefault(setting, {})[batch["batch"]] = batch
-    print(json.dumps({f"{parallel} requests / {frames} prep":summary(list(batches.values()))
-                      for (parallel,frames),batches in sorted(levels.items())}, indent=2))
+    print(json.dumps({f"{parallel} requests / {frames} prep / batch {size}":summary(list(batches.values()))
+                      for (parallel,frames,size),batches in sorted(levels.items())}, indent=2))
 
 
 if __name__ == "__main__":
