@@ -1,0 +1,29 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebrowser-external
+  namespace: kube-system
+spec:
+  type: ExternalName
+  externalName: pumped-piglet.maas
+  ports:
+    - port: 8088
+      protocol: TCP
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: filebrowser
+  namespace: kube-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`files.app.home.panderosystems.com`)
+      kind: Rule
+      services:
+        - name: filebrowser-external
+          port: 8088
+  tls:
+    secretName: wildcard-app-home-tls

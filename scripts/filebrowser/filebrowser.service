@@ -1,0 +1,23 @@
+[Unit]
+Description=FileBrowser Quantum read-only USB browser
+After=network.target
+
+[Service]
+Type=simple
+User=filebrowser
+Group=filebrowser
+WorkingDirectory=/var/lib/filebrowser
+EnvironmentFile=-/etc/filebrowser/bootstrap.env
+ExecStart=/usr/local/bin/filebrowser -c /etc/filebrowser/config.yaml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/srv/files
+ReadWritePaths=/var/lib/filebrowser
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

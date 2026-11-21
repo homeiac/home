@@ -4,3 +4,4 @@ resources:
   - wildcard-cert-kube-system.yaml
   - tlsstore-default.yaml
   - homeassistant-ingress.yaml
+  - filebrowser-ingress.yaml

@@ -1,0 +1,10 @@
+[Unit]
+Description=Forward FileBrowser connections to LXC 104
+Requires=pve-container@104.service
+After=pve-container@104.service
+BindsTo=pve-container@104.service
+
+[Service]
+ExecStart=/usr/local/sbin/filebrowser-proxy-container
+Restart=on-failure
+RestartSec=5

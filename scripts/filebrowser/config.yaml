@@ -1,0 +1,45 @@
+http:
+  port: 8080
+server:
+  database:
+    path: /var/lib/filebrowser/database.sqlite
+  cacheDir: /var/lib/filebrowser/cache
+  sources:
+    - path: /srv/files/SSK
+      name: SSK
+      config:
+        defaultEnabled: true
+        defaultPermissions: &readOnly
+          view: true
+          download: true
+          modify: false
+          create: false
+          delete: false
+        rules:
+          - folderPath: /
+            viewable: true
+    - path: /srv/files/RASPBMC
+      name: RASPBMC
+      config:
+        defaultEnabled: true
+        defaultPermissions: *readOnly
+        rules:
+          - folderPath: /
+            viewable: true
+    - path: /srv/files/BitLocker
+      name: BitLocker
+      config:
+        defaultEnabled: true
+        defaultPermissions: *readOnly
+        rules:
+          - folderPath: /
+            viewable: true
+auth:
+  adminUsername: admin
+  methods:
+    password:
+      enabled: true
+      signup: false
+      minLength: 12
+frontend:
+  name: Piglet USB Files

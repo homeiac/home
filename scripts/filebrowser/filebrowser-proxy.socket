@@ -1,0 +1,9 @@
+[Unit]
+Description=FileBrowser HTTP backend for Traefik
+
+[Socket]
+ListenStream=0.0.0.0:8088
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target
