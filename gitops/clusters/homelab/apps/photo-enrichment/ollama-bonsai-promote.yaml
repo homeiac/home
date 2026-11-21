@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ollama-bonsai-promote-v1
+  name: ollama-bonsai-promote-v2
   namespace: ollama
 data:
   check.mjs: "// Import verified local model files and exercise Ollama's native vision\
@@ -38,8 +38,8 @@ data:
     \ {model});\n  console.log(JSON.stringify({event: 'imported', capabilities: info.capabilities,\
     \ details: info.details}));\n  if (!info.capabilities?.includes('vision')) throw\
     \ new Error('Imported model has no vision capability');\n}\n\nasync function promoteModel()\
-    \ {\n  const relative = `manifests/registry.ollama.ai/library/${model}/latest`;\n\
-    \  const data = await readFile(`/store/${relative}`);\n  const manifest = JSON.parse(data);\n\
+    \ {\n  const relative = `manifests-v2/ollama.com/library/${model}/latest`;\n \
+    \ const data = await readFile(`/store/${relative}`);\n  const manifest = JSON.parse(data);\n\
     \  const layers = [manifest.config, ...manifest.layers];\n  const digests = new\
     \ Set(layers.map(layer => layer.digest));\n  if (Object.values(files).some(hash\
     \ => !digests.has(`sha256:${hash}`))) {\n    throw new Error('Tested manifest\
@@ -95,12 +95,12 @@ data:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ollama-bonsai-promote-v1
+  name: ollama-bonsai-promote-v2
   namespace: ollama
 spec:
   podSelector:
     matchLabels:
-      app: ollama-bonsai-promote-v1
+      app: ollama-bonsai-promote-v2
   policyTypes:
   - Ingress
   - Egress
@@ -108,7 +108,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ollama-bonsai-promote-v1
+  name: ollama-bonsai-promote-v2
   namespace: ollama
 spec:
   backoffLimit: 0
@@ -116,7 +116,7 @@ spec:
   template:
     metadata:
       labels:
-        app: ollama-bonsai-promote-v1
+        app: ollama-bonsai-promote-v2
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
@@ -158,4 +158,4 @@ spec:
           claimName: ollama-models
       - name: script
         configMap:
-          name: ollama-bonsai-promote-v1
+          name: ollama-bonsai-promote-v2

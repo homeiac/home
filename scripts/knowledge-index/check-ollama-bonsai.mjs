@@ -64,7 +64,7 @@ async function importModel() {
 }
 
 async function promoteModel() {
-  const relative = `manifests/registry.ollama.ai/library/${model}/latest`;
+  const relative = `manifests-v2/ollama.com/library/${model}/latest`;
   const data = await readFile(`/store/${relative}`);
   const manifest = JSON.parse(data);
   const layers = [manifest.config, ...manifest.layers];

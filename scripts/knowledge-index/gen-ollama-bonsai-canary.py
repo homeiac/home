@@ -10,7 +10,7 @@ mode = parser.add_mutually_exclusive_group()
 mode.add_argument('--gpu', action='store_true')
 mode.add_argument('--promote', action='store_true')
 args = parser.parse_args()
-name = ('ollama-bonsai-promote-v1' if args.promote else
+name = ('ollama-bonsai-promote-v2' if args.promote else
         'ollama-bonsai-vision-gpu-v1' if args.gpu else 'ollama-bonsai-vision-canary-v1')
 metadata = {'name': name, 'namespace': 'ollama' if args.gpu or args.promote else 'immich-pilot'}
 script = Path(__file__).with_name('check-ollama-bonsai.mjs').read_text()
