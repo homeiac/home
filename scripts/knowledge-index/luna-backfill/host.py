@@ -5,12 +5,16 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
+import time
 import uuid
 
 import duckdb
 
 sys.path[:0] = ['/opt/photo-enrichment/context', '/opt/knowledge-index/enrichers']
 from photo_enrichment.snapshots import analytical_connection
+from photo_enrichment import places
+from photo_enrichment.context_worker import lookup
+from photo_enrichment.postgres import connect
 from media_summary import VIDEO_EXTS, jpeg_frame, video_duration
 
 ROOT = Path('/local-3TB-backup/photo-enrichment/luna-backfill')
@@ -20,7 +24,7 @@ LIBRARY = Path('/local-3TB-backup/gphotos/library').resolve()
 RESERVE = 1_000_000
 LIMIT = 250_000_000
 MODEL = 'gpt-6-luna'
-PROMPT_VERSION = 'saved-context-v1'
+PROMPT_VERSION = 'saved-context-v2'
 os.umask(0o077)
 
 
@@ -65,15 +69,74 @@ def seed(db):
         reader.close()
 
 
+def migrate(db):
+    """Preserve earlier costs and captions, and give corrections a stable Parquet filename."""
+    cols={r[1] for r in db.execute('PRAGMA table_info(jobs)')}
+    for name,kind in [('origin_batch','TEXT'),('available_after','REAL DEFAULT 0')]:
+        if name not in cols:
+            db.execute(f'ALTER TABLE jobs ADD COLUMN {name} {kind}')
+    db.execute("""CREATE TABLE IF NOT EXISTS previous_captions(
+        job_id INTEGER PRIMARY KEY,metadata TEXT,result TEXT,cost INTEGER,original_state TEXT)""")
+    db.commit()
+
+
+def schedule_corrections(db):
+    """Retry the first captions that missed place hints and early video decoder failures once."""
+    with db:
+        db.execute("""INSERT OR IGNORE INTO previous_captions SELECT id,metadata,result,cost,state FROM jobs
+            WHERE published=1 AND ((state='ok' AND json_type(metadata,'$.gps')='object'
+            AND json_type(metadata,'$.place_lookup') IS NULL) OR (state='source_error' AND ext IN ('mp4','mov','3gp','avi','mpg','m4v')))""")
+        db.execute("""UPDATE jobs SET origin_batch=batch,state='pending',cost=0,published=0
+            WHERE origin_batch IS NULL AND id IN (SELECT job_id FROM previous_captions)""")
+
+
+def add_context(db, grant):
+    """Attach saved event/venue hints and hydrate GPS from the shared budgeted Wikimedia cache."""
+    if not grant['items']:
+        return grant
+    os.environ.setdefault('PGSERVICEFILE','/etc/photo-enrichment/pg_service.conf')
+    os.environ.setdefault('PGPASSFILE','/etc/photo-enrichment/pgpass')
+    ready=[]
+    with connect() as pg:
+        for item in grant['items']:
+            m=item['metadata']
+            groups=pg.execute("""SELECT DISTINCT g.event,g.location,g.venue FROM photo_groups g
+                JOIN group_members gm ON gm.group_id=g.id WHERE gm.path=%s AND gm.size_bytes=%s""",
+                [item['path'],item['size']]).fetchall()
+            m['saved_groups']=[dict(event=e,location=l,venue=v) for e,l,v in groups if e or l or v]
+            gps=m.get('gps')
+            if gps and not m.get('place_lookup'):
+                try:
+                    feed,hit=lookup(pg,gps['latitude'],gps['longitude'])
+                except (places.LookupDeferred,RuntimeError,OSError) as exc:
+                    retry=getattr(exc,'seconds',300)
+                    with db:
+                        db.execute("""UPDATE jobs SET state='pending',cost=0,batch=NULL,available_after=?
+                            WHERE id=? AND batch=? AND state='reserved'""",
+                            [time.time()+retry,item['id'],grant['batch']])
+                    continue
+                m['place_lookup']=feed.get('provider',places.VERSION)
+                m['nearby_candidates']=[dict(name=c['title'],description=c.get('description',''),
+                    distance_m=places.distance(gps['latitude'],gps['longitude'],c['latitude'],c['longitude']))
+                    for c in feed.get('candidates',[])[:5]]
+            with db:
+                db.execute("UPDATE jobs SET metadata=? WHERE id=? AND state='reserved'",[json.dumps(m),item['id']])
+            ready.append(item)
+    grant['items']=ready
+    return grant
+
+
 def reserve(db, request):
     """Atomically reserve the worst-case estimate and claim disjoint items."""
+    schedule_corrections(db)
     cap = min(int(request['estimated_limit_usd'])*1_000_000,LIMIT)
     db.execute('BEGIN IMMEDIATE')
     used = db.execute('SELECT coalesce(sum(cost),0) FROM jobs').fetchone()[0]
+    used += db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0]
     pilot = int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])
     blocked = db.execute("SELECT value FROM config WHERE key='blocked'").fetchone()
     limit = min(12,int(request['batch_size']),max(0,(cap-used-pilot)//RESERVE))
-    rows = [] if blocked else db.execute("SELECT id,path,size_bytes,ext,metadata FROM jobs WHERE state='pending' ORDER BY id LIMIT ?",[limit]).fetchall()
+    rows = [] if blocked else db.execute("SELECT id,path,size_bytes,ext,metadata FROM jobs WHERE state='pending' AND available_after<=unixepoch() ORDER BY id LIMIT ?",[limit]).fetchall()
     batch = uuid.uuid4().hex
     db.executemany("UPDATE jobs SET state='reserved',batch=?,cost=?,started=CURRENT_TIMESTAMP WHERE id=?",[(batch,RESERVE,row[0]) for row in rows])
     db.commit()
@@ -135,8 +198,8 @@ def publish(db):
     dest.mkdir(exist_ok=True)
     db.execute('BEGIN IMMEDIATE')
     try:
-        batches=db.execute("""SELECT batch FROM jobs WHERE batch IS NOT NULL AND published=0
-                              GROUP BY batch HAVING sum(state IN ('reserved','sent'))=0""").fetchall()
+        batches=db.execute("""SELECT coalesce(origin_batch,batch) FROM jobs WHERE coalesce(origin_batch,batch) IS NOT NULL
+                              GROUP BY coalesce(origin_batch,batch) HAVING min(published)=0 AND sum(state IN ('pending','reserved','sent'))=0""").fetchall()
         for (batch,) in batches:
             con=duckdb.connect()
             try:
@@ -145,7 +208,7 @@ def publish(db):
                     input_tokens BIGINT,cached_input_tokens BIGINT,output_tokens BIGINT,elapsed_seconds DOUBLE,
                     standard_api_cost_proxy_usd DOUBLE,state VARCHAR,finished_at TIMESTAMP)""")
                 records=[]
-                for path,size,ext,meta,result,cost,state,ts in db.execute('SELECT path,size_bytes,ext,metadata,result,cost,state,finished FROM jobs WHERE batch=?',[batch]):
+                for path,size,ext,meta,result,cost,state,ts in db.execute('SELECT path,size_bytes,ext,metadata,result,cost,state,finished FROM jobs WHERE coalesce(origin_batch,batch)=?',[batch]):
                     r=json.loads(result)
                     records.append((path,size,MODEL,PROMPT_VERSION,'video' if ext in VIDEO_EXTS else 'photo',meta,
                                     r.get('summary'),r.get('tags'),r.get('input'),r.get('cached'),r.get('output'),
@@ -156,7 +219,7 @@ def publish(db):
                 tmp.replace(dest/(batch+'.parquet'))
             finally:
                 con.close()
-            db.execute('UPDATE jobs SET published=1 WHERE batch=?',[batch])
+            db.execute('UPDATE jobs SET published=1 WHERE coalesce(origin_batch,batch)=?',[batch])
         db.commit()
     except Exception:
         db.rollback()
@@ -169,7 +232,7 @@ def export_metrics(db):
     dest=Path('/var/lib/prometheus/node-exporter/knowledge_index_luna.prom')
     rows=db.execute("SELECT state,count(*),sum(cost),sum(published) FROM jobs GROUP BY state").fetchall()
     costs={state:total/1e6 for state,_,total,_ in rows}
-    settled=costs.get('ok',0)
+    settled=costs.get('ok',0)+db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0]/1e6
     held=sum(costs.get(state,0) for state in ('sent','reserved','unknown'))
     prior=int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])/1e6
     saved=sum(n for state,_,_,n in rows if state=='ok')
@@ -192,6 +255,7 @@ def main():
             UNIQUE(path,size_bytes));
             CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state,id);
             CREATE INDEX IF NOT EXISTS jobs_batch ON jobs(batch);""")
+        migrate(db)
         op=request['op']
         if op=='init':
             if not 0 < request['pilot_microdollars'] <= 1_000_000:
@@ -201,7 +265,7 @@ def main():
             seed(db)
         if op in ('init','status'):
             result=dict(states=dict(db.execute('SELECT state,count(*) FROM jobs GROUP BY state')),
-                        estimated_and_held_usd=(db.execute('SELECT coalesce(sum(cost),0) FROM jobs').fetchone()[0]+int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0]))/1e6)
+                        estimated_and_held_usd=(db.execute('SELECT coalesce(sum(cost),0) FROM jobs').fetchone()[0]+int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])+db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0])/1e6)
         elif op=='recover':
             # Only stale leases qualify. Unsent work is safe to retry. A request
             # that may already have reached the provider keeps its reservation.
@@ -223,7 +287,9 @@ def main():
         elif op=='frames':
             try:result=frames(db,request)
             except (ValueError,OSError,RuntimeError) as e:result={'source_error':type(e).__name__}
-        else:result={'reserve':reserve,'finish':finish}[op](db,request)
+        elif op=='reserve':result=add_context(db,reserve(db,request))
+        elif op=='finish':result=finish(db,request)
+        else:raise ValueError('Unexpected operation')
         if op in ('init','publish','reserve'):
             export_metrics(db)
         print(json.dumps(result,ensure_ascii=False))
