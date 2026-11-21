@@ -45,6 +45,7 @@ spec:
             - --image-max-tokens
             - '1024'
             - --jinja
+            - --no-webui
             - --cache-type-k
             - q8_0
             - --cache-type-v
@@ -84,28 +85,3 @@ spec:
   selector: {app: photo-bonsai}
   ports:
     - {name: http, port: 8080, targetPort: http}
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: photo-bonsai-worker-only
-  namespace: immich-pilot
-spec:
-  ipAllowList:
-    sourceRange: [192.168.4.175/32]
----
-apiVersion: traefik.io/v1alpha1
-kind: IngressRoute
-metadata:
-  name: photo-bonsai
-  namespace: immich-pilot
-spec:
-  entryPoints: [websecure]
-  routes:
-    - match: Host(`photo-bonsai.app.home.panderosystems.com`) && (Path(`/health`) || Path(`/v1/chat/completions`))
-      kind: Rule
-      middlewares:
-        - {name: photo-bonsai-worker-only}
-      services:
-        - {name: photo-bonsai, port: 8080}
-  tls: {}

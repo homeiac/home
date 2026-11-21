@@ -13,11 +13,13 @@ import time
 import urllib.request
 
 
-ENDPOINT = 'https://photo-bonsai.app.home.panderosystems.com'
+ENDPOINT = 'http://127.0.0.1:18082'
 MODEL = 'bonsai-27b'
 UNITS = ('knowledge-index-enrich.service', 'photo-enrichment-context.service')
 BACKUP = Path('/opt/knowledge-index/backups/photo-bonsai-v1')
 CONTEXT = Path('/opt/photo-enrichment/context')
+BRIDGE = Path('/opt/knowledge-index/photo-bonsai-bridge.py')
+BRIDGE_UNIT = Path('/etc/systemd/system/photo-bonsai-bridge.service')
 CONTEXT_SOURCES = {
     'photo-enrich.py': 'eaaee8dbd2ddd6effb104c268e0121f0064aa6d462e9144c59ab4f54f90c0ac9',
     'photo_enrichment/context_worker.py': '1d75045363317006f882d53f1559ae4982fa541da87552357abd4dbc2d3ec93e',
@@ -66,6 +68,24 @@ def restart_workers():
     time.sleep(5)
     for unit in UNITS:
         systemctl('is-active', '--quiet', unit)
+
+
+def prepare_bridge(source):
+    compile(source, str(BRIDGE), 'exec')
+    replace(BRIDGE, source.encode())
+    replace(BRIDGE_UNIT, f'''[Unit]
+Description=Loopback bridge to photo Bonsai in VM 105
+After=pve-cluster.service
+
+[Service]
+ExecStart=/usr/bin/python3 {BRIDGE}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+'''.encode())
+    systemctl('daemon-reload')
+    systemctl('enable', '--now', BRIDGE_UNIT.name)
 
 
 def restore():
@@ -133,17 +153,25 @@ def switch(files):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['switch', 'restore'])
+    parser.add_argument('action', choices=['prepare', 'switch', 'restore'])
     args = parser.parse_args()
     if os.environ.get('KI_BONSAI_REMOTE') == '1':
         os.umask(0o077)
-        switch(json.load(sys.stdin)) if args.action == 'switch' else restore()
+        if args.action == 'prepare':
+            prepare_bridge(sys.stdin.read())
+        elif args.action == 'switch':
+            switch(json.load(sys.stdin))
+        else:
+            restore()
         return
     root = Path(__file__).parent
-    files = {relative: (root / relative).read_text() for relative in CONTEXT_SOURCES}
+    if args.action == 'prepare':
+        data = (root / 'host/photo-bonsai-bridge.py').read_text()
+    else:
+        data = json.dumps({relative: (root / relative).read_text() for relative in CONTEXT_SOURCES})
     remote = 'KI_BONSAI_REMOTE=1 python3 -c ' + shlex.quote(Path(__file__).read_text()) + ' ' + args.action
     subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', os.environ['CB_HOST'], remote],
-                   input=json.dumps(files), text=True, check=True)
+                   input=data, text=True, check=True)
 
 
 if __name__ == '__main__':
