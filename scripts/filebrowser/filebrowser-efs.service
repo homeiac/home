@@ -1,0 +1,23 @@
+[Unit]
+Description=Read-only on-demand EFS view for FileBrowser
+After=local-fs.target
+Before=pve-container@104.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/filebrowser-efs-view.py mount
+ExecStartPost=/usr/local/sbin/filebrowser-wait-efs-view
+ExecStop=/bin/umount /mnt/filebrowser/BitLocker-Decrypted
+RuntimeDirectory=filebrowser-efs
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitCORE=0
+MemoryMax=512M
+TasksMax=64
+NoNewPrivileges=true
+TimeoutStopSec=15
+# This FUSE mount must be in the host mount namespace for the LXC bind mount.
+# Do not add PrivateMounts/ProtectSystem/PrivateTmp here.
+
+[Install]
+WantedBy=multi-user.target

@@ -29,9 +29,18 @@ if [[ -f /etc/pve/lxc/104.conf ]]; then
     backup_dir=/root/filebrowser-backups/$(date +%Y%m%dT%H%M%S)
     mkdir -p "$backup_dir"
     cp /etc/pve/lxc/104.conf "$backup_dir/104.conf"
-    pct set 104 -mp2 "$target,mp=/srv/files/BitLocker,ro=1,backup=0"
+    browser_target=$target
+    if [[ -f /etc/systemd/system/filebrowser-efs.service ]]; then
+        systemctl start filebrowser-efs
+        /usr/local/sbin/filebrowser-wait-efs-view
+        browser_target=/mnt/filebrowser/BitLocker-Decrypted
+    fi
+    pct set 104 -mp2 "$browser_target,mp=/srv/files/BitLocker,ro=1,backup=0"
     # Refresh the bind mount even if the container previously saw an empty directory.
     pct shutdown 104 --timeout 30
     pct start 104
 fi
 echo 'BitLocker is unlocked and mounted read-only. Refresh FileBrowser after it restarts.'
+if [[ -f /etc/systemd/system/filebrowser-efs.service ]]; then
+    echo 'For EFS-encrypted files, also run the private unlock-efs.sh command.'
+fi
