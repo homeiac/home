@@ -1,0 +1,13 @@
+[Unit]
+Description=Reconcile user caption tags from saved Knowledge Index photos
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/knowledge-index-caption-tags.json
+
+[Service]
+Type=oneshot
+ExecStart=/opt/knowledge-index/venv/bin/python /opt/knowledge-index/reconcile-caption-tags.py --config /etc/knowledge-index-caption-tags.json --apply
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=240
