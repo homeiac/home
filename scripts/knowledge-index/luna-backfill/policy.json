@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "runner": "mac",
   "model": "gpt-6-luna",
   "estimated_limit_usd": 250,
   "batch_size": 12,

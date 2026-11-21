@@ -1,4 +1,4 @@
-"""Mac client for the Git-controlled Luna sweep. Piglet owns the budget and all writes."""
+"""Submit the Git-controlled Luna sweep. Piglet owns the budget and all writes."""
 from concurrent.futures import ThreadPoolExecutor
 import base64
 import fcntl
@@ -11,7 +11,8 @@ import tempfile
 import time
 import urllib.request
 
-DIR=Path(__file__).resolve().parent
+DIR=Path(os.environ.get('KI_LUNA_STATE', Path(__file__).resolve().parent))
+RUNNER=os.environ.get('KI_LUNA_RUNNER','mac')
 POLICY='https://raw.githubusercontent.com/homeiac/home/codex/photo-enrichment-217/scripts/knowledge-index/luna-backfill/policy.json'
 SCHEMA={'type':'object','properties':{'summary':{'type':'string'},'tags':{'type':'array','items':{'type':'string'}}},
         'required':['summary','tags'],'additionalProperties':False}
@@ -24,9 +25,15 @@ PROMPT=("Write a factual searchable caption in one or two sentences and up to ei
 
 
 def host(**request):
-    target=os.environ['CB_HOST']
-    proc=subprocess.run(['ssh','-T','-o','BatchMode=yes','-o','ConnectTimeout=10',target,
-                         '/opt/photo-enrichment/context/venv/bin/python /opt/knowledge-index/luna-backfill/host.py'],
+    cmd=['ssh','-T','-o','BatchMode=yes','-o','ConnectTimeout=10']
+    if RUNNER=='still-fawn':
+        cmd.extend(['-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes',
+                    '-o',f'UserKnownHostsFile={DIR / "piglet_known_hosts"}',
+                    '-i',str(DIR/'piglet_ed25519'),os.environ['CB_HOST']])
+    else:
+        cmd.extend([os.environ['CB_HOST'],
+                    '/opt/photo-enrichment/context/venv/bin/python /opt/knowledge-index/luna-backfill/host.py'])
+    proc=subprocess.run(cmd,
                         input=json.dumps(request),text=True,capture_output=True,timeout=240)
     if proc.returncode:
         raise RuntimeError('Piglet operation failed: '+request['op'])
@@ -70,6 +77,16 @@ def process(batch,item):
     return result['state']
 
 
+def read_policy():
+    with urllib.request.urlopen(POLICY,timeout=20) as resp:
+        policy=json.load(resp)
+    if not policy['enabled'] or policy.get('runner','mac')!=RUNNER:
+        return None
+    if policy['model']!='gpt-6-luna' or not 0<policy['estimated_limit_usd']<=250:
+        raise ValueError('Invalid policy')
+    return policy
+
+
 def main():
     os.umask(0o077)
     lock=(DIR/'worker.lock').open('a')
@@ -77,12 +94,13 @@ def main():
     except BlockingIOError:return
     # Re-read the Git policy after each small batch. Network/policy failures
     # suspend submissions and launchd retries later.
+    if not read_policy():
+        return
     host(op='recover')
     host(op='publish')
     while True:
-        with urllib.request.urlopen(POLICY,timeout=20) as resp: policy=json.load(resp)
-        if policy['enabled'] is not True:return
-        if policy['model']!='gpt-6-luna' or not 0<policy['estimated_limit_usd']<=250:raise ValueError('Invalid policy')
+        policy=read_policy()
+        if not policy:return
         grant=host(op='reserve',estimated_limit_usd=policy['estimated_limit_usd'],batch_size=policy['batch_size'])
         if not grant['items']:
             print('Idle, exhausted or blocked. Held plus estimated USD',grant['held_or_used_usd'],flush=True)

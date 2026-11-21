@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fixed, stdin-only helper for the still-fawn SSH account on Piglet.
+set -eu
+test "$#" -eq 0
+export KI_LUNA_BRIDGE=1
+exec /opt/photo-enrichment/context/venv/bin/python -I /opt/knowledge-index/luna-backfill/host.py

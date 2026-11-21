@@ -1,0 +1,10 @@
+[Unit]
+Description=Resume Luna work after startup or a transient failure
+
+[Timer]
+OnBootSec=1min
+OnCalendar=*:0/5
+Unit=knowledge-index-luna.service
+
+[Install]
+WantedBy=timers.target

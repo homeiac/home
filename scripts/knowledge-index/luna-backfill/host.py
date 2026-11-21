@@ -293,6 +293,8 @@ def export_metrics(db):
         content.append(f'knowledge_index_luna_jobs{{state="{state}"}} {counts.get(state, 0)}')
     unpublished = db.execute("SELECT count(*) FROM jobs WHERE state='ok' AND published=0").fetchone()[0]
     blocked = db.execute("SELECT EXISTS(SELECT 1 FROM config WHERE key='blocked' AND value!='')").fetchone()[0]
+    runner = db.execute("SELECT value FROM config WHERE key='runner'").fetchone()
+    content.append(f'knowledge_index_luna_runner {2 if runner and runner[0]=="still-fawn" else 1}')
     content.extend([f'knowledge_index_luna_awaiting_publish {unpublished}', f'knowledge_index_luna_blocked {blocked}',
                     f'knowledge_index_luna_heartbeat_timestamp_seconds {int(time.time())}'])
     tmp=dest.with_name(dest.name+'.'+uuid.uuid4().hex+'.tmp')
@@ -304,6 +306,11 @@ def export_metrics(db):
 def main():
     ROOT.mkdir(parents=True,exist_ok=True)
     request=json.load(sys.stdin)
+    op=request['op']
+    if os.environ.get('KI_LUNA_BRIDGE') == '1' and op not in {
+        'status','recover','reserve','frames','start','finish','release','publish'
+    }:
+        raise ValueError('Unexpected bridge operation')
     with sqlite3.connect(ROOT/'luna-ledger.sqlite3',timeout=60) as db:
         db.executescript("""CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY,value TEXT);
             CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY,path TEXT,size_bytes INTEGER,ext TEXT,metadata TEXT,
@@ -312,7 +319,6 @@ def main():
             CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state,id);
             CREATE INDEX IF NOT EXISTS jobs_batch ON jobs(batch);""")
         migrate(db)
-        op=request['op']
         if op=='init':
             if not 0 < request['pilot_microdollars'] <= 1_000_000:
                 raise ValueError('Invalid prior pilot estimate')
@@ -324,6 +330,9 @@ def main():
                         estimated_and_held_usd=(db.execute('SELECT coalesce(sum(cost),0) FROM jobs').fetchone()[0]+int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])+db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0])/1e6)
         elif op=='recover':
             result=recover(db)
+            runner='still-fawn' if os.environ.get('KI_LUNA_BRIDGE')=='1' else 'mac'
+            with db:
+                db.execute("INSERT OR REPLACE INTO config VALUES ('runner',?)",[runner])
         elif op=='start':
             with db:
                 count=db.execute("UPDATE jobs SET state='sent',started=CURRENT_TIMESTAMP WHERE id=? AND batch=? AND state='reserved'",[request['id'],request['batch']]).rowcount

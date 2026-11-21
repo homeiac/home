@@ -361,14 +361,21 @@ def panels():
         location("Mac GPU · Bonsai", [(host_value("media_pipeline_backend_in_flight", "metal"), "Active requests"),
                                       (host_value("media_pipeline_mac_request_limit"), "Available request capacity")], 6,
                  "Piglet sends distinct pending items to the Mac Metal worker. Zero capacity means it is currently unavailable for backfill."),
-        location("Mac client → Enterprise Luna", [(luna_value("knowledge_index_luna_jobs", "sent"), "Submitted"),
+        location("Submission client → Enterprise Luna", [(luna_value("knowledge_index_luna_runner", fresh=False), "Last active client"),
+                                                (luna_value("knowledge_index_luna_jobs", "sent"), "Submitted"),
                                                 (luna_value("knowledge_index_luna_jobs", "reserved"), "Preparing"),
                                                 (luna_value("knowledge_index_luna_jobs", "unknown", False), "Requests with projected cost"),
                                                 (luna_value("knowledge_index_luna_blocked", fresh=False), "Accounting hold (1 = paused)")], 12,
-                 "The Mac client submits to Enterprise Codex. Submitted and preparing require a recent report. The last recorded accounting hold remains visible until the ledger clears it."),
+                 "The client submits to Enterprise Codex. Submitted and preparing require a recent report. The last recorded client and accounting hold remain visible when idle."),
         location("Piglet · Luna publication", [(luna_value("knowledge_index_luna_jobs", "pending", False), "Pending"),
                                               (luna_value("knowledge_index_luna_awaiting_publish"), "Completed, awaiting Parquet")], 18,
                  "Luna has a separate queue and Parquet dataset on Piglet. The Bonsai queue and its finish estimate appear above.")]
+    locations[3]["fieldConfig"]["overrides"].append({
+        "matcher": {"id": "byName", "options": "Last active client"},
+        "properties": [{"id": "mappings", "value": [{"type": "value", "options": {
+            "1": {"text": "Mac"}, "2": {"text": "still-fawn"}
+        }}]}],
+    })
     coverage = 'knowledge_index_caption_coverage{instance=~"$instance",coverage='
     snapshot_fresh = (' and on(instance,job) (knowledge_index_exporter_success' + INST + ' == 1) '
                       'and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds' + INST + ' < 900)')
@@ -446,7 +453,7 @@ def pipeline_panels():
     graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_context_edge_info'+INST+')'
     # Luna's comparison queue and writer are distinct from the local Bonsai stream.
     luna_flow = [("luna_queue", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="pending"})', "Piglet Luna queue (items)"),
-                 ("luna_client", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="reserved"})', "Mac Luna client (reserved)"),
+                 ("luna_client", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="reserved"})', "Luna submission client (reserved)"),
                  ("luna_cloud", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="sent"})', "Enterprise Luna (submitted)"),
                  ("luna_write", 'max(knowledge_index_luna_saved'+INST+')', "Piglet Luna Parquet (captions)")]
     for index, (ident, expression, title) in enumerate(luna_flow):

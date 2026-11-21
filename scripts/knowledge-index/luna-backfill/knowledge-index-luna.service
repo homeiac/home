@@ -1,0 +1,23 @@
+[Unit]
+Description=Knowledge Index Luna worker on still-fawn
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ki-luna
+Group=ki-luna
+WorkingDirectory=/var/lib/ki-luna
+Environment=HOME=/var/lib/ki-luna
+Environment=KI_LUNA_STATE=/var/lib/ki-luna
+Environment=KI_LUNA_RUNNER=still-fawn
+Environment=PATH=/opt/knowledge-index/luna-backfill/bin:/usr/bin:/bin
+EnvironmentFile=/etc/knowledge-index-luna.conf
+UMask=0077
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ki-luna
+NoNewPrivileges=true
+ExecCondition=/opt/knowledge-index/luna-backfill/bin/codex login status
+ExecStart=/usr/bin/python3 /opt/knowledge-index/luna-backfill/worker.py
+TimeoutStartSec=infinity
