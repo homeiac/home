@@ -16,6 +16,8 @@ The service allocates no GPU on still-fawn. It submits to Enterprise Codex with 
 
 ## Measure a concurrency change
 
-Set `parallel` in the Git policy. The worker reads each new commit between batches. The shared ledger supports up to 24 reservations per batch and the worker allows up to 20 concurrent tasks. Frame preparation on Piglet has a separate four-task limit. The $250 budget includes reserved work and every settled request.
+Set `parallel`, `batch_size`, and `frame_slots` in the Git policy. The worker reads each new commit between batches. The shared ledger supports up to 48 reservations per batch and the worker allows up to 20 concurrent tasks. The $250 budget includes reserved work and every settled request.
 
 Read the service journal with `journalctl -u knowledge-index-luna.service -o cat --since <trial-start>` on still-fawn and pass it to `python3 scripts/knowledge-index/luna-backfill/measure.py`. It reports media mix, saved throughput, estimated cost per caption and preparation and model-response latency for each tier. On Nov 21, 4, 8 and 20 slots delivered approximately 31, 53 and 66 saves/min. At 20, frame preparation and time waiting for it took longer than the median model request. The samples had different photo/video mixes. Keep the current placement while Piglet preparation limits throughput.
+
+The follow-up held request concurrency at 20. Four frame slots and 24-job batches saved 62.6/min. Six frame slots and 24-job batches saved 55.9/min. Four frame slots and 48-job batches saved 69.3/min. At a common 85% photo and 15% video mix, estimated cost was $0.000583 per caption with 24 jobs and $0.000581 with 48. Bonsai saved 112 and 128 photos in equal four-minute windows before and during the 48-job trial. These are sequential production samples. The production policy uses 20 request slots, four frame slots, and 48-job batches.
