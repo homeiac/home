@@ -236,6 +236,10 @@ def export_metrics(db):
     held=sum(costs.get(state,0) for state in ('sent','reserved','unknown'))
     prior=int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])/1e6
     saved=sum(n for state,_,_,n in rows if state=='ok')
+    # The original Parquet file remains readable until its corrected batch is
+    # atomically replaced. Count those captions throughout the retry.
+    saved+=db.execute("""SELECT count(*) FROM previous_captions h JOIN jobs j ON j.id=h.job_id
+                         WHERE h.original_state='ok' AND j.published=0""").fetchone()[0]
     content=[f'knowledge_index_luna_saved {saved}',
              f'knowledge_index_luna_proxy_usd {settled}',
              f'knowledge_index_luna_budget_held_usd {prior+held}']
