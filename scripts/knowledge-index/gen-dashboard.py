@@ -70,15 +70,61 @@ def shift(items, dy):
     return items
 
 
+SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
+THROUGHPUT_HEIGHT = 8
+# Recorded rollout times in UTC. Both reference windows end on Nov 20 Pacific.
+GEMMA_REFERENCE = 1795240800
+STANDALONE_REFERENCE = 1795242330
+GEMMA_END = 1795241400
+STANDALONE_START = 1795241606
+STANDALONE_END = 1795242360
+NATIVE_START = 1795242820
+
+
+def summary_pace(at=None):
+    """Successful summary rows committed per second over ten minutes."""
+    selector = f'media_pipeline_persisted_items_total{{status="ok",{SUMMARY_SELECTION}}}[10m]'
+    if at is not None:
+        selector += f' @ {at}'
+    return f'max by(enricher) (sum by(instance,enricher) (rate({selector})))'
+
+
+def throughput_panels():
+    labels = ("Gemma in Ollama", "Standalone Bonsai", "Bonsai in Ollama")
+    live = f'({summary_pace()}) * 60'
+    comparisons = [(f'({summary_pace(GEMMA_REFERENCE)}) * 60', labels[0]),
+                   (f'({summary_pace(STANDALONE_REFERENCE)}) * 60', labels[1]),
+                   (f'({live}) and on() (vector(time()) >= {NATIVE_START})', labels[2] + ' · live')]
+    comparison = _panel('stat', 'Saved summaries/min · before and after', comparisons, 0, 5, 10, 7,
+                        decimals=1, extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
+                                                       'reduceOptions': {'calcs': ['lastNotNull']}}},
+                        description='All three values use ten minutes of successful Parquet writes. Reference windows ended Nov 20 at 10:00 pm and 10:25:30 pm Pacific. The live value feeds the ETA. Workload mix and shared-server traffic vary.')
+    for target in comparison['targets']:
+        target.update(instant=True, range=False)
+    comparison['fieldConfig']['defaults']['noValue'] = 'No sample'
+    phases = [f'(vector(time()) < {GEMMA_END})',
+              f'((vector(time()) >= {STANDALONE_START}) and (vector(time()) < {STANDALONE_END}))',
+              f'(vector(time()) >= {NATIVE_START})']
+    history = series('Summary throughput over time', [(f'({live}) and on() {phase}', label)
+                     for phase, label in zip(phases, labels)], 10, 5, 14, 7, decimals=1,
+                     description='Ten-minute rate of successful Parquet writes. Gaps separate rollout phases. Early points after a cutover can still include pauses from the previous ten minutes.')
+    for target in history['targets']:
+        target.update(instant=False, range=True, interval='30s')
+    history['fieldConfig']['defaults'].update(min=0, custom={'drawStyle': 'line', 'lineWidth': 2, 'showPoints': 'never', 'spanNulls': False})
+    for label, color in zip(labels, ('orange', 'blue', 'green')):
+        history['fieldConfig']['overrides'].append({'matcher': {'id': 'byName', 'options': label},
+            'properties': [{'id': 'color', 'value': {'mode': 'fixed', 'fixedColor': color}}]})
+    return [comparison, history]
+
+
 def work_remaining_panels():
     """Queue estimates and USE signals for the summary pipeline on Piglet."""
-    selection = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
+    selection = SUMMARY_SELECTION
     fresh = ('(knowledge_index_exporter_success' + INST + ' == 1) and on(instance,job) '
              '(time() - node_textfile_mtime_seconds{file=~".*/knowledge_index[.]prom",instance=~"$instance"} < 900)')
     queue = (f'max by(enricher) (media_summaries_queue{{{selection}}} '
              f'and on(instance,job) ({fresh}))')
-    pace = ('clamp_min(max by(enricher) (deriv(media_summaries_rows'
-            f'{{status="ok",{selection}}}[1h]) and on(instance,job) ({fresh})), 0)')
+    pace = summary_pace()
     running = ('max by(enricher) (media_pipeline_running{' + selection + '} and on(instance,enricher,job) '
                '(time() - media_pipeline_heartbeat_timestamp_seconds{' + selection + '} < 60))')
     eta = (f'(({queue} / ({pace} > 0)) and ({running} == 1)) or ({queue} == 0) '
@@ -96,8 +142,8 @@ def work_remaining_panels():
               "0": {"text": "Queue clear", "color": "green"}}
     p = [row("Work remaining & bottleneck", 0),
          stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="Indexed photos and videos awaiting a summary, by selected enricher. Counts use the latest successful export only."),
-         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last hour’s successful summary pace. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
-         stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Rate of growth in successful rows saved to Parquet over the last hour."),
+         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
+         stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Successful rows saved to Parquet over the last ten minutes."),
          stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured worker time over 30 minutes. Model requests include queueing, transport and inference. Compare resource signals below before attributing the delay to hardware.")]
     p += [stat("Photo context still to do", context, 0, 5, w=5, unit="locale"),
           stat("Photo context finish estimate", f'({context} / ({context_pace} > 0)) or ({context} == 0) or ({context} > 0) * 0 - 1', 5, 5, w=5, unit="s", mappings=no_eta, description="Backlog divided by the last hour’s increase in completed jobs. New arrivals and retries can extend the estimate."),
@@ -238,7 +284,9 @@ def panels():
     ollama = next(i for i, panel in enumerate(p) if panel['title'] == 'Ollama pod')
     p.insert(ollama + 1, stat("Standalone Bonsai", 'kube_deployment_status_replicas_available{namespace="immich-pilot",deployment="photo-bonsai"}',
                              9, p[ollama]['gridPos']['y'], w=3, mappings=YN))
-    return overview + shift(p, 17)
+    intro = [panel for panel in overview if panel['gridPos']['y'] < 5]
+    details = [panel for panel in overview if panel['gridPos']['y'] >= 5]
+    return intro + throughput_panels() + shift(details, THROUGHPUT_HEIGHT) + shift(p, 17 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():

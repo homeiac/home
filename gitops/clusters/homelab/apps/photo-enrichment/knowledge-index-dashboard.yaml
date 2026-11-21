@@ -106,7 +106,7 @@ data:
           },
           "targets": [
             {
-              "expr": "((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) / (clamp_min(max by(enricher) (deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h]) and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))), 0) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) == 0) or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) * 0 - 1",
+              "expr": "((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) / (max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m]))) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) == 0) or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) * 0 - 1",
               "legendFormat": "{{enricher}}",
               "refId": "A",
               "instant": true,
@@ -164,7 +164,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Current backlog divided by the last hour\u2019s successful summary pace. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
+          "description": "Current backlog divided by the last ten minutes of successful Parquet writes. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
         },
         {
           "id": 139,
@@ -182,7 +182,7 @@ data:
           },
           "targets": [
             {
-              "expr": "clamp_min(max by(enricher) (deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h]) and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))), 0) * 60",
+              "expr": "max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m]))) * 60",
               "legendFormat": "{{enricher}}",
               "refId": "A",
               "instant": true,
@@ -218,7 +218,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Rate of growth in successful rows saved to Parquet over the last hour."
+          "description": "Successful rows saved to Parquet over the last ten minutes."
         },
         {
           "id": 140,
@@ -276,6 +276,197 @@ data:
           "description": "Largest share of measured worker time over 30 minutes. Model requests include queueing, transport and inference. Compare resource signals below before attributing the delay to hardware."
         },
         {
+          "id": 151,
+          "type": "stat",
+          "title": "Saved summaries/min \u00b7 before and after",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 10,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "(max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795240800)))) * 60",
+              "legendFormat": "Gemma in Ollama",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "(max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795242330)))) * 60",
+              "legendFormat": "Standalone Bonsai",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795242820)",
+              "legendFormat": "Bonsai in Ollama \u00b7 live",
+              "refId": "C",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "No sample"
+            },
+            "overrides": []
+          },
+          "options": {
+            "textMode": "value_and_name",
+            "orientation": "vertical",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "description": "All three values use ten minutes of successful Parquet writes. Reference windows ended Nov 20 at 10:00 pm and 10:25:30 pm Pacific. The live value feeds the ETA. Workload mix and shared-server traffic vary."
+        },
+        {
+          "id": 152,
+          "type": "timeseries",
+          "title": "Summary throughput over time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 14,
+            "x": 10,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) < 1795241400)",
+              "legendFormat": "Gemma in Ollama",
+              "refId": "A",
+              "instant": false,
+              "range": true,
+              "interval": "30s"
+            },
+            {
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() ((vector(time()) >= 1795241606) and (vector(time()) < 1795242360))",
+              "legendFormat": "Standalone Bonsai",
+              "refId": "B",
+              "instant": false,
+              "range": true,
+              "interval": "30s"
+            },
+            {
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795242820)",
+              "legendFormat": "Bonsai in Ollama",
+              "refId": "C",
+              "instant": false,
+              "range": true,
+              "interval": "30s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Gemma in Ollama"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "orange"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Standalone Bonsai"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "blue"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Bonsai in Ollama"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Ten-minute rate of successful Parquet writes. Gaps separate rollout phases. Early points after a cutover can still include pauses from the previous ten minutes."
+        },
+        {
           "id": 141,
           "type": "stat",
           "title": "Photo context still to do",
@@ -287,7 +478,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 5
+            "y": 13
           },
           "targets": [
             {
@@ -339,7 +530,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 5
+            "y": 13
           },
           "targets": [
             {
@@ -415,7 +606,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 5
+            "y": 13
           },
           "targets": [
             {
@@ -468,7 +659,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 5
+            "y": 13
           },
           "targets": [
             {
@@ -521,7 +712,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 5
+            "y": 13
           },
           "targets": [
             {
@@ -572,7 +763,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 9
+            "y": 17
           },
           "panels": []
         },
@@ -588,7 +779,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 10
+            "y": 18
           },
           "targets": [
             {
@@ -672,7 +863,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 10
+            "y": 18
           },
           "targets": [
             {
@@ -749,7 +940,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 10
+            "y": 18
           },
           "targets": [
             {
@@ -819,7 +1010,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 17
+            "y": 25
           },
           "panels": []
         },
@@ -835,7 +1026,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 18
+            "y": 26
           },
           "targets": [
             {
@@ -886,7 +1077,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 18
+            "y": 26
           },
           "targets": [
             {
@@ -937,7 +1128,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 18
+            "y": 26
           },
           "targets": [
             {
@@ -988,7 +1179,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 18
+            "y": 26
           },
           "targets": [
             {
@@ -1039,7 +1230,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 18
+            "y": 26
           },
           "targets": [
             {
@@ -1090,7 +1281,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 18
+            "y": 26
           },
           "targets": [
             {
@@ -1141,7 +1332,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 22
+            "y": 30
           },
           "targets": [
             {
@@ -1191,7 +1382,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 22
+            "y": 30
           },
           "targets": [
             {
@@ -1240,7 +1431,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 22
+            "y": 30
           },
           "targets": [
             {
@@ -1290,7 +1481,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 22
+            "y": 30
           },
           "targets": [
             {
@@ -1341,7 +1532,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 22
+            "y": 30
           },
           "targets": [
             {
@@ -1391,7 +1582,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 26
+            "y": 34
           },
           "targets": [
             {
@@ -1445,7 +1636,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 26
+            "y": 34
           },
           "targets": [
             {
@@ -1496,7 +1687,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 33
+            "y": 41
           },
           "panels": []
         },
@@ -1512,7 +1703,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 34
+            "y": 42
           },
           "targets": [
             {
@@ -1615,7 +1806,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 34
+            "y": 42
           },
           "targets": [
             {
@@ -1667,7 +1858,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 34
+            "y": 42
           },
           "targets": [
             {
@@ -1728,7 +1919,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 38
+            "y": 46
           },
           "targets": [
             {
@@ -1833,7 +2024,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 48
+            "y": 56
           },
           "targets": [
             {
@@ -1887,7 +2078,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 48
+            "y": 56
           },
           "targets": [
             {
@@ -1998,7 +2189,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 54
+            "y": 62
           },
           "targets": [
             {
@@ -2052,7 +2243,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 54
+            "y": 62
           },
           "targets": [
             {
@@ -2106,7 +2297,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 54
+            "y": 62
           },
           "targets": [
             {
@@ -2160,7 +2351,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 61
+            "y": 69
           },
           "targets": [
             {
@@ -2222,7 +2413,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 61
+            "y": 69
           },
           "targets": [
             {
@@ -2275,7 +2466,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 68
+            "y": 76
           },
           "targets": [
             {
@@ -2337,7 +2528,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 68
+            "y": 76
           },
           "targets": [
             {
@@ -2387,7 +2578,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 75
+            "y": 83
           },
           "panels": []
         },
@@ -2403,7 +2594,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 76
+            "y": 84
           },
           "targets": [
             {
@@ -2496,7 +2687,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 76
+            "y": 84
           },
           "targets": [
             {
@@ -2557,7 +2748,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 76
+            "y": 84
           },
           "targets": [
             {
@@ -2610,7 +2801,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 76
+            "y": 84
           },
           "targets": [
             {
@@ -2663,7 +2854,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 80
+            "y": 88
           },
           "targets": [
             {
@@ -2725,7 +2916,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 80
+            "y": 88
           },
           "targets": [
             {
@@ -2811,7 +3002,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 87
+            "y": 95
           },
           "targets": [
             {
@@ -2866,7 +3057,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 87
+            "y": 95
           },
           "targets": [
             {
@@ -2919,7 +3110,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 94
+            "y": 102
           },
           "targets": [
             {
@@ -2973,7 +3164,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 94
+            "y": 102
           },
           "targets": [
             {
@@ -3026,7 +3217,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 94
+            "y": 102
           },
           "targets": [
             {
@@ -3077,7 +3268,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 120
+            "y": 128
           },
           "panels": []
         },
@@ -3093,7 +3284,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 121
+            "y": 129
           },
           "targets": [
             {
@@ -3162,7 +3353,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 121
+            "y": 129
           },
           "targets": [
             {
@@ -3215,7 +3406,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 121
+            "y": 129
           },
           "targets": [
             {
@@ -3268,7 +3459,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 121
+            "y": 129
           },
           "targets": [
             {
@@ -3322,7 +3513,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 125
+            "y": 133
           },
           "targets": [
             {
@@ -3376,7 +3567,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 125
+            "y": 133
           },
           "targets": [
             {
@@ -3426,7 +3617,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 101
+            "y": 109
           },
           "panels": []
         },
@@ -3442,7 +3633,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 102
+            "y": 110
           },
           "targets": [
             {
@@ -3491,7 +3682,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 102
+            "y": 110
           },
           "targets": [
             {
@@ -3545,7 +3736,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 109
+            "y": 117
           },
           "targets": [
             {
@@ -3609,7 +3800,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 109
+            "y": 117
           },
           "targets": [
             {
@@ -3658,7 +3849,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 109
+            "y": 117
           },
           "targets": [
             {
@@ -3707,7 +3898,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 109
+            "y": 117
           },
           "targets": [
             {
@@ -3764,7 +3955,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 113
+            "y": 121
           },
           "targets": [
             {
@@ -3813,7 +4004,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 113
+            "y": 121
           },
           "targets": [
             {
@@ -3859,7 +4050,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 132
+            "y": 140
           },
           "panels": []
         },
@@ -3875,7 +4066,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 133
+            "y": 141
           },
           "targets": [
             {
@@ -3925,7 +4116,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 133
+            "y": 141
           },
           "targets": [
             {
@@ -3979,7 +4170,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 133
+            "y": 141
           },
           "targets": [
             {
@@ -4028,7 +4219,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 133
+            "y": 141
           },
           "targets": [
             {
@@ -4077,7 +4268,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 133
+            "y": 141
           },
           "targets": [
             {
@@ -4127,7 +4318,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 133
+            "y": 141
           },
           "targets": [
             {
@@ -4176,7 +4367,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 137
+            "y": 145
           },
           "targets": [
             {
@@ -4240,7 +4431,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 137
+            "y": 145
           },
           "targets": [
             {
@@ -4289,7 +4480,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 137
+            "y": 145
           },
           "targets": [
             {
@@ -4339,7 +4530,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 137
+            "y": 145
           },
           "targets": [
             {
@@ -4388,7 +4579,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 137
+            "y": 145
           },
           "targets": [
             {
@@ -4437,7 +4628,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 137
+            "y": 145
           },
           "targets": [
             {
@@ -4490,7 +4681,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 141
+            "y": 149
           },
           "targets": [
             {
@@ -4549,7 +4740,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 141
+            "y": 149
           },
           "targets": [
             {
@@ -4598,7 +4789,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 141
+            "y": 149
           },
           "targets": [
             {
@@ -4645,7 +4836,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 148
+            "y": 156
           },
           "panels": []
         },
@@ -4661,7 +4852,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 149
+            "y": 157
           },
           "targets": [
             {
@@ -4715,7 +4906,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 149
+            "y": 157
           },
           "targets": [
             {
@@ -4765,7 +4956,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 149
+            "y": 157
           },
           "targets": [
             {
@@ -4823,7 +5014,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 149
+            "y": 157
           },
           "targets": [
             {
@@ -4873,7 +5064,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 149
+            "y": 157
           },
           "targets": [
             {
@@ -4931,7 +5122,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 149
+            "y": 157
           },
           "targets": [
             {
@@ -4985,7 +5176,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 153
+            "y": 161
           },
           "targets": [
             {
@@ -5053,7 +5244,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 153
+            "y": 161
           },
           "targets": [
             {
@@ -5103,7 +5294,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 153
+            "y": 161
           },
           "targets": [
             {
@@ -5162,7 +5353,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 153
+            "y": 161
           },
           "targets": [
             {
@@ -5212,7 +5403,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 153
+            "y": 161
           },
           "targets": [
             {
@@ -5261,7 +5452,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 153
+            "y": 161
           },
           "targets": [
             {
@@ -5310,7 +5501,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5379,7 +5570,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5447,7 +5638,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5515,7 +5706,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5579,7 +5770,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5630,7 +5821,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5681,7 +5872,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 157
+            "y": 165
           },
           "targets": [
             {
@@ -5731,7 +5922,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 161
+            "y": 169
           },
           "targets": [
             {
@@ -5780,7 +5971,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 161
+            "y": 169
           },
           "targets": [
             {
@@ -5834,7 +6025,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 168
+            "y": 176
           },
           "targets": [
             {
@@ -5888,7 +6079,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 168
+            "y": 176
           },
           "targets": [
             {
@@ -5934,7 +6125,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 175
+            "y": 183
           },
           "panels": []
         },
@@ -5950,7 +6141,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 176
+            "y": 184
           },
           "targets": [
             {
@@ -6018,7 +6209,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 176
+            "y": 184
           },
           "targets": [
             {
@@ -6075,7 +6266,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 176
+            "y": 184
           },
           "targets": [
             {
@@ -6124,7 +6315,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 176
+            "y": 184
           },
           "targets": [
             {
@@ -6173,7 +6364,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 176
+            "y": 184
           },
           "targets": [
             {
@@ -6222,7 +6413,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 176
+            "y": 184
           },
           "targets": [
             {
@@ -6272,7 +6463,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 180
+            "y": 188
           },
           "panels": []
         },
@@ -6288,7 +6479,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 181
+            "y": 189
           },
           "targets": [
             {
@@ -6338,7 +6529,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 181
+            "y": 189
           },
           "targets": [
             {
@@ -6387,7 +6578,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 181
+            "y": 189
           },
           "targets": [
             {
@@ -6436,7 +6627,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 181
+            "y": 189
           },
           "targets": [
             {
@@ -6489,7 +6680,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 181
+            "y": 189
           },
           "targets": [
             {
@@ -6538,7 +6729,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 181
+            "y": 189
           },
           "targets": [
             {
@@ -6588,7 +6779,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 185
+            "y": 193
           },
           "targets": [
             {
@@ -6638,7 +6829,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 185
+            "y": 193
           },
           "targets": [
             {
@@ -6684,7 +6875,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 193
+            "y": 201
           },
           "panels": []
         },
@@ -6700,7 +6891,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 194
+            "y": 202
           },
           "targets": [
             {
@@ -6749,7 +6940,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 194
+            "y": 202
           },
           "targets": [
             {
@@ -6802,7 +6993,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 194
+            "y": 202
           },
           "targets": [
             {
@@ -6851,7 +7042,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 194
+            "y": 202
           },
           "targets": [
             {
@@ -6901,7 +7092,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 194
+            "y": 202
           },
           "targets": [
             {
@@ -6965,7 +7156,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 194
+            "y": 202
           },
           "targets": [
             {
@@ -7014,7 +7205,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 198
+            "y": 206
           },
           "targets": [
             {
@@ -7149,7 +7340,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 206
+            "y": 214
           },
           "targets": [
             {
@@ -7203,7 +7394,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 206
+            "y": 214
           },
           "targets": [
             {
@@ -7254,7 +7445,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 214
+            "y": 222
           },
           "panels": []
         },
@@ -7270,7 +7461,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 215
+            "y": 223
           },
           "targets": [
             {
@@ -7334,7 +7525,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 215
+            "y": 223
           },
           "targets": [
             {
@@ -7383,7 +7574,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 215
+            "y": 223
           },
           "targets": [
             {
@@ -7451,7 +7642,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 215
+            "y": 223
           },
           "targets": [
             {
@@ -7500,7 +7691,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 215
+            "y": 223
           },
           "targets": [
             {
@@ -7549,7 +7740,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 215
+            "y": 223
           },
           "targets": [
             {
@@ -7599,7 +7790,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 219
+            "y": 227
           },
           "targets": [
             {
@@ -7645,7 +7836,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 225
+            "y": 233
           },
           "panels": []
         },
@@ -7661,7 +7852,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 226
+            "y": 234
           },
           "targets": [
             {
@@ -7729,7 +7920,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 226
+            "y": 234
           },
           "targets": [
             {
@@ -7778,7 +7969,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 226
+            "y": 234
           },
           "targets": [
             {
@@ -7837,7 +8028,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 230
+            "y": 238
           },
           "targets": [
             {
@@ -7886,7 +8077,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 236
+            "y": 244
           },
           "targets": [
             {
