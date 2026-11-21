@@ -43,6 +43,17 @@ class GalleryReader:
             names=[c[0] for c in result.description]
             return [dict(zip(names,row)) for row in result.fetchall()]
 
+    def batches(self,query,params=(),batch_size=256):
+        """Stream one analytical query instead of rescanning Parquet per page."""
+        with get_telemetry().stage('duckdb.query',**{'db.system.name':'duckdb'}):
+            result=self.db.execute(query,params)
+            names=[c[0] for c in result.description]
+        while True:
+            with get_telemetry().stage('duckdb.query',**{'db.system.name':'duckdb'}):
+                rows=result.fetchmany(batch_size)
+            if not rows:return
+            yield [dict(zip(names,row)) for row in rows]
+
     def faces(self,person,status,offset,limit,matches,review=None,grouped=False,group="",scope="repeated"):
         review=review or {}
         if status not in ('all','unreviewed','named','suggested') or offset<0 or not 1<=limit<=100:

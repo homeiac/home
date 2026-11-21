@@ -305,11 +305,18 @@ class PostgresStore(Store):
                     self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
                     references=read('SELECT f.id,f.person,f.model,f.embedding '+base+" AND f.person IS NOT NULL AND f.label_source='user'")
                     reference_groups=vectors(references)
-                    last=''
-                    while True:
-                        candidates=read('SELECT f.id,f.person,f.model,f.embedding '+base+
-                            ' AND f.id>? ORDER BY f.id LIMIT 256',[last])
-                        if not candidates:break
+                    def candidate_batches():
+                        query='SELECT f.id,f.person,f.model,f.embedding '+base
+                        if reader:
+                            yield from reader.batches(query+' ORDER BY f.id')
+                            return
+                        last=''
+                        while True:
+                            candidates=read(query+' AND f.id>? ORDER BY f.id LIMIT 256',[last])
+                            if not candidates:return
+                            yield candidates
+                            last=candidates[-1]['id']
+                    for candidates in candidate_batches():
                         rejected=self.rows('SELECT face_id,reference_id FROM rejected_matches WHERE face_id=ANY(?)',
                             [[r['id'] for r in candidates]])
                         ranked=rank_batch(candidates,references,{(r['face_id'],r['reference_id']) for r in rejected},reference_groups=reference_groups)
@@ -319,7 +326,6 @@ class PostgresStore(Store):
                             if row['person'] is None and match['qualified']:
                                 matches[row['id']]={key:match[key] for key in ('person','reference_id','score')}
                         review_groups.add(candidates,ranked)
-                        last=candidates[-1]['id']
             finally:
                 if reader:reader.close()
             self._matching_cache=dict(signature=signature,at=time.monotonic(),matches=matches,

@@ -391,7 +391,10 @@ silently label its group. Group and detection counts are presented separately.
 
 Ranking and grouping run in the existing background matching pass, not HTTP
 requests. The GUI reads the last completed pass; startup displays a pending state
-until it exists. The cache is invalidated when faces, human reviews, rejections
+until it exists. Candidates stream from a single local analytical query in bounded
+batches; each batch no longer rescans and sorts the entire Parquet face table.
+Normalized reference embeddings are reused across all batches.
+The cache is invalidated when faces, human reviews, rejections
 or the analytical snapshot change. Existing automatic-acceptance preferences and
 its minimum-score setting are preserved.
 

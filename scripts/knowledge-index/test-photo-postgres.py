@@ -65,20 +65,30 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
 
     def test_matching_reads_embeddings_locally_and_caches_unchanged_inputs(self):
+        from photo_enrichment.readside import GalleryReader
         self.add_review_faces()
         export_snapshot(self.state)
         original=self.store.rows
+        original_batches=GalleryReader.batches
+        scans=[]
+        def tracked_batches(reader,query):
+            scans.append(query)
+            yield from original_batches(reader,query,batch_size=1)
         def without_embedding_download(query,params=()):
             self.assertNotIn('f.embedding',query)
             return original(query,params)
-        with patch.object(self.store,'rows',side_effect=without_embedding_download):
+        with patch.object(self.store,'rows',side_effect=without_embedding_download),patch.object(GalleryReader,'batches',tracked_batches):
             matches=self.store.matching_pass()
             self.assertIn('review-a',matches)
+            self.assertEqual(len(scans),1)
+            self.assertNotIn('LIMIT',scans[0])
             self.store._matching_cache['at']=0
-            with patch('photo_enrichment.matching.match_batch',side_effect=AssertionError('Unchanged library recomputed')):
+            with patch('photo_enrichment.matching.rank_batch',side_effect=AssertionError('Unchanged library recomputed')):
                 self.assertEqual(self.store.matching_pass(),matches)
+            self.assertEqual(len(scans),1)
             self.store.label_face('stable-face','Renamed synthetic person')
             self.assertEqual(self.store.matching_pass()['review-a']['person'],'Renamed synthetic person')
+            self.assertEqual(len(scans),2)
 
     def test_gps_context_backfill_preserves_original_and_reviews(self):
         import json
