@@ -56,6 +56,8 @@ HELP = {
     "gphotos_ingest_archives": ("gauge", "Takeout archives in the ingest ledger"),
     "gphotos_ingest_last_ok": ("gauge", "1 if the last ingest run finished ok"),
     "gphotos_ingest_last_finished_timestamp_seconds": ("gauge", "unix time the last ingest run finished"),
+    "knowledge_index_caption_coverage": ("gauge", "Current distinct media versions by published local and Luna caption coverage"),
+    "knowledge_index_caption_first_saved_last_ten_minutes": ("gauge", "Current media versions whose earliest retained successful caption timestamp falls in the last ten minutes"),
     "media_summaries_rows": ("gauge", "summary rows by enricher and status (ok/error)"),
     "media_summaries_queue": ("gauge", "media files still to summarize per enricher"),
     "ollama_up": ("gauge", "1 if the Ollama API answered"),
@@ -114,6 +116,40 @@ def dir_bytes(path):
     return sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(path) for f in fs if os.path.isfile(os.path.join(d, f)))
 
 
+def collect_coverage(o, con, index, luna_dir):
+    """Use published datasets only. A path and current byte size identify a library item."""
+    local_files = os.path.join(index, "summaries", "*", "*.parquet")
+    luna_files = os.path.join(luna_dir, "*.parquet")
+    if not glob.glob(luna_files):
+        return
+    rows = con.execute("""
+        WITH catalog AS (SELECT DISTINCT path, size_bytes FROM gphotos_files WHERE kind='media'),
+        local_results AS (
+            SELECT path, size_bytes, min(created_at) AS first_local
+            FROM read_parquet(?, union_by_name=true)
+            WHERE source='gphotos' AND status='ok' GROUP BY path, size_bytes
+        ), cloud_results AS (
+            SELECT source_path AS path, size_bytes, min(finished_at) AS first_cloud
+            FROM read_parquet(?, union_by_name=true)
+            WHERE state='ok' GROUP BY source_path, size_bytes
+        ), assets AS (
+            SELECT CASE WHEN l.path IS NOT NULL AND c.path IS NOT NULL THEN 'both'
+                        WHEN l.path IS NOT NULL THEN 'local_only'
+                        WHEN c.path IS NOT NULL THEN 'luna_only' ELSE 'neither' END AS coverage,
+                   least(first_local, first_cloud) AS first_caption
+            FROM catalog LEFT JOIN local_results l USING(path, size_bytes)
+            LEFT JOIN cloud_results c USING(path, size_bytes)
+        ) SELECT coverage, count(*), count(*) FILTER (WHERE
+                 first_caption BETWEEN timezone('UTC', current_timestamp) - INTERVAL '10 minutes'
+                                   AND timezone('UTC', current_timestamp))
+          FROM assets GROUP BY coverage
+    """, [local_files, luna_files]).fetchall()
+    counts = {coverage: count for coverage, count, _ in rows}
+    for coverage in ("local_only", "luna_only", "both", "neither"):
+        o.add("knowledge_index_caption_coverage", counts.get(coverage, 0), coverage=coverage)
+    o.add("knowledge_index_caption_first_saved_last_ten_minutes", sum(n for _, _, n in rows))
+
+
 def collect_index(o, index, enrichers):
     db = os.path.join(index, "knowledge.duckdb")
     con = duckdb.connect(db, read_only=True)
@@ -152,6 +188,8 @@ def collect_index(o, index, enrichers):
         batches = glob.glob(os.path.join(index, "summaries", enr, "*.parquet"))
         if batches:
             o.add("media_summaries_last_batch_timestamp_seconds", max(os.path.getmtime(b) for b in batches), enricher=enr)
+    luna_dir = os.environ.get("KI_LUNA_PARQUET", os.path.join(os.path.dirname(index), "photo-enrichment", "luna-backfill", "luna_codex_captions"))
+    collect_coverage(o, con, index, luna_dir)
     con.close()
 
 

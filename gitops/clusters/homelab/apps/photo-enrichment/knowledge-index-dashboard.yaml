@@ -521,6 +521,219 @@ data:
           "description": "Luna has a separate queue and Parquet dataset on Piglet. The Bonsai queue and its finish estimate appear above."
         },
         {
+          "id": 165,
+          "type": "stat",
+          "title": "Combined captions saved / min",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 11
+          },
+          "targets": [
+            {
+              "expr": "sum((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) + (clamp_min(max(deriv(knowledge_index_luna_saved{instance=~\"$instance\"}[10m])), 0) * 60)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Bonsai and Luna outputs over ten minutes. When both caption one asset, each output counts."
+        },
+        {
+          "id": 166,
+          "type": "stat",
+          "title": "Distinct items with a caption",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 11
+          },
+          "targets": [
+            {
+              "expr": "sum(max by(coverage) (knowledge_index_caption_coverage{instance=~\"$instance\",coverage=~\"local_only|luna_only|both\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900)))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes."
+        },
+        {
+          "id": 167,
+          "type": "stat",
+          "title": "Items without any caption",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 11
+          },
+          "targets": [
+            {
+              "expr": "sum(max by(coverage) (knowledge_index_caption_coverage{instance=~\"$instance\",coverage=\"neither\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900)))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes."
+        },
+        {
+          "id": 168,
+          "type": "stat",
+          "title": "ETA to first caption for every item",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 11
+          },
+          "targets": [
+            {
+              "expr": "((sum(max by(coverage) (knowledge_index_caption_coverage{instance=~\"$instance\",coverage=\"neither\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900)))) / ((max(knowledge_index_caption_first_saved_last_ten_minutes{instance=~\"$instance\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900)) / 10) > 0)) * 60 or (sum(max by(coverage) (knowledge_index_caption_coverage{instance=~\"$instance\",coverage=\"neither\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))) == 0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes. Remaining items divided by the count reaching their first retained caption in the preceding ten minutes. Assumes similar media mix, uptime and Luna availability."
+        },
+        {
           "id": 152,
           "type": "stat",
           "title": "Summaries saved/min \u00b7 before and now",
@@ -532,7 +745,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 11
+            "y": 15
           },
           "targets": [
             {
@@ -600,7 +813,7 @@ data:
             "h": 7,
             "w": 14,
             "x": 10,
-            "y": 11
+            "y": 15
           },
           "targets": [
             {
@@ -746,7 +959,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 18
+            "y": 22
           },
           "targets": [
             {
@@ -797,7 +1010,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 18
+            "y": 22
           },
           "targets": [
             {
@@ -850,7 +1063,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 18
+            "y": 22
           },
           "targets": [
             {
@@ -903,7 +1116,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 22
+            "y": 26
           },
           "targets": [
             {
@@ -925,6 +1138,11 @@ data:
               "expr": "clamp_min(max(deriv(knowledge_index_luna_saved{instance=~\"$instance\"}[10m])), 0) * 60",
               "legendFormat": "Luna \u00b7 Enterprise",
               "refId": "D"
+            },
+            {
+              "expr": "sum((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) + (clamp_min(max(deriv(knowledge_index_luna_saved{instance=~\"$instance\"}[10m])), 0) * 60)",
+              "legendFormat": "Combined \u00b7 all captions",
+              "refId": "E"
             }
           ],
           "fieldConfig": {
@@ -969,7 +1187,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 28
+            "y": 32
           },
           "targets": [
             {
@@ -1020,7 +1238,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 28
+            "y": 32
           },
           "targets": [
             {
@@ -1071,7 +1289,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1123,7 +1341,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1203,7 +1421,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1256,7 +1474,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1309,7 +1527,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1360,7 +1578,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 39
+            "y": 43
           },
           "panels": []
         },
@@ -1376,7 +1594,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 40
+            "y": 44
           },
           "targets": [
             {
@@ -1460,7 +1678,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 40
+            "y": 44
           },
           "targets": [
             {
@@ -1537,7 +1755,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 40
+            "y": 44
           },
           "targets": [
             {
@@ -1607,7 +1825,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 47
+            "y": 51
           },
           "panels": []
         },
@@ -1623,7 +1841,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 48
+            "y": 52
           },
           "targets": [
             {
@@ -1674,7 +1892,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 48
+            "y": 52
           },
           "targets": [
             {
@@ -1725,7 +1943,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 48
+            "y": 52
           },
           "targets": [
             {
@@ -1776,7 +1994,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 48
+            "y": 52
           },
           "targets": [
             {
@@ -1827,7 +2045,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 48
+            "y": 52
           },
           "targets": [
             {
@@ -1878,7 +2096,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 48
+            "y": 52
           },
           "targets": [
             {
@@ -1929,7 +2147,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 52
+            "y": 56
           },
           "targets": [
             {
@@ -1979,7 +2197,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 52
+            "y": 56
           },
           "targets": [
             {
@@ -2028,7 +2246,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 52
+            "y": 56
           },
           "targets": [
             {
@@ -2078,7 +2296,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 52
+            "y": 56
           },
           "targets": [
             {
@@ -2129,7 +2347,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 52
+            "y": 56
           },
           "targets": [
             {
@@ -2179,7 +2397,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 60
           },
           "targets": [
             {
@@ -2233,7 +2451,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 60
           },
           "targets": [
             {
@@ -2284,7 +2502,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 63
+            "y": 67
           },
           "panels": []
         },
@@ -2300,7 +2518,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 64
+            "y": 68
           },
           "targets": [
             {
@@ -2403,7 +2621,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 64
+            "y": 68
           },
           "targets": [
             {
@@ -2455,7 +2673,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 64
+            "y": 68
           },
           "targets": [
             {
@@ -2516,7 +2734,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 64
+            "y": 68
           },
           "targets": [
             {
@@ -2569,7 +2787,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 68
+            "y": 72
           },
           "targets": [
             {
@@ -2674,7 +2892,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 78
+            "y": 82
           },
           "targets": [
             {
@@ -2728,7 +2946,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 78
+            "y": 82
           },
           "targets": [
             {
@@ -2839,7 +3057,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 84
+            "y": 88
           },
           "targets": [
             {
@@ -2893,7 +3111,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 84
+            "y": 88
           },
           "targets": [
             {
@@ -2947,7 +3165,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 84
+            "y": 88
           },
           "targets": [
             {
@@ -3001,7 +3219,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 91
+            "y": 95
           },
           "targets": [
             {
@@ -3063,7 +3281,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 91
+            "y": 95
           },
           "targets": [
             {
@@ -3116,7 +3334,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 98
+            "y": 102
           },
           "targets": [
             {
@@ -3178,7 +3396,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 98
+            "y": 102
           },
           "targets": [
             {
@@ -3228,7 +3446,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 105
+            "y": 109
           },
           "panels": []
         },
@@ -3244,7 +3462,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 106
+            "y": 110
           },
           "targets": [
             {
@@ -3337,7 +3555,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 106
+            "y": 110
           },
           "targets": [
             {
@@ -3398,7 +3616,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 106
+            "y": 110
           },
           "targets": [
             {
@@ -3451,7 +3669,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 106
+            "y": 110
           },
           "targets": [
             {
@@ -3504,7 +3722,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 110
+            "y": 114
           },
           "targets": [
             {
@@ -3566,7 +3784,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 110
+            "y": 114
           },
           "targets": [
             {
@@ -3652,7 +3870,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 117
+            "y": 121
           },
           "targets": [
             {
@@ -3707,7 +3925,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 117
+            "y": 121
           },
           "targets": [
             {
@@ -3760,7 +3978,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 124
+            "y": 128
           },
           "targets": [
             {
@@ -3814,7 +4032,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 124
+            "y": 128
           },
           "targets": [
             {
@@ -3867,7 +4085,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 124
+            "y": 128
           },
           "targets": [
             {
@@ -3918,7 +4136,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 150
+            "y": 154
           },
           "panels": []
         },
@@ -3934,7 +4152,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 151
+            "y": 155
           },
           "targets": [
             {
@@ -4003,7 +4221,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 151
+            "y": 155
           },
           "targets": [
             {
@@ -4056,7 +4274,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 151
+            "y": 155
           },
           "targets": [
             {
@@ -4109,7 +4327,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 151
+            "y": 155
           },
           "targets": [
             {
@@ -4163,7 +4381,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 155
+            "y": 159
           },
           "targets": [
             {
@@ -4217,7 +4435,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 155
+            "y": 159
           },
           "targets": [
             {
@@ -4267,7 +4485,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 131
+            "y": 135
           },
           "panels": []
         },
@@ -4283,7 +4501,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 132
+            "y": 136
           },
           "targets": [
             {
@@ -4332,7 +4550,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 132
+            "y": 136
           },
           "targets": [
             {
@@ -4386,7 +4604,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 139
+            "y": 143
           },
           "targets": [
             {
@@ -4450,7 +4668,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 139
+            "y": 143
           },
           "targets": [
             {
@@ -4499,7 +4717,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 139
+            "y": 143
           },
           "targets": [
             {
@@ -4548,7 +4766,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 139
+            "y": 143
           },
           "targets": [
             {
@@ -4605,7 +4823,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 143
+            "y": 147
           },
           "targets": [
             {
@@ -4654,7 +4872,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 143
+            "y": 147
           },
           "targets": [
             {
@@ -4700,7 +4918,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 162
+            "y": 166
           },
           "panels": []
         },
@@ -4716,7 +4934,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 163
+            "y": 167
           },
           "targets": [
             {
@@ -4766,7 +4984,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 163
+            "y": 167
           },
           "targets": [
             {
@@ -4820,7 +5038,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 163
+            "y": 167
           },
           "targets": [
             {
@@ -4869,7 +5087,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 163
+            "y": 167
           },
           "targets": [
             {
@@ -4918,7 +5136,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 163
+            "y": 167
           },
           "targets": [
             {
@@ -4968,7 +5186,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 163
+            "y": 167
           },
           "targets": [
             {
@@ -5017,7 +5235,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 167
+            "y": 171
           },
           "targets": [
             {
@@ -5081,7 +5299,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 167
+            "y": 171
           },
           "targets": [
             {
@@ -5130,7 +5348,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 167
+            "y": 171
           },
           "targets": [
             {
@@ -5180,7 +5398,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 167
+            "y": 171
           },
           "targets": [
             {
@@ -5229,7 +5447,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 167
+            "y": 171
           },
           "targets": [
             {
@@ -5278,7 +5496,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 167
+            "y": 171
           },
           "targets": [
             {
@@ -5331,7 +5549,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 171
+            "y": 175
           },
           "targets": [
             {
@@ -5390,7 +5608,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 171
+            "y": 175
           },
           "targets": [
             {
@@ -5439,7 +5657,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 171
+            "y": 175
           },
           "targets": [
             {
@@ -5486,7 +5704,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 178
+            "y": 182
           },
           "panels": []
         },
@@ -5502,7 +5720,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 179
+            "y": 183
           },
           "targets": [
             {
@@ -5556,7 +5774,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 179
+            "y": 183
           },
           "targets": [
             {
@@ -5606,7 +5824,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 179
+            "y": 183
           },
           "targets": [
             {
@@ -5664,7 +5882,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 179
+            "y": 183
           },
           "targets": [
             {
@@ -5714,7 +5932,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 179
+            "y": 183
           },
           "targets": [
             {
@@ -5772,7 +5990,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 179
+            "y": 183
           },
           "targets": [
             {
@@ -5826,7 +6044,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 183
+            "y": 187
           },
           "targets": [
             {
@@ -5894,7 +6112,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 183
+            "y": 187
           },
           "targets": [
             {
@@ -5944,7 +6162,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 183
+            "y": 187
           },
           "targets": [
             {
@@ -6003,7 +6221,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 183
+            "y": 187
           },
           "targets": [
             {
@@ -6053,7 +6271,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 183
+            "y": 187
           },
           "targets": [
             {
@@ -6102,7 +6320,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 183
+            "y": 187
           },
           "targets": [
             {
@@ -6151,7 +6369,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6220,7 +6438,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6288,7 +6506,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6356,7 +6574,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6420,7 +6638,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6471,7 +6689,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6522,7 +6740,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 187
+            "y": 191
           },
           "targets": [
             {
@@ -6572,7 +6790,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 191
+            "y": 195
           },
           "targets": [
             {
@@ -6621,7 +6839,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 191
+            "y": 195
           },
           "targets": [
             {
@@ -6675,7 +6893,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 198
+            "y": 202
           },
           "targets": [
             {
@@ -6729,7 +6947,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 198
+            "y": 202
           },
           "targets": [
             {
@@ -6775,7 +6993,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 205
+            "y": 209
           },
           "panels": []
         },
@@ -6791,7 +7009,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 206
+            "y": 210
           },
           "targets": [
             {
@@ -6859,7 +7077,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 206
+            "y": 210
           },
           "targets": [
             {
@@ -6916,7 +7134,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 206
+            "y": 210
           },
           "targets": [
             {
@@ -6965,7 +7183,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 206
+            "y": 210
           },
           "targets": [
             {
@@ -7014,7 +7232,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 206
+            "y": 210
           },
           "targets": [
             {
@@ -7063,7 +7281,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 206
+            "y": 210
           },
           "targets": [
             {
@@ -7113,7 +7331,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 210
+            "y": 214
           },
           "panels": []
         },
@@ -7129,7 +7347,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 211
+            "y": 215
           },
           "targets": [
             {
@@ -7179,7 +7397,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 211
+            "y": 215
           },
           "targets": [
             {
@@ -7228,7 +7446,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 211
+            "y": 215
           },
           "targets": [
             {
@@ -7277,7 +7495,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 211
+            "y": 215
           },
           "targets": [
             {
@@ -7330,7 +7548,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 211
+            "y": 215
           },
           "targets": [
             {
@@ -7379,7 +7597,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 211
+            "y": 215
           },
           "targets": [
             {
@@ -7429,7 +7647,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 215
+            "y": 219
           },
           "targets": [
             {
@@ -7479,7 +7697,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 215
+            "y": 219
           },
           "targets": [
             {
@@ -7525,7 +7743,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 223
+            "y": 227
           },
           "panels": []
         },
@@ -7541,7 +7759,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 224
+            "y": 228
           },
           "targets": [
             {
@@ -7590,7 +7808,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 224
+            "y": 228
           },
           "targets": [
             {
@@ -7643,7 +7861,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 224
+            "y": 228
           },
           "targets": [
             {
@@ -7692,7 +7910,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 224
+            "y": 228
           },
           "targets": [
             {
@@ -7742,7 +7960,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 224
+            "y": 228
           },
           "targets": [
             {
@@ -7806,7 +8024,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 224
+            "y": 228
           },
           "targets": [
             {
@@ -7855,7 +8073,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 228
+            "y": 232
           },
           "targets": [
             {
@@ -7990,7 +8208,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 236
+            "y": 240
           },
           "targets": [
             {
@@ -8044,7 +8262,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 236
+            "y": 240
           },
           "targets": [
             {
@@ -8095,7 +8313,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 244
+            "y": 248
           },
           "panels": []
         },
@@ -8111,7 +8329,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8175,7 +8393,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8224,7 +8442,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8292,7 +8510,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8341,7 +8559,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8390,7 +8608,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8440,7 +8658,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 249
+            "y": 253
           },
           "targets": [
             {
@@ -8486,7 +8704,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 255
+            "y": 259
           },
           "panels": []
         },
@@ -8502,7 +8720,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 256
+            "y": 260
           },
           "targets": [
             {
@@ -8570,7 +8788,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 256
+            "y": 260
           },
           "targets": [
             {
@@ -8619,7 +8837,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 256
+            "y": 260
           },
           "targets": [
             {
@@ -8678,7 +8896,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 260
+            "y": 264
           },
           "targets": [
             {
@@ -8727,7 +8945,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 266
+            "y": 270
           },
           "targets": [
             {

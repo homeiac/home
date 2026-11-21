@@ -324,7 +324,8 @@ def panels():
     backend_series = [(backend_pace(name), label) for name, label in
                       (("primary", "RTX"), ("metal", "Mac Metal"), ("cache", "Cache"))]
     luna_rate = 'clamp_min(max(deriv(knowledge_index_luna_saved' + INST + '[10m])), 0) * 60'
-    backend_series.append((luna_rate, "Luna · Enterprise"))
+    combined_rate = f'sum(({summary_pace()}) * 60) + ({luna_rate})'
+    backend_series.extend([(luna_rate, "Luna · Enterprise"), (combined_rate, "Combined · all captions")])
     backends = series("Parquet summaries saved per minute by backend", backend_series, 0, 16, 24, 6, decimals=1,
                       description="Bonsai uses the shared RTX and Mac queue. Luna writes a separate comparison dataset. Each line measures saved rows over ten minutes. The same asset can have both a Bonsai and a Luna caption.")
     scope = "{" + SUMMARY_SELECTION + "}"
@@ -367,7 +368,27 @@ def panels():
         location("Piglet · Luna publication", [(luna_value("knowledge_index_luna_jobs", "pending", False), "Pending"),
                                               (luna_value("knowledge_index_luna_awaiting_publish"), "Completed, awaiting Parquet")], 18,
                  "Luna has a separate queue and Parquet dataset on Piglet. The Bonsai queue and its finish estimate appear above.")]
-    return intro + locations + shift(throughput + luna + [backends, cache_sim, phases], 6) + shift(details, THROUGHPUT_HEIGHT + 22) + shift(p, 39 + THROUGHPUT_HEIGHT)
+    coverage = 'knowledge_index_caption_coverage{instance=~"$instance",coverage='
+    snapshot_fresh = (' and on(instance,job) (knowledge_index_exporter_success' + INST + ' == 1) '
+                      'and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds' + INST + ' < 900)')
+    def covered(selector):
+        return f'sum(max by(coverage) ({coverage}{selector}}}{snapshot_fresh}))'
+    unique = covered('~"local_only|luna_only|both"')
+    remaining = covered('"neither"')
+    unique_pace = 'max(knowledge_index_caption_first_saved_last_ten_minutes' + INST + snapshot_fresh + ') / 10'
+    eta = f'(({remaining}) / (({unique_pace}) > 0)) * 60 or ({remaining} == 0)'
+    coverage_note = "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes."
+    combined = [
+        stat("Combined captions saved / min", combined_rate, 0, 11, w=6, decimals=1,
+             description="Bonsai and Luna outputs over ten minutes. When both caption one asset, each output counts."),
+        stat("Distinct items with a caption", unique, 6, 11, w=6, unit="locale", description=coverage_note),
+        stat("Items without any caption", remaining, 12, 11, w=6, unit="locale", description=coverage_note),
+        stat("ETA to first caption for every item", eta, 18, 11, w=6, unit="s",
+             description=coverage_note + " Remaining items divided by the count reaching their first retained caption in the preceding ten minutes. Assumes similar media mix, uptime and Luna availability.")]
+    for panel in combined:
+        panel["targets"][0].update(instant=True, range=False)
+        panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting fresh data"
+    return intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases], 10) + shift(details, THROUGHPUT_HEIGHT + 26) + shift(p, 43 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():
