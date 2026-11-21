@@ -9,3 +9,8 @@ resources:
   - job-model-update.yaml
   - secrets/ghcr-creds.sops.yaml
   - vpa
+configMapGenerator:
+  - name: summary-backfill
+    namespace: ollama
+    envs:
+      - summary-backfill.env

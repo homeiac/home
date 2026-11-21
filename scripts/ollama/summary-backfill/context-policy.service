@@ -1,0 +1,8 @@
+[Unit]
+Description=Reconcile the Git-controlled photo context backfill policy
+After=network-online.target
+
+[Service]
+Type=oneshot
+StateDirectory=knowledge-index-summary-policy
+ExecStart=/usr/local/libexec/knowledge-index-context-policy

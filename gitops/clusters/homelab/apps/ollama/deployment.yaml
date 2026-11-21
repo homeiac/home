@@ -37,7 +37,10 @@ spec:
             - name: OLLAMA_GPU_OVERHEAD
               value: "1073741824"  # 1GB GPU memory overhead
             - name: OLLAMA_NUM_PARALLEL
-              value: "1"  # Single parallel to reduce CPU usage
+              valueFrom:
+                configMapKeyRef:
+                  name: summary-backfill
+                  key: OLLAMA_NUM_PARALLEL
             - name: OLLAMA_MAX_LOADED_MODELS
               value: "1"  # Limit to one model to prevent memory pressure
             - name: OLLAMA_FLASH_ATTENTION
