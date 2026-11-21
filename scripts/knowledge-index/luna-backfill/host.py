@@ -19,10 +19,12 @@ from media_summary import VIDEO_EXTS, jpeg_frame, video_duration
 
 ROOT = Path('/local-3TB-backup/photo-enrichment/luna-backfill')
 LIBRARY = Path('/local-3TB-backup/gphotos/library').resolve()
-# Microdollars cover the published short/long rate card. One unknown attempt
-# retains a full dollar. No automatic resubmission of an ambiguous request.
+# In-flight requests reserve a dollar. Completed requests without reported
+# usage settle at a conservative estimate from the observed media cohort.
 RESERVE = 1_000_000
 LIMIT = 250_000_000
+MIN_PROJECTION = 2_000  # $0.002 per request
+LEGACY_HOLDS = ('unknown usage or exceeded reservation', 'interrupted request with unknown usage')
 MODEL = 'gpt-6-luna'
 PROMPT_VERSION = 'saved-context-v2'
 os.umask(0o077)
@@ -168,11 +170,52 @@ def frames(db, request):
     return dict(images=[base64.b64encode(b).decode() for b in images])
 
 
+def projected_cost(db, ext):
+    """Use twice the highest observed cost for the same media type."""
+    video_formats = tuple(sorted(VIDEO_EXTS))
+    placeholders = ','.join('?' for _ in video_formats)
+    same_kind = f'(ext IN ({placeholders})) = ?'
+    observed = db.execute(
+        f"SELECT max(cost) FROM jobs WHERE state='ok' AND {same_kind}",
+        (*video_formats, ext in VIDEO_EXTS),
+    ).fetchone()[0]
+    return min(RESERVE, max(MIN_PROJECTION, 2 * observed)) if observed is not None else RESERVE
+
+
+def recover(db):
+    """Release unsent leases and account for interrupted submissions without retrying them."""
+    db.execute('BEGIN IMMEDIATE')
+    with db:
+        db.execute("UPDATE jobs SET state='pending',cost=0,batch=NULL WHERE state='reserved' AND started<datetime('now','-45 minutes')")
+        stale = db.execute("SELECT id,ext FROM jobs WHERE state='sent' AND started<datetime('now','-45 minutes')").fetchall()
+        for job_id, ext in stale:
+            db.execute("""UPDATE jobs SET state='unknown',cost=?,finished=CURRENT_TIMESTAMP,
+                          result='{}' WHERE id=?""", (projected_cost(db, ext), job_id))
+        hold = db.execute("SELECT value FROM config WHERE key='blocked'").fetchone()
+        if hold and hold[0] in LEGACY_HOLDS:
+            for job_id, ext in db.execute("SELECT id,ext FROM jobs WHERE state='unknown' AND cost=?", (RESERVE,)).fetchall():
+                db.execute("UPDATE jobs SET cost=? WHERE id=?", (projected_cost(db, ext), job_id))
+            overrun = db.execute("""SELECT 1 FROM jobs WHERE state='ok' AND cost>?
+                                     UNION ALL SELECT 1 FROM previous_captions WHERE cost>? LIMIT 1""",
+                                 (RESERVE, RESERVE)).fetchone()
+            if overrun:
+                db.execute("UPDATE config SET value='reported usage exceeded reservation' WHERE key='blocked'")
+            else:
+                db.execute("DELETE FROM config WHERE key='blocked'")
+    return {'recovered_unknown':len(stale)}
+
+
 def finish(db, request):
-    """Settle each reservation exactly once. Unknown CLI usage keeps its hold."""
+    """Settle each reservation once, projecting cost when the CLI usage is missing."""
+    db.execute('BEGIN IMMEDIATE')
     with db:
         for row in request['results']:
-            state, cost = row['state'], RESERVE
+            state = row['state']
+            expected_state = 'reserved' if state == 'source_error' else 'sent'
+            job = db.execute("SELECT ext FROM jobs WHERE id=? AND batch=? AND state=?",
+                             (row['id'], request['batch'], expected_state)).fetchone()
+            if not job:
+                continue
             if state == 'source_error':
                 cost = 0  # No CLI invocation.
             elif state == 'ok':
@@ -182,12 +225,14 @@ def finish(db, request):
                 mult = 2 if i>272000 else 1
                 # Ceiling to a microdollar. Cached input is included in total input.
                 cost = ((i-c)*10*mult+c*mult+o*(75 if mult==2 else 50)+99)//100
-            elif state != 'unknown':
+            elif state == 'unknown':
+                cost = projected_cost(db, job[0])
+            else:
                 raise ValueError('Invalid outcome')
-            if state=='unknown' or cost>RESERVE:
-                db.execute("INSERT OR REPLACE INTO config VALUES ('blocked',?)",['unknown usage or exceeded reservation'])
+            if cost>RESERVE:
+                db.execute("INSERT OR REPLACE INTO config VALUES ('blocked','reported usage exceeded reservation')")
             db.execute("""UPDATE jobs SET state=?,cost=?,result=?,finished=CURRENT_TIMESTAMP
-                          WHERE id=? AND batch=? AND state IN ('reserved','sent')""",
+                          WHERE id=? AND batch=?""",
                        [state,cost,json.dumps(row),row['id'],request['batch']])
     return {'recorded':len(request['results'])}
 
@@ -232,8 +277,8 @@ def export_metrics(db):
     dest=Path('/var/lib/prometheus/node-exporter/knowledge_index_luna.prom')
     rows=db.execute("SELECT state,count(*),sum(cost),sum(published) FROM jobs GROUP BY state").fetchall()
     costs={state:total/1e6 for state,_,total,_ in rows}
-    settled=costs.get('ok',0)+db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0]/1e6
-    held=sum(costs.get(state,0) for state in ('sent','reserved','unknown'))
+    settled=costs.get('ok',0)+costs.get('unknown',0)+db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0]/1e6
+    held=sum(costs.get(state,0) for state in ('sent','reserved'))
     prior=int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])/1e6
     saved=sum(n for state,_,_,n in rows if state=='ok')
     # The original Parquet file remains readable until its corrected batch is
@@ -278,13 +323,7 @@ def main():
             result=dict(states=dict(db.execute('SELECT state,count(*) FROM jobs GROUP BY state')),
                         estimated_and_held_usd=(db.execute('SELECT coalesce(sum(cost),0) FROM jobs').fetchone()[0]+int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])+db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0])/1e6)
         elif op=='recover':
-            # Only stale leases qualify. Unsent work is safe to retry. A request
-            # that may already have reached the provider keeps its reservation.
-            with db:
-                db.execute("UPDATE jobs SET state='pending',cost=0,batch=NULL WHERE state='reserved' AND started<datetime('now','-45 minutes')")
-                lost=db.execute("UPDATE jobs SET state='unknown',finished=CURRENT_TIMESTAMP,result='{}' WHERE state='sent' AND started<datetime('now','-45 minutes')").rowcount
-                if lost:db.execute("INSERT OR REPLACE INTO config VALUES ('blocked','interrupted request with unknown usage')")
-            result={'recovered_unknown':lost}
+            result=recover(db)
         elif op=='start':
             with db:
                 count=db.execute("UPDATE jobs SET state='sent',started=CURRENT_TIMESTAMP WHERE id=? AND batch=? AND state='reserved'",[request['id'],request['batch']]).rowcount

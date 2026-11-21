@@ -66,7 +66,7 @@ def process(batch,item):
             result['seconds']=time.monotonic()-start
     host(op='finish',batch=batch,results=[result])
     if result['state']=='unknown':
-        raise RuntimeError('Luna usage or response unavailable; budget hold retained')
+        raise RuntimeError('Luna usage or response unavailable; estimated cost recorded, queue resumes on next scheduled run')
     return result['state']
 
 

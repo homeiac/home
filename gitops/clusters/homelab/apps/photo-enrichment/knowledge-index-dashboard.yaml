@@ -430,7 +430,7 @@ data:
             },
             {
               "expr": "max(knowledge_index_luna_jobs{instance=~\"$instance\",state=\"unknown\"})",
-              "legendFormat": "Requests with unknown usage",
+              "legendFormat": "Requests with projected cost",
               "refId": "C",
               "instant": true,
               "range": false
@@ -1056,7 +1056,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Measured Codex tokens valued at standard Luna API rates. The Enterprise account supplies inference."
+          "description": "Reported Codex tokens valued at standard Luna API rates, plus projected cost for requests without a usage report. The Enterprise account supplies inference."
         },
         {
           "id": 156,
@@ -1109,7 +1109,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The $250 Luna allowance less settled estimates, a $1 allowance for earlier pilots, and $1 per outstanding or unknown request."
+          "description": "The $250 Luna allowance less reported and projected costs, a $1 allowance for earlier pilots, and $1 reserved per request in flight."
         },
         {
           "id": 157,

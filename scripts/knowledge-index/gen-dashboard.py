@@ -315,10 +315,10 @@ def panels():
     throughput = throughput_panels()
     luna = [stat("Luna captions saved to Parquet", 'max(knowledge_index_luna_saved' + INST + ')', 0, 12, w=8, unit="locale"),
             stat("Luna estimated token cost", 'max(knowledge_index_luna_proxy_usd' + INST + ')', 8, 12, w=8, unit="currencyUSD", decimals=3,
-                 description="Measured Codex tokens valued at standard Luna API rates. The Enterprise account supplies inference."),
+                 description="Reported Codex tokens valued at standard Luna API rates, plus projected cost for requests without a usage report. The Enterprise account supplies inference."),
             stat("Luna budget available", '250 - max(knowledge_index_luna_proxy_usd' + INST + ') - max(knowledge_index_luna_budget_held_usd' + INST + ')',
                  16, 12, w=8, unit="currencyUSD", decimals=2,
-                 description="The $250 Luna allowance less settled estimates, a $1 allowance for earlier pilots, and $1 per outstanding or unknown request.")]
+                 description="The $250 Luna allowance less reported and projected costs, a $1 allowance for earlier pilots, and $1 reserved per request in flight.")]
     for panel in luna:
         panel['targets'][0].update(instant=True, range=False)
     backend_series = [(backend_pace(name), label) for name, label in
@@ -363,7 +363,7 @@ def panels():
                  "Piglet sends distinct pending items to the Mac Metal worker. Zero capacity means it is currently unavailable for backfill."),
         location("Mac client → Enterprise Luna", [(luna_value("knowledge_index_luna_jobs", "sent"), "Submitted"),
                                                 (luna_value("knowledge_index_luna_jobs", "reserved"), "Preparing"),
-                                                (luna_value("knowledge_index_luna_jobs", "unknown", False), "Requests with unknown usage"),
+                                                (luna_value("knowledge_index_luna_jobs", "unknown", False), "Requests with projected cost"),
                                                 (luna_value("knowledge_index_luna_blocked", fresh=False), "Accounting hold (1 = paused)")], 12,
                  "The Mac client submits to Enterprise Codex. Submitted and preparing require a recent report. The last recorded accounting hold remains visible until the ledger clears it."),
         location("Piglet · Luna publication", [(luna_value("knowledge_index_luna_jobs", "pending", False), "Pending"),

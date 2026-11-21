@@ -16,6 +16,7 @@ class LedgerTest(unittest.TestCase):
         self.host = importlib.util.module_from_spec(spec)
         modules = {name: MagicMock() for name in ("photo_enrichment", "photo_enrichment.snapshots",
                    "photo_enrichment.context_worker", "photo_enrichment.postgres", "media_summary")}
+        modules["media_summary"].VIDEO_EXTS = {"mp4"}
         with patch.dict(sys.modules, modules):
             spec.loader.exec_module(self.host)
         self.tmp = tempfile.TemporaryDirectory()
@@ -36,17 +37,39 @@ class LedgerTest(unittest.TestCase):
         return self.host.reserve(self.db, dict(estimated_limit_usd=cap,batch_size=12))
 
     def settle(self, grant, item, state='ok'):
+        self.db.execute("UPDATE jobs SET state='sent' WHERE id=? AND state='reserved'", [item['id']])
+        self.db.commit()
         self.host.finish(self.db, dict(batch=grant['batch'],results=[dict(
             id=item['id'],state=state,input=10000,cached=4000,output=120,seconds=.1,
             summary='a saved caption',tags=['a'])]))
 
-    def test_reservation_and_unknown(self):
+    def test_projection_counts_toward_cap_without_blocking_queue(self):
         grant=self.claim(2)
         self.assertEqual(len(grant['items']),1)
         self.assertEqual(self.claim(2)['items'],[])
-        self.settle(grant,grant['items'][0],'unknown')
+        self.settle(grant,grant['items'][0])
+        with self.db:
+            self.db.execute("INSERT INTO jobs(path,size_bytes,ext,metadata) VALUES ('c',30,'jpg','{}')")
+        grant=self.claim(3)
+        item=grant['items'][0]
+        self.settle(grant,item,'unknown')
+        self.assertEqual(self.db.execute('SELECT cost FROM jobs WHERE id=?',[item['id']]).fetchone()[0],2_000)
+        self.assertEqual(self.claim(2)['items'],[])
+        self.assertFalse(self.claim(3)['blocked'])
+
+    def test_recover_reprices_legacy_unknown_and_preserves_real_overrun(self):
+        with self.db:
+            self.db.execute("UPDATE jobs SET state='ok',cost=2000 WHERE path='a'")
+            self.db.execute("UPDATE jobs SET state='unknown',cost=? WHERE path='b'", [self.host.RESERVE])
+            self.db.execute("INSERT INTO config VALUES ('blocked',?)",[self.host.LEGACY_HOLDS[0]])
+        self.host.recover(self.db)
+        self.assertEqual(self.db.execute("SELECT cost FROM jobs WHERE path='b'").fetchone()[0],4000)
+        self.assertFalse(self.claim()['blocked'])
+        with self.db:
+            self.db.execute("UPDATE jobs SET state='ok',cost=? WHERE path='a'", [self.host.RESERVE+1])
+            self.db.execute("INSERT INTO config VALUES ('blocked',?)",[self.host.LEGACY_HOLDS[0]])
+        self.host.recover(self.db)
         self.assertTrue(self.claim()['blocked'])
-        self.assertEqual(self.db.execute('SELECT sum(cost) FROM jobs').fetchone()[0],1_000_000)
 
     def test_correction_replaces_same_file_and_keeps_cost(self):
         grant=self.claim()
