@@ -771,7 +771,7 @@ data:
             },
             {
               "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
-              "legendFormat": "Current \u00b7 all backends",
+              "legendFormat": "Bonsai now \u00b7 RTX + Mac + cache",
               "refId": "C",
               "instant": true,
               "range": false
@@ -806,7 +806,7 @@ data:
               ]
             }
           },
-          "description": "Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48\u201316:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08\u201317:18 UTC. Current includes writes from every active backend and cache. Media mix and cache hits can affect the rate."
+          "description": "Successful Bonsai summaries committed to Parquet per minute. The one-slot baseline covers 16:48\u201316:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08\u201317:18 UTC. The current rate includes RTX, Mac and cache saves. The Combined captions saved / min card also includes Luna. Media mix and cache hits can affect these rates."
         },
         {
           "id": 153,

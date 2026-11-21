@@ -107,11 +107,11 @@ def throughput_panels():
     rtx_observed = observed.replace("11.789473684210524", "20.208747368421054")
     two_slots = f'(({summary_pace(1795281480)}) * 60) or ({rtx_observed})'
     comparison = _panel('stat', 'Summaries saved/min · before and now',
-                        [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'), (after, 'Current · all backends')],
+                        [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'), (after, 'Bonsai now · RTX + Mac + cache')],
                         0, 5, 10, 7, decimals=1,
                         extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
                                            'reduceOptions': {'calcs': ['lastNotNull']}}},
-                        description='Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48–16:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08–17:18 UTC. Current includes writes from every active backend and cache. Media mix and cache hits can affect the rate.')
+                        description='Successful Bonsai summaries committed to Parquet per minute. The one-slot baseline covers 16:48–16:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08–17:18 UTC. The current rate includes RTX, Mac and cache saves. The Combined captions saved / min card also includes Luna. Media mix and cache hits can affect these rates.')
     for target in comparison['targets']:
         target.update(instant=True, range=False)
     comparison['fieldConfig']['defaults']['noValue'] = 'Awaiting sample'
