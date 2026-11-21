@@ -60,6 +60,17 @@ Its source appears empty while locked. The exFAT mounts return automatically.
 
 ## Deploy and verify
 
+Sidebar links are saved per user independently of source access. If a disk is
+missing from Links, repair the admin sidebar without changing permissions:
+
+```bash
+bash scripts/filebrowser/fix-sidebar.sh 192.168.4.175 fix
+```
+
+This preserves custom links, backs up the profile on piglet, and adds any missing
+SSK, RASPBMC, and BitLocker root links. Reload the browser afterward. The API
+verification below also checks that all three sidebar links are present.
+
 ```bash
 bash scripts/filebrowser/deploy.sh 192.168.4.175
 bash scripts/filebrowser/check-status.sh 192.168.4.175

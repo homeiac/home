@@ -30,6 +30,12 @@ with opener.open(request, timeout=15) as response:
     assert response.status == 200
     token = response.read().decode().strip().strip('"')
 print('Authenticated login: PASS')
+request = urllib.request.Request(base + '/api/users?username=self', headers={'X-Auth': token})
+with opener.open(request, timeout=15) as response:
+    user = json.load(response)
+    visible = {link.get('sourceName') for link in user.get('sidebarLinks', []) if link.get('category', '').startswith('source')}
+    assert {'SSK', 'RASPBMC', 'BitLocker'} <= visible, 'Missing disk links in sidebar'
+    print('All three disk links present in sidebar: PASS')
 for source in ('SSK', 'RASPBMC', 'BitLocker'):
     query = urllib.parse.urlencode({'source': source, 'path': '/'})
     request = urllib.request.Request(base + '/api/resources?' + query, headers={'X-Auth': token})
