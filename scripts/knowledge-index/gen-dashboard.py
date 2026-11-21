@@ -332,7 +332,7 @@ def panels():
     hit_bytes = f'sum by(capacity_mib)(increase(media_pipeline_mac_cache_reusable_bytes_total{scope}[1h]))'
     sent_bytes = f'sum(increase(media_pipeline_mac_candidate_bytes_total{scope}[1h]))'
     cache_sim = series("Mac preview cache · estimated bytes reusable",
-                       [(f'100 * {hit_bytes} / scalar({sent_bytes} > 0)', "{{capacity_mib}} MiB")],
+                       [(f'100 * {hit_bytes} / on() group_left() ({sent_bytes} > 0)', "{{capacity_mib}} MiB")],
                        0, 22, 12, 6, decimals=2, unit="percent",
                        description="Last hour of actual Mac-bound JPEG traffic after the existing caption cache. Three simulated LRU capacities retain only frame hashes and sizes. A zero means no observed reusable bytes. A gap means no traffic.")
     seconds = f'sum by(phase,kind)(rate(media_pipeline_mac_phase_seconds_total{scope}[10m]))'
@@ -377,6 +377,7 @@ def panels():
     remaining = covered('"neither"')
     unique_pace = 'max(knowledge_index_caption_first_saved_last_ten_minutes' + INST + snapshot_fresh + ') / 10'
     eta = f'(({remaining}) / (({unique_pace}) > 0)) * 60 or ({remaining} == 0)'
+    backends["targets"].append(dict(refId="F", expr=unique_pace, legendFormat="First caption · distinct items"))
     coverage_note = "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes."
     combined = [
         stat("Combined captions saved / min", combined_rate, 0, 11, w=6, decimals=1,

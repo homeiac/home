@@ -1143,6 +1143,11 @@ data:
               "expr": "sum((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) + (clamp_min(max(deriv(knowledge_index_luna_saved{instance=~\"$instance\"}[10m])), 0) * 60)",
               "legendFormat": "Combined \u00b7 all captions",
               "refId": "E"
+            },
+            {
+              "refId": "F",
+              "expr": "max(knowledge_index_caption_first_saved_last_ten_minutes{instance=~\"$instance\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900)) / 10",
+              "legendFormat": "First caption \u00b7 distinct items"
             }
           ],
           "fieldConfig": {
@@ -1191,7 +1196,7 @@ data:
           },
           "targets": [
             {
-              "expr": "100 * sum by(capacity_mib)(increase(media_pipeline_mac_cache_reusable_bytes_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h])) / scalar(sum(increase(media_pipeline_mac_candidate_bytes_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h])) > 0)",
+              "expr": "100 * sum by(capacity_mib)(increase(media_pipeline_mac_cache_reusable_bytes_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h])) / on() group_left() (sum(increase(media_pipeline_mac_candidate_bytes_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h])) > 0)",
               "legendFormat": "{{capacity_mib}} MiB",
               "refId": "A"
             }
