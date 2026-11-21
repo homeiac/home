@@ -73,13 +73,11 @@ def shift(items, dy):
 SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
 # Observed production transitions in UTC.
-GEMMA_END = 1795241400
-STANDALONE_START = 1795241606
-STANDALONE_END = 1795242360
-NATIVE_START = 1795242820
 ONE_SLOT_REFERENCE = 1795280280  # Last clean 10-minute window ending Nov 21 16:58 UTC.
 TWO_SLOT_START = 1795280415      # Runner accepted work Nov 21 17:00:14 UTC.
 TWO_SLOT_WINDOW = TWO_SLOT_START + 600
+GPU_DISPATCH_START = 1795293575  # Continuous refill deployed Nov 21 at 20:39:35 UTC.
+GPU_DISPATCH_BASELINE = 1795292400  # Start of the measured 20:20–20:30 UTC baseline.
 
 
 def summary_pace(at=None):
@@ -96,9 +94,10 @@ def backend_pace(backend):
 
 
 def throughput_panels():
-    labels = ("Gemma in Ollama", "Standalone Bonsai", "Bonsai before backfill", "Bonsai · summaries backfill")
-    live = f'({summary_pace()}) * 60'
-    after = f'({live}) and on() (vector(time()) >= {TWO_SLOT_WINDOW})'
+    gpu_pace = f'({backend_pace("primary")}) + ({backend_pace("metal")})'
+    after = f'({gpu_pace}) and on() (vector(time()) >= {GPU_DISPATCH_START + 600})'
+    before_dispatch = (f'({gpu_pace}) and on() (vector(time()) >= {GPU_DISPATCH_BASELINE + 600}) '
+                       f'and on() (vector(time()) < {GPU_DISPATCH_START})')
     # The recorded observation survives TSDB retention. Scope its fallback to
     # the same host and enricher as the pinned Prometheus sample.
     observed = (f'max by(enricher) (media_pipeline_queue{{{SUMMARY_SELECTION},'
@@ -106,26 +105,27 @@ def throughput_panels():
     before = f'(({summary_pace(ONE_SLOT_REFERENCE)}) * 60) or ({observed})'
     rtx_observed = observed.replace("11.789473684210524", "20.208747368421054")
     two_slots = f'(({summary_pace(1795281480)}) * 60) or ({rtx_observed})'
+    observed_joint = (f'max(media_pipeline_queue{{{SUMMARY_SELECTION},'
+                      'instance="pumped-piglet",enricher="gemma4-e2b-p1"}) * 0 + 21.4')
     comparison = _panel('stat', 'Summaries saved/min · before and now',
-                        [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'), (after, 'Bonsai now · RTX + Mac + cache')],
+                        [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'),
+                         (observed_joint, 'RTX + Mac · before refill'), (after, 'RTX + Mac · after refill')],
                         0, 5, 10, 7, decimals=1,
                         extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
                                            'reduceOptions': {'calcs': ['lastNotNull']}}},
-                        description='Successful Bonsai summaries committed to Parquet per minute. The one-slot baseline covers 16:48–16:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08–17:18 UTC. The current rate includes RTX, Mac and cache saves. The Combined captions saved / min card also includes Luna. Media mix and cache hits can affect these rates.')
+                        description='The RTX-only baselines cover 16:48–16:58 and 17:08–17:18 UTC on Nov 21. Before refill, the RTX and Mac saved 214 summaries from 20:20–20:30 UTC. After refill shows the rolling ten-minute rate for the two GPUs. The refill comparison excludes Luna and cache saves.')
     for target in comparison['targets']:
         target.update(instant=True, range=False)
     comparison['fieldConfig']['defaults']['noValue'] = 'Awaiting sample'
-    phases = [f'(vector(time()) < {GEMMA_END})',
-              f'((vector(time()) >= {STANDALONE_START}) and (vector(time()) < {STANDALONE_END}))',
-              f'((vector(time()) >= {NATIVE_START}) and (vector(time()) <= {ONE_SLOT_REFERENCE}))',
-              f'(vector(time()) >= {TWO_SLOT_WINDOW})']
-    history = series('Summary throughput over time', [(f'({live}) and on() {phase}', label)
-                     for phase, label in zip(phases, labels)], 10, 5, 14, 7, decimals=1,
-                     description='Successful Parquet writes per minute in rolling ten-minute windows. The gap at the two-slot rollout excludes windows containing both configurations.')
+    labels = ('Before refill', 'After refill', 'Goal · 30/min')
+    goal = f'vector(30) and on() (vector(time()) >= {GPU_DISPATCH_BASELINE + 600})'
+    history = series('RTX + Mac Parquet saves/min · before and after',
+                     list(zip((before_dispatch, after, goal), labels)), 10, 5, 14, 7, decimals=1,
+                     description='Rolling ten-minute Parquet saves from the RTX and Mac only. Luna and cache saves are excluded. The gap excludes windows crossing the scheduler deployment.')
     for target in history['targets']:
         target.update(instant=False, range=True, interval='30s')
     history['fieldConfig']['defaults'].update(min=0, custom={'drawStyle': 'line', 'lineWidth': 2, 'showPoints': 'never', 'spanNulls': False})
-    for label, color in zip(labels, ('orange', 'blue', 'purple', 'green')):
+    for label, color in zip(labels, ('orange', 'green', 'gray')):
         history['fieldConfig']['overrides'].append({'matcher': {'id': 'byName', 'options': label},
             'properties': [{'id': 'color', 'value': {'mode': 'fixed', 'fixedColor': color}}]})
     return [comparison, history]

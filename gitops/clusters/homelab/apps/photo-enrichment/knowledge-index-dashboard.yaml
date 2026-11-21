@@ -802,9 +802,16 @@ data:
               "range": false
             },
             {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
-              "legendFormat": "Bonsai now \u00b7 RTX + Mac + cache",
+              "expr": "max(media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",instance=\"pumped-piglet\",enricher=\"gemma4-e2b-p1\"}) * 0 + 21.4",
+              "legendFormat": "RTX + Mac \u00b7 before refill",
               "refId": "C",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) + (max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60)) and on() (vector(time()) >= 1795294175)",
+              "legendFormat": "RTX + Mac \u00b7 after refill",
+              "refId": "D",
               "instant": true,
               "range": false
             }
@@ -838,12 +845,12 @@ data:
               ]
             }
           },
-          "description": "Successful Bonsai summaries committed to Parquet per minute. The one-slot baseline covers 16:48\u201316:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08\u201317:18 UTC. The current rate includes RTX, Mac and cache saves. The Combined captions saved / min card also includes Luna. Media mix and cache hits can affect these rates."
+          "description": "The RTX-only baselines cover 16:48\u201316:58 and 17:08\u201317:18 UTC on Nov 21. Before refill, the RTX and Mac saved 214 summaries from 20:20\u201320:30 UTC. After refill shows the rolling ten-minute rate for the two GPUs. The refill comparison excludes Luna and cache saves."
         },
         {
           "id": 153,
           "type": "timeseries",
-          "title": "Summary throughput over time",
+          "title": "RTX + Mac Parquet saves/min \u00b7 before and after",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -856,33 +863,25 @@ data:
           },
           "targets": [
             {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) < 1795241400)",
-              "legendFormat": "Gemma in Ollama",
+              "expr": "((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) + (max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60)) and on() (vector(time()) >= 1795293000) and on() (vector(time()) < 1795293575)",
+              "legendFormat": "Before refill",
               "refId": "A",
               "instant": false,
               "range": true,
               "interval": "30s"
             },
             {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() ((vector(time()) >= 1795241606) and (vector(time()) < 1795242360))",
-              "legendFormat": "Standalone Bonsai",
+              "expr": "((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) + (max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60)) and on() (vector(time()) >= 1795294175)",
+              "legendFormat": "After refill",
               "refId": "B",
               "instant": false,
               "range": true,
               "interval": "30s"
             },
             {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() ((vector(time()) >= 1795242820) and (vector(time()) <= 1795280280))",
-              "legendFormat": "Bonsai before backfill",
+              "expr": "vector(30) and on() (vector(time()) >= 1795293000)",
+              "legendFormat": "Goal \u00b7 30/min",
               "refId": "C",
-              "instant": false,
-              "range": true,
-              "interval": "30s"
-            },
-            {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
-              "legendFormat": "Bonsai \u00b7 summaries backfill",
-              "refId": "D",
               "instant": false,
               "range": true,
               "interval": "30s"
@@ -916,7 +915,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Gemma in Ollama"
+                  "options": "Before refill"
                 },
                 "properties": [
                   {
@@ -931,37 +930,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Standalone Bonsai"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "blue"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Bonsai before backfill"
-                },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "mode": "fixed",
-                      "fixedColor": "purple"
-                    }
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Bonsai \u00b7 summaries backfill"
+                  "options": "After refill"
                 },
                 "properties": [
                   {
@@ -969,6 +938,21 @@ data:
                     "value": {
                       "mode": "fixed",
                       "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Goal \u00b7 30/min"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "gray"
                     }
                   }
                 ]
@@ -984,7 +968,7 @@ data:
               "mode": "multi"
             }
           },
-          "description": "Successful Parquet writes per minute in rolling ten-minute windows. The gap at the two-slot rollout excludes windows containing both configurations."
+          "description": "Rolling ten-minute Parquet saves from the RTX and Mac only. Luna and cache saves are excluded. The gap excludes windows crossing the scheduler deployment."
         },
         {
           "id": 154,
