@@ -6,10 +6,13 @@ import yaml
 
 root = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--gpu', action='store_true')
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument('--gpu', action='store_true')
+mode.add_argument('--promote', action='store_true')
 args = parser.parse_args()
-name = 'ollama-bonsai-vision-gpu-v1' if args.gpu else 'ollama-bonsai-vision-canary-v1'
-metadata = {'name': name, 'namespace': 'ollama' if args.gpu else 'immich-pilot'}
+name = ('ollama-bonsai-promote-v1' if args.promote else
+        'ollama-bonsai-vision-gpu-v1' if args.gpu else 'ollama-bonsai-vision-canary-v1')
+metadata = {'name': name, 'namespace': 'ollama' if args.gpu or args.promote else 'immich-pilot'}
 script = Path(__file__).with_name('check-ollama-bonsai.mjs').read_text()
 image = 'ollama/ollama:0.40.17@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754'
 node_image = 'ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd'
@@ -43,6 +46,12 @@ if args.gpu:
     server['resources']['requests']['nvidia.com/gpu'] = '1'
     server['resources']['limits']['nvidia.com/gpu'] = '1'
     test['env'] = [{'name': 'REQUIRE_GPU', 'value': 'true'}]
+if args.promote:
+    spec.pop('initContainers')
+    spec['volumes'][0] = {'name': 'store', 'persistentVolumeClaim': {'claimName': 'ollama-models'}}
+    spec['volumes'].pop(1)
+    test['volumeMounts'].pop(1)
+    test['env'] = [{'name': 'PROMOTE_MODEL_ONLY', 'value': 'true'}]
 resources = [
     {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': metadata, 'data': {'check.mjs': script}},
     {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': metadata,
@@ -51,5 +60,6 @@ resources = [
      'spec': {'backoffLimit': 0, 'activeDeadlineSeconds': 1500,
               'template': {'metadata': {'labels': labels}, 'spec': spec}}},
 ]
-target = root / 'gitops/clusters/homelab/apps/photo-enrichment/ollama-bonsai-canary.yaml'
+filename = 'ollama-bonsai-promote.yaml' if args.promote else 'ollama-bonsai-canary.yaml'
+target = root / 'gitops/clusters/homelab/apps/photo-enrichment' / filename
 target.write_text(yaml.safe_dump_all(resources, sort_keys=False))

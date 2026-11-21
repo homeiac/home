@@ -1,7 +1,7 @@
 // Import verified local model files and exercise Ollama's native vision API.
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { link, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { execFileSync } from 'node:child_process';
 
@@ -63,6 +63,38 @@ async function importModel() {
   if (!info.capabilities?.includes('vision')) throw new Error('Imported model has no vision capability');
 }
 
+async function promoteModel() {
+  const relative = `manifests/registry.ollama.ai/library/${model}/latest`;
+  const data = await readFile(`/store/${relative}`);
+  const manifest = JSON.parse(data);
+  const layers = [manifest.config, ...manifest.layers];
+  const digests = new Set(layers.map(layer => layer.digest));
+  if (Object.values(files).some(hash => !digests.has(`sha256:${hash}`))) {
+    throw new Error('Tested manifest does not reference both verified Bonsai files');
+  }
+  await mkdir('/store/models/blobs', {recursive: true});
+  for (const {digest, size} of layers) {
+    if (!/^sha256:[0-9a-f]{64}$/.test(digest)) throw new Error('Invalid manifest digest');
+    const name = digest.replace(':', '-');
+    const source = `/store/blobs/${name}`;
+    const destination = `/store/models/blobs/${name}`;
+    if ((await stat(source)).size !== size) throw new Error('Canary blob size mismatch');
+    await link(source, destination).catch(error => { if (error.code !== 'EEXIST') throw error; });
+    if ((await stat(destination)).size !== size) throw new Error('Existing production blob size mismatch');
+  }
+  const destination = `/store/models/${relative}`;
+  await mkdir(destination.slice(0, destination.lastIndexOf('/')), {recursive: true});
+  const temp = `${destination}.bonsai-canary`;
+  try {
+    await writeFile(temp, data);
+    await link(temp, destination).catch(error => { if (error.code !== 'EEXIST') throw error; });
+    if (!(await readFile(destination)).equals(data)) throw new Error('Refusing to overwrite a different Bonsai manifest');
+  } finally {
+    await rm(temp, {force: true});
+  }
+  console.log(JSON.stringify({event: 'promoted', model, layers: layers.length}));
+}
+
 function ffmpeg(args) {
   return execFileSync('ffmpeg', ['-v', 'error', '-nostdin', ...args], { maxBuffer: 8 * 1024 * 1024 });
 }
@@ -81,6 +113,10 @@ async function visionCheck(name, images, question, expected) {
   }
 }
 
+if (process.env.PROMOTE_MODEL_ONLY === 'true') {
+  await promoteModel();
+  process.exit(0);
+}
 await waitForServer();
 if (process.env.IMPORT_MODEL !== 'false') await importModel();
 const photo = ffmpeg(['-f', 'lavfi', '-i', 'color=c=green:s=768x512', '-frames:v', '1', '-f', 'mjpeg', '-']);

@@ -14,3 +14,4 @@ resources:
   - immich-ocr-recovery
   - bonsai.yaml
   - ollama-bonsai-canary.yaml
+  - ollama-bonsai-promote.yaml

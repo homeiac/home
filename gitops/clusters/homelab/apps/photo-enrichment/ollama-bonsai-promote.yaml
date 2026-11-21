@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ollama-bonsai-promote-v1
+  namespace: ollama
+data:
+  check.mjs: "// Import verified local model files and exercise Ollama's native vision\
+    \ API.\nimport { createHash } from 'node:crypto';\nimport { createReadStream,\
+    \ createWriteStream } from 'node:fs';\nimport { link, mkdir, readFile, rename,\
+    \ rm, stat, writeFile } from 'node:fs/promises';\nimport { pipeline } from 'node:stream/promises';\n\
+    import { execFileSync } from 'node:child_process';\n\nconst endpoint = process.env.OLLAMA_ENDPOINT\
+    \ ?? 'http://127.0.0.1:11434';\nconst model = 'bonsai-27b';\nconst files = {\n\
+    \  'Bonsai-27B-Q1_0.gguf': '17ef842e47450caeb8eaa3ebfbbab5d2f2278b62b79be107985fb69a2f819aa0',\n\
+    \  'Bonsai-27B-mmproj-Q8_0.gguf': 'eb561d41a7bbeb0fcf04883c8af11078ef6cae0a66862a0b68443cfca495269d',\n\
+    };\n\nasync function waitForServer() {\n  const deadline = Date.now() + 300_000;\n\
+    \  while (Date.now() < deadline) {\n    try {\n      await request('/api/version',\
+    \ undefined, 5_000);\n      return;\n    } catch {\n      await new Promise(resolve\
+    \ => setTimeout(resolve, 5_000));\n    }\n  }\n  throw new Error('Ollama did not\
+    \ become ready');\n}\n\nasync function request(path, body, timeout = 300_000)\
+    \ {\n  const options = { signal: AbortSignal.timeout(timeout) };\n  if (body)\
+    \ Object.assign(options, { method: 'POST', headers: {'Content-Type': 'application/json'},\n\
+    \    body: JSON.stringify(body) });\n  const response = await fetch(endpoint +\
+    \ path, options);\n  const data = await response.json();\n  if (!response.ok ||\
+    \ data.error) throw new Error(`${path}: ${response.status} ${data.error ?? ''}`);\n\
+    \  return data;\n}\n\nasync function importModel() {\n  await mkdir('/store/blobs',\
+    \ {recursive: true});\n  for (const [name, hash] of Object.entries(files)) {\n\
+    \    const destination = `/store/blobs/sha256-${hash}`;\n    const temp = destination\
+    \ + '.bonsai-import';\n    const digest = createHash('sha256');\n    try {\n \
+    \     await pipeline(createReadStream(`/source/${name}`), async function* (chunks)\
+    \ {\n        for await (const chunk of chunks) {\n          digest.update(chunk);\n\
+    \          yield chunk;\n        }\n      }, createWriteStream(temp));\n     \
+    \ if (digest.digest('hex') !== hash) throw new Error(`SHA-256 mismatch: ${name}`);\n\
+    \      await rename(temp, destination);\n    } finally {\n      await rm(temp,\
+    \ {force: true});\n    }\n    console.log(`Verified and staged ${name}`);\n  }\n\
+    \  await request('/api/create', { model, stream: false,\n    files: Object.fromEntries(Object.entries(files).map(([name,\
+    \ digest]) => [name, `sha256:${digest}`])),\n    renderer: 'qwen3.5', parser:\
+    \ 'qwen3.5', parameters: {num_ctx: 8192} });\n  const info = await request('/api/show',\
+    \ {model});\n  console.log(JSON.stringify({event: 'imported', capabilities: info.capabilities,\
+    \ details: info.details}));\n  if (!info.capabilities?.includes('vision')) throw\
+    \ new Error('Imported model has no vision capability');\n}\n\nasync function promoteModel()\
+    \ {\n  const relative = `manifests/registry.ollama.ai/library/${model}/latest`;\n\
+    \  const data = await readFile(`/store/${relative}`);\n  const manifest = JSON.parse(data);\n\
+    \  const layers = [manifest.config, ...manifest.layers];\n  const digests = new\
+    \ Set(layers.map(layer => layer.digest));\n  if (Object.values(files).some(hash\
+    \ => !digests.has(`sha256:${hash}`))) {\n    throw new Error('Tested manifest\
+    \ does not reference both verified Bonsai files');\n  }\n  await mkdir('/store/models/blobs',\
+    \ {recursive: true});\n  for (const {digest, size} of layers) {\n    if (!/^sha256:[0-9a-f]{64}$/.test(digest))\
+    \ throw new Error('Invalid manifest digest');\n    const name = digest.replace(':',\
+    \ '-');\n    const source = `/store/blobs/${name}`;\n    const destination = `/store/models/blobs/${name}`;\n\
+    \    if ((await stat(source)).size !== size) throw new Error('Canary blob size\
+    \ mismatch');\n    await link(source, destination).catch(error => { if (error.code\
+    \ !== 'EEXIST') throw error; });\n    if ((await stat(destination)).size !== size)\
+    \ throw new Error('Existing production blob size mismatch');\n  }\n  const destination\
+    \ = `/store/models/${relative}`;\n  await mkdir(destination.slice(0, destination.lastIndexOf('/')),\
+    \ {recursive: true});\n  const temp = `${destination}.bonsai-canary`;\n  try {\n\
+    \    await writeFile(temp, data);\n    await link(temp, destination).catch(error\
+    \ => { if (error.code !== 'EEXIST') throw error; });\n    if (!(await readFile(destination)).equals(data))\
+    \ throw new Error('Refusing to overwrite a different Bonsai manifest');\n  } finally\
+    \ {\n    await rm(temp, {force: true});\n  }\n  console.log(JSON.stringify({event:\
+    \ 'promoted', model, layers: layers.length}));\n}\n\nfunction ffmpeg(args) {\n\
+    \  return execFileSync('ffmpeg', ['-v', 'error', '-nostdin', ...args], { maxBuffer:\
+    \ 8 * 1024 * 1024 });\n}\n\nasync function visionCheck(name, images, question,\
+    \ expected) {\n  console.log(JSON.stringify({event: 'started', name, frames: images.length}));\n\
+    \  const response = await request('/api/chat', {model, think: false, stream: false,\
+    \ keep_alive: '5m',\n    options: {num_ctx: 8192, num_thread: 2, num_predict:\
+    \ 160, temperature: 0},\n    messages: [{role: 'user', content: question, images:\
+    \ images.map(image => image.toString('base64'))}]}, 540_000);\n  const raw = response.message?.content\
+    \ ?? '';\n  const result = JSON.parse(raw.match(/\\{[\\s\\S]*\\}/)?.[0] ?? 'null');\n\
+    \  console.log(JSON.stringify({event: 'completed', name, frames: images.length,\n\
+    \    seconds: response.total_duration / 1e9, promptTokens: response.prompt_eval_count,\
+    \ content: raw}));\n  if (!result?.summary || !Array.isArray(result.tags) || !expected.test(result.summary))\
+    \ {\n    throw new Error(`Invalid or visually incorrect ${name} caption`);\n \
+    \ }\n}\n\nif (process.env.PROMOTE_MODEL_ONLY === 'true') {\n  await promoteModel();\n\
+    \  process.exit(0);\n}\nawait waitForServer();\nif (process.env.IMPORT_MODEL !==\
+    \ 'false') await importModel();\nconst photo = ffmpeg(['-f', 'lavfi', '-i', 'color=c=green:s=768x512',\
+    \ '-frames:v', '1', '-f', 'mjpeg', '-']);\nawait visionCheck('photo', [photo],\
+    \ 'What solid color covers this photo? Answer only with JSON containing summary\
+    \ and tags.', /\\bgreen\\b/i);\n\n// Use actual decoded frames from a two-scene\
+    \ video, in reverse alphabetical color order.\nconst vid = '/tmp/bonsai-vision-canary.mp4';\n\
+    ffmpeg(['-y', '-f', 'lavfi', '-i', 'color=c=red:s=768x512:r=2:d=2', '-f', 'lavfi',\
+    \ '-i', 'color=c=blue:s=768x512:r=2:d=2',\n  '-filter_complex', 'concat=n=2:v=1:a=0',\
+    \ '-c:v', 'libx264', vid]);\nconst frames = Array.from({length: 8}, (_, i) =>\
+    \ ffmpeg(['-ss', String(i / 2), '-i', vid, '-frames:v', '1', '-f', 'mjpeg', '-']));\n\
+    if (frames.some(frame => !frame.length)) throw new Error('Failed to decode all\
+    \ eight video frames');\nawait visionCheck('video', frames, 'These images are\
+    \ eight frames from a video in chronological order. In summary, state the first\
+    \ and last colors in order. Answer only with JSON containing summary and tags.',\
+    \ /\\bred\\b.*\\bblue\\b/is);\nconst active = await request('/api/ps');\nconst\
+    \ models = active.models.map(({name, size, size_vram}) => ({name, size, size_vram}));\n\
+    if (process.env.REQUIRE_GPU === 'true' && !models.some(entry => entry.name.split(':')[0]\
+    \ === model && entry.size_vram > 0)) {\n  throw new Error('Bonsai vision passed\
+    \ but the model has no GPU allocation');\n}\nconsole.log(JSON.stringify({event:'passed',\
+    \ models}));\n"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ollama-bonsai-promote-v1
+  namespace: ollama
+spec:
+  podSelector:
+    matchLabels:
+      app: ollama-bonsai-promote-v1
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-bonsai-promote-v1
+  namespace: ollama
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1500
+  template:
+    metadata:
+      labels:
+        app: ollama-bonsai-promote-v1
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: canary
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        command:
+        - node
+        - /scripts/check.mjs
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: store
+          mountPath: /store
+        - name: script
+          mountPath: /scripts
+          readOnly: true
+        env:
+        - name: PROMOTE_MODEL_ONLY
+          value: 'true'
+      volumes:
+      - name: store
+        persistentVolumeClaim:
+          claimName: ollama-models
+      - name: script
+        configMap:
+          name: ollama-bonsai-promote-v1
