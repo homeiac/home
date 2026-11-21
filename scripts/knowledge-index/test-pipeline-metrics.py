@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "enrichers"))
-from pipeline_metrics import PipelineMetrics, EDGES, TITLES
+from pipeline_metrics import PipelineMetrics, MediaCacheProbe, EDGES, TITLES
 import media_summary
 
 
@@ -137,6 +137,26 @@ class PipelineTests(unittest.TestCase):
             self.assertIn('media_pipeline_persisted_items_total{enricher="e1",kind="photo",status="ok"} 0', text)
             self.assertIn('media_pipeline_stage_operations_total{enricher="e1",kind="batch",stage="write"} 1', text)
             self.assertNotIn("private.jpg", text)
+
+    def test_mac_cache_requires_delivery_and_evicts_by_bytes(self):
+        cache = MediaCacheProbe(10)
+        frames = [(b"a", 7), (b"b", 3)]
+        cache.observe(frames)
+        self.assertEqual(cache.reusable, 0)
+        cache.delivered(frames)
+        cache.observe([frames[0]])
+        self.assertEqual(cache.reusable, 12)
+        cache.delivered([(b"c", 2)])
+        self.assertEqual(list(cache.entries), [b"a", b"c"])
+        cache.delivered([(b"huge", 11)])
+        self.assertEqual(cache.used, 9)
+        m = PipelineMetrics(None, "e")
+        request = m.mac_request([b"frame"])
+        self.assertEqual(m.mac_bytes, 8)
+        m.mac_response(request, "photo", 4, {"timings": {"prompt_ms": 300, "predicted_ms": 2000}})
+        m.mac_request([b"frame"])
+        self.assertTrue(all(c.reusable == 8 for c in m.mac_cache.values()))
+        self.assertEqual(m.mac_seconds["prompt", "photo"], 0.3)
 
     def test_mac_failure_retries_only_unfinished_work_on_primary(self):
         # Arrange for the last Mac request to fail after the RTX pool drained.

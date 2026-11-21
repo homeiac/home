@@ -15,3 +15,9 @@ Run `factorial.py --inputs <pilot media folder> --output <private evaluation fol
 The initial factors are two or twenty server slots and two or twenty offered requests, with a separate eight/eight trial. Sustained macOS memory pressure excludes that allocation from further trials. When this happens, the runner completes the comparison at a lower upper level. A production candidate must complete all 40 timed requests across both blocks with normal memory pressure. Among candidates within 5% of the fastest rate, the lowest pooled p95 latency wins, with peak resident memory as the tiebreaker.
 
 Run `decision.py <evaluation folder>/factorial.sqlite3` for the comparison and `export_eval.py <evaluation folder>/factorial.sqlite3 <output.duckdb>` to query the two benchmark tables with DuckDB. A trial marked “Not run” has no timing data.
+
+## Cache diagnostics
+
+The host simulates 64 MiB, 256 MiB and 1 GiB least-recently-used frame caches on requests that reach Metal after caption-cache lookup. Each entry retains a frame digest and JPEG size. Grafana shows the percentage of transmitted image bytes each capacity could reuse. The accompanying timing panel separates client wall time from the model's reported prompt and generation time.
+
+For a faster, read-only sample on Piglet, run `replay_cache.py --index <index> --library <library> --enricher <id> --limit 512`. It decodes the next pending items and simulates sequential successful deliveries before backend selection or caption-cache lookup. For a link-only control, `CB_HOST=root@<inventory-host> python3 network_probe.py <pilot media folder> <output.json>` posts synthetic bodies sized to match the previews. These controls complement the live counters.

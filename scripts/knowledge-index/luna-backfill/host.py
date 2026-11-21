@@ -243,6 +243,13 @@ def export_metrics(db):
     content=[f'knowledge_index_luna_saved {saved}',
              f'knowledge_index_luna_proxy_usd {settled}',
              f'knowledge_index_luna_budget_held_usd {prior+held}']
+    counts = {state: n for state, n, _, _ in rows}
+    for state in ("pending", "reserved", "sent", "ok", "unknown", "source_error"):
+        content.append(f'knowledge_index_luna_jobs{{state="{state}"}} {counts.get(state, 0)}')
+    unpublished = db.execute("SELECT count(*) FROM jobs WHERE state='ok' AND published=0").fetchone()[0]
+    blocked = db.execute("SELECT EXISTS(SELECT 1 FROM config WHERE key='blocked' AND value!='')").fetchone()[0]
+    content.extend([f'knowledge_index_luna_awaiting_publish {unpublished}', f'knowledge_index_luna_blocked {blocked}',
+                    f'knowledge_index_luna_heartbeat_timestamp_seconds {int(time.time())}'])
     tmp=dest.with_name(dest.name+'.'+uuid.uuid4().hex+'.tmp')
     tmp.write_text('\n'.join(content)+'\n')
     tmp.chmod(0o644)
@@ -294,7 +301,7 @@ def main():
         elif op=='reserve':result=add_context(db,reserve(db,request))
         elif op=='finish':result=finish(db,request)
         else:raise ValueError('Unexpected operation')
-        if op in ('init','publish','reserve'):
+        if op in ('init','publish','reserve','start','finish','release','recover'):
             export_metrics(db)
         print(json.dumps(result,ensure_ascii=False))
 

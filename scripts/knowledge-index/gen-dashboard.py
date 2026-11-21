@@ -323,9 +323,51 @@ def panels():
         panel['targets'][0].update(instant=True, range=False)
     backend_series = [(backend_pace(name), label) for name, label in
                       (("primary", "RTX"), ("metal", "Mac Metal"), ("cache", "Cache"))]
+    luna_rate = 'clamp_min(max(deriv(knowledge_index_luna_saved' + INST + '[10m])), 0) * 60'
+    backend_series.append((luna_rate, "Luna · Enterprise"))
     backends = series("Parquet summaries saved per minute by backend", backend_series, 0, 16, 24, 6, decimals=1,
-                      description="Successful writes from the shared queue, counted after the Parquet file is published. A sleeping Mac contributes zero while RTX continues processing.")
-    return intro + throughput + luna + [backends] + shift(details, THROUGHPUT_HEIGHT + 10) + shift(p, 27 + THROUGHPUT_HEIGHT)
+                      description="Bonsai uses the shared RTX and Mac queue. Luna writes a separate comparison dataset. Each line measures saved rows over ten minutes. The same asset can have both a Bonsai and a Luna caption.")
+    scope = "{" + SUMMARY_SELECTION + "}"
+    hit_bytes = f'sum by(capacity_mib)(increase(media_pipeline_mac_cache_reusable_bytes_total{scope}[1h]))'
+    sent_bytes = f'sum(increase(media_pipeline_mac_candidate_bytes_total{scope}[1h]))'
+    cache_sim = series("Mac preview cache · estimated bytes reusable",
+                       [(f'100 * {hit_bytes} / scalar({sent_bytes} > 0)', "{{capacity_mib}} MiB")],
+                       0, 22, 12, 6, decimals=2, unit="percent",
+                       description="Last hour of actual Mac-bound JPEG traffic after the existing caption cache. Three simulated LRU capacities retain only frame hashes and sizes. A zero means no observed reusable bytes. A gap means no traffic.")
+    seconds = f'sum by(phase,kind)(rate(media_pipeline_mac_phase_seconds_total{scope}[10m]))'
+    counts = f'sum by(phase,kind)(rate(media_pipeline_mac_phase_observations_total{scope}[10m]))'
+    phases = series("Mac inference seconds per successful request", [(f'{seconds} / ({counts} > 0)', "{{kind}} · {{phase}}")],
+                    12, 22, 12, 6, decimals=2, unit="s",
+                    description="Round trip starts on Piglet before the HTTP request. Prompt processing includes visual input. Generation is output decoding. Queueing, transport and other server overhead contribute to the round trip.")
+    host_fresh = f'time() - media_pipeline_heartbeat_timestamp_seconds{scope} < 60'
+    def host_value(metric, backend=None):
+        selector = scope if backend is None else scope[:-1] + f',backend="{backend}"}}'
+        return f'max({metric}{selector} and on(instance,enricher,job) ({host_fresh}) and on(instance,enricher,job) (media_pipeline_running{scope} == 1))'
+    def luna_value(metric, state=None, fresh=True):
+        selector = INST if state is None else INST[:-1] + f',state="{state}"}}'
+        clause = ' and on(instance,job) (time() - knowledge_index_luna_heartbeat_timestamp_seconds' + INST + ' < 240)' if fresh else ''
+        return f'max({metric}{selector}{clause})'
+    def location(title, queries, x, description):
+        panel = _panel("stat", title, queries, x, 6, 6, 5, decimals=0, description=description,
+                       extra={"options": {"textMode": "value_and_name", "orientation": "vertical", "graphMode": "none"}})
+        panel["fieldConfig"]["defaults"]["noValue"] = "No recent report"
+        for target in panel["targets"]:
+            target.update(instant=True, range=False)
+        return panel
+    locations = [row("Where work is running", 5),
+        location("RTX 3070 · Bonsai", [(host_value("media_pipeline_backend_in_flight", "primary"), "Active requests")], 0,
+                 "Ollama runs in K3s on Piglet’s RTX. The summary worker reserves two model slots."),
+        location("Mac GPU · Bonsai", [(host_value("media_pipeline_backend_in_flight", "metal"), "Active requests"),
+                                      (host_value("media_pipeline_mac_request_limit"), "Available request capacity")], 6,
+                 "Piglet sends distinct pending items to the Mac Metal worker. Zero capacity means it is currently unavailable for backfill."),
+        location("Mac client → Enterprise Luna", [(luna_value("knowledge_index_luna_jobs", "sent"), "Submitted"),
+                                                (luna_value("knowledge_index_luna_jobs", "reserved"), "Preparing"),
+                                                (luna_value("knowledge_index_luna_blocked"), "Budget or usage hold")], 12,
+                 "The Mac client submits to Enterprise Codex. Piglet tracks leases and estimated spend. A stale report hides current activity."),
+        location("Piglet · Luna publication", [(luna_value("knowledge_index_luna_jobs", "pending", False), "Pending"),
+                                              (luna_value("knowledge_index_luna_awaiting_publish"), "Completed, awaiting Parquet")], 18,
+                 "Luna has a separate queue and Parquet dataset on Piglet. The Bonsai queue and its finish estimate appear above.")]
+    return intro + locations + shift(throughput + luna + [backends, cache_sim, phases], 6) + shift(details, THROUGHPUT_HEIGHT + 22) + shift(p, 39 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():
@@ -379,6 +421,19 @@ def pipeline_panels():
     graph["targets"][0]["expr"] += ' or label_replace(((100 * sum by(id,title) ('+context_rate+') / scalar(sum('+context_rate+')) >= 0) or sum by(id,title)(photo_context_stage_seconds_total'+INST+') * 0), "title", "$1 (%)", "title", "(.+)")'
     graph["targets"][0]["expr"] += ' or '+node('sum(photo_context_jobs{instance=~"$instance",kind=~"ready|retry"})','photo_context_jobs','Photo context queue (photos)')
     graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_context_edge_info'+INST+')'
+    # Luna's comparison queue and writer are distinct from the local Bonsai stream.
+    luna_flow = [("luna_queue", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="pending"})', "Piglet Luna queue (items)"),
+                 ("luna_client", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="reserved"})', "Mac Luna client (reserved)"),
+                 ("luna_cloud", 'max(knowledge_index_luna_jobs{instance=~"$instance",state="sent"})', "Enterprise Luna (submitted)"),
+                 ("luna_write", 'max(knowledge_index_luna_saved'+INST+')', "Piglet Luna Parquet (captions)")]
+    for index, (ident, expression, title) in enumerate(luna_flow):
+        if ident in ("luna_client", "luna_cloud"):
+            expression += ' and on() (time() - max(knowledge_index_luna_heartbeat_timestamp_seconds' + INST + ') < 240)'
+        graph["targets"][0]["expr"] += " or " + node(expression, ident, title)
+        if index:
+            source = luna_flow[index - 1][0]
+            edge = f'label_replace(label_replace(label_replace((({expression}) * 0 + 1), "id", "{source}-{ident}", "", ""), "source", "{source}", "", ""), "target", "{ident}", "", "")'
+            graph["targets"][1]["expr"] += " or " + edge
     for backend, title in (("primary", "RTX"), ("metal", "Mac Metal")):
         rate = backend_pace(backend)
         ident = "summary_" + backend

@@ -4,7 +4,8 @@ The worker writes this independently of the expensive five-minute index exporter
 Counters reset on process restart; Prometheus rate/increase handles the reset.
 No media paths, prompts, transcripts, or summaries enter these metrics.
 """
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
+import hashlib
 from contextlib import contextmanager
 import json
 import logging
@@ -22,6 +23,12 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
          ("decode", "prompt"), ("prompt", "inference"), ("inference", "parse"),
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
 PIPELINE_HELP = {
+    "media_pipeline_backend_in_flight": ("gauge", "HTTP model requests currently awaiting a response, by backend"),
+    "media_pipeline_mac_request_limit": ("gauge", "Mac request capacity discovered at the latest batch selection"),
+    "media_pipeline_mac_candidate_bytes_total": ("counter", "Base64 JPEG bytes offered to Metal after caption cache misses"),
+    "media_pipeline_mac_cache_reusable_bytes_total": ("counter", "Base64 bytes reusable under a bounded simulated LRU of successful frame transfers"),
+    "media_pipeline_mac_phase_seconds_total": ("counter", "Seconds by Mac request phase; round trip includes upload, queue, compute and return"),
+    "media_pipeline_mac_phase_observations_total": ("counter", "Responses reporting the corresponding Mac request phase"),
     "media_pipeline_backend_saved_total": ("counter", "Successful Parquet writes by execution backend or cache hit"),
     "media_pipeline_cache_hits_total": ("counter", "Successful captions reused for identical model inputs; inference requests avoided"),
     "media_pipeline_stage_seconds_total": ("counter", "Wall seconds in each stage, including in-flight work; inference includes transport and server time"),
@@ -42,6 +49,34 @@ PIPELINE_HELP = {
 }
 
 
+class MediaCacheProbe:
+    """Simulate a bounded JPEG cache. Store only digests and sizes on the queue host."""
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.entries = OrderedDict()
+        self.used = self.reusable = 0
+
+    def observe(self, frames):
+        for digest, size in frames:
+            if digest in self.entries:
+                self.reusable += 4 * ((size + 2) // 3)
+                self.entries.move_to_end(digest)
+
+    def delivered(self, frames):
+        for digest, size in frames:
+            if digest in self.entries:
+                self.entries.move_to_end(digest)
+                continue
+            if size > self.capacity:
+                continue
+            while self.used + size > self.capacity:
+                _, dropped = self.entries.popitem(last=False)
+                self.used -= dropped
+            self.entries[digest] = size
+            self.used += size
+
+
 class PipelineMetrics:
     """Measure stages with a monotonic clock and publish atomically every five seconds."""
 
@@ -51,6 +86,12 @@ class PipelineMetrics:
         self.operations = defaultdict(int)
         self.items = defaultdict(int)
         self.persisted = defaultdict(int)
+        self.mac_cache = {mib: MediaCacheProbe(mib * 1024**2) for mib in (64, 256, 1024)}
+        self.mac_bytes = 0
+        self.mac_seconds = defaultdict(float)
+        self.mac_counts = defaultdict(int)
+        self.backend_active = {"primary": 0, "metal": 0}
+        self.mac_limit = 0
         self.backend_saved = dict.fromkeys(("primary", "metal", "cache"), 0)
         self.ollama_seconds = defaultdict(float)
         self.ollama_observations = defaultdict(int)
@@ -130,6 +171,41 @@ class PipelineMetrics:
         with self.lock:
             self.cache_hits[kind] += 1
 
+    @contextmanager
+    def backend_request(self, backend):
+        with self.lock:
+            self.backend_active[backend] += 1
+        try:
+            yield
+        finally:
+            with self.lock:
+                self.backend_active[backend] -= 1
+
+    def mac_capacity(self, offered):
+        with self.lock:
+            self.mac_limit = offered
+
+    def mac_request(self, jpegs):
+        frames = [(hashlib.sha256(jpeg).digest(), len(jpeg)) for jpeg in jpegs]
+        with self.lock:
+            self.mac_bytes += sum(4 * ((size + 2) // 3) for _, size in frames)
+            for cache in self.mac_cache.values():
+                cache.observe(frames)
+        return frames
+
+    def mac_response(self, frames, kind, elapsed, response):
+        timings = response.get("timings") or {}
+        with self.lock:
+            for cache in self.mac_cache.values():
+                cache.delivered(frames)
+            self.mac_seconds["round_trip", kind] += elapsed
+            self.mac_counts["round_trip", kind] += 1
+            for phase, key in (("prompt", "prompt_ms"), ("generation", "predicted_ms")):
+                value = timings.get(key)
+                if isinstance(value, (float, int)) and math.isfinite(value) and value >= 0:
+                    self.mac_seconds[phase, kind] += value / 1000
+                    self.mac_counts[phase, kind] += 1
+
     def ollama(self, response: dict, kind: str) -> None:
         """Keep only numeric timing and token fields; missing fields remain absent."""
         with self.lock:
@@ -175,6 +251,15 @@ class PipelineMetrics:
             for name, values in (("media_pipeline_items_total", self.items), ("media_pipeline_persisted_items_total", self.persisted)):
                 for (kind, status), value in sorted(values.items()):
                     add(name, value, kind=kind, status=status)
+            for backend, count in self.backend_active.items():
+                add("media_pipeline_backend_in_flight", count, backend=backend)
+            add("media_pipeline_mac_request_limit", self.mac_limit)
+            add("media_pipeline_mac_candidate_bytes_total", self.mac_bytes)
+            for mib, cache in self.mac_cache.items():
+                add("media_pipeline_mac_cache_reusable_bytes_total", cache.reusable, capacity_mib=mib)
+            for (phase, kind), seconds in self.mac_seconds.items():
+                add("media_pipeline_mac_phase_seconds_total", seconds, phase=phase, kind=kind)
+                add("media_pipeline_mac_phase_observations_total", self.mac_counts[phase, kind], phase=phase, kind=kind)
             for backend, count in self.backend_saved.items():
                 add("media_pipeline_backend_saved_total", count, backend=backend)
             if self.pending is not None:

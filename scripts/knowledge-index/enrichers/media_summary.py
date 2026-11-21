@@ -154,8 +154,14 @@ def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="open
         body = {"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2, **(extra or {})}
         url = endpoint.rstrip("/") + "/v1/chat/completions"
     req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json", **(headers or {})})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    mac_frames = metrics.mac_request(jpegs) if endpoint == MAC_ENDPOINT and metrics is not None else None
+    started = time.monotonic()
+    backend = "metal" if endpoint == MAC_ENDPOINT else "primary"
+    tracking = metrics.backend_request(backend) if metrics is not None else nullcontext()
+    with tracking, urllib.request.urlopen(req, timeout=timeout) as resp:
         out = json.load(resp)
+    if mac_frames is not None:
+        metrics.mac_response(mac_frames, kind, time.monotonic() - started, out)
     if api == "ollama" and metrics is not None:
         metrics.ollama(out, kind)
     return out["message"]["content"] if api == "ollama" else out["choices"][0]["message"]["content"]
@@ -338,6 +344,7 @@ def run(a):
         metal = partial(summarize, library=a.library, a=metal_args, metrics=metrics, cache=cache)
         while remaining > 0:
             mac_slots, metal_args.model_headers = mac_route(a)
+            metrics.mac_capacity(mac_slots)
             fetch_size = max(a.batch_size, 4 * (a.parallel + mac_slots)) if mac_slots else a.batch_size
             with metrics.measure("queue"):
                 rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics)
