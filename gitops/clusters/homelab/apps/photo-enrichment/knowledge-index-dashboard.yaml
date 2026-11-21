@@ -5506,7 +5506,7 @@ data:
         {
           "id": 150,
           "type": "stat",
-          "title": "Bonsai pod",
+          "title": "Standalone Bonsai",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

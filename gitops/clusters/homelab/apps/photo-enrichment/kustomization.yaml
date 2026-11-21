@@ -13,5 +13,3 @@ resources:
   - gpu-maintenance
   - immich-ocr-recovery
   - bonsai.yaml
-  - ollama-bonsai-canary.yaml
-  - ollama-bonsai-promote.yaml

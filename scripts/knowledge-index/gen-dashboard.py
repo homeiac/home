@@ -236,7 +236,7 @@ def panels():
     p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 42)
     overview = work_remaining_panels()
     ollama = next(i for i, panel in enumerate(p) if panel['title'] == 'Ollama pod')
-    p.insert(ollama + 1, stat("Bonsai pod", 'kube_deployment_status_replicas_available{namespace="immich-pilot",deployment="photo-bonsai"}',
+    p.insert(ollama + 1, stat("Standalone Bonsai", 'kube_deployment_status_replicas_available{namespace="immich-pilot",deployment="photo-bonsai"}',
                              9, p[ollama]['gridPos']['y'], w=3, mappings=YN))
     return overview + shift(p, 17)
 

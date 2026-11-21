@@ -88,14 +88,14 @@ index files first.
 
 Spec and design: `openspec/changes/add-media-summaries-enricher/` (OpenSpec; `npx @fission-ai/openspec@1.16.0 validate --strict`).
 `scripts/knowledge-index/enrichers/media_summary.py` reads photos and videos read-only on the Proxmox host, asks an
-OpenAI-compatible vision server (Bonsai served by llama.cpp on the RTX 3070 in the GPU VM) for a summary
+vision server (Bonsai served by Ollama on the RTX 3070 in the GPU VM) for a summary
 and tags, and writes `summaries/<enricher>/<batch>.parquet` (temporary file and atomic rename, 16 items per Bonsai batch).
 Photo = one image (long edge 1024) + context (date, album, people, has-GPS). Video = up to 8 frames across the clip + a
 faster-whisper transcript when that package is installed and the clip has audio. A file that cannot be decoded or answered gets
 a `status='error'` row and stays queued.
 
 ```bash
-export CB_HOST=root@<host> KI_ENDPOINT=http://127.0.0.1:18082 KI_MODEL=bonsai-27b KI_API=openai
+export CB_HOST=root@<host> KI_ENDPOINT=http://<existing-ollama-service> KI_MODEL=bonsai-27b KI_API=ollama
 scripts/knowledge-index/knowledge-index-ctl.sh enrich sample 20   # print 20 summaries, write nothing: judge quality first
 scripts/knowledge-index/knowledge-index-ctl.sh enrich start       # background unit knowledge-index-enrich (nice, idle I/O)
 scripts/knowledge-index/knowledge-index-ctl.sh enrich status      # unit state, last log lines, rows per enricher/status
@@ -112,22 +112,29 @@ summary, tags[], frames_sampled, duration_s, status (`ok`/`error`), error, creat
 Queue: `SELECT path FROM gphotos_to_summarize('qwen25vl-3b-p1') LIMIT 500` (a table macro, so a brand-new enricher id works).
 Search: `SELECT f.path, s.summary FROM media_summaries s JOIN gphotos_media f USING (path) WHERE s.summary ILIKE '%birthday%'`.
 
-### Bonsai cutover and rollback
+### Bonsai deployment and rollback
 
-Flux runs `photo-bonsai` on Piglet using the prepared read-only model directory.
-The Proxmox loopback bridge connects the workers to the private ClusterIP through
-the existing guest agent. The benchmark used Bonsai with Gemma unloaded. The
-Ollama Deployment was taken to zero to free its GPU share, retaining the model
-volume for restoration. Ollama clients cannot generate while it is scaled down.
+Ollama owns one of Piglet's four GPU scheduling shares. Both photo workers send
+native requests to the same `bonsai-27b` model, and other Ollama callers keep their
+existing model names. A share grants access to the RTX 3070, whose VRAM is shared
+with Frigate and the Immich GPU services. Ollama keeps one model resident to fit
+within that memory budget, so switching models can incur a cold load.
 
-Use `switch-photo-bonsai.py prepare` for the bridge, then `switch-summary` and
-`switch-context` separately after validating inference. Summary rows keep their
-existing queue identity and record the actual new model. The context worker
-keeps its prior seed fingerprint, so changing inference servers does not redo
-completed jobs. `fix-heic-summary` and `fix-heic-context` apply the decoder to
-existing host releases. To restore Ollama, stop Bonsai through Flux, revert the
-Ollama replica change, verify the model, and use `restore-summary` and
-`restore-context` to put both consumers back on their backed-up settings.
+The private GPU test used the verified PrismML model and projector. Ollama
+correctly captioned a synthetic green photo and an eight-frame video from red to
+blue. The photo took 147 seconds including cold start, and the warm video took
+6.5 seconds. Ollama reported all 4,724,893,940 allocated model bytes in VRAM. The
+promotion Job linked the tested model into the shared store alongside existing
+models. The test and promotion manifests can be rendered with
+`gen-ollama-bonsai-canary.py --gpu` and `--promote` as needed.
+
+Use `switch-photo-bonsai.py ollama-summary` and `ollama-context` to switch running
+standalone consumers separately. The summary queue identity and context seed
+fingerprint preserve completed work. For standalone rollback, return the GPU
+share to `photo-bonsai` through Flux, check its private loopback bridge, then
+restore each consumer's backed-up `standalone-service.conf` drop-in and restart
+that worker. `fix-heic-summary` and `fix-heic-context` apply the decoder to older
+host releases.
 
 ## Metrics, dashboard and alerts (as code)
 

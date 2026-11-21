@@ -79,6 +79,10 @@ case "${1:-}" in
       openai) KI_EXTRA='{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":384}'; KI_BATCH=16;;
       *) echo 'KI_API must be ollama or openai' >&2; exit 1;;
     esac
+    if [[ "$KI_API" == ollama && "$KI_MODEL" == bonsai-27b ]]; then
+      KI_EXTRA='{"think":false,"options":{"num_ctx":8192,"num_predict":384,"temperature":0.2}}'
+      KI_BATCH=16
+    fi
     run_cmd() {   # runs on the host beside the read-only photo library
       echo "$KI/venv/bin/python $KI/enrichers/media_summary.py run --index \"\$IDX\" --library \"\$PH/library\" --endpoint '${KI_ENDPOINT:?set KI_ENDPOINT}' \
             --model '$KI_MODEL' --api '$KI_API' --extra-json '$KI_EXTRA' --batch-size $KI_BATCH --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB \
