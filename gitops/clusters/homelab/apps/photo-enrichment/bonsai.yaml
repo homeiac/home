@@ -4,7 +4,7 @@ metadata:
   name: photo-bonsai
   namespace: immich-pilot
 spec:
-  replicas: 1
+  replicas: 0  # Temporarily give the test runner this GPU share.
   strategy:
     type: Recreate
   selector:

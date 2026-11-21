@@ -12,6 +12,19 @@ const files = {
   'Bonsai-27B-mmproj-Q8_0.gguf': 'eb561d41a7bbeb0fcf04883c8af11078ef6cae0a66862a0b68443cfca495269d',
 };
 
+async function waitForServer() {
+  const deadline = Date.now() + 300_000;
+  while (Date.now() < deadline) {
+    try {
+      await request('/api/version', undefined, 5_000);
+      return;
+    } catch {
+      await new Promise(resolve => setTimeout(resolve, 5_000));
+    }
+  }
+  throw new Error('Ollama did not become ready');
+}
+
 async function request(path, body, timeout = 300_000) {
   const options = { signal: AbortSignal.timeout(timeout) };
   if (body) Object.assign(options, { method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -68,6 +81,7 @@ async function visionCheck(name, images, question, expected) {
   }
 }
 
+await waitForServer();
 if (process.env.IMPORT_MODEL !== 'false') await importModel();
 const photo = ffmpeg(['-f', 'lavfi', '-i', 'color=c=green:s=768x512', '-frames:v', '1', '-f', 'mjpeg', '-']);
 await visionCheck('photo', [photo], 'What solid color covers this photo? Answer only with JSON containing summary and tags.', /\bgreen\b/i);
@@ -80,4 +94,8 @@ const frames = Array.from({length: 8}, (_, i) => ffmpeg(['-ss', String(i / 2), '
 if (frames.some(frame => !frame.length)) throw new Error('Failed to decode all eight video frames');
 await visionCheck('video', frames, 'These images are eight frames from a video in chronological order. In summary, state the first and last colors in order. Answer only with JSON containing summary and tags.', /\bred\b.*\bblue\b/is);
 const active = await request('/api/ps');
-console.log(JSON.stringify({event:'passed', models: active.models.map(({name, size, size_vram}) => ({name, size, size_vram}))}));
+const models = active.models.map(({name, size, size_vram}) => ({name, size, size_vram}));
+if (process.env.REQUIRE_GPU === 'true' && !models.some(entry => entry.name.split(':')[0] === model && entry.size_vram > 0)) {
+  throw new Error('Bonsai vision passed but the model has no GPU allocation');
+}
+console.log(JSON.stringify({event:'passed', models}));

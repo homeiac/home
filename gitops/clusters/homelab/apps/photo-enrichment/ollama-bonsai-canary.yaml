@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ollama-bonsai-vision-canary-v1
-  namespace: immich-pilot
+  name: ollama-bonsai-vision-gpu-v1
+  namespace: ollama
 data:
   check.mjs: "// Import verified local model files and exercise Ollama's native vision\
     \ API.\nimport { createHash } from 'node:crypto';\nimport { createReadStream,\
@@ -11,19 +11,24 @@ data:
     \ 'node:child_process';\n\nconst endpoint = process.env.OLLAMA_ENDPOINT ?? 'http://127.0.0.1:11434';\n\
     const model = 'bonsai-27b';\nconst files = {\n  'Bonsai-27B-Q1_0.gguf': '17ef842e47450caeb8eaa3ebfbbab5d2f2278b62b79be107985fb69a2f819aa0',\n\
     \  'Bonsai-27B-mmproj-Q8_0.gguf': 'eb561d41a7bbeb0fcf04883c8af11078ef6cae0a66862a0b68443cfca495269d',\n\
-    };\n\nasync function request(path, body, timeout = 300_000) {\n  const options\
-    \ = { signal: AbortSignal.timeout(timeout) };\n  if (body) Object.assign(options,\
-    \ { method: 'POST', headers: {'Content-Type': 'application/json'},\n    body:\
-    \ JSON.stringify(body) });\n  const response = await fetch(endpoint + path, options);\n\
-    \  const data = await response.json();\n  if (!response.ok || data.error) throw\
-    \ new Error(`${path}: ${response.status} ${data.error ?? ''}`);\n  return data;\n\
-    }\n\nasync function importModel() {\n  await mkdir('/store/blobs', {recursive:\
-    \ true});\n  for (const [name, hash] of Object.entries(files)) {\n    const destination\
-    \ = `/store/blobs/sha256-${hash}`;\n    const temp = destination + '.bonsai-import';\n\
-    \    const digest = createHash('sha256');\n    try {\n      await pipeline(createReadStream(`/source/${name}`),\
-    \ async function* (chunks) {\n        for await (const chunk of chunks) {\n  \
-    \        digest.update(chunk);\n          yield chunk;\n        }\n      }, createWriteStream(temp));\n\
-    \      if (digest.digest('hex') !== hash) throw new Error(`SHA-256 mismatch: ${name}`);\n\
+    };\n\nasync function waitForServer() {\n  const deadline = Date.now() + 300_000;\n\
+    \  while (Date.now() < deadline) {\n    try {\n      await request('/api/version',\
+    \ undefined, 5_000);\n      return;\n    } catch {\n      await new Promise(resolve\
+    \ => setTimeout(resolve, 5_000));\n    }\n  }\n  throw new Error('Ollama did not\
+    \ become ready');\n}\n\nasync function request(path, body, timeout = 300_000)\
+    \ {\n  const options = { signal: AbortSignal.timeout(timeout) };\n  if (body)\
+    \ Object.assign(options, { method: 'POST', headers: {'Content-Type': 'application/json'},\n\
+    \    body: JSON.stringify(body) });\n  const response = await fetch(endpoint +\
+    \ path, options);\n  const data = await response.json();\n  if (!response.ok ||\
+    \ data.error) throw new Error(`${path}: ${response.status} ${data.error ?? ''}`);\n\
+    \  return data;\n}\n\nasync function importModel() {\n  await mkdir('/store/blobs',\
+    \ {recursive: true});\n  for (const [name, hash] of Object.entries(files)) {\n\
+    \    const destination = `/store/blobs/sha256-${hash}`;\n    const temp = destination\
+    \ + '.bonsai-import';\n    const digest = createHash('sha256');\n    try {\n \
+    \     await pipeline(createReadStream(`/source/${name}`), async function* (chunks)\
+    \ {\n        for await (const chunk of chunks) {\n          digest.update(chunk);\n\
+    \          yield chunk;\n        }\n      }, createWriteStream(temp));\n     \
+    \ if (digest.digest('hex') !== hash) throw new Error(`SHA-256 mismatch: ${name}`);\n\
     \      await rename(temp, destination);\n    } finally {\n      await rm(temp,\
     \ {force: true});\n    }\n    console.log(`Verified and staged ${name}`);\n  }\n\
     \  await request('/api/create', { model, stream: false,\n    files: Object.fromEntries(Object.entries(files).map(([name,\
@@ -44,12 +49,12 @@ data:
     \    seconds: response.total_duration / 1e9, promptTokens: response.prompt_eval_count,\
     \ content: raw}));\n  if (!result?.summary || !Array.isArray(result.tags) || !expected.test(result.summary))\
     \ {\n    throw new Error(`Invalid or visually incorrect ${name} caption`);\n \
-    \ }\n}\n\nif (process.env.IMPORT_MODEL !== 'false') await importModel();\nconst\
-    \ photo = ffmpeg(['-f', 'lavfi', '-i', 'color=c=green:s=768x512', '-frames:v',\
-    \ '1', '-f', 'mjpeg', '-']);\nawait visionCheck('photo', [photo], 'What solid\
-    \ color covers this photo? Answer only with JSON containing summary and tags.',\
-    \ /\\bgreen\\b/i);\n\n// Use actual decoded frames from a two-scene video, in\
-    \ reverse alphabetical color order.\nconst vid = '/tmp/bonsai-vision-canary.mp4';\n\
+    \ }\n}\n\nawait waitForServer();\nif (process.env.IMPORT_MODEL !== 'false') await\
+    \ importModel();\nconst photo = ffmpeg(['-f', 'lavfi', '-i', 'color=c=green:s=768x512',\
+    \ '-frames:v', '1', '-f', 'mjpeg', '-']);\nawait visionCheck('photo', [photo],\
+    \ 'What solid color covers this photo? Answer only with JSON containing summary\
+    \ and tags.', /\\bgreen\\b/i);\n\n// Use actual decoded frames from a two-scene\
+    \ video, in reverse alphabetical color order.\nconst vid = '/tmp/bonsai-vision-canary.mp4';\n\
     ffmpeg(['-y', '-f', 'lavfi', '-i', 'color=c=red:s=768x512:r=2:d=2', '-f', 'lavfi',\
     \ '-i', 'color=c=blue:s=768x512:r=2:d=2',\n  '-filter_complex', 'concat=n=2:v=1:a=0',\
     \ '-c:v', 'libx264', vid]);\nconst frames = Array.from({length: 8}, (_, i) =>\
@@ -58,18 +63,22 @@ data:
     \ eight video frames');\nawait visionCheck('video', frames, 'These images are\
     \ eight frames from a video in chronological order. In summary, state the first\
     \ and last colors in order. Answer only with JSON containing summary and tags.',\
-    \ /\\bred\\b.*\\bblue\\b/is);\nconst active = await request('/api/ps');\nconsole.log(JSON.stringify({event:'passed',\
-    \ models: active.models.map(({name, size, size_vram}) => ({name, size, size_vram}))}));\n"
+    \ /\\bred\\b.*\\bblue\\b/is);\nconst active = await request('/api/ps');\nconst\
+    \ models = active.models.map(({name, size, size_vram}) => ({name, size, size_vram}));\n\
+    if (process.env.REQUIRE_GPU === 'true' && !models.some(entry => entry.name.split(':')[0]\
+    \ === model && entry.size_vram > 0)) {\n  throw new Error('Bonsai vision passed\
+    \ but the model has no GPU allocation');\n}\nconsole.log(JSON.stringify({event:'passed',\
+    \ models}));\n"
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ollama-bonsai-vision-canary-v1
-  namespace: immich-pilot
+  name: ollama-bonsai-vision-gpu-v1
+  namespace: ollama
 spec:
   podSelector:
     matchLabels:
-      app: ollama-bonsai-vision-canary-v1
+      app: ollama-bonsai-vision-gpu-v1
   policyTypes:
   - Ingress
   - Egress
@@ -77,15 +86,15 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ollama-bonsai-vision-canary-v1
-  namespace: immich-pilot
+  name: ollama-bonsai-vision-gpu-v1
+  namespace: ollama
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 1500
   template:
     metadata:
       labels:
-        app: ollama-bonsai-vision-canary-v1
+        app: ollama-bonsai-vision-gpu-v1
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
@@ -112,7 +121,13 @@ spec:
         - name: OLLAMA_MAX_LOADED_MODELS
           value: '1'
         - name: CUDA_VISIBLE_DEVICES
-          value: '-1'
+          value: '0'
+        - name: OLLAMA_FLASH_ATTENTION
+          value: 'true'
+        - name: OLLAMA_GPU_OVERHEAD
+          value: '1073741824'
+        - name: OLLAMA_NOPRUNE
+          value: 'true'
         startupProbe:
           exec:
             command:
@@ -124,9 +139,11 @@ spec:
           requests:
             cpu: 500m
             memory: 2Gi
+            nvidia.com/gpu: '1'
           limits:
             cpu: '2'
             memory: 10Gi
+            nvidia.com/gpu: '1'
         securityContext: &id001
           allowPrivilegeEscalation: false
           capabilities:
@@ -158,14 +175,18 @@ spec:
         - name: script
           mountPath: /scripts
           readOnly: true
+        env:
+        - name: REQUIRE_GPU
+          value: 'true'
       volumes:
       - name: store
-        emptyDir:
-          sizeLimit: 8Gi
+        persistentVolumeClaim:
+          claimName: ollama-models
       - name: source
         hostPath:
           path: /var/lib/photo-models/bonsai-27b
           type: Directory
       - name: script
         configMap:
-          name: ollama-bonsai-vision-canary-v1
+          name: ollama-bonsai-vision-gpu-v1
+      runtimeClassName: nvidia

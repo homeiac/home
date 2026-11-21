@@ -187,10 +187,49 @@ def switch(files, unit):
     print(f'{unit} is running with Bonsai. Previous settings were backed up.')
 
 
+def switch_to_ollama(unit):
+    config = Path('/etc/default/knowledge-index').read_text()
+    endpoint = next(line.partition('=')[2].strip().strip('"\'') for line in config.splitlines()
+                    if line.startswith('KI_OLLAMA_URL='))
+    request = urllib.request.Request(endpoint.rstrip('/') + '/api/show',
+                                     json.dumps({'model': MODEL}).encode(), {'Content-Type': 'application/json'})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        if 'vision' not in json.load(response).get('capabilities', []):
+            raise RuntimeError('The existing Ollama endpoint does not advertise Bonsai vision')
+    argv = command(unit)
+    if argv[argv.index('--model') + 1] != MODEL:
+        raise RuntimeError(f'{unit} must already be using Bonsai')
+    if argv[argv.index('--api') + 1] == 'ollama':
+        return
+    if argv[argv.index('--endpoint') + 1] != ENDPOINT:
+        raise RuntimeError(f'{unit} is not using the expected standalone endpoint')
+    set_option(argv, '--endpoint', endpoint)
+    set_option(argv, '--api', 'ollama')
+    if unit == UNITS[0]:
+        set_option(argv, '--extra-json', json.dumps({'think': False, 'options': {
+            'num_ctx': 8192, 'num_predict': 384, 'temperature': 0.2}}))
+    path = dropin(unit)
+    original = path.read_bytes()
+    backup = BACKUP / unit / 'standalone-service.conf'
+    if not backup.exists():
+        replace(backup, original)
+    try:
+        replace(path, exec_start(argv))
+        restart_worker(unit)
+        if command(unit)[argv.index('--api') + 1] != 'ollama':
+            raise RuntimeError(f'{unit} did not start with native Ollama')
+    except Exception:
+        replace(path, original)
+        restart_worker(unit)
+        raise
+    print(f'{unit} is running with Bonsai through Ollama.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['prepare', 'switch-summary', 'switch-context', 'restore-summary',
-                                           'restore-context', 'fix-heic-summary', 'fix-heic-context'])
+                                           'restore-context', 'fix-heic-summary', 'fix-heic-context',
+                                           'ollama-summary', 'ollama-context'])
     args = parser.parse_args()
     if os.environ.get('KI_BONSAI_REMOTE') == '1':
         os.umask(0o077)
@@ -200,6 +239,8 @@ def main():
             switch(json.load(sys.stdin), UNITS[args.action.endswith('-context')])
         elif args.action.startswith('fix-heic-'):
             install_heic(sys.stdin.read(), UNITS[args.action.endswith('-context')])
+        elif args.action.startswith('ollama-'):
+            switch_to_ollama(UNITS[args.action.endswith('-context')])
         else:
             restore(UNITS[args.action.endswith('-context')])
         return
