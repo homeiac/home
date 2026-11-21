@@ -13,3 +13,9 @@ Sign in interactively on still-fawn under the service account by running `sudo -
 Push `enabled: false` in `policy.json` and wait for the existing Mac batch to finish. Verify there are zero sent and reserved leases on Piglet before unloading the Mac launch agent. Push `runner: still-fawn` and `enabled: true`, then start the service or let the timer pick up the change. Verify the runner metric reports still-fawn and that the persisted caption count advances. The Mac worker loaded before runner selection was added defaults to the Mac and must be unloaded before enabling still-fawn.
 
 The service allocates no GPU on still-fawn. It submits to Enterprise Codex with the saved context and writes through the same Piglet ledger.
+
+## Measure a concurrency change
+
+Set `parallel` in the Git policy. The worker reads each new commit between batches. The shared ledger supports up to 24 reservations per batch and the worker allows up to 20 concurrent tasks. Frame preparation on Piglet has a separate four-task limit. The $250 budget includes reserved work and every settled request.
+
+Read the service journal with `journalctl -u knowledge-index-luna.service -o cat --since <trial-start>` on still-fawn and pass it to `python3 scripts/knowledge-index/luna-backfill/measure.py`. It reports media mix, saved throughput, estimated cost per caption and preparation and model-response latency for each tier. On Nov 21, 4, 8 and 20 slots delivered approximately 31, 53 and 66 saves/min. At 20, frame preparation and time waiting for it took longer than the median model request. The samples had different photo/video mixes. Keep the current placement while Piglet preparation limits throughput.
