@@ -6,7 +6,7 @@ metadata:
   labels:
     app: ollama-gpu
 spec:
-  replicas: 1
+  replicas: 0  # Reserve this GPU share for photo-bonsai. See #217.
   strategy:
     type: RollingUpdate
     rollingUpdate:
