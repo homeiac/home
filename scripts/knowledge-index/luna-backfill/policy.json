@@ -4,5 +4,5 @@
   "model": "gpt-6-luna",
   "estimated_limit_usd": 250,
   "batch_size": 24,
-  "parallel": 8
+  "parallel": 20
 }
