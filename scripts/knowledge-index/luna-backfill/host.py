@@ -91,7 +91,15 @@ def frames(db, request):
     if ext in VIDEO_EXTS:
         duration = video_duration(str(file))
         n = min(8,max(1,int(duration)))
-        images = [jpeg_frame(str(file),duration*(i+.5)/n) for i in range(n)]
+        images = []
+        for i in range(n):
+            try:
+                images.append(jpeg_frame(str(file),duration*(i+.5)/n))
+            except RuntimeError:
+                # Containers can extend past their last decodable video frame.
+                continue
+        if not images:
+            images = [jpeg_frame(str(file),0)]
     else:
         images = [jpeg_frame(str(file))]
     return dict(images=[base64.b64encode(b).decode() for b in images])
