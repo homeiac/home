@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "runner": "mac",
   "model": "gpt-6-luna",
   "estimated_limit_usd": 250,
