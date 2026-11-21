@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photo-bonsai
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: photo-bonsai}
+  template:
+    metadata:
+      labels: {app: photo-bonsai}
+    spec:
+      automountServiceAccountToken: false
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pumped-piglet-gpu
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: llama-server
+          image: ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289
+          command: [/models/runtime/llama-prism-b10828-a153697/llama-server]
+          args:
+            - --model
+            - /models/Bonsai-27B-Q1_0.gguf
+            - --mmproj
+            - /models/Bonsai-27B-mmproj-Q8_0.gguf
+            - --alias
+            - bonsai-27b
+            - --host
+            - 0.0.0.0
+            - --port
+            - '8080'
+            - -ngl
+            - '99'
+            - -c
+            - '8192'
+            - -np
+            - '1'
+            - --image-max-tokens
+            - '1024'
+            - --jinja
+            - --cache-type-k
+            - q8_0
+            - --cache-type-v
+            - q8_0
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /models/runtime/llama-prism-b10828-a153697:/models/cuda-libs/nvidia/cuda_runtime/lib:/models/cuda-libs/nvidia/cublas/lib:/models/system-libs
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          ports:
+            - {name: http, containerPort: 8080}
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {nvidia.com/gpu: '1', cpu: '2', memory: 2Gi}
+            limits: {nvidia.com/gpu: '1', memory: 12Gi}
+          volumeMounts:
+            - {name: models, mountPath: /models, readOnly: true}
+      volumes:
+        - name: models
+          hostPath:
+            path: /var/lib/photo-models/bonsai-27b
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photo-bonsai
+  namespace: immich-pilot
+spec:
+  selector: {app: photo-bonsai}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: photo-bonsai-worker-only
+  namespace: immich-pilot
+spec:
+  ipAllowList:
+    sourceRange: [192.168.4.175/32]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: photo-bonsai
+  namespace: immich-pilot
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`photo-bonsai.app.home.panderosystems.com`) && (Path(`/health`) || Path(`/v1/chat/completions`))
+      kind: Rule
+      middlewares:
+        - {name: photo-bonsai-worker-only}
+      services:
+        - {name: photo-bonsai, port: 8080}
+  tls: {}

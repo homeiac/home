@@ -12,3 +12,4 @@ resources:
   - immich-sync
   - gpu-maintenance
   - immich-ocr-recovery
+  - bonsai.yaml

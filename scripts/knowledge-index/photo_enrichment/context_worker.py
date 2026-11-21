@@ -114,7 +114,7 @@ def process(*args,**kwargs):
         return _process(*args,**kwargs)
 
 
-def _process(connection,library,endpoint,model,metrics,provider=places.nearby,infer=None,first_photo=""):
+def _process(connection,library,endpoint,model,metrics,provider=places.nearby,infer=None,first_photo="",api='ollama'):
     """One durable job, with retries; singleton session lock fences worker restarts."""
     row=connection.execute("""UPDATE photo_context SET status='running',attempts=attempts+1,updated_at=now()
         WHERE path=(SELECT path FROM photo_context WHERE status IN ('ready','retry') AND available_at<=now()
@@ -144,8 +144,10 @@ def _process(connection,library,endpoint,model,metrics,provider=places.nearby,in
                 else:
                     sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'enrichers'))
                     from media_summary import jpeg_frame,ask_model,parse_answer
+                    options = ({'think': False} if api == 'ollama' else
+                               {'chat_template_kwargs': {'enable_thinking': False}, 'max_tokens': 384})
                     summary,tags=parse_answer(ask_model(endpoint,model,prompt,[jpeg_frame(str(source))],
-                        timeout=180,api='ollama',extra={'think':False}))
+                        timeout=180,api=api,extra=options))
             if source.stat().st_size!=size:raise ValueError('Source changed during inference')
         with metrics.measure('context_save'),telemetry.stage('context.persist'):
             connection.execute("""UPDATE photo_context SET status='done',summary=%s,tags=%s,model=%s,context=%s,
@@ -163,7 +165,7 @@ def _process(connection,library,endpoint,model,metrics,provider=places.nearby,in
     return True
 
 
-def run(state,library,endpoint,model,metrics,max_jobs=0,first_photo=""):
+def run(state,library,endpoint,model,metrics,max_jobs=0,first_photo="",*,api='ollama',seed_model=None):
     with connect() as connection:
         initialize(connection)
         if not connection.execute('SELECT pg_try_advisory_lock(217,8)').fetchone()[0]:
@@ -172,9 +174,9 @@ def run(state,library,endpoint,model,metrics,max_jobs=0,first_photo=""):
         last_seed=0;count=0
         while not max_jobs or count<max_jobs:
             if time.monotonic()-last_seed>300:
-                with metrics.measure('context_queue'):seed(connection,state,model)
+                with metrics.measure('context_queue'):seed(connection,state,seed_model or model)
                 last_seed=time.monotonic()
             metrics.jobs={status:n for status,n in connection.execute('SELECT status,count(*) FROM photo_context GROUP BY status').fetchall()}
-            if process(connection,library,endpoint,model,metrics,first_photo=first_photo):count+=1
+            if process(connection,library,endpoint,model,metrics,first_photo=first_photo,api=api):count+=1
             elif max_jobs:break
             time.sleep(5)

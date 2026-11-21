@@ -273,7 +273,7 @@ data:
             "graphMode": "none",
             "textMode": "value_and_name"
           },
-          "description": "Largest share of measured worker time over 30 minutes. Ollama request includes request overhead and model processing. Compare resource signals below before attributing the delay to hardware."
+          "description": "Largest share of measured worker time over 30 minutes. Model requests include queueing, transport and inference. Compare resource signals below before attributing the delay to hardware."
         },
         {
           "id": 141,
@@ -1568,7 +1568,7 @@ data:
                       "color": "light-blue"
                     },
                     "5": {
-                      "text": "Ollama request",
+                      "text": "Model request",
                       "color": "green"
                     },
                     "6": {
@@ -1943,7 +1943,7 @@ data:
                       "color": "light-blue"
                     },
                     "5": {
-                      "text": "Ollama request",
+                      "text": "Model request",
                       "color": "green"
                     },
                     "6": {
@@ -2164,9 +2164,17 @@ data:
           },
           "targets": [
             {
-              "expr": "sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / (sum by (phase, kind) (rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) > 0)",
+              "expr": "sum by(phase,kind)(rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / (sum by(phase,kind)(rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) > 0)",
               "legendFormat": "{{kind}} / {{phase}}",
               "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            },
+            {
+              "expr": "clamp_min(sum by(kind)(rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"total\"}[$__rate_interval])) / (sum by(kind)(rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"total\"}[$__rate_interval])) > 0) - sum by(kind)(rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"load\"}[$__rate_interval])) / (sum by(kind)(rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"load\"}[$__rate_interval])) > 0) - sum by(kind)(rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"prompt\"}[$__rate_interval])) / (sum by(kind)(rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"prompt\"}[$__rate_interval])) > 0) - sum by(kind)(rate(media_pipeline_ollama_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"generation\"}[$__rate_interval])) / (sum by(kind)(rate(media_pipeline_ollama_observations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",phase=\"generation\"}[$__rate_interval])) > 0), 0)",
+              "legendFormat": "{{kind}} / server remainder",
+              "refId": "B",
               "interval": "30s",
               "instant": false,
               "range": true
@@ -2200,7 +2208,7 @@ data:
               "mode": "multi"
             }
           },
-          "description": "Native API timings: load, prompt processing, generation and total. Total overlaps the components; do not add them. Missing fields are not reported as zero."
+          "description": "Native Ollama API timings for Ollama runs. Server remainder subtracts load, prompt and generation from total. It can include runner wait and request processing. For client wall time, see Model request under Photo or Video: seconds per stage operation."
         },
         {
           "id": 105,

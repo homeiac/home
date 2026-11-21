@@ -128,7 +128,8 @@ class PipelineTests(unittest.TestCase):
         start = next(p["gridPos"]["y"] for p in panels if p["title"] == "Pipeline bottlenecks")
         end = next(p["gridPos"]["y"] for p in panels if p["title"] == "Backfill progress")
         self.assertEqual(end - start, 99)  # Includes the existing queue/snapshot and Frigate rows.
-        self.assertEqual(start, 16)
+        value_start = next(p["gridPos"]["y"] for p in panels if p["title"] == "Value delivered")
+        self.assertEqual(start - value_start, 16)
         self.assertIn("immich_queue_jobs", graph["targets"][0]["expr"])
         self.assertIn("immich_thumbnail_generation", graph["targets"][1]["expr"])
         self.assertIn("photo_enrichment_stage_seconds_total", graph["targets"][0]["expr"])

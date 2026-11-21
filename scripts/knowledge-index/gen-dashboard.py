@@ -98,7 +98,7 @@ def work_remaining_panels():
          stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="Indexed photos and videos awaiting a summary, by selected enricher. Counts use the latest successful export only."),
          stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last hour’s successful summary pace. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
          stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Rate of growth in successful rows saved to Parquet over the last hour."),
-         stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured worker time over 30 minutes. Ollama request includes request overhead and model processing. Compare resource signals below before attributing the delay to hardware.")]
+         stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured worker time over 30 minutes. Model requests include queueing, transport and inference. Compare resource signals below before attributing the delay to hardware.")]
     p += [stat("Photo context still to do", context, 0, 5, w=5, unit="locale"),
           stat("Photo context finish estimate", f'({context} / ({context_pace} > 0)) or ({context} == 0) or ({context} > 0) * 0 - 1', 5, 5, w=5, unit="s", mappings=no_eta, description="Backlog divided by the last hour’s increase in completed jobs. New arrivals and retries can extend the estimate."),
           stat("Photo extraction jobs left", 'sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|running|retry"})', 10, 5, w=5, unit="locale", description="Includes delayed retries. See the PostgreSQL queue section for age and retry counts."),
@@ -248,7 +248,7 @@ def pipeline_panels():
     states = {str(i): {"text": name, "color": color} for i, name, color in [
         (-1, "No recent telemetry", "gray"), (0, "Between stages", "gray"), (1, "Selecting batch", "purple"),
         (2, "Read / decode", "blue"), (3, "Transcribing", "yellow"), (4, "Building prompt", "light-blue"),
-        (5, "Ollama request", "green"), (6, "Parsing answer", "light-purple"), (7, "Writing Parquet", "orange"),
+        (5, "Model request", "green"), (6, "Parsing answer", "light-purple"), (7, "Writing Parquet", "orange"),
         (8, "Finished", "dark-green"), (9, "Failed", "red")]}
     p = [row("Pipeline bottlenecks", 0)]
     p += [stat("Worker stage", current, 0, 1, w=8, mappings=states, legend="{{instance}} / {{enricher}}"),
@@ -318,12 +318,21 @@ def pipeline_panels():
                '(sum by (stage) (rate(media_pipeline_stage_operations_total' + ks + '[$__rate_interval])) > 0)')
         p.append(series(title, [(avg, "{{stage}}")], x, 21, 8, 7, unit="s", decimals=2,
                         description="Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."))
-    ollama_avg = ('sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total' + sel + '[$__rate_interval])) / '
-                  '(sum by (phase, kind) (rate(media_pipeline_ollama_observations_total' + sel + '[$__rate_interval])) > 0)')
+    def ollama_average(labels, group):
+        return (f'sum by({group})(rate(media_pipeline_ollama_seconds_total{labels}[$__rate_interval])) / '
+                f'(sum by({group})(rate(media_pipeline_ollama_observations_total{labels}[$__rate_interval])) > 0)')
+
+    ollama_avg = ollama_average(sel, 'phase,kind')
+
+    def ollama_phase(phase):
+        return ollama_average(sel[:-1] + f',phase="{phase}"' + '}', 'kind')
+
+    ollama_remainder = f'clamp_min({ollama_phase("total")} - {ollama_phase("load")} - {ollama_phase("prompt")} - {ollama_phase("generation")}, 0)'
     tokens = ('sum by (phase, kind) (rate(media_pipeline_ollama_tokens_total' + sel + '[$__rate_interval])) / '
               '(sum by (phase, kind) (rate(media_pipeline_ollama_seconds_total' + sel + '[$__rate_interval])) > 0)')
-    p += [series("Ollama: seconds per response", [(ollama_avg, "{{kind}} / {{phase}}")], 0, 28, 12, 7, unit="s", decimals=2,
-                 description="Native API timings: load, prompt processing, generation and total. Total overlaps the components; do not add them. Missing fields are not reported as zero."),
+    p += [series("Ollama: seconds per response", [(ollama_avg, "{{kind}} / {{phase}}"),
+                 (ollama_remainder, "{{kind}} / server remainder")], 0, 28, 12, 7, unit="s", decimals=2,
+                 description="Native Ollama API timings for Ollama runs. Server remainder subtracts load, prompt and generation from total. It can include runner wait and request processing. For client wall time, see Model request under Photo or Video: seconds per stage operation."),
           series("Ollama: tokens per second", [(tokens, "{{kind}} / {{phase}}")], 12, 28, 12, 7, unit="suffix: tokens/s", decimals=1),
           series("Attempted vs saved items per minute", [
               ('sum by (kind, status) (rate(media_pipeline_items_total' + sel + '[$__rate_interval])) * 60', '{{kind}} {{status}} attempted'),

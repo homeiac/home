@@ -39,6 +39,8 @@ def main() -> None:
     context = commands.add_parser("context-worker", help="Cached GPS lookup and local contextual captions")
     context.add_argument('--endpoint',required=True)
     context.add_argument('--model',required=True)
+    context.add_argument('--api', choices=['ollama', 'openai'], default='ollama')
+    context.add_argument('--seed-model', help='Keep the previous context fingerprint when changing inference backends')
     context.add_argument('--max-jobs',type=int,default=0)
     context.add_argument('--first-photo',default='',help='Prioritize one filename for rollout verification')
     worker = commands.add_parser("worker", help="Continuously extract pending photos and publish Parquet/telemetry")
@@ -74,7 +76,9 @@ def main() -> None:
         metrics.prefix='photo_context'
         metrics.stages=('context_queue','location','context_llm','context_save')
         try:
-            with metrics:run(args.state,args.library,args.endpoint,args.model,metrics,args.max_jobs,args.first_photo)
+            with metrics:
+                run(args.state,args.library,args.endpoint,args.model,metrics,args.max_jobs,args.first_photo,
+                    api=args.api,seed_model=args.seed_model)
         finally:telemetry.close()
         return
     if args.backend == "postgres" and args.command == "serve":

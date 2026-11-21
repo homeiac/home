@@ -17,7 +17,7 @@ STAGES = {"idle": 0, "queue": 1, "decode": 2, "transcribe": 3,
           "prompt": 4, "inference": 5, "parse": 6, "write": 7,
           "complete": 8, "failed": 9}
 TITLES = {"queue": "Select batch", "decode": "Read / decode", "transcribe": "Audio transcript",
-          "prompt": "Build prompt", "inference": "Ollama request", "parse": "Parse answer", "write": "Write Parquet"}
+          "prompt": "Build prompt", "inference": "Model request", "parse": "Parse answer", "write": "Write Parquet"}
 EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt"),
          ("decode", "prompt"), ("prompt", "inference"), ("inference", "parse"),
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
