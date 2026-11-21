@@ -194,7 +194,7 @@ def gpu_panels():
     pods = 'DCGM_FI_DEV_GPU_UTIL'
     KWH = "sum(increase(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION[$__range])) / 3.6e9"   # sum: the pod label changes as different pods use the GPU
     PAUSED = {"0": {"text": "STOPPED", "color": "red"}, "1": {"text": "running", "color": "green"}}
-    p = [row("GPU and Ollama (RTX 3070, shared)", 0)]
+    p = [row("Model servers and shared RTX 3070", 0)]
     p += [stat("GPU utilization", "avg(DCGM_FI_DEV_GPU_UTIL)", 0, 1, w=4, unit="percent", decimals=0, thresholds=[("green", None), ("orange", 85)]),
           stat("GPU memory used", "sum(DCGM_FI_DEV_FB_USED)", 4, 1, w=4, unit="mbytes", decimals=0),
           stat("GPU memory free", "sum(DCGM_FI_DEV_FB_FREE)", 8, 1, w=4, unit="mbytes", decimals=0, thresholds=[("red", None), ("orange", 2000), ("green", 4000)]),
@@ -208,10 +208,10 @@ def gpu_panels():
           stat("Model size", "ollama_model_size_bytes" + INST, 12, 5, w=4, unit="bytes", decimals=1),
           stat("Unloads in", "ollama_model_expires_timestamp_seconds" + INST + " - time()", 16, 5, w=4, unit="s"),
           stat("Models stored", "ollama_models_pulled" + INST, 20, 5, w=4)]
-    p += [stat("Frigate", 'kube_deployment_spec_replicas{namespace="frigate",deployment="frigate"}', 0, 9, w=4, mappings=PAUSED, thresholds=[("red", None), ("green", 1)],
+    p += [stat("Frigate", 'kube_deployment_spec_replicas{namespace="frigate",deployment="frigate"}', 0, 9, w=3, mappings=PAUSED, thresholds=[("red", None), ("green", 1)],
                description="0 = paused on purpose for GPU work (scripts/k3s/gpu-tenants.sh); cameras are not recording."),
-          stat("Stable Diffusion", 'kube_deployment_spec_replicas{namespace="stable-diffusion",deployment="stable-diffusion-webui"}', 4, 9, w=4, mappings=PAUSED, thresholds=[("red", None), ("green", 1)]),
-          stat("Ollama pod", 'kube_deployment_status_replicas_available{namespace="ollama",deployment="ollama-gpu"}', 8, 9, w=4, mappings=PAUSED, thresholds=[("red", None), ("green", 1)]),
+          stat("Stable Diffusion", 'kube_deployment_spec_replicas{namespace="stable-diffusion",deployment="stable-diffusion-webui"}', 3, 9, w=3, mappings=PAUSED, thresholds=[("red", None), ("green", 1)]),
+          stat("Ollama pod", 'kube_deployment_status_replicas_available{namespace="ollama",deployment="ollama-gpu"}', 6, 9, w=3, mappings=PAUSED, thresholds=[("red", None), ("green", 1)]),
           stat("GPU energy (selected range)", KWH, 12, 9, w=4, unit="suffix: kWh", decimals=2, description="Whole-GPU energy over the dashboard time range."),
           stat("Electricity cost (range)", "(" + KWH + ") * $kwh_price", 16, 9, w=4, unit="currencyUSD", decimals=2, description="Illustrative: kWh x the kwh_price variable. Compare with the cloud-equivalent cost in the Value row."),
           stat("GPU hours busy (range)", "sum_over_time((max(DCGM_FI_DEV_GPU_UTIL) > bool 50)[$__range:1m]) / 60", 20, 9, w=4, unit="suffix: h", decimals=1)]
@@ -234,7 +234,11 @@ def panels():
     enrichment = photo_enrichment_panels()
     shift(p[insert_at:], 99)
     p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 42)
-    return work_remaining_panels() + shift(p, 17)
+    overview = work_remaining_panels()
+    ollama = next(i for i, panel in enumerate(p) if panel['title'] == 'Ollama pod')
+    p.insert(ollama + 1, stat("Bonsai pod", 'kube_deployment_status_replicas_available{namespace="immich-pilot",deployment="photo-bonsai"}',
+                             9, p[ollama]['gridPos']['y'], w=3, mappings=YN))
+    return overview + shift(p, 17)
 
 
 def pipeline_panels():
@@ -257,7 +261,7 @@ def pipeline_panels():
           stat("Worker telemetry age", heartbeat, 16, 1, w=8, unit="s", thresholds=[("green", None), ("orange", 30), ("red", 60)],
                description="Published every 5 s by the instrumented worker. Missing data means it has not published yet. After 60 s, the state becomes unknown rather than claiming it is still busy.")]
     graph = _panel("nodeGraph", "Value stream map", [], 0, 5, 24, 10,
-                   description="Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues.")
+                   description="Share of measured worker time by stage in the rate window. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow.")
     graph["targets"] = [
         {"refId": "nodes", "expr": '(100 * sum by (id, title) (' + stage_rate + ') / scalar(sum(' + stage_rate + ')) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total' + sel + ') * 0)', "format": "table", "instant": True, "range": False},
         {"refId": "edges", "expr": 'max by (id, source, target) (media_pipeline_edge_info' + sel + ')', "format": "table", "instant": True, "range": False}]

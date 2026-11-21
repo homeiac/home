@@ -674,7 +674,7 @@ data:
     : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 16,\n       \
     \ \"y\": 89,\n        \"w\": 8,\n        \"h\": 7\n      },\n      \"targets\"\
     : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"kube_deployment_status_replicas_available{namespace=~\\\
-    \"immich-pilot|frigate|ollama\\\",deployment=~\\\"immich-server|immich-machine-learning|frigate|ollama-gpu\\\
+    \"immich-pilot|frigate|ollama\\\",deployment=~\\\"immich-server|immich-machine-learning|photo-bonsai|frigate|ollama-gpu\\\
     \"}\",\n          \"legendFormat\": \"{{deployment}}\"\n        }\n      ],\n\
     \      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"short\"\
     \n        },\n        \"overrides\": []\n      },\n      \"options\": {\n    \

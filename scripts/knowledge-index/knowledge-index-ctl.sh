@@ -13,7 +13,7 @@
 #   ./knowledge-index-ctl.sh enrich sample [N]       summarize N (default 10) queued photos/videos, print them, write nothing
 #   ./knowledge-index-ctl.sh enrich start|status|stop   run the summary enricher as systemd unit knowledge-index-enrich
 #                                                    needs KI_ENDPOINT (OpenAI-compatible vision server on the LAN, e.g. http://<gpu-vm>:11434);
-#                                                    KI_MODEL (default gemma4:e2b), KI_ENRICHER id (default gemma4-e2b-p1), KI_MIN_FREE_MIB (default 3000)
+#                                                    KI_API (ollama or openai), KI_MODEL, KI_ENRICHER id (default gemma4-e2b-p1)
 #   ./knowledge-index-ctl.sh quota-diff              diff `SELECT path FROM gphotos_quota` against gphotos-quota-list.py on the real library
 # Prerequisite: scripts/knowledge-index/install-duckdb.sh (pinned DuckDB venv).
 # Layout on the host: /opt/knowledge-index/{venv,adapters/gphotos.py,kidx.py,knowledge.sql,index-unit.sh}; data in the dataset
@@ -73,9 +73,15 @@ case "${1:-}" in
     ;;
   enrich)
     KI_MODEL="${KI_MODEL:-gemma4:e2b}"; KI_ENRICHER="${KI_ENRICHER:-gemma4-e2b-p1}"; KI_MIN_FREE_MIB="${KI_MIN_FREE_MIB:-3000}"
-    run_cmd() {   # runs on the host: reads the photos dataset read-only, calls the model server over the LAN
+    KI_API="${KI_API:-ollama}"
+    case "$KI_API" in
+      ollama) KI_EXTRA='{"think":false}'; KI_BATCH=200;;
+      openai) KI_EXTRA='{"chat_template_kwargs":{"enable_thinking":false},"max_tokens":384}'; KI_BATCH=16;;
+      *) echo 'KI_API must be ollama or openai' >&2; exit 1;;
+    esac
+    run_cmd() {   # runs on the host beside the read-only photo library
       echo "$KI/venv/bin/python $KI/enrichers/media_summary.py run --index \"\$IDX\" --library \"\$PH/library\" --endpoint '${KI_ENDPOINT:?set KI_ENDPOINT}' \
-            --model '$KI_MODEL' --api ollama --extra-json '{\"think\": false}' --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB \
+            --model '$KI_MODEL' --api '$KI_API' --extra-json '$KI_EXTRA' --batch-size $KI_BATCH --enricher '$KI_ENRICHER' --min-free-mib $KI_MIN_FREE_MIB \
             --prom /var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom $*"; }
     case "${2:-}" in
       sample) install_files

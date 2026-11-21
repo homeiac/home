@@ -105,6 +105,8 @@ def main():
         pid=subprocess.check_output(['systemctl','show','knowledge-index-enrich','-p','MainPID','--value'],text=True).strip()
         argv=Path('/proc',pid,'cmdline').read_bytes().decode().split('\0')
         endpoint=argv[argv.index('--endpoint')+1];model=argv[argv.index('--model')+1]
+        api=argv[argv.index('--api')+1] if '--api' in argv else 'ollama'
+        seed_argument=' --seed-model gemma4:e2b' if model=='bonsai-27b' else ''
         backup=ROOT/'backups'/('context-'+dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
         backup.mkdir(parents=True)
         service=UNITS/'photo-enrichment-context.service'
@@ -114,7 +116,7 @@ def main():
         run(python,'-c','from photo_enrichment.postgres import connect; from photo_enrichment.context_worker import initialize; c=connect(); initialize(c); c.close()',cwd=release,env=env)
         temporary=ROOT/'context.new';temporary.unlink(missing_ok=True);temporary.symlink_to(release);temporary.replace(link)
         base='/opt/photo-enrichment/context/venv/bin/python /opt/photo-enrichment/context/photo-enrich.py --backend postgres --index ${PHOTO_INDEX} --library ${PHOTO_LIBRARY} --state ${PHOTO_STATE}'
-        service.write_text(unit(base+' --prom /var/lib/prometheus/node-exporter/photo_context.prom context-worker --endpoint '+shlex.quote(endpoint)+' --model '+shlex.quote(model)+' --first-photo '+shlex.quote(payload.get('first_photo','')),
+        service.write_text(unit(base+' --prom /var/lib/prometheus/node-exporter/photo_context.prom context-worker --endpoint '+shlex.quote(endpoint)+' --model '+shlex.quote(model)+' --api '+shlex.quote(api)+seed_argument+' --first-photo '+shlex.quote(payload.get('first_photo','')),
             'Photo GPS context enrichment', 'Restart=on-failure\nRestartSec=30\nEnvironment=OTEL_EXPORTER_OTLP_ENDPOINT=https://photo-otel.app.home.panderosystems.com\nEnvironment=OTEL_SERVICE_NAME=photo-context\nEnvironment=PHOTO_SERVICE_VERSION='+payload['release']))
         run('systemd-analyze','verify',str(service));run('systemctl','daemon-reload')
         run('systemctl','enable','--now',service.name)

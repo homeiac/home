@@ -57,6 +57,18 @@ def _ffmpeg(args, timeout=120):
 
 def jpeg_frame(path, t=None):
     """One JPEG (long edge <= 1024) from an image or from second `t` of a video; raises RuntimeError when undecodable."""
+    if t is None and os.path.splitext(path)[1].lower() in {'.heic', '.heif', '.hif'}:
+        import io
+        from PIL import Image, ImageOps
+        from pillow_heif import register_heif_opener
+
+        register_heif_opener()
+        with Image.open(path) as source:
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            result = io.BytesIO()
+            image.convert('RGB').save(result, 'JPEG', quality=88)
+            return result.getvalue()
     scale = "scale='if(gt(iw,ih),min(1024,iw),-2)':'if(gt(iw,ih),-2,min(1024,ih))'"
     pre = ["-ss", "%.2f" % t] if t is not None else []
     r = _ffmpeg(pre + ["-i", path, "-vf", scale, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-"])

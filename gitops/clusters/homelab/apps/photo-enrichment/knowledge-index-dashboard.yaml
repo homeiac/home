@@ -1766,7 +1766,7 @@ data:
             },
             "overrides": []
           },
-          "description": "Share of measured worker time by stage in the rate window. Inference includes transport and Ollama time; it is not pure GPU time. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow, not measured per-stage queues. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
+          "description": "Share of measured worker time by stage in the rate window. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
           "transformations": [
             {
               "id": "calculateField",
@@ -4639,7 +4639,7 @@ data:
         {
           "id": 31,
           "type": "row",
-          "title": "GPU and Ollama (RTX 3070, shared)",
+          "title": "Model servers and shared RTX 3070",
           "collapsed": false,
           "gridPos": {
             "h": 1,
@@ -5308,7 +5308,7 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 4,
+            "w": 3,
             "x": 0,
             "y": 157
           },
@@ -5377,8 +5377,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 4,
-            "x": 4,
+            "w": 3,
+            "x": 3,
             "y": 157
           },
           "targets": [
@@ -5445,8 +5445,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 4,
-            "x": 8,
+            "w": 3,
+            "x": 6,
             "y": 157
           },
           "targets": [
@@ -5486,6 +5486,70 @@ data:
                     "1": {
                       "text": "running",
                       "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 150,
+          "type": "stat",
+          "title": "Bonsai pod",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 9,
+            "y": 157
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"immich-pilot\",deployment=\"photo-bonsai\"}",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "no",
+                      "color": "text"
+                    },
+                    "1": {
+                      "text": "yes",
+                      "color": "blue"
                     }
                   }
                 }
