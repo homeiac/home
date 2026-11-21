@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import subprocess
 import time
 
 ENRICHERS = Path(__file__).resolve().parents[1] / "enrichers"
@@ -30,7 +31,7 @@ def replay(index, library, limit, enricher, frames):
                 images = [media_summary.jpeg_frame(path, duration * (i + 0.5) / n) for i in range(n)]
             else:
                 images = [media_summary.jpeg_frame(path)]
-        except (OSError, RuntimeError, ValueError, TimeoutError):
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
             counts["decode_errors"] += 1
             continue
         previous = metrics.mac_bytes

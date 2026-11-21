@@ -9,6 +9,9 @@ import sqlite3
 
 def decide(db):
     db.row_factory = sqlite3.Row
+    guard = db.execute(
+        "SELECT min(slots) FROM mac_factorial_runs WHERE peak_pressure > 1 AND error IS NOT NULL"
+    ).fetchone()[0]
     cells = {}
     for slots, offered in db.execute(
         "SELECT DISTINCT slots,offered FROM mac_factorial_runs ORDER BY slots,offered"
@@ -27,7 +30,8 @@ def decide(db):
             slots=slots,
             offered=offered,
             valid=len(times),
-            eligible=all(r["valid"] == 20 and r["error"] is None and r["peak_pressure"] == 1 for r in runs),
+            eligible=(guard is None or slots < guard)
+            and all(r["valid"] == 20 and r["error"] is None and r["peak_pressure"] == 1 for r in runs),
             captions_per_minute=60 * len(times) / total_time if total_time else None,
             p95_seconds=times[math.ceil(0.95 * len(times)) - 1][0] if times else None,
             peak_rss_mib=max(
@@ -66,6 +70,7 @@ def decide(db):
         break
     return dict(
         selected=dict(slots=winner["slots"], offered=winner["offered"]),
+        memory_guard_slots=guard,
         cells=list(cells.values()),
         effects_captions_per_minute=effects,
     )

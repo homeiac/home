@@ -52,12 +52,17 @@ def client(jobs):
 
 
 def run(inputs, output):
-    items = json.loads((inputs / "manifest.json").read_text())["items"]
     jobs = []
-    for item in items:
-        # Base64 size including padding, plus the image URL envelope and short prompt.
-        size = sum(4 * ((((inputs / f).stat().st_size) + 2) // 3) + 72 for f in item["files"]) + 512
-        jobs.append((item["kind"], size))
+    if inputs.is_file():
+        payloads = json.loads(inputs.read_text())["payload_bytes"]
+        for kind, quantiles in payloads.items():
+            jobs.extend((kind, size + 1024) for size in quantiles.values())
+    else:
+        items = json.loads((inputs / "manifest.json").read_text())["items"]
+        for item in items:
+            # Base64 size including padding, plus the image URL envelope and short prompt.
+            size = sum(4 * (((inputs / f).stat().st_size + 2) // 3) + 72 for f in item["files"]) + 512
+            jobs.append((item["kind"], size))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Sink)
     thread = threading.Thread(target=server.serve_forever)
     thread.start()
@@ -87,6 +92,8 @@ def run(inputs, output):
         for offered in (1, 2, 8):
             for kind in ("photo", "video"):
                 subset = [r for r in rows if r["offered"] == offered and r["kind"] == kind]
+                if not subset:
+                    continue
                 print(
                     offered,
                     kind,
@@ -109,7 +116,7 @@ if __name__ == "__main__":
         print(json.dumps(client(json.load(sys.stdin))))
     else:
         parser = argparse.ArgumentParser(description=__doc__)
-        parser.add_argument("inputs", type=Path)
+        parser.add_argument("inputs", type=Path, help="Pilot folder or replay_cache.py JSON output")
         parser.add_argument("output", type=Path)
         args = parser.parse_args()
         run(args.inputs, args.output)

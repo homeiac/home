@@ -206,6 +206,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     os.umask(0o077)
+    # This assertion ends with the benchmark process. Normal backfill follows the user's sleep policy.
+    subprocess.Popen(["/usr/bin/caffeinate", "-i", "-w", str(os.getpid())])
     args.output.mkdir(parents=True, exist_ok=True)
     meta = json.loads((args.inputs / "manifest.json").read_text())["items"]
     photos = [
@@ -253,6 +255,8 @@ def main():
                 "SELECT 1 FROM mac_factorial_runs WHERE slots=? AND peak_pressure>1 AND error IS NOT NULL",
                 (high,),
             ).fetchone():
+                # Compare one request per slot with oversubscription at the feasible upper level.
+                run_blocks([(high, high)])
                 break
 
 
