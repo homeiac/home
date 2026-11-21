@@ -78,6 +78,8 @@ def main():
     parser.add_argument("--before", required=True, type=parse_end, help="ISO 8601 end of the baseline window")
     parser.add_argument("--after", required=True, type=parse_end, help="ISO 8601 end of the candidate window")
     parser.add_argument("--minutes", type=int, default=10)
+    parser.add_argument("--follow", action="store_true",
+                        help="Print two-minute candidate snapshots every minute, then the complete comparison as JSON lines")
     parser.add_argument("--local-port", type=int, default=29092)
     args = parser.parse_args()
     if args.minutes < 1 or args.after <= args.before:
@@ -98,8 +100,19 @@ def main():
                         raise
                     time.sleep(.25)
             host = os.environ["CB_HOST"]
-            print(json.dumps({name: report(args.local_port, host, end, args.minutes)
-                              for name, end in (("before", args.before), ("after", args.after))}, indent=2))
+            if args.follow:
+                first = args.after - args.minutes * 60 + 120
+                for end in range(first, args.after, 60):
+                    wait_until = end - time.time()
+                    if wait_until > 0:
+                        time.sleep(wait_until)
+                    print(json.dumps({"candidate_preview": report(args.local_port, host, end, 2)}), flush=True)
+                wait_until = args.after - time.time()
+                if wait_until > 0:
+                    time.sleep(wait_until)
+            comparison = {name: report(args.local_port, host, end, args.minutes)
+                          for name, end in (("before", args.before), ("after", args.after))}
+            print(json.dumps(comparison, indent=None if args.follow else 2))
         finally:
             port_forward.terminate()
 

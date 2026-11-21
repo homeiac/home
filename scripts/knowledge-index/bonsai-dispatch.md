@@ -14,4 +14,4 @@ CB_HOST=root@<piglet> python3 scripts/knowledge-index/measure-bonsai-dispatch.py
   --minutes 10 > /private/tmp/bonsai-trial.json
 ```
 
-The report uses the same Prometheus counters as Grafana, then verifies saved rows and media mix directly in Parquet. Its GPU rate excludes cache and Luna. If a trial hurts throughput or leaves more slots idle for a comparable mix, restore the previous policy in Git and verify the reported policy and rate again.
+Add `--follow` to stream two-minute candidate snapshots every minute and then emit the full comparison automatically. The report uses the same Prometheus counters as Grafana, then verifies saved rows and media mix directly in Parquet. Its GPU rate excludes cache and Luna. If a trial hurts throughput or leaves more slots idle for a comparable mix, restore the previous policy in Git and verify the reported policy and rate again.
