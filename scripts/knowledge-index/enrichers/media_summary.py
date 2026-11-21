@@ -233,11 +233,13 @@ def write_batch(rows, out_dir, enricher):
     return target
 
 
-def queue(index, enricher, limit, seen=(), metrics=None):
-    """Next `limit` queue rows, newest first, skipping paths already attempted in this run (failed ones stay queued for the next run)."""
+def queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):
+    """Select pending work while skipping paths already attempted in this run."""
+    priority = "coalesce(list_contains(?, lower(ext)), false), " if photos_first else ""
+    params = [enricher, sorted(VIDEO_EXTS), limit + len(seen)] if photos_first else [enricher, limit + len(seen)]
     with duckdb.connect(os.path.join(index, "knowledge.duckdb"), read_only=True) as con:
         cur = con.execute("SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) "
-                          "ORDER BY taken_ts DESC NULLS LAST, path LIMIT ?", [enricher, limit + len(seen)])
+                          f"ORDER BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?", params)
         names = [column[0] for column in cur.description[:-1]]
         rows = cur.fetchall()
     if metrics is not None:
@@ -343,6 +345,7 @@ class DispatchPolicy:
         self.url = os.environ.get("KI_GPU_DISPATCH_POLICY_URL") if not args.dry_run else None
         self.ref = os.environ.get("KI_GPU_DISPATCH_GIT_REF")
         self.revision = None
+        self.queue_order = "newest"
         self.next_poll = 0
 
     def poll(self):
@@ -362,10 +365,12 @@ class DispatchPolicy:
                 with urllib.request.urlopen(self.url.format(revision=revision), timeout=2) as response:
                     policy = json.load(response)
                 mode, size, routing = policy["mode"], policy["page_size"], policy["mac_routing"]
+                order = policy.get("queue_order", "newest")
                 if (mode not in ("batch", "continuous") or type(size) is not int or not 0 <= size <= 512
-                        or routing not in ("fifo", "photo-first")):
+                        or routing not in ("fifo", "photo-first") or order not in ("newest", "photos-first")):
                     raise ValueError("Invalid Git dispatch policy")
                 self.current = mode, size, routing
+                self.queue_order = order
                 self.revision = revision
             except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
                 print("WARN: keeping the last valid Git dispatch policy", file=sys.stderr)
@@ -398,8 +403,9 @@ def run(a):
         metal = partial(summarize, library=a.library, a=metal_args, metrics=metrics, cache=cache)
         while remaining > 0:
             settings = policy.poll()
+            queue_order = policy.queue_order
             dispatch_mode, dispatch_size, mac_routing = settings
-            metrics.dispatch_policy(*settings)
+            metrics.dispatch_policy(*settings, queue_order=queue_order)
             mac_slots, metal_args.model_headers = mac_route(a)
             metrics.mac_capacity(mac_slots)
             fetch_size = a.batch_size
@@ -410,7 +416,8 @@ def run(a):
                 if remaining <= 0:
                     return []
                 with metrics.measure("queue"):
-                    rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics)
+                    rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics,
+                                 photos_first=queue_order == "photos-first")
                 seen.update(r["path"] for r in rows)
                 remaining -= len(rows)
                 return rows
@@ -423,7 +430,8 @@ def run(a):
             # Keep the existing single-write cadence while refilling slots independently.
             def refill():
                 # Finish outstanding requests before activating a changed policy.
-                return [] if policy.poll() != settings or (errors and not done) else fetch()
+                return [] if (policy.poll() != settings or policy.queue_order != queue_order
+                              or (errors and not done)) else fetch()
 
             for row, result in split_batch(
                 rows, a.parallel, mac_slots, primary, metal,

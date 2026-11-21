@@ -307,9 +307,13 @@ def panels():
     insert_at = next(i for i, panel in enumerate(p) if panel["title"] == "Backfill progress")
     offset = p[insert_at]["gridPos"]["y"]
     pipeline = pipeline_panels()
+    priority_stages = [panel for panel in pipeline if panel["gridPos"]["y"] == 21]
+    pipeline = [panel for panel in pipeline if panel not in priority_stages]
+    shift([panel for panel in pipeline if panel["gridPos"]["y"] > 21], -7)
+    shift(priority_stages, 13)
     enrichment = photo_enrichment_panels()
-    shift(p[insert_at:], 99)
-    p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 42)
+    shift(p[insert_at:], 92)
+    p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 35)
     overview = work_remaining_panels()
     ollama = next(i for i, panel in enumerate(p) if panel['title'] == 'Ollama pod')
     p.insert(ollama + 1, stat("Standalone Bonsai", 'kube_deployment_status_replicas_available{namespace="immich-pilot",deployment="photo-bonsai"}',
@@ -350,12 +354,12 @@ def panels():
     ] + [(f'max(media_pipeline_mac_request_limit{scope})', "Mac available slots")],
         0, 28, 14, 6, decimals=1,
         description="Active HTTP model requests. RTX has two configured slots. The Mac reports zero available slots when unreachable.")
-    active_policy = stat("Bonsai dispatch policy applied", f'max by(mode,page_size,mac_routing) '
+    active_policy = stat("Bonsai dispatch policy applied", f'max by(mode,page_size,mac_routing,queue_order) '
                          f'(media_pipeline_dispatch_policy_applied_timestamp_seconds{scope}) * 1000',
                          14, 28, w=10, h=6, unit="dateTimeAsIso",
-                         legend="{{mode}} · page {{page_size}} · {{mac_routing}}",
+                         legend="{{mode}} · page {{page_size}} · {{queue_order}}",
                          extra_opts={"textMode": "value_and_name"},
-                         description="The active Git policy and when the worker adopted it. Page 0 uses four items per slot, with a minimum of one Parquet write batch.")
+                         description="The active Git policy and when the worker adopted it. Photos-first orders the entire pending queue. When pending photos drain, the same worker processes videos. Page 0 uses four items per slot, with a minimum of one Parquet write batch.")
     active_policy["targets"][0].update(instant=True, range=False)
     host_fresh = f'time() - media_pipeline_heartbeat_timestamp_seconds{scope} < 60'
     def host_value(metric, backend=None):
@@ -414,7 +418,7 @@ def panels():
     for panel in combined:
         panel["targets"][0].update(instant=True, range=False)
         panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting fresh data"
-    return intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy], 10) + shift(details, THROUGHPUT_HEIGHT + 32) + shift(p, 49 + THROUGHPUT_HEIGHT)
+    return intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy] + priority_stages, 10) + shift(details, THROUGHPUT_HEIGHT + 39) + shift(p, 56 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():

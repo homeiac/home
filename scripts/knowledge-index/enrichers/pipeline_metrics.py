@@ -187,9 +187,9 @@ class PipelineMetrics:
         with self.lock:
             self.mac_limit = offered
 
-    def dispatch_policy(self, mode, page_size, routing):
+    def dispatch_policy(self, mode, page_size, routing, *, queue_order="newest"):
         with self.lock:
-            settings = (mode, page_size, routing)
+            settings = (mode, page_size, routing, queue_order)
             if self.dispatch is None or settings != self.dispatch[0]:
                 self.dispatch = settings, time.time()
 
@@ -263,9 +263,9 @@ class PipelineMetrics:
                 add("media_pipeline_backend_in_flight", count, backend=backend)
             add("media_pipeline_mac_request_limit", self.mac_limit)
             if self.dispatch is not None:
-                (mode, page, routing), applied = self.dispatch
+                (mode, page, routing, queue_order), applied = self.dispatch
                 add("media_pipeline_dispatch_policy_applied_timestamp_seconds", applied,
-                    mode=mode, page_size=page, mac_routing=routing)
+                    mode=mode, page_size=page, mac_routing=routing, queue_order=queue_order)
             add("media_pipeline_mac_candidate_bytes_total", self.mac_bytes)
             for mib, cache in self.mac_cache.items():
                 add("media_pipeline_mac_cache_reusable_bytes_total", cache.reusable, capacity_mib=mib)

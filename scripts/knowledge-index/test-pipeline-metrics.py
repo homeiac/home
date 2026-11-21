@@ -206,6 +206,18 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual({row["path"]: result["backend"] for row, result in results},
                          {"video1": "RTX", "video2": "RTX", "photo": "Mac", "next": "RTX"})
 
+    def test_queue_photos_first_preserves_recency_and_falls_through_to_video(self):
+        with tempfile.TemporaryDirectory() as index:
+            with media_summary.duckdb.connect(str(Path(index) / "knowledge.duckdb")) as db:
+                db.execute("""CREATE MACRO gphotos_to_summarize(enr) AS TABLE
+                    SELECT * FROM (VALUES ('video','MP4',3),('new','jpg',2),('old','jpeg',1))
+                    t(path, ext, taken_ts)""")
+            for priority, seen, expected in ((False, (), ["video", "new"]),
+                                             (True, (), ["new", "old"]),
+                                             (True, {"new", "old"}, ["video"])):
+                rows = media_summary.queue(index, "e", 2, seen, photos_first=priority)
+                self.assertEqual([row["path"] for row in rows], expected)
+
     def test_live_policy_reads_immutable_commit_and_remembers_last_valid_settings(self):
         import io
         ref = "refs/heads/codex/photo-enrichment-217"
@@ -257,7 +269,9 @@ class PipelineTests(unittest.TestCase):
         # Both instrumented branches sit directly after Value delivered, before inventory.
         start = next(p["gridPos"]["y"] for p in panels if p["title"] == "Pipeline bottlenecks")
         end = next(p["gridPos"]["y"] for p in panels if p["title"] == "Backfill progress")
-        self.assertEqual(end - start, 99)  # Includes the existing queue/snapshot and Frigate rows.
+        self.assertEqual(end - start, 92)  # Per-kind timings now appear near the tuning controls.
+        positions = {panel["title"]: panel["gridPos"]["y"] for panel in panels}
+        self.assertLess(positions["Photo: seconds per stage operation"], positions["Pipeline bottlenecks"])
         value_start = next(p["gridPos"]["y"] for p in panels if p["title"] == "Value delivered")
         self.assertEqual(start - value_start, 16)
         self.assertIn("immich_queue_jobs", graph["targets"][0]["expr"])

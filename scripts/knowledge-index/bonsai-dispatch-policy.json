@@ -1,5 +1,6 @@
 {
   "mode": "continuous",
   "page_size": 48,
-  "mac_routing": "photo-first"
+  "mac_routing": "photo-first",
+  "queue_order": "photos-first"
 }

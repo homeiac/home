@@ -1389,8 +1389,8 @@ data:
           },
           "targets": [
             {
-              "expr": "max by(mode,page_size,mac_routing) (media_pipeline_dispatch_policy_applied_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 1000",
-              "legendFormat": "{{mode}} \u00b7 page {{page_size}} \u00b7 {{mac_routing}}",
+              "expr": "max by(mode,page_size,mac_routing,queue_order) (media_pipeline_dispatch_policy_applied_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 1000",
+              "legendFormat": "{{mode}} \u00b7 page {{page_size}} \u00b7 {{queue_order}}",
               "refId": "A",
               "instant": true,
               "range": false
@@ -1424,7 +1424,169 @@ data:
             "graphMode": "none",
             "textMode": "value_and_name"
           },
-          "description": "The active Git policy and when the worker adopted it. Page 0 uses four items per slot, with a minimum of one Parquet write batch."
+          "description": "The active Git policy and when the worker adopted it. Photos-first orders the entire pending queue. When pending photos drain, the same worker processes videos. Page 0 uses four items per slot, with a minimum of one Parquet write batch."
+        },
+        {
+          "id": 102,
+          "type": "timeseries",
+          "title": "Photo: seconds per stage operation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
+        },
+        {
+          "id": 103,
+          "type": "timeseries",
+          "title": "Video: seconds per stage operation",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
+        },
+        {
+          "id": 104,
+          "type": "timeseries",
+          "title": "Batch: query / write seconds",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "interval": "30s",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
         },
         {
           "id": 142,
@@ -1438,7 +1600,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 45
+            "y": 52
           },
           "targets": [
             {
@@ -1490,7 +1652,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 45
+            "y": 52
           },
           "targets": [
             {
@@ -1570,7 +1732,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 45
+            "y": 52
           },
           "targets": [
             {
@@ -1623,7 +1785,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 45
+            "y": 52
           },
           "targets": [
             {
@@ -1676,7 +1838,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 45
+            "y": 52
           },
           "targets": [
             {
@@ -1727,7 +1889,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 49
+            "y": 56
           },
           "panels": []
         },
@@ -1743,7 +1905,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 50
+            "y": 57
           },
           "targets": [
             {
@@ -1827,7 +1989,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 50
+            "y": 57
           },
           "targets": [
             {
@@ -1904,7 +2066,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 50
+            "y": 57
           },
           "targets": [
             {
@@ -1974,7 +2136,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 57
+            "y": 64
           },
           "panels": []
         },
@@ -1990,7 +2152,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 58
+            "y": 65
           },
           "targets": [
             {
@@ -2041,7 +2203,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 58
+            "y": 65
           },
           "targets": [
             {
@@ -2092,7 +2254,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 58
+            "y": 65
           },
           "targets": [
             {
@@ -2143,7 +2305,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 58
+            "y": 65
           },
           "targets": [
             {
@@ -2194,7 +2356,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 58
+            "y": 65
           },
           "targets": [
             {
@@ -2245,7 +2407,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 58
+            "y": 65
           },
           "targets": [
             {
@@ -2296,7 +2458,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 62
+            "y": 69
           },
           "targets": [
             {
@@ -2346,7 +2508,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 62
+            "y": 69
           },
           "targets": [
             {
@@ -2395,7 +2557,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 62
+            "y": 69
           },
           "targets": [
             {
@@ -2445,7 +2607,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 62
+            "y": 69
           },
           "targets": [
             {
@@ -2496,7 +2658,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 62
+            "y": 69
           },
           "targets": [
             {
@@ -2546,7 +2708,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 66
+            "y": 73
           },
           "targets": [
             {
@@ -2600,7 +2762,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 66
+            "y": 73
           },
           "targets": [
             {
@@ -2651,7 +2813,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 73
+            "y": 80
           },
           "panels": []
         },
@@ -2667,7 +2829,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 74
+            "y": 81
           },
           "targets": [
             {
@@ -2770,7 +2932,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 74
+            "y": 81
           },
           "targets": [
             {
@@ -2822,7 +2984,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 74
+            "y": 81
           },
           "targets": [
             {
@@ -2883,7 +3045,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 74
+            "y": 81
           },
           "targets": [
             {
@@ -2936,7 +3098,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 78
+            "y": 85
           },
           "targets": [
             {
@@ -3041,7 +3203,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 88
+            "y": 95
           },
           "targets": [
             {
@@ -3095,7 +3257,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 88
+            "y": 95
           },
           "targets": [
             {
@@ -3193,168 +3355,6 @@ data:
             }
           },
           "description": "Sampled at Prometheus scrape cadence: stages shorter than a scrape can be missed. Cumulative timing counters still include every measured stage."
-        },
-        {
-          "id": 102,
-          "type": "timeseries",
-          "title": "Photo: seconds per stage operation",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 8,
-            "x": 0,
-            "y": 94
-          },
-          "targets": [
-            {
-              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"photo\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
-        },
-        {
-          "id": 103,
-          "type": "timeseries",
-          "title": "Video: seconds per stage operation",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 8,
-            "x": 8,
-            "y": 94
-          },
-          "targets": [
-            {
-              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"video\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
-        },
-        {
-          "id": 104,
-          "type": "timeseries",
-          "title": "Batch: query / write seconds",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 8,
-            "x": 16,
-            "y": 94
-          },
-          "targets": [
-            {
-              "expr": "sum by (stage) (rate(media_pipeline_stage_completed_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) / (sum by (stage) (rate(media_pipeline_stage_operations_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",kind=\"batch\"}[$__rate_interval])) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "interval": "30s",
-              "instant": false,
-              "range": true
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 2
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Mean of completed operations, including failures. Queue and write are per batch, not per item; absent stages have no completed samples."
         },
         {
           "id": 105,

@@ -5,6 +5,9 @@ The summary worker checks the preview branch at queue-read boundaries, at most o
 - `mode` sets `batch` or `continuous`. Continuous mode fetches more work when a slot needs it while other requests are still in flight.
 - `page_size` sets the number of items per queue read while the Mac is available. Zero selects four items per available slot, with a minimum of one Parquet batch.
 - `mac_routing` sets `fifo` or `photo-first`. The latter sends the first available photo to the Mac and gives the RTX a better chance to pick up videos.
+- `queue_order` sets `newest` or `photos-first`. Photos-first keeps both GPUs working on the available photo backlog before moving on to videos. Ordering remains newest first within each kind.
+
+The Immich inventory on Nov 21 contained 71,245 photos and 7,659 videos. In the mixed Bonsai window ending at 21:10 UTC, photo model requests averaged 14.3 seconds vs. 25.6 seconds for video. Mac prompt evaluation rose from 4.3 seconds for photos to 41.1 seconds for video. The matched 24- and 48-item page trials both saved 32/min on photos. Use that as the signal to stop changing page size while photo throughput meets the 30/min target.
 
 Push a change to one setting at a time. In Grafana, note the **Bonsai dispatch policy applied** time and watch the two-minute rate, GPU slot occupancy and Mac availability. Compare a full window after the applied time to an earlier window with both GPUs available. Check media mix as well as throughput. A comparison can be saved with:
 
