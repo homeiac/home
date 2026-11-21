@@ -2,6 +2,7 @@
 """Local telemetry tests: python3 scripts/knowledge-index/test-pipeline-metrics.py."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -204,6 +205,30 @@ class PipelineTests(unittest.TestCase):
         results = media_summary.split_batch(rows, 1, 1, primary, metal, refill=lambda: next(pages), prefer_photos=True)
         self.assertEqual({row["path"]: result["backend"] for row, result in results},
                          {"video1": "RTX", "video2": "RTX", "photo": "Mac", "next": "RTX"})
+
+    def test_live_policy_reads_immutable_commit_and_remembers_last_valid_settings(self):
+        import io
+        ref = "refs/heads/codex/photo-enrichment-217"
+        good_revision, bad_revision = "a" * 40, "b" * 40
+        env = {"KI_GPU_DISPATCH_POLICY_URL": "https://example.test/{revision}/policy.json",
+               "KI_GPU_DISPATCH_GIT_REF": ref}
+        good_policy = b'{"mode":"continuous","page_size":48,"mac_routing":"photo-first"}'
+        bad_policy = b'{"mode":"continuous","page_size":-1,"mac_routing":"photo-first"}'
+        with (
+            patch.dict(os.environ, env),
+            patch.object(media_summary.time, "monotonic", side_effect=[0, 30, 60]),
+            patch.object(media_summary.subprocess, "check_output",
+                         side_effect=[f"{good_revision}\t{ref}\n", f"{good_revision}\t{ref}\n", f"{bad_revision}\t{ref}\n"]),
+            patch.object(media_summary.urllib.request, "urlopen",
+                         side_effect=[io.BytesIO(good_policy), io.BytesIO(bad_policy)]) as fetch,
+            patch("sys.stderr", new_callable=io.StringIO),
+        ):
+            policy = media_summary.DispatchPolicy(SimpleNamespace(dry_run=False))
+            for _ in range(3):
+                self.assertEqual(policy.poll(), ("continuous", 48, "photo-first"))
+        self.assertEqual([call.args[0] for call in fetch.call_args_list],
+                         [f"https://example.test/{good_revision}/policy.json",
+                          f"https://example.test/{bad_revision}/policy.json"])
 
     @patch.object(media_summary, "mac_headers", return_value={})
     def test_mac_sleep_and_mismatched_model_fall_back(self, headers):

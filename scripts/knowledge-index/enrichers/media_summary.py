@@ -341,23 +341,33 @@ class DispatchPolicy:
                         getattr(args, "dispatch_size", 0),
                         getattr(args, "mac_routing", "photo-first"))
         self.url = os.environ.get("KI_GPU_DISPATCH_POLICY_URL") if not args.dry_run else None
+        self.ref = os.environ.get("KI_GPU_DISPATCH_GIT_REF")
+        self.revision = None
         self.next_poll = 0
 
     def poll(self):
         now = time.monotonic()
-        if self.url and now >= self.next_poll:
+        if self.url and self.ref and now >= self.next_poll:
             self.next_poll = now + 30
             try:
-                # The raw Git endpoint otherwise caches old policies for five minutes.
-                url = f"{self.url}?poll={int(time.time()) // 30}"
-                with urllib.request.urlopen(url, timeout=2) as response:
+                result = subprocess.check_output(
+                    ["git", "ls-remote", "--exit-code", "https://github.com/homeiac/home.git", self.ref],
+                    timeout=3, stderr=subprocess.DEVNULL, text=True,
+                )
+                revision, _ = result.strip().split("\t")
+                if not re.fullmatch(r"[0-9a-f]{40}", revision):
+                    raise ValueError("Invalid Git dispatch revision")
+                if revision == self.revision:
+                    return self.current
+                with urllib.request.urlopen(self.url.format(revision=revision), timeout=2) as response:
                     policy = json.load(response)
                 mode, size, routing = policy["mode"], policy["page_size"], policy["mac_routing"]
                 if (mode not in ("batch", "continuous") or type(size) is not int or not 0 <= size <= 512
                         or routing not in ("fifo", "photo-first")):
                     raise ValueError("Invalid Git dispatch policy")
                 self.current = mode, size, routing
-            except (OSError, ValueError, KeyError, TypeError):
+                self.revision = revision
+            except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
                 print("WARN: keeping the last valid Git dispatch policy", file=sys.stderr)
         return self.current
 

@@ -67,7 +67,8 @@ def main() -> None:
                          f"Environment=KI_SUMMARY_PARALLEL={parallel}\n"
                          f"Environment=KI_GPU_DISPATCH_MODE={dispatch['mode']}\n"
                          f"Environment=KI_GPU_DISPATCH_SIZE={dispatch['page_size']}\n"
-                         "Environment=KI_GPU_DISPATCH_POLICY_URL=https://raw.githubusercontent.com/homeiac/home/codex/photo-enrichment-217/scripts/knowledge-index/bonsai-dispatch-policy.json\n"
+                         "Environment=KI_GPU_DISPATCH_GIT_REF=refs/heads/codex/photo-enrichment-217\n"
+                         "Environment=KI_GPU_DISPATCH_POLICY_URL=https://raw.githubusercontent.com/homeiac/home/{revision}/scripts/knowledge-index/bonsai-dispatch-policy.json\n"
                          f"Environment=KI_MAC_ROUTING={dispatch['mac_routing']}\n").encode(), 0o644)
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         started = time.time()

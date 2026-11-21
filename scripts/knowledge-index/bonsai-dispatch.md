@@ -1,6 +1,6 @@
 # Live Bonsai dispatch tuning
 
-The summary worker polls `bonsai-dispatch-policy.json` from the preview Git branch at queue-read boundaries. It checks at most once every 30 seconds. A changed policy takes effect after its outstanding requests finish. Git fetch failures retain the latest valid settings.
+The summary worker checks the preview branch at queue-read boundaries, at most once every 30 seconds. It reads `bonsai-dispatch-policy.json` at the resolved commit to avoid cached branch content. A changed policy takes effect after its outstanding requests finish. Git fetch failures retain the latest valid settings.
 
 - `mode` sets `batch` or `continuous`. Continuous mode fetches more work when a slot needs it while other requests are still in flight.
 - `page_size` sets the number of items per queue read while the Mac is available. Zero selects four items per available slot, with a minimum of one Parquet batch.
