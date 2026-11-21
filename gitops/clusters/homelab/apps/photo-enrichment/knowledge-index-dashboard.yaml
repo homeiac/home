@@ -25,6 +25,792 @@ data:
       ],
       "panels": [
         {
+          "id": 136,
+          "type": "row",
+          "title": "Work remaining & bottleneck",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "panels": []
+        },
+        {
+          "id": 137,
+          "type": "stat",
+          "title": "Summaries still to do",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900)))",
+              "legendFormat": "{{enricher}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Indexed photos and videos awaiting a summary, by selected enricher. Counts use the latest successful export only."
+        },
+        {
+          "id": 138,
+          "type": "stat",
+          "title": "Summary finish estimate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) / (clamp_min(max by(enricher) (deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h]) and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))), 0) > 0)) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 1)) or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) == 0) or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) and (max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60)) == 0)) * 0 - 2 or ((max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) unless max by(enricher) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60))) * 0 - 3 or (max by(enricher) (media_summaries_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))) > 0) * 0 - 1",
+              "legendFormat": "{{enricher}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "-1": {
+                      "text": "No recent progress",
+                      "color": "orange"
+                    },
+                    "-2": {
+                      "text": "Worker stopped",
+                      "color": "orange"
+                    },
+                    "-3": {
+                      "text": "Worker status unknown",
+                      "color": "gray"
+                    },
+                    "0": {
+                      "text": "Queue clear",
+                      "color": "green"
+                    }
+                  }
+                }
+              ],
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Current backlog divided by the last hour\u2019s successful summary pace. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
+        },
+        {
+          "id": 139,
+          "type": "stat",
+          "title": "Summaries saved / minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 5,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "clamp_min(max by(enricher) (deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h]) and on(instance,job) ((knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - node_textfile_mtime_seconds{file=~\".*/knowledge_index[.]prom\",instance=~\"$instance\"} < 900))), 0) * 60",
+              "legendFormat": "{{enricher}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Rate of growth in successful rows saved to Parquet over the last hour."
+        },
+        {
+          "id": 140,
+          "type": "stat",
+          "title": "Summary bottleneck \u00b7 stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 7,
+            "x": 17,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "topk by(enricher)(1, (100 * sum by(enricher,title)(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[30m])) / on(enricher) group_left sum by(enricher) (sum by(enricher,title)(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[30m])))) > 0)",
+              "legendFormat": "{{title}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0,
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name"
+          },
+          "description": "Largest share of measured worker time over 30 minutes. Ollama request includes request overhead and model processing. Compare resource signals below before attributing the delay to hardware."
+        },
+        {
+          "id": 141,
+          "type": "stat",
+          "title": "Photo context still to do",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 5,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 142,
+          "type": "stat",
+          "title": "Photo context finish estimate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 5,
+            "x": 5,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "(sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) / (sum(deriv(photo_context_jobs{instance=~\"$instance\",kind=\"done\"}[1h])) > 0)) or (sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) == 0) or (sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"}) > 0) * 0 - 1",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "-1": {
+                      "text": "No recent progress",
+                      "color": "orange"
+                    },
+                    "-2": {
+                      "text": "Worker stopped",
+                      "color": "orange"
+                    },
+                    "-3": {
+                      "text": "Worker status unknown",
+                      "color": "gray"
+                    },
+                    "0": {
+                      "text": "Queue clear",
+                      "color": "green"
+                    }
+                  }
+                }
+              ],
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Backlog divided by the last hour\u2019s increase in completed jobs. New arrivals and retries can extend the estimate."
+        },
+        {
+          "id": 143,
+          "type": "stat",
+          "title": "Photo extraction jobs left",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 5,
+            "x": 10,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(photo_enrichment_jobs{instance=~\"$instance\",kind=~\"ready|running|retry\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Includes delayed retries. See the PostgreSQL queue section for age and retry counts."
+        },
+        {
+          "id": 144,
+          "type": "stat",
+          "title": "Immich jobs outstanding",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 5,
+            "x": 15,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(immich_queue_jobs{state=~\"waiting|active|delayed|prioritized|paused\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "All native Immich queues. Open Photo App for per-queue throughput and estimates."
+        },
+        {
+          "id": 145,
+          "type": "stat",
+          "title": "Immich enrichment sync",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum by(state)(immich_sync_assets{state=~\"pending|conflict\"})",
+              "legendFormat": "{{state}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name"
+          },
+          "description": "Pending assets are ready for transfer. Conflicts require review and do not contribute to automatic queue drain."
+        },
+        {
+          "id": 146,
+          "type": "row",
+          "title": "USE checks \u00b7 Piglet host and GPU VM",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 9
+          },
+          "panels": []
+        },
+        {
+          "id": 147,
+          "type": "stat",
+          "title": "Utilization \u00b7 percent busy",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 10
+          },
+          "targets": [
+            {
+              "expr": "avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL{Hostname=\"k3s-vm-pumped-piglet-gpu\"}[5m]))",
+              "legendFormat": "Shared GPU",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\",job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[5m])))",
+              "legendFormat": "Host CPU",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "C",
+              "expr": "100 * (1 - sum(node_memory_MemAvailable_bytes and on(instance,job) node_uname_info{job=\"node-exporter\",nodename=\"k3s-vm-pumped-piglet-gpu\"}) / sum(node_memory_MemTotal_bytes and on(instance,job) node_uname_info{job=\"node-exporter\",nodename=\"k3s-vm-pumped-piglet-gpu\"}))",
+              "legendFormat": "VM RAM",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "D",
+              "expr": "100 * max(rate(node_disk_io_time_seconds_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[5m]))",
+              "legendFormat": "Busiest host disk",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 85
+                  },
+                  {
+                    "color": "red",
+                    "value": 95
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 1,
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name"
+          },
+          "description": "Five-minute utilization where available. GPU activity is shared across Ollama, Frigate and Immich."
+        },
+        {
+          "id": 148,
+          "type": "stat",
+          "title": "Saturation \u00b7 percent of time waiting",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 10
+          },
+          "targets": [
+            {
+              "expr": "100 * max(rate(node_pressure_cpu_waiting_seconds_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[5m]) or (rate(node_pressure_cpu_waiting_seconds_total{job=\"node-exporter\"}[5m]) and on(instance,job) node_uname_info{job=\"node-exporter\",nodename=\"k3s-vm-pumped-piglet-gpu\"}))",
+              "legendFormat": "CPU wait",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "100 * max(rate(node_pressure_memory_waiting_seconds_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[5m]) or (rate(node_pressure_memory_waiting_seconds_total{job=\"node-exporter\"}[5m]) and on(instance,job) node_uname_info{job=\"node-exporter\",nodename=\"k3s-vm-pumped-piglet-gpu\"}))",
+              "legendFormat": "Memory wait",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "C",
+              "expr": "100 * max(rate(node_pressure_io_waiting_seconds_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[5m]) or (rate(node_pressure_io_waiting_seconds_total{job=\"node-exporter\"}[5m]) and on(instance,job) node_uname_info{job=\"node-exporter\",nodename=\"k3s-vm-pumped-piglet-gpu\"}))",
+              "legendFormat": "I/O wait",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 10
+                  },
+                  {
+                    "color": "red",
+                    "value": 25
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 1,
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name"
+          },
+          "description": "CPU, RAM and I/O pressure show the worse of the host and GPU VM over five minutes. Ollama request queue depth is not exported."
+        },
+        {
+          "id": 149,
+          "type": "stat",
+          "title": "Errors \u00b7 last hour",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 10
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(media_pipeline_items_total{status=\"error\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h]))",
+              "legendFormat": "Summary attempts",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "max(DCGM_FI_DEV_XID_ERRORS{Hostname=\"k3s-vm-pumped-piglet-gpu\"})",
+              "legendFormat": "Last GPU Xid code",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "C",
+              "expr": "sum(increase(node_network_receive_errs_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[1h])) + sum(increase(node_network_transmit_errs_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[1h])) + sum(increase(node_network_receive_drop_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[1h])) + sum(increase(node_network_transmit_drop_total{job=\"proxmox-node-exporter\",instance=\"pumped-piglet\"}[1h]))",
+              "legendFormat": "Host network errors/drops",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 1,
+              "noValue": "No data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name"
+          },
+          "description": "GPU Xid is the last driver error code, not an hourly count. Summary attempts include failed items before Parquet persistence."
+        },
+        {
           "id": 1,
           "type": "row",
           "title": "Value delivered",
@@ -33,7 +819,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 17
           },
           "panels": []
         },
@@ -49,7 +835,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 1
+            "y": 18
           },
           "targets": [
             {
@@ -100,7 +886,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 1
+            "y": 18
           },
           "targets": [
             {
@@ -151,7 +937,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 1
+            "y": 18
           },
           "targets": [
             {
@@ -202,7 +988,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 1
+            "y": 18
           },
           "targets": [
             {
@@ -253,7 +1039,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 1
+            "y": 18
           },
           "targets": [
             {
@@ -304,7 +1090,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 1
+            "y": 18
           },
           "targets": [
             {
@@ -355,7 +1141,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 5
+            "y": 22
           },
           "targets": [
             {
@@ -405,7 +1191,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 5
+            "y": 22
           },
           "targets": [
             {
@@ -454,7 +1240,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 5
+            "y": 22
           },
           "targets": [
             {
@@ -504,7 +1290,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 5
+            "y": 22
           },
           "targets": [
             {
@@ -555,7 +1341,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 5
+            "y": 22
           },
           "targets": [
             {
@@ -605,7 +1391,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 26
           },
           "targets": [
             {
@@ -659,7 +1445,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 9
+            "y": 26
           },
           "targets": [
             {
@@ -710,7 +1496,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 16
+            "y": 33
           },
           "panels": []
         },
@@ -726,7 +1512,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 17
+            "y": 34
           },
           "targets": [
             {
@@ -829,7 +1615,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 17
+            "y": 34
           },
           "targets": [
             {
@@ -881,7 +1667,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 17
+            "y": 34
           },
           "targets": [
             {
@@ -942,7 +1728,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 21
+            "y": 38
           },
           "targets": [
             {
@@ -1047,7 +1833,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 31
+            "y": 48
           },
           "targets": [
             {
@@ -1101,7 +1887,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 31
+            "y": 48
           },
           "targets": [
             {
@@ -1212,7 +1998,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 37
+            "y": 54
           },
           "targets": [
             {
@@ -1266,7 +2052,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 37
+            "y": 54
           },
           "targets": [
             {
@@ -1320,7 +2106,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 37
+            "y": 54
           },
           "targets": [
             {
@@ -1374,7 +2160,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 61
           },
           "targets": [
             {
@@ -1428,7 +2214,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 61
           },
           "targets": [
             {
@@ -1481,7 +2267,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 51
+            "y": 68
           },
           "targets": [
             {
@@ -1543,7 +2329,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 51
+            "y": 68
           },
           "targets": [
             {
@@ -1593,7 +2379,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 58
+            "y": 75
           },
           "panels": []
         },
@@ -1609,7 +2395,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 59
+            "y": 76
           },
           "targets": [
             {
@@ -1702,7 +2488,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 59
+            "y": 76
           },
           "targets": [
             {
@@ -1763,7 +2549,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 59
+            "y": 76
           },
           "targets": [
             {
@@ -1816,7 +2602,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 59
+            "y": 76
           },
           "targets": [
             {
@@ -1869,7 +2655,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 80
           },
           "targets": [
             {
@@ -1931,7 +2717,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 80
           },
           "targets": [
             {
@@ -2017,7 +2803,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 70
+            "y": 87
           },
           "targets": [
             {
@@ -2072,7 +2858,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 70
+            "y": 87
           },
           "targets": [
             {
@@ -2125,7 +2911,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 77
+            "y": 94
           },
           "targets": [
             {
@@ -2179,7 +2965,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 77
+            "y": 94
           },
           "targets": [
             {
@@ -2232,7 +3018,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 77
+            "y": 94
           },
           "targets": [
             {
@@ -2283,7 +3069,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 103
+            "y": 120
           },
           "panels": []
         },
@@ -2299,7 +3085,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 104
+            "y": 121
           },
           "targets": [
             {
@@ -2368,7 +3154,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 104
+            "y": 121
           },
           "targets": [
             {
@@ -2421,7 +3207,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 104
+            "y": 121
           },
           "targets": [
             {
@@ -2474,7 +3260,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 104
+            "y": 121
           },
           "targets": [
             {
@@ -2528,7 +3314,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 108
+            "y": 125
           },
           "targets": [
             {
@@ -2582,7 +3368,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 108
+            "y": 125
           },
           "targets": [
             {
@@ -2632,7 +3418,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 84
+            "y": 101
           },
           "panels": []
         },
@@ -2648,7 +3434,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 85
+            "y": 102
           },
           "targets": [
             {
@@ -2697,7 +3483,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 85
+            "y": 102
           },
           "targets": [
             {
@@ -2751,7 +3537,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 92
+            "y": 109
           },
           "targets": [
             {
@@ -2815,7 +3601,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 92
+            "y": 109
           },
           "targets": [
             {
@@ -2864,7 +3650,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 92
+            "y": 109
           },
           "targets": [
             {
@@ -2913,7 +3699,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 92
+            "y": 109
           },
           "targets": [
             {
@@ -2970,7 +3756,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 96
+            "y": 113
           },
           "targets": [
             {
@@ -3019,7 +3805,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 96
+            "y": 113
           },
           "targets": [
             {
@@ -3065,7 +3851,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 115
+            "y": 132
           },
           "panels": []
         },
@@ -3081,7 +3867,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 116
+            "y": 133
           },
           "targets": [
             {
@@ -3131,7 +3917,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 116
+            "y": 133
           },
           "targets": [
             {
@@ -3185,7 +3971,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 116
+            "y": 133
           },
           "targets": [
             {
@@ -3234,7 +4020,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 116
+            "y": 133
           },
           "targets": [
             {
@@ -3283,7 +4069,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 116
+            "y": 133
           },
           "targets": [
             {
@@ -3333,7 +4119,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 116
+            "y": 133
           },
           "targets": [
             {
@@ -3382,7 +4168,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 120
+            "y": 137
           },
           "targets": [
             {
@@ -3446,7 +4232,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 120
+            "y": 137
           },
           "targets": [
             {
@@ -3495,7 +4281,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 120
+            "y": 137
           },
           "targets": [
             {
@@ -3545,7 +4331,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 120
+            "y": 137
           },
           "targets": [
             {
@@ -3594,7 +4380,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 120
+            "y": 137
           },
           "targets": [
             {
@@ -3643,7 +4429,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 120
+            "y": 137
           },
           "targets": [
             {
@@ -3696,7 +4482,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 124
+            "y": 141
           },
           "targets": [
             {
@@ -3755,7 +4541,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 124
+            "y": 141
           },
           "targets": [
             {
@@ -3804,7 +4590,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 124
+            "y": 141
           },
           "targets": [
             {
@@ -3851,7 +4637,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 131
+            "y": 148
           },
           "panels": []
         },
@@ -3867,7 +4653,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 132
+            "y": 149
           },
           "targets": [
             {
@@ -3921,7 +4707,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 132
+            "y": 149
           },
           "targets": [
             {
@@ -3971,7 +4757,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 132
+            "y": 149
           },
           "targets": [
             {
@@ -4029,7 +4815,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 132
+            "y": 149
           },
           "targets": [
             {
@@ -4079,7 +4865,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 132
+            "y": 149
           },
           "targets": [
             {
@@ -4137,7 +4923,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 132
+            "y": 149
           },
           "targets": [
             {
@@ -4191,7 +4977,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 136
+            "y": 153
           },
           "targets": [
             {
@@ -4259,7 +5045,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 136
+            "y": 153
           },
           "targets": [
             {
@@ -4309,7 +5095,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 136
+            "y": 153
           },
           "targets": [
             {
@@ -4368,7 +5154,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 136
+            "y": 153
           },
           "targets": [
             {
@@ -4418,7 +5204,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 136
+            "y": 153
           },
           "targets": [
             {
@@ -4467,7 +5253,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 136
+            "y": 153
           },
           "targets": [
             {
@@ -4516,7 +5302,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 140
+            "y": 157
           },
           "targets": [
             {
@@ -4585,7 +5371,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 140
+            "y": 157
           },
           "targets": [
             {
@@ -4653,7 +5439,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 140
+            "y": 157
           },
           "targets": [
             {
@@ -4721,7 +5507,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 140
+            "y": 157
           },
           "targets": [
             {
@@ -4772,7 +5558,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 140
+            "y": 157
           },
           "targets": [
             {
@@ -4823,7 +5609,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 140
+            "y": 157
           },
           "targets": [
             {
@@ -4873,7 +5659,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 144
+            "y": 161
           },
           "targets": [
             {
@@ -4922,7 +5708,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 144
+            "y": 161
           },
           "targets": [
             {
@@ -4976,7 +5762,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 151
+            "y": 168
           },
           "targets": [
             {
@@ -5030,7 +5816,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 151
+            "y": 168
           },
           "targets": [
             {
@@ -5076,7 +5862,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 158
+            "y": 175
           },
           "panels": []
         },
@@ -5092,7 +5878,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 159
+            "y": 176
           },
           "targets": [
             {
@@ -5160,7 +5946,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 159
+            "y": 176
           },
           "targets": [
             {
@@ -5217,7 +6003,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 159
+            "y": 176
           },
           "targets": [
             {
@@ -5266,7 +6052,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 159
+            "y": 176
           },
           "targets": [
             {
@@ -5315,7 +6101,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 159
+            "y": 176
           },
           "targets": [
             {
@@ -5364,7 +6150,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 159
+            "y": 176
           },
           "targets": [
             {
@@ -5414,7 +6200,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 163
+            "y": 180
           },
           "panels": []
         },
@@ -5430,7 +6216,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 164
+            "y": 181
           },
           "targets": [
             {
@@ -5480,7 +6266,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 164
+            "y": 181
           },
           "targets": [
             {
@@ -5529,7 +6315,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 164
+            "y": 181
           },
           "targets": [
             {
@@ -5578,7 +6364,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 164
+            "y": 181
           },
           "targets": [
             {
@@ -5631,7 +6417,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 164
+            "y": 181
           },
           "targets": [
             {
@@ -5680,7 +6466,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 164
+            "y": 181
           },
           "targets": [
             {
@@ -5730,7 +6516,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 168
+            "y": 185
           },
           "targets": [
             {
@@ -5780,7 +6566,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 168
+            "y": 185
           },
           "targets": [
             {
@@ -5826,7 +6612,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 176
+            "y": 193
           },
           "panels": []
         },
@@ -5842,7 +6628,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 177
+            "y": 194
           },
           "targets": [
             {
@@ -5891,7 +6677,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 177
+            "y": 194
           },
           "targets": [
             {
@@ -5944,7 +6730,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 177
+            "y": 194
           },
           "targets": [
             {
@@ -5993,7 +6779,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 177
+            "y": 194
           },
           "targets": [
             {
@@ -6043,7 +6829,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 177
+            "y": 194
           },
           "targets": [
             {
@@ -6107,7 +6893,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 177
+            "y": 194
           },
           "targets": [
             {
@@ -6156,7 +6942,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 181
+            "y": 198
           },
           "targets": [
             {
@@ -6291,7 +7077,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 189
+            "y": 206
           },
           "targets": [
             {
@@ -6345,7 +7131,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 189
+            "y": 206
           },
           "targets": [
             {
@@ -6396,7 +7182,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 197
+            "y": 214
           },
           "panels": []
         },
@@ -6412,7 +7198,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 198
+            "y": 215
           },
           "targets": [
             {
@@ -6476,7 +7262,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 198
+            "y": 215
           },
           "targets": [
             {
@@ -6525,7 +7311,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 198
+            "y": 215
           },
           "targets": [
             {
@@ -6593,7 +7379,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 198
+            "y": 215
           },
           "targets": [
             {
@@ -6642,7 +7428,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 198
+            "y": 215
           },
           "targets": [
             {
@@ -6691,7 +7477,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 198
+            "y": 215
           },
           "targets": [
             {
@@ -6741,7 +7527,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 202
+            "y": 219
           },
           "targets": [
             {
@@ -6787,7 +7573,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 208
+            "y": 225
           },
           "panels": []
         },
@@ -6803,7 +7589,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 209
+            "y": 226
           },
           "targets": [
             {
@@ -6871,7 +7657,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 209
+            "y": 226
           },
           "targets": [
             {
@@ -6920,7 +7706,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 209
+            "y": 226
           },
           "targets": [
             {
@@ -6979,7 +7765,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 213
+            "y": 230
           },
           "targets": [
             {
@@ -7028,7 +7814,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 219
+            "y": 236
           },
           "targets": [
             {

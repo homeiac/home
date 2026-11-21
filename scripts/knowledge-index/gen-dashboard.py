@@ -70,6 +70,78 @@ def shift(items, dy):
     return items
 
 
+def work_remaining_panels():
+    """Queue estimates and USE signals for the summary pipeline on Piglet."""
+    selection = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
+    fresh = ('(knowledge_index_exporter_success' + INST + ' == 1) and on(instance,job) '
+             '(time() - node_textfile_mtime_seconds{file=~".*/knowledge_index[.]prom",instance=~"$instance"} < 900)')
+    queue = (f'max by(enricher) (media_summaries_queue{{{selection}}} '
+             f'and on(instance,job) ({fresh}))')
+    pace = ('clamp_min(max by(enricher) (deriv(media_summaries_rows'
+            f'{{status="ok",{selection}}}[1h]) and on(instance,job) ({fresh})), 0)')
+    running = ('max by(enricher) (media_pipeline_running{' + selection + '} and on(instance,enricher,job) '
+               '(time() - media_pipeline_heartbeat_timestamp_seconds{' + selection + '} < 60))')
+    eta = (f'(({queue} / ({pace} > 0)) and ({running} == 1)) or ({queue} == 0) '
+           f'or (({queue} > 0) and ({running} == 0)) * 0 - 2 '
+           f'or (({queue} > 0) unless {running}) * 0 - 3 '
+           f'or ({queue} > 0) * 0 - 1')
+    stage_rate = f'sum by(enricher,title)(rate(media_pipeline_stage_seconds_total{{{selection}}}[30m]))'
+    slowest = f'topk by(enricher)(1, (100 * {stage_rate} / on(enricher) group_left sum by(enricher) ({stage_rate})) > 0)'
+
+    context = 'sum(photo_context_jobs{instance=~"$instance",kind=~"ready|running|retry"})'
+    context_pace = 'sum(deriv(photo_context_jobs{instance=~"$instance",kind="done"}[1h]))'
+    no_eta = {"-1": {"text": "No recent progress", "color": "orange"},
+              "-2": {"text": "Worker stopped", "color": "orange"},
+              "-3": {"text": "Worker status unknown", "color": "gray"},
+              "0": {"text": "Queue clear", "color": "green"}}
+    p = [row("Work remaining & bottleneck", 0),
+         stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="Indexed photos and videos awaiting a summary, by selected enricher. Counts use the latest successful export only."),
+         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last hour’s successful summary pace. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
+         stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Rate of growth in successful rows saved to Parquet over the last hour."),
+         stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured worker time over 30 minutes. Ollama request includes request overhead and model processing. Compare resource signals below before attributing the delay to hardware.")]
+    p += [stat("Photo context still to do", context, 0, 5, w=5, unit="locale"),
+          stat("Photo context finish estimate", f'({context} / ({context_pace} > 0)) or ({context} == 0) or ({context} > 0) * 0 - 1', 5, 5, w=5, unit="s", mappings=no_eta, description="Backlog divided by the last hour’s increase in completed jobs. New arrivals and retries can extend the estimate."),
+          stat("Photo extraction jobs left", 'sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|running|retry"})', 10, 5, w=5, unit="locale", description="Includes delayed retries. See the PostgreSQL queue section for age and retry counts."),
+          stat("Immich jobs outstanding", 'sum(immich_queue_jobs{state=~"waiting|active|delayed|prioritized|paused"})', 15, 5, w=5, unit="locale", description="All native Immich queues. Open Photo App for per-queue throughput and estimates."),
+          stat("Immich enrichment sync", 'sum by(state)(immich_sync_assets{state=~"pending|conflict"})', 20, 5, w=4, unit="locale", legend="{{state}}", extra_opts={"textMode": "value_and_name"}, description="Pending assets are ready for transfer. Conflicts require review and do not contribute to automatic queue drain.")]
+
+    host = '{job="proxmox-node-exporter",instance="pumped-piglet"}'
+    vm = 'and on(instance,job) node_uname_info{job="node-exporter",nodename="k3s-vm-pumped-piglet-gpu"}'
+    gpu = '{Hostname="k3s-vm-pumped-piglet-gpu"}'
+    def latest(title, queries, x, width, thresholds, unit='short', description=''):
+        panel = stat(title, queries[0][0], x, 10, w=width, h=6, unit=unit,
+                     legend=queries[0][1], decimals=1, thresholds=thresholds,
+                     extra_opts={"textMode": "value_and_name"}, description=description)
+        panel["targets"].extend({"refId": chr(65 + i), "expr": expr, "legendFormat": label}
+                                for i, (expr, label) in enumerate(queries[1:], 1))
+        return panel
+
+    p.append(row("USE checks · Piglet host and GPU VM", 9))
+    p.append(latest("Utilization · percent busy", [
+        (f'avg(avg_over_time(DCGM_FI_DEV_GPU_UTIL{gpu}[5m]))', 'Shared GPU'),
+        ('100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle",job="proxmox-node-exporter",instance="pumped-piglet"}[5m])))', 'Host CPU'),
+        (f'100 * (1 - sum(node_memory_MemAvailable_bytes {vm}) / sum(node_memory_MemTotal_bytes {vm}))', 'VM RAM'),
+        ('100 * max(rate(node_disk_io_time_seconds_total' + host + '[5m]))', 'Busiest host disk'),
+    ], 0, 8, [('green', None), ('orange', 85), ('red', 95)], 'percent', 'Five-minute utilization where available. GPU activity is shared across Ollama, Frigate and Immich.'))
+    pressure = [(f'100 * max(rate(node_pressure_{resource}_waiting_seconds_total{host}[5m]) '
+                 f'or (rate(node_pressure_{resource}_waiting_seconds_total{{job="node-exporter"}}[5m]) {vm}))', label)
+                for resource, label in [('cpu', 'CPU wait'), ('memory', 'Memory wait'), ('io', 'I/O wait')]]
+    p.append(latest("Saturation · percent of time waiting", pressure, 8, 8,
+                    [('green', None), ('orange', 10), ('red', 25)], 'percent',
+                    'CPU, RAM and I/O pressure show the worse of the host and GPU VM over five minutes. Ollama request queue depth is not exported.'))
+    p.append(latest("Errors · last hour", [
+        (f'sum(increase(media_pipeline_items_total{{status="error",{selection}}}[1h]))', 'Summary attempts'),
+        (f'max(DCGM_FI_DEV_XID_ERRORS{gpu})', 'Last GPU Xid code'),
+        (' + '.join(f'sum(increase(node_network_{metric}_total{host}[1h]))' for metric in ('receive_errs', 'transmit_errs', 'receive_drop', 'transmit_drop')), 'Host network errors/drops'),
+    ], 16, 8, RED_IF_POS, description='GPU Xid is the last driver error code, not an hourly count. Summary attempts include failed items before Parquet persistence.'))
+    for panel in p:
+        if panel['type'] == 'stat':
+            panel['fieldConfig']['defaults']['noValue'] = 'No data'
+        for target in panel.get('targets', []):
+            target.update(instant=True, range=False)
+    return p
+
+
 def backfill_panels():
     """Top section: live progress of the (re)index run. Needs the adapter's --prom file; the process_* panels work for any run."""
     p = [row("Backfill progress", 0)]
@@ -162,7 +234,7 @@ def panels():
     enrichment = photo_enrichment_panels()
     shift(p[insert_at:], 99)
     p[insert_at:insert_at] = shift(pipeline, offset) + shift(enrichment, offset + 42)
-    return p
+    return work_remaining_panels() + shift(p, 17)
 
 
 def pipeline_panels():
