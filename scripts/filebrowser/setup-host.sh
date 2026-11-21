@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Provision an unprivileged FileBrowser LXC and read-only USB mounts on piglet.
+# Provision an unprivileged FileBrowser LXC and read-only USB views on piglet.
 # Run via deploy.sh; never formats disks or stores BitLocker keys.
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -12,9 +12,6 @@ elif [[ $(pvesh get /cluster/nextid --vmid "$ct") != "$ct" ]]; then
 fi
 for uuid in EBFF-FC78 1860-6D8F; do
     [[ $(blkid -s TYPE -o value "/dev/disk/by-uuid/$uuid") == exfat ]] || exit 1
-    if findmnt -rn -S "/dev/disk/by-uuid/$uuid" -o OPTIONS | grep -Eq '(^|,)rw(,|$)'; then
-        echo "Refusing to reuse a writable mount for $uuid" >&2; exit 1
-    fi
 done
 backup_dir=/root/filebrowser-backups/$(date +%Y%m%dT%H%M%S)
 install -d -m 700 "$backup_dir"
@@ -28,17 +25,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y --no-install-recommends cryptsetup-bin ntfs-3g ca-certificates curl
 install -m 700 "$SCRIPT_DIR/unlock-bitlocker-host.sh" /usr/local/sbin/filebrowser-unlock-bitlocker
-for entry in EBFF-FC78:SSK 1860-6D8F:RASPBMC; do
-    uuid=${entry%%:*}; label=${entry#*:}; target=/mnt/filebrowser/$label
-    mkdir -p "$target"
-    if ! grep -Fq "UUID=$uuid " /etc/fstab; then
-        printf 'UUID=%s %s exfat ro,nosuid,nodev,noexec,nofail,x-systemd.device-timeout=10s,uid=100000,gid=100000,fmask=0133,dmask=0022 0 0\n' "$uuid" "$target" >> /etc/fstab
-    fi
-    mountpoint -q "$target" || mount "$target"
-    [[ $(findmnt -rn -M "$target" -o UUID) == "$uuid" ]]
-    findmnt -rn -M "$target" -o OPTIONS | grep -Eq '(^|,)ro(,|$)'
-done
-systemctl daemon-reload
+bash "$SCRIPT_DIR/configure-mounts-host.sh"
 if [[ ! -f /etc/pve/lxc/$ct.conf ]]; then
     pct create "$ct" local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst \
         --hostname filebrowser --unprivileged 1 --features nesting=1 --cores 1 --memory 1024 --swap 256 \

@@ -7,6 +7,10 @@ echo '=== Proxmox health ==='
 systemctl is-active pve-cluster pvedaemon
 dpkg --audit
 apt-get check -qq
+echo '=== Existing backup paths and schedules ==='
+findmnt -M /mnt/ssk-cloud
+findmnt -M /mnt/wd25-cloud
+systemctl is-enabled cloud-backup-mirror@ssk.timer cloud-backup-mirror@wd25.timer
 echo '=== Host read-only mounts ==='
 findmnt -M /mnt/filebrowser/SSK
 findmnt -M /mnt/filebrowser/RASPBMC

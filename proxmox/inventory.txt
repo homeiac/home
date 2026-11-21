@@ -17,6 +17,13 @@
 [maas]
 192.168.4.53    # ubuntu-maas-vm
 
+[filebrowser]
+# LXC 104 on pumped-piglet; unprivileged Debian 13, 1 CPU, 1GiB RAM, 8GiB local-2TB-zfs.
+# Web: https://files.app.home.panderosystems.com (Traefik -> pumped-piglet.maas:8088)
+# Read-only sources: SSK, RASPBMC, BitLocker. Existing exFAT backup writers preserved.
+# BitLocker needs interactive unlock after a host reboot; no recovery key is stored.
+# Runbook: docs/runbooks/piglet-usb-filebrowser.md
+
 # ============================================================================
 # K3s CLUSTER VMs
 # ============================================================================

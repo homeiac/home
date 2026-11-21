@@ -19,8 +19,10 @@ drops to nobody after entering the namespace. No router forwarding is configured
 | RASPBMC | UUID 1860-6D8F | /mnt/filebrowser/RASPBMC | /srv/files/RASPBMC |
 | BitLocker | PARTUUID 00024711-01 | /mnt/filebrowser/BitLocker | /srv/files/BitLocker |
 
-Both exFAT partitions are mounted using `ro,nosuid,nodev,noexec` in the host's
-fstab. The LXC bind mounts additionally use `ro=1`, and the service applies
+The existing daily cloud-backup jobs retain writable primary mounts at
+`/mnt/ssk-cloud` and `/mnt/wd25-cloud`. FileBrowser receives separate host bind
+views using `bind,ro,nosuid,nodev,noexec` in fstab. The LXC bind mounts additionally
+use `ro=1`, and the service applies
 `ReadOnlyPaths=/srv/files`. Source permissions disable create, modify and delete.
 The BitLocker device-mapper mapping also uses `--readonly`; its NTFS filesystem
 is mounted read-only using ntfs-3g. The USB ZFS backup pool is not a source.
@@ -82,6 +84,7 @@ Remove `filebrowser-ingress.yaml` from the Traefik resources kustomization and
 commit/push so Flux prunes the route. Stop `filebrowser-proxy.socket` and
 `filebrowser-proxy.service`, then shut down LXC 104. Unmount the three
 `/mnt/filebrowser/` paths and close `filebrowser-bitlocker` with cryptsetup.
-Remove only the two FileBrowser UUID lines from fstab, or compare against the
-saved backup before restoration. Preserve LXC 104 until its application state
+Remove the FileBrowser bind-view lines from fstab; preserve the writable backup
+mounts while the daily mirrors remain enabled. Compare against the saved backup
+before restoration. Preserve LXC 104 until its application state
 is no longer needed. None of these operations requires formatting a USB disk.
