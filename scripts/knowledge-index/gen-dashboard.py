@@ -305,7 +305,16 @@ def panels():
                              9, p[ollama]['gridPos']['y'], w=3, mappings=YN))
     intro = [panel for panel in overview if panel['gridPos']['y'] < 5]
     details = [panel for panel in overview if panel['gridPos']['y'] >= 5]
-    return intro + throughput_panels() + shift(details, THROUGHPUT_HEIGHT) + shift(p, 17 + THROUGHPUT_HEIGHT)
+    throughput = throughput_panels()
+    luna = [stat("Luna captions saved to Parquet", 'max(knowledge_index_luna_saved' + INST + ')', 0, 12, w=8, unit="locale"),
+            stat("Luna estimated token cost", 'max(knowledge_index_luna_proxy_usd' + INST + ')', 8, 12, w=8, unit="currencyUSD", decimals=3,
+                 description="Measured Codex tokens valued at standard Luna API rates. The Enterprise account supplies inference."),
+            stat("Luna budget available", '250 - max(knowledge_index_luna_proxy_usd' + INST + ') - max(knowledge_index_luna_budget_held_usd' + INST + ')',
+                 16, 12, w=8, unit="currencyUSD", decimals=2,
+                 description="The $250 Luna allowance less settled estimates, a $1 allowance for earlier pilots, and $1 per outstanding or unknown request.")]
+    for panel in luna:
+        panel['targets'][0].update(instant=True, range=False)
+    return intro + throughput + luna + shift(details, THROUGHPUT_HEIGHT + 4) + shift(p, 21 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():

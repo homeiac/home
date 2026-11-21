@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "model": "gpt-6-luna",
+  "estimated_limit_usd": 250,
+  "batch_size": 12,
+  "parallel": 2
+}
