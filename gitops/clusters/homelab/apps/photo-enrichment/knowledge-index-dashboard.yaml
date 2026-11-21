@@ -429,9 +429,16 @@ data:
               "range": false
             },
             {
-              "expr": "max(knowledge_index_luna_blocked{instance=~\"$instance\"} and on(instance,job) (time() - knowledge_index_luna_heartbeat_timestamp_seconds{instance=~\"$instance\"} < 240))",
-              "legendFormat": "Budget or usage hold",
+              "expr": "max(knowledge_index_luna_jobs{instance=~\"$instance\",state=\"unknown\"})",
+              "legendFormat": "Requests with unknown usage",
               "refId": "C",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "max(knowledge_index_luna_blocked{instance=~\"$instance\"})",
+              "legendFormat": "Accounting hold (1 = paused)",
+              "refId": "D",
               "instant": true,
               "range": false
             }
@@ -461,7 +468,7 @@ data:
             "orientation": "vertical",
             "graphMode": "none"
           },
-          "description": "The Mac client submits to Enterprise Codex. Piglet tracks leases and estimated spend. A stale report hides current activity."
+          "description": "The Mac client submits to Enterprise Codex. Submitted and preparing require a recent report. The last recorded accounting hold remains visible until the ledger clears it."
         },
         {
           "id": 164,

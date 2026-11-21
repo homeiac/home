@@ -363,8 +363,9 @@ def panels():
                  "Piglet sends distinct pending items to the Mac Metal worker. Zero capacity means it is currently unavailable for backfill."),
         location("Mac client → Enterprise Luna", [(luna_value("knowledge_index_luna_jobs", "sent"), "Submitted"),
                                                 (luna_value("knowledge_index_luna_jobs", "reserved"), "Preparing"),
-                                                (luna_value("knowledge_index_luna_blocked"), "Budget or usage hold")], 12,
-                 "The Mac client submits to Enterprise Codex. Piglet tracks leases and estimated spend. A stale report hides current activity."),
+                                                (luna_value("knowledge_index_luna_jobs", "unknown", False), "Requests with unknown usage"),
+                                                (luna_value("knowledge_index_luna_blocked", fresh=False), "Accounting hold (1 = paused)")], 12,
+                 "The Mac client submits to Enterprise Codex. Submitted and preparing require a recent report. The last recorded accounting hold remains visible until the ledger clears it."),
         location("Piglet · Luna publication", [(luna_value("knowledge_index_luna_jobs", "pending", False), "Pending"),
                                               (luna_value("knowledge_index_luna_awaiting_publish"), "Completed, awaiting Parquet")], 18,
                  "Luna has a separate queue and Parquet dataset on Piglet. The Bonsai queue and its finish estimate appear above.")]
