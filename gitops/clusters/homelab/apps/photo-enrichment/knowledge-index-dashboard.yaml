@@ -2207,7 +2207,7 @@ data:
           },
           "targets": [
             {
-              "expr": "clamp_min(sum(deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\"}[10m])) * 60, 0)",
+              "expr": "sum(max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60",
               "legendFormat": "",
               "refId": "A"
             }
@@ -2240,7 +2240,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Photos and videos described by the local model per minute (10 min window)."
+          "description": "Successful local summary rows saved to Parquet per minute over the last ten minutes."
         },
         {
           "id": 4,
@@ -2717,8 +2717,8 @@ data:
               "refId": "A"
             },
             {
-              "expr": "clamp_min(sum(deriv(media_summaries_rows{status=\"ok\",instance=~\"$instance\"}[10m])) * 60, 0)",
-              "legendFormat": "summaries / min",
+              "expr": "sum(max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60",
+              "legendFormat": "summaries saved / min",
               "refId": "B"
             }
           ],
@@ -2748,7 +2748,8 @@ data:
             "tooltip": {
               "mode": "multi"
             }
-          }
+          },
+          "description": "Indexing throughput and successful local summary writes. The summary line uses the worker's Parquet save counter over ten minutes, including cache saves and excluding Luna."
         },
         {
           "id": 14,

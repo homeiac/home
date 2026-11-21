@@ -259,6 +259,11 @@ class PipelineTests(unittest.TestCase):
         spec.loader.exec_module(module)
         dashboard = module.dashboard()
         panels = dashboard["panels"]
+        throughput = next(p for p in panels if p["title"] == "Throughput per minute")
+        summary_stat = next(p for p in panels if p["title"] == "Summaries per minute")
+        self.assertIn("knowledge_index_backfill_files_done", throughput["targets"][0]["expr"])
+        self.assertIn('rate(media_pipeline_persisted_items_total{status="ok"', throughput["targets"][1]["expr"])
+        self.assertEqual(throughput["targets"][1]["expr"], summary_stat["targets"][0]["expr"])
         self.assertEqual(len({p["id"] for p in panels}), len(panels))
         graph = next(p for p in panels if p["type"] == "nodeGraph")
         self.assertEqual({t["refId"] for t in graph["targets"]}, {"nodes", "edges"})

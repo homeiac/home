@@ -243,13 +243,13 @@ def backfill_panels():
 def value_panels():
     """Top section: what the index and the local GPU deliver, in numbers that matter (speed, size, cost avoided)."""
     FILES = "deriv(knowledge_index_backfill_files_done" + INST + "[5m]) * 60"
-    SUMM = 'sum(deriv(media_summaries_rows{status="ok",instance=~"$instance"}[10m])) * 60'
+    SUMM = f'sum({summary_pace()}) * 60'
     QS = 'knowledge_index_query_seconds{query="quota",instance=~"$instance"}'
     COST = ('sum(media_summaries_ok_items{kind="photo",instance=~"$instance"}) * $price_photo'
             ' + sum(media_summaries_video_seconds' + INST + ') / 60 * $price_video_min')
     p = [row("Value delivered", 0)]
     p += [stat("Files indexed per minute", "clamp_min(" + FILES + ", 0)", 0, 1, w=4, decimals=0, description="Backfill speed: files read per minute (5 min window). Only while a run publishes progress."),
-          stat("Summaries per minute", "clamp_min(" + SUMM + ", 0)", 4, 1, w=4, decimals=1, description="Photos and videos described by the local model per minute (10 min window)."),
+          stat("Summaries per minute", SUMM, 4, 1, w=4, decimals=1, description="Successful local summary rows saved to Parquet per minute over the last ten minutes."),
           stat("Quota question answered in", QS, 8, 1, w=4, unit="s", decimals=2, description="How long 'what counts against Google quota?' takes against the index right now."),
           stat("Faster than before", "$baseline_s / " + QS, 12, 1, w=4, unit="suffix:x", decimals=0, description="Baseline: reading ~120k Takeout sidecars from the USB disk took about 38 min (2026-11-16). Edit the baseline_s variable to change it."),
           stat("Index size", "knowledge_index_dataset_bytes" + INST, 16, 1, w=4, unit="bytes", decimals=1, description="Parquet files plus the DuckDB view file."),
@@ -260,7 +260,8 @@ def value_panels():
           stat("Cloud-equivalent cost avoided", COST, 12, 5, w=8, unit="currencyUSD", decimals=2,
                description="ILLUSTRATIVE. No cloud service describes a Google Photos library like this. Priced as if a multimodal AI API charged per photo and per video minute; set the two price variables at the top to your own assumptions. Not a quote."),
           stat("Counts against Google quota", 'sum(gphotos_quota_bytes{kind="media",instance=~"$instance"})', 20, 5, w=4, unit="bytes", decimals=1)]
-    p += [series("Throughput per minute", [("clamp_min(" + FILES + ", 0)", "files indexed / min"), ("clamp_min(" + SUMM + ", 0)", "summaries / min")], 0, 9, 12, 7),
+    p += [series("Throughput per minute", [("clamp_min(" + FILES + ", 0)", "files indexed / min"), (SUMM, "summaries saved / min")], 0, 9, 12, 7,
+                 description="Indexing throughput and successful local summary writes. The summary line uses the worker's Parquet save counter over ten minutes, including cache saves and excluding Luna."),
           series("Index size vs library size", [("knowledge_index_dataset_bytes" + INST, "index"), ('sum(knowledge_index_bytes{source="gphotos",instance=~"$instance"})', "library")], 12, 9, 12, 7, unit="bytes")]
     return p
 
