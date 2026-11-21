@@ -105,17 +105,19 @@ def throughput_panels():
     before = f'(({summary_pace(ONE_SLOT_REFERENCE)}) * 60) or ({observed})'
     rtx_observed = observed.replace("11.789473684210524", "20.208747368421054")
     two_slots = f'(({summary_pace(1795281480)}) * 60) or ({rtx_observed})'
-    observed_joint = (f'max(media_pipeline_queue{{{SUMMARY_SELECTION},'
-                      'instance="pumped-piglet",enricher="gemma4-e2b-p1"}) * 0 + 21.4')
+    joint_scope = (f'max(media_pipeline_queue{{{SUMMARY_SELECTION},'
+                   'instance="pumped-piglet",enricher="gemma4-e2b-p1"}) * 0')
+    observed_joint = f'{joint_scope} + 21.4'
+    observed_refill = f'{joint_scope} + 28'
     fast_rate = f'({backend_pace("primary", "2m")}) + ({backend_pace("metal", "2m")})'
     comparison = _panel('stat', 'Summaries saved/min · before and now',
                         [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'),
-                         (observed_joint, 'RTX + Mac · before refill'), (after, 'RTX + Mac · after refill'),
+                         (observed_joint, 'RTX + Mac · before refill'), (observed_refill, 'RTX + Mac · measured after refill'),
                          (fast_rate, 'RTX + Mac · latest 2 min')],
                         0, 5, 10, 7, decimals=1,
                         extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
                                            'reduceOptions': {'calcs': ['lastNotNull']}}},
-                        description='The RTX-only baselines cover 16:48–16:58 and 17:08–17:18 UTC on Nov 21. Before refill, the RTX and Mac saved 214 summaries from 20:20–20:30 UTC. After refill shows the rolling ten-minute rate for the two GPUs. The refill comparison excludes Luna and cache saves.')
+                        description='On Nov 21 the RTX and Mac saved 214 items (38 videos) from 20:20–20:30 UTC before refill and 280 items (one video) from 20:43:40–20:53:40 UTC after refill. This production comparison excludes Luna and cache saves. The RTX-only baselines cover 16:48–16:58 and 17:08–17:18 UTC.')
     for target in comparison['targets']:
         target.update(instant=True, range=False)
     comparison['fieldConfig']['defaults']['noValue'] = 'Awaiting sample'

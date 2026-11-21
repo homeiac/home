@@ -809,8 +809,8 @@ data:
               "range": false
             },
             {
-              "expr": "((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) + (max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60)) and on() (vector(time()) >= 1795294175)",
-              "legendFormat": "RTX + Mac \u00b7 after refill",
+              "expr": "max(media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",instance=\"pumped-piglet\",enricher=\"gemma4-e2b-p1\"}) * 0 + 28",
+              "legendFormat": "RTX + Mac \u00b7 measured after refill",
               "refId": "D",
               "instant": true,
               "range": false
@@ -852,7 +852,7 @@ data:
               ]
             }
           },
-          "description": "The RTX-only baselines cover 16:48\u201316:58 and 17:08\u201317:18 UTC on Nov 21. Before refill, the RTX and Mac saved 214 summaries from 20:20\u201320:30 UTC. After refill shows the rolling ten-minute rate for the two GPUs. The refill comparison excludes Luna and cache saves."
+          "description": "On Nov 21 the RTX and Mac saved 214 items (38 videos) from 20:20\u201320:30 UTC before refill and 280 items (one video) from 20:43:40\u201320:53:40 UTC after refill. This production comparison excludes Luna and cache saves. The RTX-only baselines cover 16:48\u201316:58 and 17:08\u201317:18 UTC."
         },
         {
           "id": 153,
