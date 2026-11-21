@@ -45,6 +45,8 @@ def main() -> None:
     if not args.dashboard_only:
         payload = {"expected_sha": args.expected_worker_sha, "parallel": args.parallel}
         payload["mac_assist"] = args.mac_assist
+        policy = here / "bonsai-dispatch-policy.json"
+        payload["dispatch"] = json.loads(policy.read_text())
         for filename in ("media_summary.py", "pipeline_metrics.py", "summary_cache.py"):
             payload[filename] = (here / "enrichers" / filename).read_text()
         remote = (here / "host/rollout-pipeline-preview.py").read_text()

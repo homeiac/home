@@ -201,7 +201,7 @@ class PipelineTests(unittest.TestCase):
 
         rows = [{"path": "video1", "ext": "mp4"}, {"path": "video2", "ext": "mov"},
                 {"path": "photo", "ext": "jpg"}]
-        results = media_summary.split_batch(rows, 1, 1, primary, metal, refill=lambda: next(pages))
+        results = media_summary.split_batch(rows, 1, 1, primary, metal, refill=lambda: next(pages), prefer_photos=True)
         self.assertEqual({row["path"]: result["backend"] for row, result in results},
                          {"video1": "RTX", "video2": "RTX", "photo": "Mac", "next": "RTX"})
 

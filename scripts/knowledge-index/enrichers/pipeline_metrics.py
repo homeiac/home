@@ -24,6 +24,7 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
 PIPELINE_HELP = {
     "media_pipeline_backend_in_flight": ("gauge", "HTTP model requests currently awaiting a response, by backend"),
+    "media_pipeline_dispatch_policy_applied_timestamp_seconds": ("gauge", "When the active dispatch policy was applied"),
     "media_pipeline_mac_request_limit": ("gauge", "Mac request capacity discovered at the latest batch selection"),
     "media_pipeline_mac_candidate_bytes_total": ("counter", "Base64 JPEG bytes offered to Metal after caption cache misses"),
     "media_pipeline_mac_cache_reusable_bytes_total": ("counter", "Base64 bytes reusable under a bounded simulated LRU of successful frame transfers"),
@@ -92,6 +93,7 @@ class PipelineMetrics:
         self.mac_counts = defaultdict(int)
         self.backend_active = {"primary": 0, "metal": 0}
         self.mac_limit = 0
+        self.dispatch = None
         self.backend_saved = dict.fromkeys(("primary", "metal", "cache"), 0)
         self.ollama_seconds = defaultdict(float)
         self.ollama_observations = defaultdict(int)
@@ -185,6 +187,12 @@ class PipelineMetrics:
         with self.lock:
             self.mac_limit = offered
 
+    def dispatch_policy(self, mode, page_size, routing):
+        with self.lock:
+            settings = (mode, page_size, routing)
+            if self.dispatch is None or settings != self.dispatch[0]:
+                self.dispatch = settings, time.time()
+
     def mac_request(self, jpegs):
         frames = [(hashlib.sha256(jpeg).digest(), len(jpeg)) for jpeg in jpegs]
         with self.lock:
@@ -254,6 +262,10 @@ class PipelineMetrics:
             for backend, count in self.backend_active.items():
                 add("media_pipeline_backend_in_flight", count, backend=backend)
             add("media_pipeline_mac_request_limit", self.mac_limit)
+            if self.dispatch is not None:
+                (mode, page, routing), applied = self.dispatch
+                add("media_pipeline_dispatch_policy_applied_timestamp_seconds", applied,
+                    mode=mode, page_size=page, mac_routing=routing)
             add("media_pipeline_mac_candidate_bytes_total", self.mac_bytes)
             for mib, cache in self.mac_cache.items():
                 add("media_pipeline_mac_cache_reusable_bytes_total", cache.reusable, capacity_mib=mib)

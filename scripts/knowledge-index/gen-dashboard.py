@@ -88,9 +88,9 @@ def summary_pace(at=None):
     return f'max by(enricher) (sum by(instance,enricher) (rate({selector})))'
 
 
-def backend_pace(backend):
+def backend_pace(backend, window="10m"):
     selector = f'media_pipeline_backend_saved_total{{{SUMMARY_SELECTION},backend="{backend}"}}'
-    return f'max(sum by(instance,enricher) (rate({selector}[10m]))) * 60'
+    return f'max(sum by(instance,enricher) (rate({selector}[{window}]))) * 60'
 
 
 def throughput_panels():
@@ -107,9 +107,11 @@ def throughput_panels():
     two_slots = f'(({summary_pace(1795281480)}) * 60) or ({rtx_observed})'
     observed_joint = (f'max(media_pipeline_queue{{{SUMMARY_SELECTION},'
                       'instance="pumped-piglet",enricher="gemma4-e2b-p1"}) * 0 + 21.4')
+    fast_rate = f'({backend_pace("primary", "2m")}) + ({backend_pace("metal", "2m")})'
     comparison = _panel('stat', 'Summaries saved/min · before and now',
                         [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'),
-                         (observed_joint, 'RTX + Mac · before refill'), (after, 'RTX + Mac · after refill')],
+                         (observed_joint, 'RTX + Mac · before refill'), (after, 'RTX + Mac · after refill'),
+                         (fast_rate, 'RTX + Mac · latest 2 min')],
                         0, 5, 10, 7, decimals=1,
                         extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
                                            'reduceOptions': {'calcs': ['lastNotNull']}}},
@@ -340,6 +342,19 @@ def panels():
     phases = series("Mac inference seconds per successful request", [(f'{seconds} / ({counts} > 0)', "{{kind}} · {{phase}}")],
                     12, 22, 12, 6, decimals=2, unit="s",
                     description="Round trip starts on Piglet before the HTTP request. Prompt processing includes visual input. Generation is output decoding. Queueing, transport and other server overhead contribute to the round trip.")
+    occupancy = series("GPU request slots in use · 2 min average", [
+        (f'max(avg_over_time(media_pipeline_backend_in_flight{scope[:-1]},backend="{backend}"}}[2m]))', label)
+        for backend, label in (("primary", "RTX"), ("metal", "Mac Metal"))
+    ] + [(f'max(media_pipeline_mac_request_limit{scope})', "Mac available slots")],
+        0, 28, 14, 6, decimals=1,
+        description="Active HTTP model requests. RTX has two configured slots. The Mac reports zero available slots when unreachable.")
+    active_policy = stat("Bonsai dispatch policy applied", f'max by(mode,page_size,mac_routing) '
+                         f'(media_pipeline_dispatch_policy_applied_timestamp_seconds{scope}) * 1000',
+                         14, 28, w=10, h=6, unit="dateTimeAsIso",
+                         legend="{{mode}} · page {{page_size}} · {{mac_routing}}",
+                         extra_opts={"textMode": "value_and_name"},
+                         description="The active Git policy and when the worker adopted it. Page 0 uses four items per slot, with a minimum of one Parquet write batch.")
+    active_policy["targets"][0].update(instant=True, range=False)
     host_fresh = f'time() - media_pipeline_heartbeat_timestamp_seconds{scope} < 60'
     def host_value(metric, backend=None):
         selector = scope if backend is None else scope[:-1] + f',backend="{backend}"}}'
@@ -397,7 +412,7 @@ def panels():
     for panel in combined:
         panel["targets"][0].update(instant=True, range=False)
         panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting fresh data"
-    return intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases], 10) + shift(details, THROUGHPUT_HEIGHT + 26) + shift(p, 43 + THROUGHPUT_HEIGHT)
+    return intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy], 10) + shift(details, THROUGHPUT_HEIGHT + 32) + shift(p, 49 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():

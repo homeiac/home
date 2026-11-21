@@ -273,12 +273,11 @@ def mac_route(args):
     return 0, None
 
 
-def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None):
+def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False):
     """Keep slots fed across queue reads. Retry interrupted Mac work on the RTX."""
     pending = deque(rows)
     retry = deque()
     disabled = False
-    prefer_photos = refill is not None
     with ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:
         active = {}
 
@@ -334,6 +333,35 @@ def persist(batch, args, metrics, seen):
             seen.discard(row["path"])
 
 
+class DispatchPolicy:
+    """Poll the deployed Git policy and retain the last valid settings during outages."""
+
+    def __init__(self, args):
+        self.current = (getattr(args, "dispatch_mode", "continuous"),
+                        getattr(args, "dispatch_size", 0),
+                        getattr(args, "mac_routing", "photo-first"))
+        self.url = os.environ.get("KI_GPU_DISPATCH_POLICY_URL") if not args.dry_run else None
+        self.next_poll = 0
+
+    def poll(self):
+        now = time.monotonic()
+        if self.url and now >= self.next_poll:
+            self.next_poll = now + 30
+            try:
+                # The raw Git endpoint otherwise caches old policies for five minutes.
+                url = f"{self.url}?poll={int(time.time()) // 30}"
+                with urllib.request.urlopen(url, timeout=2) as response:
+                    policy = json.load(response)
+                mode, size, routing = policy["mode"], policy["page_size"], policy["mac_routing"]
+                if (mode not in ("batch", "continuous") or type(size) is not int or not 0 <= size <= 512
+                        or routing not in ("fifo", "photo-first")):
+                    raise ValueError("Invalid Git dispatch policy")
+                self.current = mode, size, routing
+            except (OSError, ValueError, KeyError, TypeError):
+                print("WARN: keeping the last valid Git dispatch policy", file=sys.stderr)
+        return self.current
+
+
 def run(a):
     if a.min_free_mib > 0:
         free = free_gpu_mib(a.smi_cmd)
@@ -345,6 +373,7 @@ def run(a):
     done = errors = 0
     t0 = time.time()
     remaining = a.limit
+    policy = DispatchPolicy(a)
     seen = set()
     cache_context = nullcontext(None) if a.dry_run else SummaryCache(os.path.join(a.index, "summary-cache.sqlite3"))
     with cache_context as cache, PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
@@ -358,9 +387,14 @@ def run(a):
         metal_args.request_timeout = 180
         metal = partial(summarize, library=a.library, a=metal_args, metrics=metrics, cache=cache)
         while remaining > 0:
+            settings = policy.poll()
+            dispatch_mode, dispatch_size, mac_routing = settings
+            metrics.dispatch_policy(*settings)
             mac_slots, metal_args.model_headers = mac_route(a)
             metrics.mac_capacity(mac_slots)
-            fetch_size = max(a.batch_size, 4 * (a.parallel + mac_slots)) if mac_slots else a.batch_size
+            fetch_size = a.batch_size
+            if mac_slots:
+                fetch_size = dispatch_size or max(a.batch_size, 4 * (a.parallel + mac_slots))
             def fetch():
                 nonlocal remaining
                 if remaining <= 0:
@@ -378,11 +412,14 @@ def run(a):
             batch = []
             # Keep the existing single-write cadence while refilling slots independently.
             def refill():
-                # Drain the initial work before pulling more if all attempts have failed.
-                return [] if errors and not done else fetch()
+                # Finish outstanding requests before activating a changed policy.
+                return [] if policy.poll() != settings or (errors and not done) else fetch()
 
-            for row, result in split_batch(rows, a.parallel, mac_slots, primary, metal,
-                                           refill=refill if mac_slots else None):
+            for row, result in split_batch(
+                rows, a.parallel, mac_slots, primary, metal,
+                refill=refill if mac_slots and dispatch_mode == "continuous" else None,
+                prefer_photos=mac_routing == "photo-first",
+            ):
                 done += result["status"] == "ok"
                 errors += result["status"] != "ok"
                 if a.dry_run:
@@ -418,6 +455,12 @@ def main(argv):
                     help="Maximum summaries in flight, sharing a single Parquet writer")
     ap.add_argument("--mac-assist", action="store_true", default=os.environ.get("KI_MAC_BONSAI") == "1",
                     help="Share pending Bonsai summaries with the authenticated Mac worker while it is available")
+    ap.add_argument("--dispatch-mode", choices=("batch", "continuous"),
+                    default=os.environ.get("KI_GPU_DISPATCH_MODE", "continuous"))
+    ap.add_argument("--dispatch-size", type=int, default=os.environ.get("KI_GPU_DISPATCH_SIZE", "0"),
+                    help="Items per queue read with the Mac available. Zero chooses a size from the slot count.")
+    ap.add_argument("--mac-routing", choices=("fifo", "photo-first"),
+                    default=os.environ.get("KI_MAC_ROUTING", "photo-first"))
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
@@ -430,6 +473,8 @@ def main(argv):
     args = ap.parse_args(argv)
     if args.parallel < 1:
         ap.error("--parallel must be positive")
+    if not 0 <= args.dispatch_size <= 512:
+        ap.error("--dispatch-size must be between 0 and 512")
     args.extra = json.loads(args.extra_json)
     return run(args)
 

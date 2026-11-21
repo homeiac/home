@@ -280,7 +280,7 @@ data:
           "description": "Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference."
         },
         {
-          "id": 160,
+          "id": 162,
           "type": "row",
           "title": "Where work is running",
           "collapsed": false,
@@ -293,7 +293,7 @@ data:
           "panels": []
         },
         {
-          "id": 161,
+          "id": 163,
           "type": "stat",
           "title": "RTX 3070 \u00b7 Bonsai",
           "datasource": {
@@ -343,7 +343,7 @@ data:
           "description": "Ollama runs in K3s on Piglet\u2019s RTX. The summary worker reserves two model slots."
         },
         {
-          "id": 162,
+          "id": 164,
           "type": "stat",
           "title": "Mac GPU \u00b7 Bonsai",
           "datasource": {
@@ -400,7 +400,7 @@ data:
           "description": "Piglet sends distinct pending items to the Mac Metal worker. Zero capacity means it is currently unavailable for backfill."
         },
         {
-          "id": 163,
+          "id": 165,
           "type": "stat",
           "title": "Submission client \u2192 Enterprise Luna",
           "datasource": {
@@ -503,7 +503,7 @@ data:
           "description": "The client submits to Enterprise Codex. Submitted and preparing require a recent report. The last recorded client and accounting hold remain visible when idle."
         },
         {
-          "id": 164,
+          "id": 166,
           "type": "stat",
           "title": "Piglet \u00b7 Luna publication",
           "datasource": {
@@ -560,7 +560,7 @@ data:
           "description": "Luna has a separate queue and Parquet dataset on Piglet. The Bonsai queue and its finish estimate appear above."
         },
         {
-          "id": 165,
+          "id": 167,
           "type": "stat",
           "title": "Combined captions saved / min",
           "datasource": {
@@ -614,7 +614,7 @@ data:
           "description": "Bonsai and Luna outputs over ten minutes. When both caption one asset, each output counts."
         },
         {
-          "id": 166,
+          "id": 168,
           "type": "stat",
           "title": "Distinct items with a caption",
           "datasource": {
@@ -667,7 +667,7 @@ data:
           "description": "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes."
         },
         {
-          "id": 167,
+          "id": 169,
           "type": "stat",
           "title": "Items without any caption",
           "datasource": {
@@ -720,7 +720,7 @@ data:
           "description": "Piglet joins both published Parquet datasets to the current library by path and byte size every five minutes."
         },
         {
-          "id": 168,
+          "id": 170,
           "type": "stat",
           "title": "ETA to first caption for every item",
           "datasource": {
@@ -812,6 +812,13 @@ data:
               "expr": "((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) + (max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60)) and on() (vector(time()) >= 1795294175)",
               "legendFormat": "RTX + Mac \u00b7 after refill",
               "refId": "D",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "(max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[2m]))) * 60) + (max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[2m]))) * 60)",
+              "legendFormat": "RTX + Mac \u00b7 latest 2 min",
+              "refId": "E",
               "instant": true,
               "range": false
             }
@@ -1306,6 +1313,120 @@ data:
           "description": "Round trip starts on Piglet before the HTTP request. Prompt processing includes visual input. Generation is output decoding. Queueing, transport and other server overhead contribute to the round trip."
         },
         {
+          "id": 160,
+          "type": "timeseries",
+          "title": "GPU request slots in use \u00b7 2 min average",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 14,
+            "x": 0,
+            "y": 38
+          },
+          "targets": [
+            {
+              "expr": "max(avg_over_time(media_pipeline_backend_in_flight{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[2m]))",
+              "legendFormat": "RTX",
+              "refId": "A"
+            },
+            {
+              "expr": "max(avg_over_time(media_pipeline_backend_in_flight{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[2m]))",
+              "legendFormat": "Mac Metal",
+              "refId": "B"
+            },
+            {
+              "expr": "max(media_pipeline_mac_request_limit{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"})",
+              "legendFormat": "Mac available slots",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Active HTTP model requests. RTX has two configured slots. The Mac reports zero available slots when unreachable."
+        },
+        {
+          "id": 161,
+          "type": "stat",
+          "title": "Bonsai dispatch policy applied",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 10,
+            "x": 14,
+            "y": 38
+          },
+          "targets": [
+            {
+              "expr": "max by(mode,page_size,mac_routing) (media_pipeline_dispatch_policy_applied_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 1000",
+              "legendFormat": "{{mode}} \u00b7 page {{page_size}} \u00b7 {{mac_routing}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dateTimeAsIso",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name"
+          },
+          "description": "The active Git policy and when the worker adopted it. Page 0 uses four items per slot, with a minimum of one Parquet write batch."
+        },
+        {
           "id": 142,
           "type": "stat",
           "title": "Photo context still to do",
@@ -1317,7 +1438,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 39
+            "y": 45
           },
           "targets": [
             {
@@ -1369,7 +1490,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 39
+            "y": 45
           },
           "targets": [
             {
@@ -1449,7 +1570,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 39
+            "y": 45
           },
           "targets": [
             {
@@ -1502,7 +1623,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 39
+            "y": 45
           },
           "targets": [
             {
@@ -1555,7 +1676,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 39
+            "y": 45
           },
           "targets": [
             {
@@ -1606,7 +1727,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 43
+            "y": 49
           },
           "panels": []
         },
@@ -1622,7 +1743,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 44
+            "y": 50
           },
           "targets": [
             {
@@ -1706,7 +1827,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 44
+            "y": 50
           },
           "targets": [
             {
@@ -1783,7 +1904,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 44
+            "y": 50
           },
           "targets": [
             {
@@ -1853,7 +1974,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 51
+            "y": 57
           },
           "panels": []
         },
@@ -1869,7 +1990,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 52
+            "y": 58
           },
           "targets": [
             {
@@ -1920,7 +2041,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 52
+            "y": 58
           },
           "targets": [
             {
@@ -1971,7 +2092,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 52
+            "y": 58
           },
           "targets": [
             {
@@ -2022,7 +2143,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 52
+            "y": 58
           },
           "targets": [
             {
@@ -2073,7 +2194,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 52
+            "y": 58
           },
           "targets": [
             {
@@ -2124,7 +2245,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 52
+            "y": 58
           },
           "targets": [
             {
@@ -2175,7 +2296,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 56
+            "y": 62
           },
           "targets": [
             {
@@ -2225,7 +2346,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 56
+            "y": 62
           },
           "targets": [
             {
@@ -2274,7 +2395,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 56
+            "y": 62
           },
           "targets": [
             {
@@ -2324,7 +2445,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 56
+            "y": 62
           },
           "targets": [
             {
@@ -2375,7 +2496,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 56
+            "y": 62
           },
           "targets": [
             {
@@ -2425,7 +2546,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 60
+            "y": 66
           },
           "targets": [
             {
@@ -2479,7 +2600,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 60
+            "y": 66
           },
           "targets": [
             {
@@ -2530,7 +2651,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 67
+            "y": 73
           },
           "panels": []
         },
@@ -2546,7 +2667,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 68
+            "y": 74
           },
           "targets": [
             {
@@ -2649,7 +2770,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 68
+            "y": 74
           },
           "targets": [
             {
@@ -2701,7 +2822,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 68
+            "y": 74
           },
           "targets": [
             {
@@ -2762,7 +2883,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 68
+            "y": 74
           },
           "targets": [
             {
@@ -2815,7 +2936,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 72
+            "y": 78
           },
           "targets": [
             {
@@ -2920,7 +3041,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 82
+            "y": 88
           },
           "targets": [
             {
@@ -2974,7 +3095,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 82
+            "y": 88
           },
           "targets": [
             {
@@ -3085,7 +3206,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -3139,7 +3260,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -3193,7 +3314,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -3247,7 +3368,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 95
+            "y": 101
           },
           "targets": [
             {
@@ -3309,7 +3430,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 95
+            "y": 101
           },
           "targets": [
             {
@@ -3362,7 +3483,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 102
+            "y": 108
           },
           "targets": [
             {
@@ -3424,7 +3545,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 102
+            "y": 108
           },
           "targets": [
             {
@@ -3474,7 +3595,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 109
+            "y": 115
           },
           "panels": []
         },
@@ -3490,7 +3611,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 110
+            "y": 116
           },
           "targets": [
             {
@@ -3583,7 +3704,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 110
+            "y": 116
           },
           "targets": [
             {
@@ -3644,7 +3765,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 110
+            "y": 116
           },
           "targets": [
             {
@@ -3697,7 +3818,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 110
+            "y": 116
           },
           "targets": [
             {
@@ -3750,7 +3871,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 120
           },
           "targets": [
             {
@@ -3812,7 +3933,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 120
           },
           "targets": [
             {
@@ -3898,7 +4019,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 127
           },
           "targets": [
             {
@@ -3953,7 +4074,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 127
           },
           "targets": [
             {
@@ -4006,7 +4127,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 128
+            "y": 134
           },
           "targets": [
             {
@@ -4060,7 +4181,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 128
+            "y": 134
           },
           "targets": [
             {
@@ -4113,7 +4234,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 128
+            "y": 134
           },
           "targets": [
             {
@@ -4164,7 +4285,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 154
+            "y": 160
           },
           "panels": []
         },
@@ -4180,7 +4301,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 155
+            "y": 161
           },
           "targets": [
             {
@@ -4249,7 +4370,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 155
+            "y": 161
           },
           "targets": [
             {
@@ -4302,7 +4423,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 155
+            "y": 161
           },
           "targets": [
             {
@@ -4355,7 +4476,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 155
+            "y": 161
           },
           "targets": [
             {
@@ -4409,7 +4530,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 159
+            "y": 165
           },
           "targets": [
             {
@@ -4463,7 +4584,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 159
+            "y": 165
           },
           "targets": [
             {
@@ -4513,7 +4634,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 135
+            "y": 141
           },
           "panels": []
         },
@@ -4529,7 +4650,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 136
+            "y": 142
           },
           "targets": [
             {
@@ -4578,7 +4699,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 136
+            "y": 142
           },
           "targets": [
             {
@@ -4632,7 +4753,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 143
+            "y": 149
           },
           "targets": [
             {
@@ -4696,7 +4817,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 143
+            "y": 149
           },
           "targets": [
             {
@@ -4745,7 +4866,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 143
+            "y": 149
           },
           "targets": [
             {
@@ -4794,7 +4915,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 143
+            "y": 149
           },
           "targets": [
             {
@@ -4851,7 +4972,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 147
+            "y": 153
           },
           "targets": [
             {
@@ -4900,7 +5021,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 147
+            "y": 153
           },
           "targets": [
             {
@@ -4946,7 +5067,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 166
+            "y": 172
           },
           "panels": []
         },
@@ -4962,7 +5083,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 167
+            "y": 173
           },
           "targets": [
             {
@@ -5012,7 +5133,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 167
+            "y": 173
           },
           "targets": [
             {
@@ -5066,7 +5187,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 167
+            "y": 173
           },
           "targets": [
             {
@@ -5115,7 +5236,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 167
+            "y": 173
           },
           "targets": [
             {
@@ -5164,7 +5285,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 167
+            "y": 173
           },
           "targets": [
             {
@@ -5214,7 +5335,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 167
+            "y": 173
           },
           "targets": [
             {
@@ -5263,7 +5384,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 171
+            "y": 177
           },
           "targets": [
             {
@@ -5327,7 +5448,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 171
+            "y": 177
           },
           "targets": [
             {
@@ -5376,7 +5497,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 171
+            "y": 177
           },
           "targets": [
             {
@@ -5426,7 +5547,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 171
+            "y": 177
           },
           "targets": [
             {
@@ -5475,7 +5596,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 171
+            "y": 177
           },
           "targets": [
             {
@@ -5524,7 +5645,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 171
+            "y": 177
           },
           "targets": [
             {
@@ -5577,7 +5698,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 175
+            "y": 181
           },
           "targets": [
             {
@@ -5636,7 +5757,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 175
+            "y": 181
           },
           "targets": [
             {
@@ -5685,7 +5806,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 175
+            "y": 181
           },
           "targets": [
             {
@@ -5732,7 +5853,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 182
+            "y": 188
           },
           "panels": []
         },
@@ -5748,7 +5869,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 183
+            "y": 189
           },
           "targets": [
             {
@@ -5802,7 +5923,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 183
+            "y": 189
           },
           "targets": [
             {
@@ -5852,7 +5973,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 183
+            "y": 189
           },
           "targets": [
             {
@@ -5910,7 +6031,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 183
+            "y": 189
           },
           "targets": [
             {
@@ -5960,7 +6081,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 183
+            "y": 189
           },
           "targets": [
             {
@@ -6018,7 +6139,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 183
+            "y": 189
           },
           "targets": [
             {
@@ -6072,7 +6193,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 187
+            "y": 193
           },
           "targets": [
             {
@@ -6140,7 +6261,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 187
+            "y": 193
           },
           "targets": [
             {
@@ -6190,7 +6311,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 187
+            "y": 193
           },
           "targets": [
             {
@@ -6249,7 +6370,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 187
+            "y": 193
           },
           "targets": [
             {
@@ -6299,7 +6420,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 187
+            "y": 193
           },
           "targets": [
             {
@@ -6348,7 +6469,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 187
+            "y": 193
           },
           "targets": [
             {
@@ -6397,7 +6518,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6466,7 +6587,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6534,7 +6655,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6602,7 +6723,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6666,7 +6787,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6717,7 +6838,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6768,7 +6889,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 191
+            "y": 197
           },
           "targets": [
             {
@@ -6818,7 +6939,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 195
+            "y": 201
           },
           "targets": [
             {
@@ -6867,7 +6988,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 195
+            "y": 201
           },
           "targets": [
             {
@@ -6921,7 +7042,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 202
+            "y": 208
           },
           "targets": [
             {
@@ -6975,7 +7096,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 202
+            "y": 208
           },
           "targets": [
             {
@@ -7021,7 +7142,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 209
+            "y": 215
           },
           "panels": []
         },
@@ -7037,7 +7158,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7105,7 +7226,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7162,7 +7283,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7211,7 +7332,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7260,7 +7381,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7309,7 +7430,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7359,7 +7480,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 214
+            "y": 220
           },
           "panels": []
         },
@@ -7375,7 +7496,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 215
+            "y": 221
           },
           "targets": [
             {
@@ -7425,7 +7546,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 215
+            "y": 221
           },
           "targets": [
             {
@@ -7474,7 +7595,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 215
+            "y": 221
           },
           "targets": [
             {
@@ -7523,7 +7644,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 215
+            "y": 221
           },
           "targets": [
             {
@@ -7576,7 +7697,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 215
+            "y": 221
           },
           "targets": [
             {
@@ -7625,7 +7746,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 215
+            "y": 221
           },
           "targets": [
             {
@@ -7675,7 +7796,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 219
+            "y": 225
           },
           "targets": [
             {
@@ -7725,7 +7846,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 219
+            "y": 225
           },
           "targets": [
             {
@@ -7771,7 +7892,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 227
+            "y": 233
           },
           "panels": []
         },
@@ -7787,7 +7908,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 228
+            "y": 234
           },
           "targets": [
             {
@@ -7836,7 +7957,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 228
+            "y": 234
           },
           "targets": [
             {
@@ -7889,7 +8010,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 228
+            "y": 234
           },
           "targets": [
             {
@@ -7938,7 +8059,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 228
+            "y": 234
           },
           "targets": [
             {
@@ -7988,7 +8109,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 228
+            "y": 234
           },
           "targets": [
             {
@@ -8052,7 +8173,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 228
+            "y": 234
           },
           "targets": [
             {
@@ -8101,7 +8222,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 232
+            "y": 238
           },
           "targets": [
             {
@@ -8236,7 +8357,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 240
+            "y": 246
           },
           "targets": [
             {
@@ -8290,7 +8411,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 240
+            "y": 246
           },
           "targets": [
             {
@@ -8341,7 +8462,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 248
+            "y": 254
           },
           "panels": []
         },
@@ -8357,7 +8478,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 249
+            "y": 255
           },
           "targets": [
             {
@@ -8421,7 +8542,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 249
+            "y": 255
           },
           "targets": [
             {
@@ -8470,7 +8591,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 249
+            "y": 255
           },
           "targets": [
             {
@@ -8538,7 +8659,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 249
+            "y": 255
           },
           "targets": [
             {
@@ -8587,7 +8708,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 249
+            "y": 255
           },
           "targets": [
             {
@@ -8636,7 +8757,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 249
+            "y": 255
           },
           "targets": [
             {
@@ -8686,7 +8807,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 253
+            "y": 259
           },
           "targets": [
             {
@@ -8732,7 +8853,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 259
+            "y": 265
           },
           "panels": []
         },
@@ -8748,7 +8869,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 260
+            "y": 266
           },
           "targets": [
             {
@@ -8816,7 +8937,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 260
+            "y": 266
           },
           "targets": [
             {
@@ -8865,7 +8986,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 260
+            "y": 266
           },
           "targets": [
             {
@@ -8924,7 +9045,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 264
+            "y": 270
           },
           "targets": [
             {
@@ -8973,7 +9094,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 270
+            "y": 276
           },
           "targets": [
             {

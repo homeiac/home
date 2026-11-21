@@ -34,6 +34,10 @@ def main() -> None:
     mac_assist = int(payload.get("mac_assist") is True)
     if parallel < 1:
         raise ValueError("Parallel summary count must be positive")
+    dispatch = payload["dispatch"]
+    if (dispatch["mode"] not in ("batch", "continuous") or dispatch["mac_routing"] not in ("fifo", "photo-first")
+            or type(dispatch["page_size"]) is not int or not 0 <= dispatch["page_size"] <= 512):
+        raise ValueError("Invalid Bonsai dispatch policy")
     for path, text in files.items():
         compile(text, str(path), "exec")
     backup = root / "backups" / ("pipeline-" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
@@ -60,7 +64,11 @@ def main() -> None:
         replace(dropin, ("[Service]\n"
                          "Environment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\n"
                          f"Environment=KI_MAC_BONSAI={mac_assist}\n"
-                         f"Environment=KI_SUMMARY_PARALLEL={parallel}\n").encode(), 0o644)
+                         f"Environment=KI_SUMMARY_PARALLEL={parallel}\n"
+                         f"Environment=KI_GPU_DISPATCH_MODE={dispatch['mode']}\n"
+                         f"Environment=KI_GPU_DISPATCH_SIZE={dispatch['page_size']}\n"
+                         "Environment=KI_GPU_DISPATCH_POLICY_URL=https://raw.githubusercontent.com/homeiac/home/codex/photo-enrichment-217/scripts/knowledge-index/bonsai-dispatch-policy.json\n"
+                         f"Environment=KI_MAC_ROUTING={dispatch['mac_routing']}\n").encode(), 0o644)
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         started = time.time()
         subprocess.run(["systemctl", "restart", unit], check=True, timeout=45)
