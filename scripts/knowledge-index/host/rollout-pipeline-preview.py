@@ -31,6 +31,7 @@ def main() -> None:
     files = {root / "enrichers" / name: payload[name]
              for name in ("media_summary.py", "pipeline_metrics.py", "summary_cache.py")}
     parallel = int(payload.get("parallel", 1))
+    mac_assist = int(payload.get("mac_assist") is True)
     if parallel < 1:
         raise ValueError("Parallel summary count must be positive")
     for path, text in files.items():
@@ -58,6 +59,7 @@ def main() -> None:
             replace(path, text.encode(), 0o755 if path == source else 0o644)
         replace(dropin, ("[Service]\n"
                          "Environment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\n"
+                         f"Environment=KI_MAC_BONSAI={mac_assist}\n"
                          f"Environment=KI_SUMMARY_PARALLEL={parallel}\n").encode(), 0o644)
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         started = time.time()

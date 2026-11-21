@@ -90,8 +90,13 @@ def summary_pace(at=None):
     return f'max by(enricher) (sum by(instance,enricher) (rate({selector})))'
 
 
+def backend_pace(backend):
+    selector = f'media_pipeline_backend_saved_total{{{SUMMARY_SELECTION},backend="{backend}"}}'
+    return f'max(sum by(instance,enricher) (rate({selector}[10m]))) * 60'
+
+
 def throughput_panels():
-    labels = ("Gemma in Ollama", "Standalone Bonsai", "Bonsai before backfill", "Bonsai · two slots, summaries only")
+    labels = ("Gemma in Ollama", "Standalone Bonsai", "Bonsai before backfill", "Bonsai · summaries backfill")
     live = f'({summary_pace()}) * 60'
     after = f'({live}) and on() (vector(time()) >= {TWO_SLOT_WINDOW})'
     # The recorded observation survives TSDB retention. Scope its fallback to
@@ -99,12 +104,14 @@ def throughput_panels():
     observed = (f'max by(enricher) (media_pipeline_queue{{{SUMMARY_SELECTION},'
                 'instance="pumped-piglet",enricher="gemma4-e2b-p1"}) * 0 + 11.789473684210524')
     before = f'(({summary_pace(ONE_SLOT_REFERENCE)}) * 60) or ({observed})'
-    comparison = _panel('stat', 'Parquet summaries/min · one slot vs two',
-                        [(before, 'Before · one slot, shared'), (after, 'Now · two slots, summaries only')],
+    rtx_observed = observed.replace("11.789473684210524", "20.208747368421054")
+    two_slots = f'(({summary_pace(1795281480)}) * 60) or ({rtx_observed})'
+    comparison = _panel('stat', 'Summaries saved/min · before and now',
+                        [(before, 'RTX · one slot'), (two_slots, 'RTX · two slots'), (after, 'Current · all backends')],
                         0, 5, 10, 7, decimals=1,
                         extra={'options': {'textMode': 'value_and_name', 'orientation': 'vertical',
                                            'reduceOptions': {'calcs': ['lastNotNull']}}},
-                        description='Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48–16:58 UTC on Nov 21 with photo context active. The live ten-minute rate starts after a full window with two slots reserved for summaries. Media mix and cache hits can affect the rate.')
+                        description='Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48–16:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08–17:18 UTC. Current includes writes from every active backend and cache. Media mix and cache hits can affect the rate.')
     for target in comparison['targets']:
         target.update(instant=True, range=False)
     comparison['fieldConfig']['defaults']['noValue'] = 'Awaiting sample'
@@ -161,7 +168,7 @@ def work_remaining_panels():
               "0": {"text": "Queue clear", "color": "green"}}
     p = [row("Work remaining & bottleneck", 0),
          stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="The worker counts pending items during batch selection and updates the count after successful Parquet writes. If the worker is offline, this falls back to the five-minute index export."),
-         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes after the two-slot cutover. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
+         stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes from all active backends. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
          stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Successful rows saved to Parquet over the last ten minutes."),
          stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference.")]
     p += [stat("Photo context still to do", context, 0, 5, w=5, unit="locale"),
@@ -314,7 +321,11 @@ def panels():
                  description="The $250 Luna allowance less settled estimates, a $1 allowance for earlier pilots, and $1 per outstanding or unknown request.")]
     for panel in luna:
         panel['targets'][0].update(instant=True, range=False)
-    return intro + throughput + luna + shift(details, THROUGHPUT_HEIGHT + 4) + shift(p, 21 + THROUGHPUT_HEIGHT)
+    backend_series = [(backend_pace(name), label) for name, label in
+                      (("primary", "RTX"), ("metal", "Mac Metal"), ("cache", "Cache"))]
+    backends = series("Parquet summaries saved per minute by backend", backend_series, 0, 16, 24, 6, decimals=1,
+                      description="Successful writes from the shared queue, counted after the Parquet file is published. A sleeping Mac contributes zero while RTX continues processing.")
+    return intro + throughput + luna + [backends] + shift(details, THROUGHPUT_HEIGHT + 10) + shift(p, 27 + THROUGHPUT_HEIGHT)
 
 
 def pipeline_panels():
@@ -368,7 +379,14 @@ def pipeline_panels():
     graph["targets"][0]["expr"] += ' or label_replace(((100 * sum by(id,title) ('+context_rate+') / scalar(sum('+context_rate+')) >= 0) or sum by(id,title)(photo_context_stage_seconds_total'+INST+') * 0), "title", "$1 (%)", "title", "(.+)")'
     graph["targets"][0]["expr"] += ' or '+node('sum(photo_context_jobs{instance=~"$instance",kind=~"ready|retry"})','photo_context_jobs','Photo context queue (photos)')
     graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_context_edge_info'+INST+')'
-    graph["description"] += " During the backfill, two Ollama slots serve summaries and one writer commits batches to Parquet. The context worker resumes when the summary queue drains. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup."
+    for backend, title in (("primary", "RTX"), ("metal", "Mac Metal")):
+        rate = backend_pace(backend)
+        ident = "summary_" + backend
+        graph["targets"][0]["expr"] += " or " + node(rate, ident, title + " (saved/min)")
+        for source, target in (("inference", ident), (ident, "write")):
+            edge = f'label_replace(label_replace(label_replace((({rate}) > 0) * 0 + 1, "id", "{source}-{target}", "", ""), "source", "{source}", "", ""), "target", "{target}", "", "")'
+            graph["targets"][1]["expr"] += " or " + edge
+    graph["description"] += " Two RTX slots and the Mac share distinct pending items. Both paths feed one Parquet writer. Backend nodes show successful saves per minute over ten minutes. The context worker resumes when the summary queue drains. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup."
     graph["targets"][0]["expr"] += ' or '+node('max(photo_snapshot_index_rows{instance=~"$instance",kind="photos"})','photo_search','Search/group index (photos)')
     graph["description"] += " Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage."
     graph["description"] += " PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them."

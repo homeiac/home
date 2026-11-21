@@ -21,6 +21,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--expected-worker-sha")
     ap.add_argument("--parallel", type=int, default=1, help="summaries in flight per worker")
+    ap.add_argument("--mac-assist", action="store_true", help="Discover the separately Git-managed Mac worker")
     scope = ap.add_mutually_exclusive_group()
     scope.add_argument("--dashboard-only", action="store_true", help="refresh the preview without restarting the worker")
     scope.add_argument("--worker-only", action="store_true", help="deploy the host worker for a Flux-managed dashboard")
@@ -43,6 +44,7 @@ def main() -> None:
         print("Dashboard backup:", backup / "dashboard-before.json", flush=True)
     if not args.dashboard_only:
         payload = {"expected_sha": args.expected_worker_sha, "parallel": args.parallel}
+        payload["mac_assist"] = args.mac_assist
         for filename in ("media_summary.py", "pipeline_metrics.py", "summary_cache.py"):
             payload[filename] = (here / "enrichers" / filename).read_text()
         remote = (here / "host/rollout-pipeline-preview.py").read_text()

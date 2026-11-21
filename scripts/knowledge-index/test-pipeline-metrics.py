@@ -138,6 +138,44 @@ class PipelineTests(unittest.TestCase):
             self.assertIn('media_pipeline_stage_operations_total{enricher="e1",kind="batch",stage="write"} 1', text)
             self.assertNotIn("private.jpg", text)
 
+    def test_mac_failure_retries_only_unfinished_work_on_primary(self):
+        # Arrange for the last Mac request to fail after the RTX pool drained.
+        primary_drained = threading.Event()
+        primary_calls = []
+        def primary(row):
+            primary_calls.append(row)
+            if row == 9:
+                primary_drained.set()
+            return {"status": "ok"}
+        def metal(row):
+            self.assertTrue(primary_drained.wait(5))
+            return {"status": "error", "_model_failure": True}
+        results = list(media_summary.split_batch(range(10), 2, 1, primary, metal))
+        self.assertEqual(sorted(row for row, _ in results), list(range(10)))
+        self.assertEqual(sorted(primary_calls), list(range(10)))
+        self.assertTrue(all(result["status"] == "ok" for _, result in results))
+
+    def test_shared_queue_saves_each_item_once_and_keeps_decode_errors(self):
+        for mac_slots in (0, 2):
+            def metal(row):
+                return {"status": "error", "inference_backend": "metal"}
+            def primary(row):
+                return {"status": "ok", "inference_backend": "primary"}
+            results = list(media_summary.split_batch(range(19), 2, mac_slots, primary, metal))
+            self.assertEqual(sorted(row for row, _ in results), list(range(19)))
+            self.assertEqual(any(result["status"] == "error" for _, result in results), bool(mac_slots))
+
+    @patch.object(media_summary, "mac_headers", return_value={})
+    def test_mac_sleep_and_mismatched_model_fall_back(self, headers):
+        import io
+        args = SimpleNamespace(mac_assist=True, model="bonsai-27b", dry_run=False)
+        with patch("urllib.request.urlopen", side_effect=ConnectionRefusedError):
+            self.assertEqual(media_summary.mac_route(args), (0, None))
+        for model, slots, wanted in (("unrelated", 8, 0), ("bonsai-27b-metal", 27, 0), ("bonsai-27b-metal", 8, 8)):
+            props = io.BytesIO(json.dumps({"data": [{"id": model, "tags": [f"backfill-parallel={slots}"]}]}).encode())
+            with patch("urllib.request.urlopen", return_value=props):
+                self.assertEqual(media_summary.mac_route(args)[0], wanted)
+
     def test_dashboard_graph_frames_and_layout(self):
         spec = importlib.util.spec_from_file_location("dashboard", HERE / "gen-dashboard.py")
         module = importlib.util.module_from_spec(spec)

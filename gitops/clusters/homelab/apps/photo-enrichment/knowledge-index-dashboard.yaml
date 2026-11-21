@@ -168,7 +168,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Current backlog divided by the last ten minutes of successful Parquet writes after the two-slot cutover. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
+          "description": "Current backlog divided by the last ten minutes of successful Parquet writes from all active backends. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."
         },
         {
           "id": 140,
@@ -282,7 +282,7 @@ data:
         {
           "id": 152,
           "type": "stat",
-          "title": "Parquet summaries/min \u00b7 one slot vs two",
+          "title": "Summaries saved/min \u00b7 before and now",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -296,15 +296,22 @@ data:
           "targets": [
             {
               "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795280280)))) * 60) or (max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",instance=\"pumped-piglet\",enricher=\"gemma4-e2b-p1\"}) * 0 + 11.789473684210524)",
-              "legendFormat": "Before \u00b7 one slot, shared",
+              "legendFormat": "RTX \u00b7 one slot",
               "refId": "A",
               "instant": true,
               "range": false
             },
             {
-              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
-              "legendFormat": "Now \u00b7 two slots, summaries only",
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m] @ 1795281480)))) * 60) or (max by(enricher) (media_pipeline_queue{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",instance=\"pumped-piglet\",enricher=\"gemma4-e2b-p1\"}) * 0 + 20.208747368421054)",
+              "legendFormat": "RTX \u00b7 two slots",
               "refId": "B",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
+              "legendFormat": "Current \u00b7 all backends",
+              "refId": "C",
               "instant": true,
               "range": false
             }
@@ -338,7 +345,7 @@ data:
               ]
             }
           },
-          "description": "Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48\u201316:58 UTC on Nov 21 with photo context active. The live ten-minute rate starts after a full window with two slots reserved for summaries. Media mix and cache hits can affect the rate."
+          "description": "Successful photo and video summaries committed to Parquet per minute. The one-slot baseline covers 16:48\u201316:58 UTC on Nov 21 with photo context active. The two-slot RTX baseline covers 17:08\u201317:18 UTC. Current includes writes from every active backend and cache. Media mix and cache hits can affect the rate."
         },
         {
           "id": 153,
@@ -381,7 +388,7 @@ data:
             },
             {
               "expr": "((max by(enricher) (sum by(instance,enricher) (rate(media_pipeline_persisted_items_total{status=\"ok\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[10m])))) * 60) and on() (vector(time()) >= 1795281015)",
-              "legendFormat": "Bonsai \u00b7 two slots, summaries only",
+              "legendFormat": "Bonsai \u00b7 summaries backfill",
               "refId": "D",
               "instant": false,
               "range": true,
@@ -461,7 +468,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Bonsai \u00b7 two slots, summaries only"
+                  "options": "Bonsai \u00b7 summaries backfill"
                 },
                 "properties": [
                   {
@@ -644,6 +651,67 @@ data:
           "description": "The $250 Luna allowance less settled estimates, a $1 allowance for earlier pilots, and $1 per outstanding or unknown request."
         },
         {
+          "id": 157,
+          "type": "timeseries",
+          "title": "Parquet summaries saved per minute by backend",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60",
+              "legendFormat": "RTX",
+              "refId": "A"
+            },
+            {
+              "expr": "max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60",
+              "legendFormat": "Mac Metal",
+              "refId": "B"
+            },
+            {
+              "expr": "max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"cache\"}[10m]))) * 60",
+              "legendFormat": "Cache",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Successful writes from the shared queue, counted after the Parquet file is published. A sleeping Mac contributes zero while RTX continues processing."
+        },
+        {
           "id": 142,
           "type": "stat",
           "title": "Photo context still to do",
@@ -655,7 +723,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 17
+            "y": 23
           },
           "targets": [
             {
@@ -707,7 +775,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 17
+            "y": 23
           },
           "targets": [
             {
@@ -787,7 +855,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 17
+            "y": 23
           },
           "targets": [
             {
@@ -840,7 +908,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 17
+            "y": 23
           },
           "targets": [
             {
@@ -893,7 +961,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 17
+            "y": 23
           },
           "targets": [
             {
@@ -944,7 +1012,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 21
+            "y": 27
           },
           "panels": []
         },
@@ -960,7 +1028,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 22
+            "y": 28
           },
           "targets": [
             {
@@ -1044,7 +1112,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 22
+            "y": 28
           },
           "targets": [
             {
@@ -1121,7 +1189,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 22
+            "y": 28
           },
           "targets": [
             {
@@ -1191,7 +1259,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 29
+            "y": 35
           },
           "panels": []
         },
@@ -1207,7 +1275,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 30
+            "y": 36
           },
           "targets": [
             {
@@ -1258,7 +1326,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 30
+            "y": 36
           },
           "targets": [
             {
@@ -1309,7 +1377,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 30
+            "y": 36
           },
           "targets": [
             {
@@ -1360,7 +1428,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 30
+            "y": 36
           },
           "targets": [
             {
@@ -1411,7 +1479,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 30
+            "y": 36
           },
           "targets": [
             {
@@ -1462,7 +1530,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 30
+            "y": 36
           },
           "targets": [
             {
@@ -1513,7 +1581,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 34
+            "y": 40
           },
           "targets": [
             {
@@ -1563,7 +1631,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 34
+            "y": 40
           },
           "targets": [
             {
@@ -1612,7 +1680,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 34
+            "y": 40
           },
           "targets": [
             {
@@ -1662,7 +1730,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 34
+            "y": 40
           },
           "targets": [
             {
@@ -1713,7 +1781,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 34
+            "y": 40
           },
           "targets": [
             {
@@ -1763,7 +1831,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 38
+            "y": 44
           },
           "targets": [
             {
@@ -1817,7 +1885,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 38
+            "y": 44
           },
           "targets": [
             {
@@ -1868,7 +1936,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 45
+            "y": 51
           },
           "panels": []
         },
@@ -1884,7 +1952,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 46
+            "y": 52
           },
           "targets": [
             {
@@ -1987,7 +2055,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 46
+            "y": 52
           },
           "targets": [
             {
@@ -2039,7 +2107,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 46
+            "y": 52
           },
           "targets": [
             {
@@ -2100,7 +2168,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 46
+            "y": 52
           },
           "targets": [
             {
@@ -2153,12 +2221,12 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 50
+            "y": 56
           },
           "targets": [
             {
               "refId": "nodes",
-              "expr": "label_replace(((100 * sum by (id, title) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 0) or (100 * sum by (id, title) (rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (photo_enrichment_stage_seconds_total{instance=~\"$instance\"}) * 0)), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or max by (id,title) (photo_frigate_processing_milliseconds{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by (id,title) (photo_frigate_service_up{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or label_replace(((100 * sum by(id,title) (rate(photo_review_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_review_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or sum by(id,title)(photo_review_stage_seconds_total{instance=~\"$instance\"}) * 0), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or label_replace(label_replace((sum(photo_enrichment_jobs{instance=~\"$instance\",kind=~\"ready|retry\"})), \"id\", \"photo_jobs\", \"\", \"\"), \"title\", \"PostgreSQL queue (jobs)\", \"\", \"\") or label_replace(label_replace((max(photo_snapshot_export_seconds{instance=~\"$instance\"})), \"id\", \"photo_export\", \"\", \"\"), \"title\", \"Parquet export (seconds)\", \"\", \"\") or label_replace(label_replace((time()-min(photo_snapshot_captured_timestamp_seconds{instance=~\"$instance\"})), \"id\", \"photo_analytics\", \"\", \"\"), \"title\", \"DuckDB snapshot age (seconds)\", \"\", \"\") or label_replace(label_replace((histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name=\"photo-review\",stage=\"duckdb.query\"}[$__rate_interval])))), \"id\", \"photo_gallery\", \"\", \"\"), \"title\", \"Gallery DuckDB query p95 (seconds)\", \"\", \"\") or label_replace(label_replace((histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name=\"photo-review\",stage=\"db.query\"}[$__rate_interval])))), \"id\", \"photo_live_db\", \"\", \"\"), \"title\", \"GUI PostgreSQL calls p95 (seconds)\", \"\", \"\") or label_replace(((100 * sum by(id,title) (rate(photo_context_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_context_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or sum by(id,title)(photo_context_stage_seconds_total{instance=~\"$instance\"}) * 0), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or label_replace(label_replace((sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|retry\"})), \"id\", \"photo_context_jobs\", \"\", \"\"), \"title\", \"Photo context queue (photos)\", \"\", \"\") or label_replace(label_replace((max(photo_snapshot_index_rows{instance=~\"$instance\",kind=\"photos\"})), \"id\", \"photo_search\", \"\", \"\"), \"title\", \"Search/group index (photos)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"library\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_library\", \"\", \"\"), \"title\", \"Immich library (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"sidecar\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_sidecar\", \"\", \"\"), \"title\", \"Immich sidecar (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"metadata\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_metadata\", \"\", \"\"), \"title\", \"Immich metadata (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"thumbnail_generation\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_thumbnail_generation\", \"\", \"\"), \"title\", \"Immich thumbnail generation (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"face_detection\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_face_detection\", \"\", \"\"), \"title\", \"Immich face detection (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"facial_recognition\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_facial_recognition\", \"\", \"\"), \"title\", \"Immich facial recognition (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"smart_search\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_smart_search\", \"\", \"\"), \"title\", \"Immich smart search (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"ocr\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_ocr\", \"\", \"\"), \"title\", \"Immich ocr (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"video_conversion\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_video_conversion\", \"\", \"\"), \"title\", \"Immich video conversion (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"duplicate_detection\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_duplicate_detection\", \"\", \"\"), \"title\", \"Immich duplicate detection (queued jobs)\", \"\", \"\") or label_replace(label_replace(((((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m]))) or (sum(immich_queue_jobs{queue=\"thumbnail_generation\",state=~\"waiting|delayed|prioritized|paused\"}) == 0))) * 60), \"id\", \"immich_gallery\", \"\", \"\"), \"title\", \"Immich thumbnail completions (jobs/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_ocr_success_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"ocr\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_ocr_completed\", \"\", \"\"), \"title\", \"Immich OCR completions (jobs/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_ocr_failed_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"ocr\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_ocr_errors\", \"\", \"\"), \"title\", \"Immich OCR failed attempts (/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_asset_encode_video_success_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"video_conversion\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_video_completed\", \"\", \"\"), \"title\", \"Immich video conversion completions (jobs/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_asset_encode_video_failed_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"video_conversion\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_video_errors\", \"\", \"\"), \"title\", \"Immich video conversion failures (/min)\", \"\", \"\") or label_replace(label_replace((immich_sync_available_summaries), \"id\", \"sync_source\", \"\", \"\"), \"title\", \"Knowledge Index completed summaries\", \"\", \"\") or label_replace(label_replace((immich_sync_assets{state=\"pending\"}), \"id\", \"sync_pending\", \"\", \"\"), \"title\", \"Enrichment queue (assets)\", \"\", \"\") or label_replace(label_replace((immich_sync_assets{state=\"applied\"}), \"id\", \"sync_preserved\", \"\", \"\"), \"title\", \"Immich custom metadata (assets)\", \"\", \"\") or label_replace(label_replace((sum(immich_sync_assets{state=~\"error|conflict\"})), \"id\", \"sync_review\", \"\", \"\"), \"title\", \"Sync errors or conflicts (assets)\", \"\", \"\") or label_replace(label_replace((sum(immich_sync_assets{state=~\"missing|excluded\"})), \"id\", \"sync_unmapped\", \"\", \"\"), \"title\", \"Missing or excluded (assets)\", \"\", \"\")",
+              "expr": "label_replace(((100 * sum by (id, title) (rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval])) / scalar(sum(rate(media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (media_pipeline_stage_seconds_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) * 0) or (100 * sum by (id, title) (rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_enrichment_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or (sum by (id, title) (photo_enrichment_stage_seconds_total{instance=~\"$instance\"}) * 0)), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or max by (id,title) (photo_frigate_processing_milliseconds{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by (id,title) (photo_frigate_service_up{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or label_replace(((100 * sum by(id,title) (rate(photo_review_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_review_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or sum by(id,title)(photo_review_stage_seconds_total{instance=~\"$instance\"}) * 0), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or label_replace(label_replace((sum(photo_enrichment_jobs{instance=~\"$instance\",kind=~\"ready|retry\"})), \"id\", \"photo_jobs\", \"\", \"\"), \"title\", \"PostgreSQL queue (jobs)\", \"\", \"\") or label_replace(label_replace((max(photo_snapshot_export_seconds{instance=~\"$instance\"})), \"id\", \"photo_export\", \"\", \"\"), \"title\", \"Parquet export (seconds)\", \"\", \"\") or label_replace(label_replace((time()-min(photo_snapshot_captured_timestamp_seconds{instance=~\"$instance\"})), \"id\", \"photo_analytics\", \"\", \"\"), \"title\", \"DuckDB snapshot age (seconds)\", \"\", \"\") or label_replace(label_replace((histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name=\"photo-review\",stage=\"duckdb.query\"}[$__rate_interval])))), \"id\", \"photo_gallery\", \"\", \"\"), \"title\", \"Gallery DuckDB query p95 (seconds)\", \"\", \"\") or label_replace(label_replace((histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name=\"photo-review\",stage=\"db.query\"}[$__rate_interval])))), \"id\", \"photo_live_db\", \"\", \"\"), \"title\", \"GUI PostgreSQL calls p95 (seconds)\", \"\", \"\") or label_replace(((100 * sum by(id,title) (rate(photo_context_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval])) / scalar(sum(rate(photo_context_stage_seconds_total{instance=~\"$instance\"}[$__rate_interval]))) >= 0) or sum by(id,title)(photo_context_stage_seconds_total{instance=~\"$instance\"}) * 0), \"title\", \"$1 (%)\", \"title\", \"(.+)\") or label_replace(label_replace((sum(photo_context_jobs{instance=~\"$instance\",kind=~\"ready|retry\"})), \"id\", \"photo_context_jobs\", \"\", \"\"), \"title\", \"Photo context queue (photos)\", \"\", \"\") or label_replace(label_replace((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60), \"id\", \"summary_primary\", \"\", \"\"), \"title\", \"RTX (saved/min)\", \"\", \"\") or label_replace(label_replace((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60), \"id\", \"summary_metal\", \"\", \"\"), \"title\", \"Mac Metal (saved/min)\", \"\", \"\") or label_replace(label_replace((max(photo_snapshot_index_rows{instance=~\"$instance\",kind=\"photos\"})), \"id\", \"photo_search\", \"\", \"\"), \"title\", \"Search/group index (photos)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"library\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_library\", \"\", \"\"), \"title\", \"Immich library (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"sidecar\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_sidecar\", \"\", \"\"), \"title\", \"Immich sidecar (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"metadata\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_metadata\", \"\", \"\"), \"title\", \"Immich metadata (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"thumbnail_generation\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_thumbnail_generation\", \"\", \"\"), \"title\", \"Immich thumbnail generation (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"face_detection\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_face_detection\", \"\", \"\"), \"title\", \"Immich face detection (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"facial_recognition\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_facial_recognition\", \"\", \"\"), \"title\", \"Immich facial recognition (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"smart_search\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_smart_search\", \"\", \"\"), \"title\", \"Immich smart search (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"ocr\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_ocr\", \"\", \"\"), \"title\", \"Immich ocr (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"video_conversion\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_video_conversion\", \"\", \"\"), \"title\", \"Immich video conversion (queued jobs)\", \"\", \"\") or label_replace(label_replace((sum(immich_queue_jobs{queue=\"duplicate_detection\",state=~\"waiting|delayed|prioritized|paused\"})), \"id\", \"immich_duplicate_detection\", \"\", \"\"), \"title\", \"Immich duplicate detection (queued jobs)\", \"\", \"\") or label_replace(label_replace(((((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m]))) or (sum(immich_queue_jobs{queue=\"thumbnail_generation\",state=~\"waiting|delayed|prioritized|paused\"}) == 0))) * 60), \"id\", \"immich_gallery\", \"\", \"\"), \"title\", \"Immich thumbnail completions (jobs/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_ocr_success_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"ocr\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_ocr_completed\", \"\", \"\"), \"title\", \"Immich OCR completions (jobs/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_ocr_failed_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"ocr\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_ocr_errors\", \"\", \"\"), \"title\", \"Immich OCR failed attempts (/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_asset_encode_video_success_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"video_conversion\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_video_completed\", \"\", \"\"), \"title\", \"Immich video conversion completions (jobs/min)\", \"\", \"\") or label_replace(label_replace(((sum(rate(immich_jobs_asset_encode_video_failed_total{namespace=\"immich-pilot\",endpoint=\"metrics-ms\"}[5m])) or (sum(immich_queue_jobs{queue=\"video_conversion\",state!=\"failed\"}) == 0)) * 60), \"id\", \"immich_video_errors\", \"\", \"\"), \"title\", \"Immich video conversion failures (/min)\", \"\", \"\") or label_replace(label_replace((immich_sync_available_summaries), \"id\", \"sync_source\", \"\", \"\"), \"title\", \"Knowledge Index completed summaries\", \"\", \"\") or label_replace(label_replace((immich_sync_assets{state=\"pending\"}), \"id\", \"sync_pending\", \"\", \"\"), \"title\", \"Enrichment queue (assets)\", \"\", \"\") or label_replace(label_replace((immich_sync_assets{state=\"applied\"}), \"id\", \"sync_preserved\", \"\", \"\"), \"title\", \"Immich custom metadata (assets)\", \"\", \"\") or label_replace(label_replace((sum(immich_sync_assets{state=~\"error|conflict\"})), \"id\", \"sync_review\", \"\", \"\"), \"title\", \"Sync errors or conflicts (assets)\", \"\", \"\") or label_replace(label_replace((sum(immich_sync_assets{state=~\"missing|excluded\"})), \"id\", \"sync_unmapped\", \"\", \"\"), \"title\", \"Missing or excluded (assets)\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false,
@@ -2166,7 +2234,7 @@ data:
             },
             {
               "refId": "edges",
-              "expr": "max by (id, source, target) (media_pipeline_edge_info{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) or max by (id, source, target) (photo_enrichment_edge_info{instance=~\"$instance\"}) or max by (id,source,target) (photo_frigate_edge_info{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by(id,source,target)(photo_pipeline_edge_info{instance=~\"$instance\"}) or max by(id,source,target)(photo_review_edge_info{instance=~\"$instance\"}) or max by(id,source,target)(photo_app_edge_info{instance=~\"$instance\"}) or max by(id,source,target)(photo_context_edge_info{instance=~\"$instance\"}) or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_ocr_ocr_errors\", \"\", \"\"), \"source\", \"immich_ocr\", \"\", \"\"), \"target\", \"immich_ocr_errors\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_ocr_ocr_completed\", \"\", \"\"), \"source\", \"immich_ocr\", \"\", \"\"), \"target\", \"immich_ocr_completed\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_library_metadata\", \"\", \"\"), \"source\", \"immich_library\", \"\", \"\"), \"target\", \"immich_metadata\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_sidecar_metadata\", \"\", \"\"), \"source\", \"immich_sidecar\", \"\", \"\"), \"target\", \"immich_metadata\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_metadata_thumbnail_generation\", \"\", \"\"), \"source\", \"immich_metadata\", \"\", \"\"), \"target\", \"immich_thumbnail_generation\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_gallery\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_gallery\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_face_detection\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_face_detection\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_face_detection_facial_recognition\", \"\", \"\"), \"source\", \"immich_face_detection\", \"\", \"\"), \"target\", \"immich_facial_recognition\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_smart_search\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_smart_search\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_smart_search_duplicate_detection\", \"\", \"\"), \"source\", \"immich_smart_search\", \"\", \"\"), \"target\", \"immich_duplicate_detection\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_ocr\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_ocr\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_metadata_video_conversion\", \"\", \"\"), \"source\", \"immich_metadata\", \"\", \"\"), \"target\", \"immich_video_conversion\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_video_conversion_video_completed\", \"\", \"\"), \"source\", \"immich_video_conversion\", \"\", \"\"), \"target\", \"immich_video_completed\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_video_conversion_video_errors\", \"\", \"\"), \"source\", \"immich_video_conversion\", \"\", \"\"), \"target\", \"immich_video_errors\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_source_sync_pending\", \"\", \"\"), \"source\", \"sync_source\", \"\", \"\"), \"target\", \"sync_pending\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_metadata_sync_pending\", \"\", \"\"), \"source\", \"immich_metadata\", \"\", \"\"), \"target\", \"sync_pending\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_pending_sync_preserved\", \"\", \"\"), \"source\", \"sync_pending\", \"\", \"\"), \"target\", \"sync_preserved\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_pending_sync_review\", \"\", \"\"), \"source\", \"sync_pending\", \"\", \"\"), \"target\", \"sync_review\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_source_sync_unmapped\", \"\", \"\"), \"source\", \"sync_source\", \"\", \"\"), \"target\", \"sync_unmapped\", \"\", \"\")",
+              "expr": "max by (id, source, target) (media_pipeline_edge_info{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}) or max by (id, source, target) (photo_enrichment_edge_info{instance=~\"$instance\"}) or max by (id,source,target) (photo_frigate_edge_info{instance=~\"$instance\"} and on(instance) (time() - photo_frigate_last_poll_timestamp_seconds{instance=~\"$instance\"} < 60)) or max by(id,source,target)(photo_pipeline_edge_info{instance=~\"$instance\"}) or max by(id,source,target)(photo_review_edge_info{instance=~\"$instance\"}) or max by(id,source,target)(photo_app_edge_info{instance=~\"$instance\"}) or max by(id,source,target)(photo_context_edge_info{instance=~\"$instance\"}) or label_replace(label_replace(label_replace(((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) > 0) * 0 + 1, \"id\", \"inference-summary_primary\", \"\", \"\"), \"source\", \"inference\", \"\", \"\"), \"target\", \"summary_primary\", \"\", \"\") or label_replace(label_replace(label_replace(((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"primary\"}[10m]))) * 60) > 0) * 0 + 1, \"id\", \"summary_primary-write\", \"\", \"\"), \"source\", \"summary_primary\", \"\", \"\"), \"target\", \"write\", \"\", \"\") or label_replace(label_replace(label_replace(((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60) > 0) * 0 + 1, \"id\", \"inference-summary_metal\", \"\", \"\"), \"source\", \"inference\", \"\", \"\"), \"target\", \"summary_metal\", \"\", \"\") or label_replace(label_replace(label_replace(((max(sum by(instance,enricher) (rate(media_pipeline_backend_saved_total{instance=~\"$instance\",enricher=~\"$pipeline_enricher\",backend=\"metal\"}[10m]))) * 60) > 0) * 0 + 1, \"id\", \"summary_metal-write\", \"\", \"\"), \"source\", \"summary_metal\", \"\", \"\"), \"target\", \"write\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_ocr_ocr_errors\", \"\", \"\"), \"source\", \"immich_ocr\", \"\", \"\"), \"target\", \"immich_ocr_errors\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_ocr_ocr_completed\", \"\", \"\"), \"source\", \"immich_ocr\", \"\", \"\"), \"target\", \"immich_ocr_completed\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_library_metadata\", \"\", \"\"), \"source\", \"immich_library\", \"\", \"\"), \"target\", \"immich_metadata\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_sidecar_metadata\", \"\", \"\"), \"source\", \"immich_sidecar\", \"\", \"\"), \"target\", \"immich_metadata\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_metadata_thumbnail_generation\", \"\", \"\"), \"source\", \"immich_metadata\", \"\", \"\"), \"target\", \"immich_thumbnail_generation\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_gallery\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_gallery\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_face_detection\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_face_detection\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_face_detection_facial_recognition\", \"\", \"\"), \"source\", \"immich_face_detection\", \"\", \"\"), \"target\", \"immich_facial_recognition\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_smart_search\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_smart_search\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_smart_search_duplicate_detection\", \"\", \"\"), \"source\", \"immich_smart_search\", \"\", \"\"), \"target\", \"immich_duplicate_detection\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_thumbnail_generation_ocr\", \"\", \"\"), \"source\", \"immich_thumbnail_generation\", \"\", \"\"), \"target\", \"immich_ocr\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_metadata_video_conversion\", \"\", \"\"), \"source\", \"immich_metadata\", \"\", \"\"), \"target\", \"immich_video_conversion\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_video_conversion_video_completed\", \"\", \"\"), \"source\", \"immich_video_conversion\", \"\", \"\"), \"target\", \"immich_video_completed\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_video_conversion_video_errors\", \"\", \"\"), \"source\", \"immich_video_conversion\", \"\", \"\"), \"target\", \"immich_video_errors\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_source_sync_pending\", \"\", \"\"), \"source\", \"sync_source\", \"\", \"\"), \"target\", \"sync_pending\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"immich_metadata_sync_pending\", \"\", \"\"), \"source\", \"immich_metadata\", \"\", \"\"), \"target\", \"sync_pending\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_pending_sync_preserved\", \"\", \"\"), \"source\", \"sync_pending\", \"\", \"\"), \"target\", \"sync_preserved\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_pending_sync_review\", \"\", \"\"), \"source\", \"sync_pending\", \"\", \"\"), \"target\", \"sync_review\", \"\", \"\") or label_replace(label_replace(label_replace(vector(1), \"id\", \"sync_source_sync_unmapped\", \"\", \"\"), \"source\", \"sync_source\", \"\", \"\"), \"target\", \"sync_unmapped\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false,
@@ -2191,7 +2259,7 @@ data:
             },
             "overrides": []
           },
-          "description": "Share of measured operation time by stage in the rate window. Concurrent stages each contribute time. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. During the backfill, two Ollama slots serve summaries and one writer commits batches to Parquet. The context worker resumes when the summary queue drains. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
+          "description": "Share of measured operation time by stage in the rate window. Concurrent stages each contribute time. Inference includes transport, server wait and model execution. Photo path skips transcription; parse loops to decode until the batch is saved. Edges show control flow. Two RTX slots and the Mac share distinct pending items. Both paths feed one Parquet writer. Backend nodes show successful saves per minute over ten minutes. The context worker resumes when the summary queue drains. Photo context runs independently: saved person labels and cached nearby Wikipedia/Wikidata candidates go to the local vision model; PostgreSQL retains provenance and the original caption. Nearby does not mean pictured. Provider calls are serialized and budgeted; the GUI performs no external lookup. Gallery lists, filters and counts run in DuckDB over Parquet. Recent PostgreSQL review edits overlay the snapshot immediately. GUI PostgreSQL timing includes live edit reads and other point operations. Query nodes show p95 seconds, not worker percentages; edges describe data flow. Open the Photo App dashboard for request latency, active lock waits, traces and automatic triage. PostgreSQL is authoritative for enrichment and human edits. Jobs are leased and retries do not block other files. Parquet export is independent of extraction; DuckDB pins a complete generation. Queue nodes show jobs, export shows last successful duration, analytics shows snapshot age; units are explicit in each node title. GUI matching/review percentages are normalized separately from worker percentages. Matching compares saved embeddings against human-confirmed people without regenerating embeddings. Optional automatic acceptance is a separate measured stage; its machine labels never become reference examples until a person confirms them. Two independent components read the same indexed library: GPU summaries and optional CPU photo enrichment. Percentages are normalized within each worker, not across workers. Photo review is only database-save time, not human thinking/wait time. Optional Frigate calls may use the shared GPU. Uninstrumented photo stages are absent, never synthetic zero measurements. Pending queues appear below; oldest unfinished PostgreSQL job age is shown below; end-to-end lead time is not yet measured. Immich is a separate branch reading the same library. Its nodes show queued jobs, and thumbnail/OCR completions show jobs/min. Static edges show logical processing dependencies, not measured transfer rates or elapsed time. Immich uses its own ML service; Frigate is not its face engine. Knowledge Index enrichment flows through a durable reconciliation queue into verified Immich custom metadata. These are counts, not timing percentages. The enrichment queue also includes face and group context without a summary. Native descriptions and face assignments remain gated; preserved provenance is not native UI promotion. See Photo App for CPU throttling, queue states, throughput and VPA recommendations. Frigate is a separate shared-service component: API reachability is 1/0, detector/face nodes show Frigate's rolling processing milliseconds (ms). Those are not caption-worker percentages or evidence of identity-match readiness. Titles identify each unit; no cross-component percentages are added. Frigate values describe its camera service, not uploaded-photo throughput. Zero face milliseconds means no recorded native face processing; it does not prove recognition is working. Frigate nodes disappear after 60 seconds without polling. Nodes show zero during the first two scrapes while rate samples accumulate.",
           "transformations": [
             {
               "id": "calculateField",
@@ -2258,7 +2326,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 60
+            "y": 66
           },
           "targets": [
             {
@@ -2312,7 +2380,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 60
+            "y": 66
           },
           "targets": [
             {
@@ -2423,7 +2491,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 66
+            "y": 72
           },
           "targets": [
             {
@@ -2477,7 +2545,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 66
+            "y": 72
           },
           "targets": [
             {
@@ -2531,7 +2599,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 66
+            "y": 72
           },
           "targets": [
             {
@@ -2585,7 +2653,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 79
           },
           "targets": [
             {
@@ -2647,7 +2715,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 79
           },
           "targets": [
             {
@@ -2700,7 +2768,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 80
+            "y": 86
           },
           "targets": [
             {
@@ -2762,7 +2830,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 80
+            "y": 86
           },
           "targets": [
             {
@@ -2812,7 +2880,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 87
+            "y": 93
           },
           "panels": []
         },
@@ -2828,7 +2896,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -2921,7 +2989,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -2982,7 +3050,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -3035,7 +3103,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 88
+            "y": 94
           },
           "targets": [
             {
@@ -3088,7 +3156,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 92
+            "y": 98
           },
           "targets": [
             {
@@ -3150,7 +3218,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 92
+            "y": 98
           },
           "targets": [
             {
@@ -3236,7 +3304,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 99
+            "y": 105
           },
           "targets": [
             {
@@ -3291,7 +3359,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 99
+            "y": 105
           },
           "targets": [
             {
@@ -3344,7 +3412,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 106
+            "y": 112
           },
           "targets": [
             {
@@ -3398,7 +3466,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 106
+            "y": 112
           },
           "targets": [
             {
@@ -3451,7 +3519,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 106
+            "y": 112
           },
           "targets": [
             {
@@ -3502,7 +3570,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 132
+            "y": 138
           },
           "panels": []
         },
@@ -3518,7 +3586,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 133
+            "y": 139
           },
           "targets": [
             {
@@ -3587,7 +3655,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 133
+            "y": 139
           },
           "targets": [
             {
@@ -3640,7 +3708,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 133
+            "y": 139
           },
           "targets": [
             {
@@ -3693,7 +3761,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 133
+            "y": 139
           },
           "targets": [
             {
@@ -3747,7 +3815,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 137
+            "y": 143
           },
           "targets": [
             {
@@ -3801,7 +3869,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 137
+            "y": 143
           },
           "targets": [
             {
@@ -3851,7 +3919,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 113
+            "y": 119
           },
           "panels": []
         },
@@ -3867,7 +3935,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 120
           },
           "targets": [
             {
@@ -3916,7 +3984,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 120
           },
           "targets": [
             {
@@ -3970,7 +4038,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 121
+            "y": 127
           },
           "targets": [
             {
@@ -4034,7 +4102,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 121
+            "y": 127
           },
           "targets": [
             {
@@ -4083,7 +4151,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 121
+            "y": 127
           },
           "targets": [
             {
@@ -4132,7 +4200,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 121
+            "y": 127
           },
           "targets": [
             {
@@ -4189,7 +4257,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 125
+            "y": 131
           },
           "targets": [
             {
@@ -4238,7 +4306,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 125
+            "y": 131
           },
           "targets": [
             {
@@ -4284,7 +4352,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 144
+            "y": 150
           },
           "panels": []
         },
@@ -4300,7 +4368,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 145
+            "y": 151
           },
           "targets": [
             {
@@ -4350,7 +4418,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 145
+            "y": 151
           },
           "targets": [
             {
@@ -4404,7 +4472,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 145
+            "y": 151
           },
           "targets": [
             {
@@ -4453,7 +4521,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 145
+            "y": 151
           },
           "targets": [
             {
@@ -4502,7 +4570,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 145
+            "y": 151
           },
           "targets": [
             {
@@ -4552,7 +4620,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 145
+            "y": 151
           },
           "targets": [
             {
@@ -4601,7 +4669,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 149
+            "y": 155
           },
           "targets": [
             {
@@ -4665,7 +4733,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 149
+            "y": 155
           },
           "targets": [
             {
@@ -4714,7 +4782,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 149
+            "y": 155
           },
           "targets": [
             {
@@ -4764,7 +4832,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 149
+            "y": 155
           },
           "targets": [
             {
@@ -4813,7 +4881,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 149
+            "y": 155
           },
           "targets": [
             {
@@ -4862,7 +4930,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 149
+            "y": 155
           },
           "targets": [
             {
@@ -4915,7 +4983,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 153
+            "y": 159
           },
           "targets": [
             {
@@ -4974,7 +5042,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 153
+            "y": 159
           },
           "targets": [
             {
@@ -5023,7 +5091,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 153
+            "y": 159
           },
           "targets": [
             {
@@ -5070,7 +5138,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 160
+            "y": 166
           },
           "panels": []
         },
@@ -5086,7 +5154,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 161
+            "y": 167
           },
           "targets": [
             {
@@ -5140,7 +5208,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 161
+            "y": 167
           },
           "targets": [
             {
@@ -5190,7 +5258,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 161
+            "y": 167
           },
           "targets": [
             {
@@ -5248,7 +5316,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 161
+            "y": 167
           },
           "targets": [
             {
@@ -5298,7 +5366,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 161
+            "y": 167
           },
           "targets": [
             {
@@ -5356,7 +5424,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 161
+            "y": 167
           },
           "targets": [
             {
@@ -5410,7 +5478,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 165
+            "y": 171
           },
           "targets": [
             {
@@ -5478,7 +5546,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 165
+            "y": 171
           },
           "targets": [
             {
@@ -5528,7 +5596,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 165
+            "y": 171
           },
           "targets": [
             {
@@ -5587,7 +5655,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 165
+            "y": 171
           },
           "targets": [
             {
@@ -5637,7 +5705,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 165
+            "y": 171
           },
           "targets": [
             {
@@ -5686,7 +5754,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 165
+            "y": 171
           },
           "targets": [
             {
@@ -5735,7 +5803,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -5804,7 +5872,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -5872,7 +5940,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -5940,7 +6008,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -6004,7 +6072,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -6055,7 +6123,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -6106,7 +6174,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 169
+            "y": 175
           },
           "targets": [
             {
@@ -6156,7 +6224,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 173
+            "y": 179
           },
           "targets": [
             {
@@ -6205,7 +6273,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 173
+            "y": 179
           },
           "targets": [
             {
@@ -6259,7 +6327,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 180
+            "y": 186
           },
           "targets": [
             {
@@ -6313,7 +6381,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 180
+            "y": 186
           },
           "targets": [
             {
@@ -6359,7 +6427,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 187
+            "y": 193
           },
           "panels": []
         },
@@ -6375,7 +6443,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 188
+            "y": 194
           },
           "targets": [
             {
@@ -6443,7 +6511,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 188
+            "y": 194
           },
           "targets": [
             {
@@ -6500,7 +6568,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 188
+            "y": 194
           },
           "targets": [
             {
@@ -6549,7 +6617,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 188
+            "y": 194
           },
           "targets": [
             {
@@ -6598,7 +6666,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 188
+            "y": 194
           },
           "targets": [
             {
@@ -6647,7 +6715,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 188
+            "y": 194
           },
           "targets": [
             {
@@ -6697,7 +6765,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 192
+            "y": 198
           },
           "panels": []
         },
@@ -6713,7 +6781,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 193
+            "y": 199
           },
           "targets": [
             {
@@ -6763,7 +6831,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 193
+            "y": 199
           },
           "targets": [
             {
@@ -6812,7 +6880,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 193
+            "y": 199
           },
           "targets": [
             {
@@ -6861,7 +6929,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 193
+            "y": 199
           },
           "targets": [
             {
@@ -6914,7 +6982,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 193
+            "y": 199
           },
           "targets": [
             {
@@ -6963,7 +7031,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 193
+            "y": 199
           },
           "targets": [
             {
@@ -7013,7 +7081,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 197
+            "y": 203
           },
           "targets": [
             {
@@ -7063,7 +7131,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 197
+            "y": 203
           },
           "targets": [
             {
@@ -7109,7 +7177,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 205
+            "y": 211
           },
           "panels": []
         },
@@ -7125,7 +7193,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 206
+            "y": 212
           },
           "targets": [
             {
@@ -7174,7 +7242,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 206
+            "y": 212
           },
           "targets": [
             {
@@ -7227,7 +7295,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 206
+            "y": 212
           },
           "targets": [
             {
@@ -7276,7 +7344,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 206
+            "y": 212
           },
           "targets": [
             {
@@ -7326,7 +7394,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 206
+            "y": 212
           },
           "targets": [
             {
@@ -7390,7 +7458,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 206
+            "y": 212
           },
           "targets": [
             {
@@ -7439,7 +7507,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 210
+            "y": 216
           },
           "targets": [
             {
@@ -7574,7 +7642,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 218
+            "y": 224
           },
           "targets": [
             {
@@ -7628,7 +7696,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 218
+            "y": 224
           },
           "targets": [
             {
@@ -7679,7 +7747,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 226
+            "y": 232
           },
           "panels": []
         },
@@ -7695,7 +7763,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 227
+            "y": 233
           },
           "targets": [
             {
@@ -7759,7 +7827,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 227
+            "y": 233
           },
           "targets": [
             {
@@ -7808,7 +7876,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 227
+            "y": 233
           },
           "targets": [
             {
@@ -7876,7 +7944,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 227
+            "y": 233
           },
           "targets": [
             {
@@ -7925,7 +7993,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 227
+            "y": 233
           },
           "targets": [
             {
@@ -7974,7 +8042,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 227
+            "y": 233
           },
           "targets": [
             {
@@ -8024,7 +8092,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 231
+            "y": 237
           },
           "targets": [
             {
@@ -8070,7 +8138,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 237
+            "y": 243
           },
           "panels": []
         },
@@ -8086,7 +8154,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 238
+            "y": 244
           },
           "targets": [
             {
@@ -8154,7 +8222,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 238
+            "y": 244
           },
           "targets": [
             {
@@ -8203,7 +8271,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 238
+            "y": 244
           },
           "targets": [
             {
@@ -8262,7 +8330,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 242
+            "y": 248
           },
           "targets": [
             {
@@ -8311,7 +8379,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 248
+            "y": 254
           },
           "targets": [
             {

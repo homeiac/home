@@ -22,6 +22,7 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
          ("decode", "prompt"), ("prompt", "inference"), ("inference", "parse"),
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
 PIPELINE_HELP = {
+    "media_pipeline_backend_saved_total": ("counter", "Successful Parquet writes by execution backend or cache hit"),
     "media_pipeline_cache_hits_total": ("counter", "Successful captions reused for identical model inputs; inference requests avoided"),
     "media_pipeline_stage_seconds_total": ("counter", "Wall seconds in each stage, including in-flight work; inference includes transport and server time"),
     "media_pipeline_stage_completed_seconds_total": ("counter", "Wall seconds in completed stage operations, including failed attempts"),
@@ -50,6 +51,7 @@ class PipelineMetrics:
         self.operations = defaultdict(int)
         self.items = defaultdict(int)
         self.persisted = defaultdict(int)
+        self.backend_saved = dict.fromkeys(("primary", "metal", "cache"), 0)
         self.ollama_seconds = defaultdict(float)
         self.ollama_observations = defaultdict(int)
         self.tokens = defaultdict(int)
@@ -114,10 +116,12 @@ class PipelineMetrics:
         with self.lock:
             self.pending = count
 
-    def item(self, kind: str, status: str, persisted: bool = False) -> None:
+    def item(self, kind: str, status: str, persisted: bool = False, backend: str = "primary") -> None:
         """Distinguish completed inference from durable Parquet output."""
         with self.lock:
             (self.persisted if persisted else self.items)[kind, status] += 1
+            if persisted and status == "ok":
+                self.backend_saved[backend] += 1
             if persisted and status == "ok" and self.pending is not None:
                 self.pending = max(0, self.pending - 1)
 
@@ -171,6 +175,8 @@ class PipelineMetrics:
             for name, values in (("media_pipeline_items_total", self.items), ("media_pipeline_persisted_items_total", self.persisted)):
                 for (kind, status), value in sorted(values.items()):
                     add(name, value, kind=kind, status=status)
+            for backend, count in self.backend_saved.items():
+                add("media_pipeline_backend_saved_total", count, backend=backend)
             if self.pending is not None:
                 add("media_pipeline_queue", self.pending)
             for name, value in (("worker_stage", STAGES[stage_now]), ("stage_started_timestamp_seconds", stage_started),

@@ -30,7 +30,9 @@ import subprocess
 import sys
 import time
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from copy import copy
 from contextlib import nullcontext
 from functools import partial
 
@@ -138,7 +140,7 @@ def parse_answer(text):
     return summary, tags
 
 
-def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m", metrics=None, kind="photo"):
+def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m", metrics=None, kind="photo", headers=None):
     """One chat request with all images. api="ollama" uses Ollama's native /api/chat: it honors `think: false`
     (the OpenAI-compatible /v1 endpoint did not on 2026-11-16: reasoning models then spent ~500 hidden tokens, 18-45 s/item instead of ~2-5 s)."""
     b64 = [base64.b64encode(j).decode() for j in jpegs]
@@ -151,7 +153,7 @@ def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="open
         content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + x}} for x in b64]
         body = {"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2, **(extra or {})}
         url = endpoint.rstrip("/") + "/v1/chat/completions"
-    req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
+    req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json", **(headers or {})})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         out = json.load(resp)
     if api == "ollama" and metrics is not None:
@@ -163,7 +165,7 @@ def summarize(row, library, a, metrics=None, cache=None):
     """-> dict of result columns for one queue row; never raises (errors become status='error' rows)."""
     base = {"source": "gphotos", "path": row["path"], "size_bytes": row["size_bytes"], "enricher": a.enricher, "model": a.model,
             "prompt_version": PROMPT_VERSION, "summary": None, "tags": None, "frames_sampled": None, "duration_s": None,
-            "status": "error", "error": None}
+            "status": "error", "error": None, "inference_backend": getattr(a, "backend", "primary")}
     ap = os.path.join(library, row["path"])
     metrics = metrics or PipelineMetrics(None, a.enricher)
     kind = "video" if row["ext"] in VIDEO_EXTS else "photo"
@@ -188,16 +190,20 @@ def summarize(row, library, a, metrics=None, cache=None):
         }) if cache is not None else None
         cached = cache.get(cache_key) if cache is not None else None
         if cached is None:
+            base["_model_failure"] = True
             with metrics.measure("inference", kind):
                 answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
-                                   num_ctx=a.num_ctx, metrics=metrics, kind=kind)
+                                   num_ctx=a.num_ctx, metrics=metrics, kind=kind, timeout=getattr(a, "request_timeout", 600),
+                                   headers=getattr(a, "model_headers", None))
             with metrics.measure("parse", kind):
                 summary, tags = parse_answer(answer)
+            base.pop("_model_failure", None)
             if cache is not None:
                 cache.put(cache_key, summary, tags)
         else:
             summary, tags = cached
             metrics.cache_hit(kind)
+            base["inference_backend"] = "cache"
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
@@ -233,6 +239,80 @@ def queue(index, enricher, limit, seen=(), metrics=None):
     return [r for r in (dict(zip(names, row[:-1])) for row in rows) if r["path"] not in seen][:limit]
 
 
+MAC_ENDPOINT = "http://127.0.0.1:19476"
+
+
+def mac_headers():
+    with open("/opt/knowledge-index/mac-bonsai.key", encoding="ascii") as file:
+        return {"Authorization": "Bearer " + file.read().strip()}
+
+
+def mac_route(args):
+    """Discover the authenticated Mac server's Git-configured request limit."""
+    if not getattr(args, "mac_assist", False) or args.model != "bonsai-27b" or args.dry_run:
+        return 0, None
+    try:
+        headers = mac_headers()
+        probe = urllib.request.Request(MAC_ENDPOINT + "/v1/models", headers=headers)
+        with urllib.request.urlopen(probe, timeout=1) as response:
+            models = json.load(response)["data"]
+        for model in models:
+            if model["id"] == "bonsai-27b-metal":
+                for tag in model["tags"]:
+                    match = re.fullmatch(r"backfill-parallel=([1-9]|1[0-9]|20)", tag)
+                    if match:
+                        return int(match[1]), headers
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return 0, None
+
+
+def split_batch(rows, primary_slots, mac_slots, primary, metal):
+    """Yield each item once. Retry interrupted Mac work on the primary worker."""
+    pending = deque(rows)
+    retry = deque()
+    disabled = False
+    with ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:
+        active = {}
+
+        def submit(backend):
+            if backend == "metal" and disabled:
+                return
+            candidates = retry if backend == "primary" and retry else pending
+            if candidates:
+                row = candidates.popleft()
+                task = metal if backend == "metal" else primary
+                active[pool.submit(task, row)] = (backend, row)
+
+        for backend, count in (("primary", primary_slots), ("metal", mac_slots)):
+            for _ in range(count):
+                submit(backend)
+        while active:
+            completed, _ = wait(active, return_when=FIRST_COMPLETED)
+            for future in completed:
+                backend, row = active.pop(future)
+                result = future.result()
+                if backend == "metal" and result["status"] != "ok" and result.get("_model_failure"):
+                    disabled = True
+                    retry.append(row)
+                else:
+                    yield row, result
+                submit(backend)
+            # Primary slots may already have drained when a late Mac request fails.
+            primary_active = sum(backend == "primary" for backend, _ in active.values())
+            for _ in range(min(len(retry), primary_slots - primary_active)):
+                submit("primary")
+
+
+def persist(batch, args, metrics):
+    """Only the host writes Parquet and advances durable counters."""
+    with metrics.measure("write"):
+        write_batch([result for _, result in batch], args.index, args.enricher)
+    for row, result in batch:
+        kind = "video" if row["ext"] in VIDEO_EXTS else "photo"
+        metrics.item(kind, result["status"], persisted=True, backend=result.get("inference_backend", "primary"))
+
+
 def run(a):
     if a.min_free_mib > 0:
         free = free_gpu_mib(a.smi_cmd)
@@ -246,26 +326,39 @@ def run(a):
     remaining = a.limit
     seen = set()
     cache_context = nullcontext(None) if a.dry_run else SummaryCache(os.path.join(a.index, "summary-cache.sqlite3"))
-    with cache_context as cache, PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics, \
-            ThreadPoolExecutor(max_workers=a.parallel) as pool:
-        summarize_item = partial(summarize, library=a.library, a=a, metrics=metrics, cache=cache)
+    with cache_context as cache, PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
+        primary = partial(summarize, library=a.library, a=a, metrics=metrics, cache=cache)
+        metal_args = copy(a)
+        metal_args.model = "bonsai-27b-metal"
+        metal_args.endpoint = MAC_ENDPOINT
+        metal_args.api = "openai"
+        metal_args.extra = {"max_tokens": 384, "chat_template_kwargs": {"enable_thinking": False}}
+        metal_args.backend = "metal"
+        metal_args.request_timeout = 180
+        metal = partial(summarize, library=a.library, a=metal_args, metrics=metrics, cache=cache)
         while remaining > 0:
+            mac_slots, metal_args.model_headers = mac_route(a)
+            fetch_size = max(a.batch_size, 4 * (a.parallel + mac_slots)) if mac_slots else a.batch_size
             with metrics.measure("queue"):
-                rows = queue(a.index, a.enricher, min(a.batch_size, remaining), seen, metrics)
+                rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics)
             if not rows:
                 break
             seen.update(r["path"] for r in rows)
-            out = list(pool.map(summarize_item, rows))
-            done += sum(r["status"] == "ok" for r in out)
-            errors += sum(r["status"] != "ok" for r in out)
+            batch = []
+            for row, result in split_batch(rows, a.parallel, mac_slots, primary, metal):
+                done += result["status"] == "ok"
+                errors += result["status"] != "ok"
+                if a.dry_run:
+                    print("%s\t%s\t%s\t%s" % (result["status"], row["path"], result["summary"] or result["error"], ",".join(result["tags"] or [])))
+                    continue
+                batch.append((row, result))
+                if len(batch) == a.batch_size:
+                    persist(batch, a, metrics)
+                    batch.clear()
             if a.dry_run:
-                for r in out:
-                    print("%s\t%s\t%s\t%s" % (r["status"], r["path"], r["summary"] or r["error"], ",".join(r["tags"] or [])))
                 break
-            with metrics.measure("write"):
-                write_batch(out, a.index, a.enricher)
-            for row, result in zip(rows, out):
-                metrics.item("video" if row["ext"] in VIDEO_EXTS else "photo", result["status"], persisted=True)
+            if batch:
+                persist(batch, a, metrics)
             remaining -= len(rows)
             if errors and not done and len(rows) == errors:   # a whole batch failed: the model server is probably down, stop
                 print("whole batch failed; stopping", file=sys.stderr)
@@ -287,6 +380,8 @@ def main(argv):
     ap.add_argument("--batch-size", type=int, default=50)
     ap.add_argument("--parallel", type=int, default=os.environ.get("KI_SUMMARY_PARALLEL", "1"),
                     help="Maximum summaries in flight, sharing a single Parquet writer")
+    ap.add_argument("--mac-assist", action="store_true", default=os.environ.get("KI_MAC_BONSAI") == "1",
+                    help="Share pending Bonsai summaries with the authenticated Mac worker while it is available")
     ap.add_argument("--frames", type=int, default=8)
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
