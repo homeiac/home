@@ -6,7 +6,7 @@ metadata:
   labels:
     app: ollama-gpu
 spec:
-  replicas: 0  # Reserve this GPU share for photo-bonsai. See #217.
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -25,7 +25,7 @@ spec:
         nvidia.com/gpu.present: "true"
       containers:
         - name: ollama
-          image: ollama/ollama:0.20.2
+          image: ollama/ollama:0.40.17@sha256:ccc42bcd3d5fcf7ab0d532b300382154e1a4da56fc666bdb313b78ebdd912754
           imagePullPolicy: IfNotPresent
           args:
             - serve
@@ -46,6 +46,11 @@ spec:
               value: "0"  # Explicitly use GPU 0
           ports:
             - containerPort: 11434
+          readinessProbe:
+            httpGet:
+              path: /api/version
+              port: 11434
+            periodSeconds: 5
           resizePolicy:
             - resourceName: cpu
               restartPolicy: NotRequired
