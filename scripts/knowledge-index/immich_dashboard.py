@@ -12,7 +12,13 @@ OCR_RATE = 'sum(rate(immich_jobs_ocr_success_total{namespace="immich-pilot",endp
 OCR_BACKLOG = 'sum(immich_queue_jobs{queue="ocr",state=~"waiting|delayed|prioritized|paused"})'
 GPU = '{Hostname="k3s-vm-pumped-piglet-gpu"}'
 OCR_FAILURE_RATE = 'sum(rate(immich_jobs_ocr_failed_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))'
-OVERVIEW_HEIGHT = 104
+VIDEO_QUEUE = 'immich_queue_jobs{queue="video_conversion"}'
+VIDEO_BACKLOG = 'sum(immich_queue_jobs{queue="video_conversion",state=~"waiting|delayed|prioritized|paused"})'
+VIDEO_IDLE = 'sum(immich_queue_jobs{queue="video_conversion",state!="failed"}) == 0'
+VIDEO_METRICS = '{namespace="immich-pilot",endpoint="metrics-ms"}'
+VIDEO_RATE = f'(sum(rate(immich_jobs_asset_encode_video_success_total{VIDEO_METRICS}[5m])) or ({VIDEO_IDLE})) * 60'
+VIDEO_ERRORS = f'(sum(rate(immich_jobs_asset_encode_video_failed_total{VIDEO_METRICS}[5m])) or ({VIDEO_IDLE})) * 60'
+OVERVIEW_HEIGHT = 119
 
 
 def add_panels(panel, panels):
@@ -76,9 +82,17 @@ def add_panels(panel, panels):
     add('Shared RTX 3070 utilization', 'max(DCGM_FI_DEV_GPU_UTIL'+GPU+')', 0, 89, 8, 7, unit='percent', legend='GPU busy', description='Whole GPU shared by Immich, Frigate and Ollama. This is not attribution to OCR.')
     p = add('Shared RTX 3070 memory', 'max(DCGM_FI_DEV_FB_USED'+GPU+') * 1024 * 1024', 8, 89, 8, 7, unit='bytes', legend='Used')
     p['targets'].append({'refId':'B','expr':'max(DCGM_FI_DEV_FB_FREE'+GPU+') * 1024 * 1024','legendFormat':'Free'})
-    add('GPU service replicas ready', 'kube_deployment_status_replicas_available{namespace=~"immich-pilot|frigate|ollama",deployment=~"immich-machine-learning|frigate|ollama-gpu"}', 16, 89, 8, 7, legend='{{deployment}}', description='Availability only. CUDA provider logs and real OCR/camera/generation checks verify processing.')
+    add('GPU service replicas ready', 'kube_deployment_status_replicas_available{namespace=~"immich-pilot|frigate|ollama",deployment=~"immich-server|immich-machine-learning|frigate|ollama-gpu"}', 16, 89, 8, 7, legend='{{deployment}}', description='Availability only. Verify processing through application logs and job metrics.')
     add('OCR failed attempts / minute', OCR_FAILURE_RATE+' * 60', 0, 96, 12, 6, legend='Failed attempts/min', description='Actual worker errors. Immich may discard failed jobs, so a zero retained failed queue does not mean zero errors. Requeue missing OCR after recovery.')
     add('Immich ML restarts', 'sum by(pod)(kube_pod_container_status_restarts_total{namespace="immich-pilot",container="main",pod=~"immich-machine-learning-.*"})', 12, 96, 12, 6, legend='{{pod}}', description='Correlate restarts with failed attempts, memory and throughput.')
+    add('Video transcodes waiting', VIDEO_BACKLOG, 0, 103, 6, 4, 'stat')
+    add('Video jobs completed / minute', VIDEO_RATE, 6, 103, 6, 4, 'stat', description='Successful video conversion jobs, including remuxes and software fallback. Check server logs to confirm NVENC.')
+    add('Video jobs failed / minute', VIDEO_ERRORS, 12, 103, 6, 4, 'stat', description='Failed worker attempts. A successful software fallback is counted as success.')
+    add('Shared RTX 3070 encoder utilization', 'max(DCGM_FI_DEV_ENC_UTIL'+GPU+')', 18, 103, 6, 4, 'stat', 'percent', description='Whole-device NVENC utilization, sampled by DCGM.')
+    add('Video conversion queue over time', f'sum by(state)({VIDEO_QUEUE})', 0, 107, 8, 7, legend='{{state}}')
+    p = add('Video conversion outcomes over time', VIDEO_RATE, 8, 107, 8, 7, legend='Completed / minute')
+    p['targets'].append({'refId':'B','expr':VIDEO_ERRORS,'legendFormat':'Failed / minute'})
+    add('Shared RTX 3070 video engine activity', 'max(DCGM_FI_DEV_ENC_UTIL'+GPU+')', 16, 107, 8, 7, unit='percent', legend='Encoder', description='Whole-device NVENC activity. Short encodes can complete between scrapes.')
     return OVERVIEW_HEIGHT
 
 
@@ -90,7 +104,9 @@ def add_graph(graph, node):
     graph['targets'][0]['expr'] += ' or '+node('('+RATE+') * 60', 'immich_gallery', 'Immich thumbnail completions (jobs/min)')
     graph['targets'][0]['expr'] += ' or '+node(OCR_RATE+' * 60', 'immich_ocr_completed', 'Immich OCR completions (jobs/min)')
     graph['targets'][0]['expr'] += ' or '+node(OCR_FAILURE_RATE+' * 60', 'immich_ocr_errors', 'Immich OCR failed attempts (/min)')
-    for source, target in [('ocr','ocr_errors'),('ocr','ocr_completed'),('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion')]:
+    graph['targets'][0]['expr'] += ' or '+node(VIDEO_RATE, 'immich_video_completed', 'Immich video conversion completions (jobs/min)')
+    graph['targets'][0]['expr'] += ' or '+node(VIDEO_ERRORS, 'immich_video_errors', 'Immich video conversion failures (/min)')
+    for source, target in [('ocr','ocr_errors'),('ocr','ocr_completed'),('library','metadata'),('sidecar','metadata'),('metadata','thumbnail_generation'),('thumbnail_generation','gallery'),('thumbnail_generation','face_detection'),('face_detection','facial_recognition'),('thumbnail_generation','smart_search'),('smart_search','duplicate_detection'),('thumbnail_generation','ocr'),('metadata','video_conversion'),('video_conversion','video_completed'),('video_conversion','video_errors')]:
         expr='vector(1)'
         for label, value in [('id', 'immich_'+source+'_'+target),('source','immich_'+source),('target','immich_'+target)]:
             expr = f'label_replace({expr}, "{label}", "{value}", "", "")'

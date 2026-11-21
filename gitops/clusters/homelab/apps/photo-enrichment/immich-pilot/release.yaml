@@ -33,12 +33,22 @@ spec:
             image:
               tag: v3.4.2
     immich:
+      # Preserve the existing UI-managed upload layout when switching to a config file.
+      configuration:
+        storageTemplate:
+          enabled: true
+          template: '{{y}}/{{MM}}/{{dd}}/{{filename}}'
+        ffmpeg:
+          accel: nvenc
+          accelDecode: false
       metrics:
         enabled: true
       persistence:
         library:
           existingClaim: immich-library-piglet
     server:
+      defaultPodOptions:
+        runtimeClassName: nvidia
       persistence:
         originals:
           enabled: true
@@ -65,6 +75,7 @@ spec:
                 # This IPv4 cluster needs a routable metrics listener, not an IPv6 URL.
                 IMMICH_HOST: 0.0.0.0
                 IMMICH_LOG_FORMAT: json
+                NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
                 DB_HOSTNAME: immich-postgres
                 DB_USERNAME: immich
                 DB_DATABASE_NAME: immich
@@ -76,8 +87,8 @@ spec:
               resources:
                 # The initial 89k-asset scan saturates 2 CPUs and approaches 4Gi.
                 # Give image workers headroom; the scheduler still shares the node.
-                requests: {cpu: '1', memory: 2Gi}
-                limits: {cpu: '4', memory: 6Gi}
+                requests: {cpu: '1', memory: 2Gi, nvidia.com/gpu: '1'}
+                limits: {cpu: '4', memory: 6Gi, nvidia.com/gpu: '1'}
     machine-learning:
       defaultPodOptions:
         runtimeClassName: nvidia

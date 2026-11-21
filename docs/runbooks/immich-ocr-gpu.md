@@ -108,3 +108,17 @@ restart count was zero, GPU memory usage about 3 GiB, and all three service
 deployments were available. Frigate retained its two active source streams and
 Ollama returned `OK` from a real chat request. All 46 dashboard queries passed
 live validation; the OCR/GPU panels were also checked in Chrome.
+
+## Video transcoding
+
+The Immich HelmRelease assigns the fourth existing GPU share to `immich-server`.
+The chart mounts the application configuration with NVENC encoding and software
+decoding. The upload storage template is copied from the prior database setting.
+With a configuration file mounted, change system settings through Git; the admin
+UI displays them read-only. The default video conversion policy still applies.
+
+The Photo App dashboard shows video conversion backlog, job outcomes, and shared
+RTX video encoder activity. Job success includes remuxes and software fallback.
+To confirm hardware encoding on an Immich job, find its NVENC start and success
+messages in server logs and check that no retry or fallback occurred for that job.
+Rollback by reverting the server GPU assignment and chart configuration together.
