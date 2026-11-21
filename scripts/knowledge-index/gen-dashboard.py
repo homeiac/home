@@ -103,14 +103,14 @@ def work_remaining_panels():
           stat("Photo context finish estimate", f'({context} / ({context_pace} > 0)) or ({context} == 0) or ({context} > 0) * 0 - 1', 5, 5, w=5, unit="s", mappings=no_eta, description="Backlog divided by the last hour’s increase in completed jobs. New arrivals and retries can extend the estimate."),
           stat("Photo extraction jobs left", 'sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|running|retry"})', 10, 5, w=5, unit="locale", description="Includes delayed retries. See the PostgreSQL queue section for age and retry counts."),
           stat("Immich jobs outstanding", 'sum(immich_queue_jobs{state=~"waiting|active|delayed|prioritized|paused"})', 15, 5, w=5, unit="locale", description="All native Immich queues. Open Photo App for per-queue throughput and estimates."),
-          stat("Immich enrichment sync", 'sum by(state)(immich_sync_assets{state=~"pending|conflict"})', 20, 5, w=4, unit="locale", legend="{{state}}", extra_opts={"textMode": "value_and_name"}, description="Pending assets are ready for transfer. Conflicts require review and do not contribute to automatic queue drain.")]
+          stat("Immich sync", 'sum by(state)(immich_sync_assets{state=~"pending|conflict"})', 20, 5, w=4, unit="locale", legend="{{state}}", extra_opts={"textMode": "value_and_name"}, description="Pending assets are ready for transfer. Conflicts require review and do not contribute to automatic queue drain.")]
 
     host = '{job="proxmox-node-exporter",instance="pumped-piglet"}'
     vm = 'and on(instance,job) node_uname_info{job="node-exporter",nodename="k3s-vm-pumped-piglet-gpu"}'
     gpu = '{Hostname="k3s-vm-pumped-piglet-gpu"}'
-    def latest(title, queries, x, width, thresholds, unit='short', description=''):
+    def latest(title, queries, x, width, thresholds, unit='short', description='', decimals=1):
         panel = stat(title, queries[0][0], x, 10, w=width, h=6, unit=unit,
-                     legend=queries[0][1], decimals=1, thresholds=thresholds,
+                     legend=queries[0][1], decimals=decimals, thresholds=thresholds,
                      extra_opts={"textMode": "value_and_name"}, description=description)
         panel["targets"].extend({"refId": chr(65 + i), "expr": expr, "legendFormat": label}
                                 for i, (expr, label) in enumerate(queries[1:], 1))
@@ -130,10 +130,10 @@ def work_remaining_panels():
                     [('green', None), ('orange', 10), ('red', 25)], 'percent',
                     'CPU, RAM and I/O pressure show the worse of the host and GPU VM over five minutes. Ollama request queue depth is not exported.'))
     p.append(latest("Errors · last hour", [
-        (f'sum(increase(media_pipeline_items_total{{status="error",{selection}}}[1h]))', 'Summary attempts'),
+        (f'sum(increase(media_pipeline_items_total{{status="error",{selection}}}[1h]))', 'Failed summary attempts'),
         (f'max(DCGM_FI_DEV_XID_ERRORS{gpu})', 'Last GPU Xid code'),
         (' + '.join(f'sum(increase(node_network_{metric}_total{host}[1h]))' for metric in ('receive_errs', 'transmit_errs', 'receive_drop', 'transmit_drop')), 'Host network errors/drops'),
-    ], 16, 8, RED_IF_POS, description='GPU Xid is the last driver error code, not an hourly count. Summary attempts include failed items before Parquet persistence.'))
+    ], 16, 8, RED_IF_POS, description='GPU Xid is the last driver error code, not an hourly count. Summary attempts include failed items before Parquet persistence.', decimals=0))
     for panel in p:
         if panel['type'] == 'stat':
             panel['fieldConfig']['defaults']['noValue'] = 'No data'

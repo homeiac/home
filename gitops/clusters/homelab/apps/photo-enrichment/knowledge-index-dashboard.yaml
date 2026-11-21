@@ -512,7 +512,7 @@ data:
         {
           "id": 145,
           "type": "stat",
-          "title": "Immich enrichment sync",
+          "title": "Immich sync",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -754,7 +754,7 @@ data:
           "targets": [
             {
               "expr": "sum(increase(media_pipeline_items_total{status=\"error\",instance=~\"$instance\",enricher=~\"$pipeline_enricher\"}[1h]))",
-              "legendFormat": "Summary attempts",
+              "legendFormat": "Failed summary attempts",
               "refId": "A",
               "instant": true,
               "range": false
@@ -793,7 +793,7 @@ data:
               "color": {
                 "mode": "thresholds"
               },
-              "decimals": 1,
+              "decimals": 0,
               "noValue": "No data"
             },
             "overrides": []
