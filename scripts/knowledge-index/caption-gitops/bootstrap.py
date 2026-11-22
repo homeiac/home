@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import tempfile
 import yaml
 
@@ -27,6 +28,13 @@ def ssh(host: str, cmd: str, data: bytes | None = None) -> bytes:
 def main() -> None:
     """Create no plaintext credential in the checkout or command output."""
     host = os.environ['CB_HOST']
+    if sys.argv[1:] == ['--installer-only']:
+        ssh(host, 'test -f ' + REMOTE)
+        install_entrypoint(host)
+        print('Restricted installer updated; deployment key and worker unchanged.')
+        return
+    if sys.argv[1:]:
+        raise SystemExit('Usage: bootstrap.py [--installer-only]')
     with tempfile.TemporaryDirectory(prefix='caption-bootstrap-') as td:
         directory = Path(td)
         key = directory / 'id_ed25519'
@@ -55,8 +63,7 @@ python3 -c __EDIT__
                 'line=' + repr(restricted) + '; '
                 'p.write_text(old + ("" if old.endswith("\\n") or not old else "\\n") + line) if line.strip() not in old.splitlines() else None; p.chmod(0o600)')
         ssh(host, setup.replace('__EDIT__', shlex.quote(edit)))
-        installer = (HERE / 'install.py').read_bytes()
-        ssh(host, 'if test -f ' + REMOTE + '; then cp -p ' + REMOTE + ' ' + REMOTE + '.previous; fi; install -m 0644 /dev/stdin ' + REMOTE, installer)
+        install_entrypoint(host)
         if not SECRET.exists():
             obj = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'caption-worker-deploy', 'namespace': 'monitoring'},
                    'type': 'Opaque', 'data': {'id_ed25519': base64.b64encode(key.read_bytes()).decode(),
@@ -67,6 +74,13 @@ python3 -c __EDIT__
             encrypted = subprocess.check_output(['sops', '--encrypt', '--filename-override', str(SECRET), str(plain)], cwd=REPO)
             SECRET.write_bytes(encrypted)
         print('Restricted installer bootstrapped; deployment key is SOPS-encrypted. Worker awaits Flux Job.')
+
+
+def install_entrypoint(host: str) -> None:
+    """Back up and atomically update only the already-reviewed fixed entry point."""
+    ssh(host, 'if test -f ' + REMOTE + '; then cp -p ' + REMOTE + ' ' + REMOTE + '.previous; fi; '
+        'install -m 0644 /dev/stdin ' + REMOTE + '.new && mv ' + REMOTE + '.new ' + REMOTE,
+        (HERE / 'install.py').read_bytes())
 
 
 if __name__ == '__main__':

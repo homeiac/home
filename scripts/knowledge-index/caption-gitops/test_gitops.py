@@ -33,6 +33,13 @@ def bundle() -> dict:
 
 
 class GitOpsTests(unittest.TestCase):
+    def test_idle_clean_exit_is_healthy_but_crash_is_not(self):
+        for status, expected in [('0', True), ('1', False), ('75', False)]:
+            with patch.object(install, 'command', side_effect=[
+                    SimpleNamespace(returncode=3),
+                    SimpleNamespace(stdout='ActiveState=activating\nSubState=auto-restart\nExecMainStatus=' + status)]):
+                self.assertEqual(install.healthy_service(), expected)
+
     def test_audit_detects_repeated_success_but_allows_retry_of_error(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

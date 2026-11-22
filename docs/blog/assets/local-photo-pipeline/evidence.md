@@ -54,3 +54,28 @@ The article claims a path toward reducing Google's storage warning, not a measur
 Read-only inspection at approximately 08:36 Pacific found `knowledge-index-enrich.service` with `LoadState=not-found` and `ActiveState=inactive`. The previous boot journal ended at 2026-11-22 04:13:42 UTC; the new boot began at 04:15:59 UTC. The pipeline metrics file last changed at 04:13:49 UTC and still contained the previous running flag, but its heartbeat was stale. The node-exporter scrape-error flag was zero. Luna published a current heartbeat separately.
 
 The launcher uses `systemd-run --collect`; preview overrides are stored under `/run/systemd/system`. Those are temporary runtime units/settings. This explains why the worker did not return after reboot and why both local-backend panels lacked fresh reports. It does not establish why the host rebooted. No worker or host changes were made during this diagnosis. Reproduce the read-only checks with `scripts/knowledge-index/check-caption-health.sh`.
+
+## November 22 GitOps recovery
+
+Flux applied worker bundle `2244713d49e0` from PR #218 commit `bbdfc5f`. The installer
+Job completed at 16:49:24 UTC after backing up existing files and retiring the
+temporary overrides. The unit's permanent fragment is
+`/etc/systemd/system/knowledge-index-enrich.service`; it is enabled for boot.
+
+At 16:50:03 UTC the scheduled reconciliation reported no changed files and no
+restart; the worker PID stayed 357095. A controlled service-only restart at
+16:50:34 UTC produced PID 359801 and a fresh heartbeat. Exactly one worker process
+was present. No host reboot was performed.
+
+The audit baseline captured 1,996 completed Parquet files before deployment.
+By 16:51:13 UTC, two new batches contained 30 successful, distinct item identities
+and two retryable error rows. Fifteen successes were saved before the restart and
+15 afterward. New successful rows had zero duplicates within the new output and
+zero matches against previously successful `(source, path, size_bytes, enricher)`
+keys. This is a bounded recovery check, not a claim that historical data contains
+no duplicates or that all captioning has finished.
+
+Reproduce with `scripts/knowledge-index/caption-gitops/audit-host.sh verify` and
+`check-host.sh`; `check-flux.sh` reads installer and scheduled-reconciliation logs.
+Local validation passed nine reconciliation/locking/audit tests, 16 metrics tests,
+five cache tests and all 27 enricher integration assertions.

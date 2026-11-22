@@ -179,4 +179,6 @@ The durable result is preserved data, useful enrichment, and a feedback loop tha
 
 Piglet rebooted at **8:15:59 p.m. Pacific on November 21**. The local caption worker had been started as a temporary systemd service. It disappeared on reboot and did not start again. Its last heartbeat was at 8:13:49 p.m. Both the RTX and Mac panels use this worker's reports, so both showed “No recent report.” That does not establish a GPU failure. Luna had a separate, current heartbeat.
 
-The November 22 inspection found the local service absent and inactive. Recovery needs a permanent service that starts at boot, using the saved worker settings and existing completed outputs. This read-only diagnosis did not restart it. The cause of the host reboot has not been established.
+The fix is a permanent service that starts at boot. Git holds its code and settings; Flux sends them to the host through a Job and ConfigMap. A scheduled Job checks every five minutes and repairs drift without restarting an unchanged worker. The existing completed-work identity is preserved, and a process lock prevents a second writer.
+
+The worker resumed at **8:49 a.m. Pacific on November 22**. It saved 15 new captions, then saved another 15 after a controlled service restart. All 30 were unique, with no repeats of earlier successful summaries. Two error rows remained retryable. The scheduled Job also completed without restarting the worker. The service is enabled for boot; the host itself was not rebooted for this test. The cause of the original host reboot has not been established.

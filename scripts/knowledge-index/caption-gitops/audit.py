@@ -48,6 +48,8 @@ def main() -> None:
     result = {'since': baseline['at'], 'new_files': len(new), 'new_successful_rows': total,
               'new_unique_items': unique, 'duplicates_within_new_rows': total - unique,
               'duplicates_of_previously_completed_items': prior,
+              'last_batch_saved_at': datetime.datetime.fromtimestamp(
+                  max(Path(p).stat().st_mtime for p in new), datetime.timezone.utc).isoformat(),
               'new_errors': con.execute("SELECT count(*) FROM new_rows WHERE status <> 'ok'").fetchone()[0]}
     print(json.dumps(result, sort_keys=True))
     if prior or total != unique:

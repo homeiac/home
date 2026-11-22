@@ -79,6 +79,16 @@ def preflight(config: dict) -> None:
         raise RuntimeError('Existing data mounts are required')
 
 
+def healthy_service() -> bool:
+    """A clean empty-queue exit may be waiting for the next scheduled restart."""
+    if command('systemctl', 'is-active', '--quiet', UNIT, check=False).returncode == 0:
+        return True
+    output = command('systemctl', 'show', UNIT, '-p', 'ActiveState', '-p', 'SubState',
+                     '-p', 'ExecMainStatus').stdout
+    state = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
+    return state == {'ActiveState': 'activating', 'SubState': 'auto-restart', 'ExecMainStatus': '0'}
+
+
 def reconcile(bundle: dict) -> dict:
     """Apply desired files; only restart when execution settings or code changed."""
     config = validate(bundle)
@@ -120,7 +130,7 @@ def reconcile(bundle: dict) -> dict:
             command('systemctl', 'start', UNIT)
             for _ in range(45):
                 if METRICS.exists() and METRICS.stat().st_mtime >= started - (60 if was_active and not restart else 0):
-                    if command('systemctl', 'is-active', '--quiet', UNIT, check=False).returncode == 0:
+                    if healthy_service():
                         break
                 time.sleep(1)
             else:

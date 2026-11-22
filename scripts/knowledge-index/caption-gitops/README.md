@@ -53,7 +53,9 @@ disabled. The encrypted Kubernetes credential is reused on reruns. Only SOPS
 ciphertext is stored in Git. The key authorizes deployment of Python running as
 root, so repository writes and the decrypted credential are privileged access.
 The bootstrap does not start the worker; Flux's Job does that. Updates to the
-bootstrap installer itself require rerunning this step. No host Docker is needed.
+bootstrap installer itself use `bootstrap.py --installer-only`, which leaves the
+deployment key unchanged. A full bootstrap rerun needs the SOPS decryption identity
+to reuse the encrypted key. No host Docker is needed.
 
 ## Check recovery and duplicates
 
@@ -65,6 +67,9 @@ CB_HOST=root@<inventory-host> bash scripts/knowledge-index/caption-gitops/audit-
 # After the rollout, and again after a worker restart:
 CB_HOST=root@<inventory-host> bash scripts/knowledge-index/caption-gitops/audit-host.sh verify
 CB_HOST=root@<inventory-host> bash scripts/knowledge-index/check-caption-health.sh
+KUBECONFIG=~/kubeconfig bash scripts/knowledge-index/caption-gitops/check-flux.sh
+# Optional controlled restart, then rerun the audit after new batches appear:
+CB_HOST=root@<inventory-host> bash scripts/knowledge-index/caption-gitops/check-host.sh --restart
 ```
 
 The audit snapshots completed Parquet filenames before recovery. It counts all

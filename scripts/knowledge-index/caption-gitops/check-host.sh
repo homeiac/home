@@ -38,4 +38,6 @@ for proc in Path('/proc').glob('[0-9]*'):
     except (FileNotFoundError, PermissionError, ProcessLookupError):
         pass
 print('Caption worker process IDs:', json.dumps(workers))
+keys = Path('/root/.ssh/authorized_keys').read_text().splitlines()
+print('Restricted deployment key entries:', sum('caption-worker-gitops' in line for line in keys))
 PY
