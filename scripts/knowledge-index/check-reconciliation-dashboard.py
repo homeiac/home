@@ -54,7 +54,7 @@ def main() -> None:
     source = kubectl('-n', 'flux-system', 'get', 'gitrepository', 'photo-enrichment-preview', '-o', 'json')
     print('Flux source:', source['status']['artifact']['revision'])
     for panel in expected['panels']:
-        if panel['gridPos']['y'] >= 24:
+        if panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT:
             continue
         for target in panel.get('targets', []):
             expr = target['expr'].replace('$instance', '.*').replace('$__rate_interval', '5m')

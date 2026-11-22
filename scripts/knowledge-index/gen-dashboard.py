@@ -72,6 +72,7 @@ def shift(items, dy):
 
 SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
+RECONCILIATION_HEIGHT = 28
 # Observed production transitions in UTC.
 ONE_SLOT_REFERENCE = 1795280280  # Last clean 10-minute window ending Nov 21 16:58 UTC.
 TWO_SLOT_START = 1795280415      # Runner accepted work Nov 21 17:00:14 UTC.
@@ -423,7 +424,7 @@ def panels():
     all_panels = intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy] + priority_stages, 10) + shift(details, THROUGHPUT_HEIGHT + 39) + shift(p, 56 + THROUGHPUT_HEIGHT)
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
     all_panels += shift(immich_face_panels(), bottom)
-    return reconciliation_panels() + shift(all_panels, 24)
+    return reconciliation_panels() + shift(all_panels, RECONCILIATION_HEIGHT)
 
 
 def reconciliation_panels():
@@ -432,6 +433,15 @@ def reconciliation_panels():
         return f'sum(max by(state) (knowledge_index_reconciliation_jobs{{instance=~"$instance",state=~"{state}"}}))'
     def risk(level):
         return f'max(knowledge_index_reconciliation_risk{{instance=~"$instance",risk="{level}"}})'
+    pace='sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total'+INST+'[5m])))'
+    remaining=jobs('pending|reserved|sent')
+    fresh='(time() - max(knowledge_index_reconciliation_updated_timestamp_seconds'+INST+') < 180)'
+    unblocked='(max(knowledge_index_reconciliation_blocked'+INST+') == 0)'
+    no_unknown=f'({jobs("unknown")} == 0)'
+    eta=(f'((({remaining}) / ({pace} > 0)) and on() ({remaining} > 0) and on() {unblocked} '
+         f'or ({remaining} == 0)) and on() {no_unknown} and on() {fresh}')
+    finish=f'((time() + ({eta} > 0)) * 1000) or (({eta}) == 0)'
+    percent=f'100 * ({jobs("ok|skipped")}) / ({jobs("pending|reserved|sent|ok|skipped|unknown")} > 0)'
     p=[row('Summary reconciliation · Luna',0),
        stat('Reconciled summaries',jobs('ok'),0,1,unit='locale',description='One successful current revision per file. Earlier revisions remain in history; reassessment can move a file back to pending.'),
        stat('Still to reconcile',jobs('pending|reserved|sent'),4,1,unit='locale'),
@@ -457,12 +467,27 @@ def reconciliation_panels():
             description='Temporary reservations for in-flight requests plus retained holds for skipped requests without usage. Released when known usage is recorded; not actual spending.'),
        series('Review decisions over time',[(risk('critical'),'Critical — needs you'),(risk('low'),'Minor — handled automatically')],0,16,24,7,
               description='Only current completed results. Aliases confirmed by you are treated as the same person. Earlier broad review flags are reassessed under the critical-only policy.')]
+    shift(p[1:],4)
+    estimates=[
+        stat('Queue complete',percent,0,1,w=6,unit='percent',decimals=1,
+             description='Current files successfully reconciled or deliberately skipped, divided by all current files. Skipped files count as processed, not successful summaries; their count remains visible below.'),
+        stat('Current speed · combined',f'({pace}) * 60 and on() {fresh}',6,1,w=6,decimals=1,unit='suffix: summaries/min',
+             description='Combined successful completions per minute across still-fawn and Mac, averaged over the last five minutes.'),
+        stat('Estimated time remaining',eta,12,1,w=6,unit='s',decimals=0,
+             description='Pending and in-flight files divided by combined five-minute completion rate. Assumes similar work and continued uptime. Hidden when blocked, reporting is over three minutes old, or no positive speed is measured.'),
+        stat('Estimated finish time',finish,18,1,w=6,unit='dateTimeAsLocal',
+             description='Current time plus the estimated duration, shown in browser local time. This is an estimate, not a deadline.')]
+    for panel in estimates[-2:]:
+        panel['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Complete','color':'green'}}}]
+    p[1:1]=estimates
     for panel in p:
         if panel['type']=='stat':
             panel['targets'][0].update(instant=True,range=False)
             panel['fieldConfig']['defaults']['noValue']='No recent data'
         elif panel['type']=='timeseries':
             panel['fieldConfig']['defaults']['custom']={'drawStyle':'line','lineInterpolation':'linear','lineWidth':2,'fillOpacity':0,'showPoints':'never','spanNulls':False}
+    for panel in estimates[-2:]:
+        panel['fieldConfig']['defaults']['noValue']='Paused / no estimate'
     return p
 
 

@@ -38,6 +38,243 @@ data:
           "panels": []
         },
         {
+          "id": 188,
+          "type": "stat",
+          "title": "Queue complete",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "100 * (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"ok|skipped\"}))) / (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent|ok|skipped|unknown\"})) > 0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Current files successfully reconciled or deliberately skipped, divided by all current files. Skipped files count as processed, not successful summaries; their count remains visible below."
+        },
+        {
+          "id": 189,
+          "type": "stat",
+          "title": "Current speed \u00b7 combined",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "(sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m])))) * 60 and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: summaries/min",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Combined successful completions per minute across still-fawn and Mac, averaged over the last five minutes."
+        },
+        {
+          "id": 190,
+          "type": "stat",
+          "title": "Estimated time remaining",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "(((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 0,
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Complete",
+                      "color": "green"
+                    }
+                  }
+                }
+              ],
+              "noValue": "Paused / no estimate"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Pending and in-flight files divided by combined five-minute completion rate. Assumes similar work and continued uptime. Hidden when blocked, reporting is over three minutes old, or no positive speed is measured."
+        },
+        {
+          "id": 191,
+          "type": "stat",
+          "title": "Estimated finish time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "((time() + ((((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180) > 0)) * 1000) or (((((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180)) == 0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dateTimeAsLocal",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Complete",
+                      "color": "green"
+                    }
+                  }
+                }
+              ],
+              "noValue": "Paused / no estimate"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Current time plus the estimated duration, shown in browser local time. This is an estimate, not a deadline."
+        },
+        {
           "id": 176,
           "type": "stat",
           "title": "Reconciled summaries",
@@ -49,7 +286,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 1
+            "y": 5
           },
           "targets": [
             {
@@ -102,7 +339,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 1
+            "y": 5
           },
           "targets": [
             {
@@ -154,7 +391,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 1
+            "y": 5
           },
           "targets": [
             {
@@ -211,7 +448,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 1
+            "y": 5
           },
           "targets": [
             {
@@ -264,7 +501,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 1
+            "y": 5
           },
           "targets": [
             {
@@ -317,7 +554,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 1
+            "y": 5
           },
           "targets": [
             {
@@ -378,7 +615,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 5
+            "y": 9
           },
           "targets": [
             {
@@ -446,7 +683,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 5
+            "y": 9
           },
           "targets": [
             {
@@ -505,7 +742,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 12
+            "y": 16
           },
           "targets": [
             {
@@ -573,7 +810,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 12
+            "y": 16
           },
           "targets": [
             {
@@ -627,7 +864,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 12
+            "y": 16
           },
           "targets": [
             {
@@ -681,7 +918,7 @@ data:
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 16
+            "y": 20
           },
           "targets": [
             {
@@ -741,7 +978,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 24
+            "y": 28
           },
           "panels": []
         },
@@ -757,7 +994,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 25
+            "y": 29
           },
           "targets": [
             {
@@ -810,7 +1047,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 25
+            "y": 29
           },
           "targets": [
             {
@@ -890,7 +1127,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 12,
-            "y": 25
+            "y": 29
           },
           "targets": [
             {
@@ -944,7 +1181,7 @@ data:
             "h": 4,
             "w": 7,
             "x": 17,
-            "y": 25
+            "y": 29
           },
           "targets": [
             {
@@ -996,7 +1233,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 29
+            "y": 33
           },
           "panels": []
         },
@@ -1012,7 +1249,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 0,
-            "y": 30
+            "y": 34
           },
           "targets": [
             {
@@ -1062,7 +1299,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 6,
-            "y": 30
+            "y": 34
           },
           "targets": [
             {
@@ -1119,7 +1356,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 12,
-            "y": 30
+            "y": 34
           },
           "targets": [
             {
@@ -1229,7 +1466,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 18,
-            "y": 30
+            "y": 34
           },
           "targets": [
             {
@@ -1286,7 +1523,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1340,7 +1577,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1393,7 +1630,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1446,7 +1683,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 35
+            "y": 39
           },
           "targets": [
             {
@@ -1499,7 +1736,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 39
+            "y": 43
           },
           "targets": [
             {
@@ -1581,7 +1818,7 @@ data:
             "h": 7,
             "w": 14,
             "x": 10,
-            "y": 39
+            "y": 43
           },
           "targets": [
             {
@@ -1704,7 +1941,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 46
+            "y": 50
           },
           "targets": [
             {
@@ -1755,7 +1992,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 46
+            "y": 50
           },
           "targets": [
             {
@@ -1808,7 +2045,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 46
+            "y": 50
           },
           "targets": [
             {
@@ -1861,7 +2098,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 50
+            "y": 54
           },
           "targets": [
             {
@@ -1937,7 +2174,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 56
+            "y": 60
           },
           "targets": [
             {
@@ -1988,7 +2225,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 60
           },
           "targets": [
             {
@@ -2039,7 +2276,7 @@ data:
             "h": 6,
             "w": 14,
             "x": 0,
-            "y": 62
+            "y": 66
           },
           "targets": [
             {
@@ -2100,7 +2337,7 @@ data:
             "h": 6,
             "w": 10,
             "x": 14,
-            "y": 62
+            "y": 66
           },
           "targets": [
             {
@@ -2153,7 +2390,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 68
+            "y": 72
           },
           "targets": [
             {
@@ -2207,7 +2444,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 68
+            "y": 72
           },
           "targets": [
             {
@@ -2261,7 +2498,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 68
+            "y": 72
           },
           "targets": [
             {
@@ -2315,7 +2552,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 76
+            "y": 80
           },
           "targets": [
             {
@@ -2367,7 +2604,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 76
+            "y": 80
           },
           "targets": [
             {
@@ -2447,7 +2684,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 76
+            "y": 80
           },
           "targets": [
             {
@@ -2500,7 +2737,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 76
+            "y": 80
           },
           "targets": [
             {
@@ -2553,7 +2790,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 76
+            "y": 80
           },
           "targets": [
             {
@@ -2604,7 +2841,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 80
+            "y": 84
           },
           "panels": []
         },
@@ -2620,7 +2857,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 81
+            "y": 85
           },
           "targets": [
             {
@@ -2704,7 +2941,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 81
+            "y": 85
           },
           "targets": [
             {
@@ -2781,7 +3018,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 81
+            "y": 85
           },
           "targets": [
             {
@@ -2851,7 +3088,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 88
+            "y": 92
           },
           "panels": []
         },
@@ -2867,7 +3104,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 89
+            "y": 93
           },
           "targets": [
             {
@@ -2918,7 +3155,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 89
+            "y": 93
           },
           "targets": [
             {
@@ -2969,7 +3206,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 89
+            "y": 93
           },
           "targets": [
             {
@@ -3020,7 +3257,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 89
+            "y": 93
           },
           "targets": [
             {
@@ -3071,7 +3308,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 89
+            "y": 93
           },
           "targets": [
             {
@@ -3122,7 +3359,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 89
+            "y": 93
           },
           "targets": [
             {
@@ -3173,7 +3410,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 93
+            "y": 97
           },
           "targets": [
             {
@@ -3223,7 +3460,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 93
+            "y": 97
           },
           "targets": [
             {
@@ -3272,7 +3509,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 93
+            "y": 97
           },
           "targets": [
             {
@@ -3322,7 +3559,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 93
+            "y": 97
           },
           "targets": [
             {
@@ -3373,7 +3610,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 93
+            "y": 97
           },
           "targets": [
             {
@@ -3423,7 +3660,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 97
+            "y": 101
           },
           "targets": [
             {
@@ -3478,7 +3715,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 97
+            "y": 101
           },
           "targets": [
             {
@@ -3529,7 +3766,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 104
+            "y": 108
           },
           "panels": []
         },
@@ -3545,7 +3782,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 105
+            "y": 109
           },
           "targets": [
             {
@@ -3648,7 +3885,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 105
+            "y": 109
           },
           "targets": [
             {
@@ -3700,7 +3937,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 105
+            "y": 109
           },
           "targets": [
             {
@@ -3761,7 +3998,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 105
+            "y": 109
           },
           "targets": [
             {
@@ -3814,7 +4051,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 109
+            "y": 113
           },
           "targets": [
             {
@@ -3919,7 +4156,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 119
+            "y": 123
           },
           "targets": [
             {
@@ -3973,7 +4210,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 119
+            "y": 123
           },
           "targets": [
             {
@@ -4084,7 +4321,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 125
+            "y": 129
           },
           "targets": [
             {
@@ -4146,7 +4383,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 125
+            "y": 129
           },
           "targets": [
             {
@@ -4199,7 +4436,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 132
+            "y": 136
           },
           "targets": [
             {
@@ -4261,7 +4498,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 132
+            "y": 136
           },
           "targets": [
             {
@@ -4311,7 +4548,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 139
+            "y": 143
           },
           "panels": []
         },
@@ -4327,7 +4564,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 140
+            "y": 144
           },
           "targets": [
             {
@@ -4420,7 +4657,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 140
+            "y": 144
           },
           "targets": [
             {
@@ -4481,7 +4718,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 140
+            "y": 144
           },
           "targets": [
             {
@@ -4534,7 +4771,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 140
+            "y": 144
           },
           "targets": [
             {
@@ -4587,7 +4824,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 144
+            "y": 148
           },
           "targets": [
             {
@@ -4649,7 +4886,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 144
+            "y": 148
           },
           "targets": [
             {
@@ -4735,7 +4972,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 151
+            "y": 155
           },
           "targets": [
             {
@@ -4790,7 +5027,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 151
+            "y": 155
           },
           "targets": [
             {
@@ -4843,7 +5080,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 158
+            "y": 162
           },
           "targets": [
             {
@@ -4897,7 +5134,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 158
+            "y": 162
           },
           "targets": [
             {
@@ -4950,7 +5187,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 158
+            "y": 162
           },
           "targets": [
             {
@@ -5001,7 +5238,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 184
+            "y": 188
           },
           "panels": []
         },
@@ -5017,7 +5254,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 185
+            "y": 189
           },
           "targets": [
             {
@@ -5086,7 +5323,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 185
+            "y": 189
           },
           "targets": [
             {
@@ -5139,7 +5376,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 185
+            "y": 189
           },
           "targets": [
             {
@@ -5192,7 +5429,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 185
+            "y": 189
           },
           "targets": [
             {
@@ -5246,7 +5483,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 189
+            "y": 193
           },
           "targets": [
             {
@@ -5300,7 +5537,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 189
+            "y": 193
           },
           "targets": [
             {
@@ -5350,7 +5587,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 165
+            "y": 169
           },
           "panels": []
         },
@@ -5366,7 +5603,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 166
+            "y": 170
           },
           "targets": [
             {
@@ -5415,7 +5652,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 166
+            "y": 170
           },
           "targets": [
             {
@@ -5469,7 +5706,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 173
+            "y": 177
           },
           "targets": [
             {
@@ -5533,7 +5770,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 173
+            "y": 177
           },
           "targets": [
             {
@@ -5582,7 +5819,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 173
+            "y": 177
           },
           "targets": [
             {
@@ -5631,7 +5868,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 173
+            "y": 177
           },
           "targets": [
             {
@@ -5688,7 +5925,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 177
+            "y": 181
           },
           "targets": [
             {
@@ -5737,7 +5974,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 177
+            "y": 181
           },
           "targets": [
             {
@@ -5783,7 +6020,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 196
+            "y": 200
           },
           "panels": []
         },
@@ -5799,7 +6036,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 197
+            "y": 201
           },
           "targets": [
             {
@@ -5849,7 +6086,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 197
+            "y": 201
           },
           "targets": [
             {
@@ -5903,7 +6140,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 197
+            "y": 201
           },
           "targets": [
             {
@@ -5952,7 +6189,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 197
+            "y": 201
           },
           "targets": [
             {
@@ -6001,7 +6238,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 197
+            "y": 201
           },
           "targets": [
             {
@@ -6051,7 +6288,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 197
+            "y": 201
           },
           "targets": [
             {
@@ -6100,7 +6337,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 201
+            "y": 205
           },
           "targets": [
             {
@@ -6164,7 +6401,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 201
+            "y": 205
           },
           "targets": [
             {
@@ -6213,7 +6450,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 201
+            "y": 205
           },
           "targets": [
             {
@@ -6263,7 +6500,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 201
+            "y": 205
           },
           "targets": [
             {
@@ -6312,7 +6549,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 201
+            "y": 205
           },
           "targets": [
             {
@@ -6361,7 +6598,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 201
+            "y": 205
           },
           "targets": [
             {
@@ -6414,7 +6651,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 205
+            "y": 209
           },
           "targets": [
             {
@@ -6473,7 +6710,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 205
+            "y": 209
           },
           "targets": [
             {
@@ -6522,7 +6759,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 205
+            "y": 209
           },
           "targets": [
             {
@@ -6569,7 +6806,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 212
+            "y": 216
           },
           "panels": []
         },
@@ -6585,7 +6822,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 213
+            "y": 217
           },
           "targets": [
             {
@@ -6639,7 +6876,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 213
+            "y": 217
           },
           "targets": [
             {
@@ -6689,7 +6926,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 213
+            "y": 217
           },
           "targets": [
             {
@@ -6747,7 +6984,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 213
+            "y": 217
           },
           "targets": [
             {
@@ -6797,7 +7034,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 213
+            "y": 217
           },
           "targets": [
             {
@@ -6855,7 +7092,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 213
+            "y": 217
           },
           "targets": [
             {
@@ -6909,7 +7146,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 217
+            "y": 221
           },
           "targets": [
             {
@@ -6977,7 +7214,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 217
+            "y": 221
           },
           "targets": [
             {
@@ -7027,7 +7264,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 217
+            "y": 221
           },
           "targets": [
             {
@@ -7086,7 +7323,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 217
+            "y": 221
           },
           "targets": [
             {
@@ -7136,7 +7373,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 217
+            "y": 221
           },
           "targets": [
             {
@@ -7185,7 +7422,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 217
+            "y": 221
           },
           "targets": [
             {
@@ -7234,7 +7471,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7303,7 +7540,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7371,7 +7608,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7439,7 +7676,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7503,7 +7740,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7554,7 +7791,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7605,7 +7842,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 221
+            "y": 225
           },
           "targets": [
             {
@@ -7655,7 +7892,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 225
+            "y": 229
           },
           "targets": [
             {
@@ -7704,7 +7941,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 225
+            "y": 229
           },
           "targets": [
             {
@@ -7758,7 +7995,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 232
+            "y": 236
           },
           "targets": [
             {
@@ -7812,7 +8049,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 232
+            "y": 236
           },
           "targets": [
             {
@@ -7858,7 +8095,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 239
+            "y": 243
           },
           "panels": []
         },
@@ -7874,7 +8111,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 240
+            "y": 244
           },
           "targets": [
             {
@@ -7942,7 +8179,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 240
+            "y": 244
           },
           "targets": [
             {
@@ -7999,7 +8236,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 240
+            "y": 244
           },
           "targets": [
             {
@@ -8048,7 +8285,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 240
+            "y": 244
           },
           "targets": [
             {
@@ -8097,7 +8334,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 240
+            "y": 244
           },
           "targets": [
             {
@@ -8146,7 +8383,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 240
+            "y": 244
           },
           "targets": [
             {
@@ -8196,7 +8433,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 244
+            "y": 248
           },
           "panels": []
         },
@@ -8212,7 +8449,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8262,7 +8499,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8311,7 +8548,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8360,7 +8597,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8413,7 +8650,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8462,7 +8699,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 245
+            "y": 249
           },
           "targets": [
             {
@@ -8512,7 +8749,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 249
+            "y": 253
           },
           "targets": [
             {
@@ -8562,7 +8799,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 249
+            "y": 253
           },
           "targets": [
             {
@@ -8608,7 +8845,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 257
+            "y": 261
           },
           "panels": []
         },
@@ -8624,7 +8861,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 258
+            "y": 262
           },
           "targets": [
             {
@@ -8673,7 +8910,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 258
+            "y": 262
           },
           "targets": [
             {
@@ -8726,7 +8963,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 258
+            "y": 262
           },
           "targets": [
             {
@@ -8775,7 +9012,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 258
+            "y": 262
           },
           "targets": [
             {
@@ -8825,7 +9062,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 258
+            "y": 262
           },
           "targets": [
             {
@@ -8889,7 +9126,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 258
+            "y": 262
           },
           "targets": [
             {
@@ -8938,7 +9175,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 262
+            "y": 266
           },
           "targets": [
             {
@@ -9073,7 +9310,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 270
+            "y": 274
           },
           "targets": [
             {
@@ -9127,7 +9364,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 270
+            "y": 274
           },
           "targets": [
             {
@@ -9178,7 +9415,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 278
+            "y": 282
           },
           "panels": []
         },
@@ -9194,7 +9431,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 279
+            "y": 283
           },
           "targets": [
             {
@@ -9258,7 +9495,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 279
+            "y": 283
           },
           "targets": [
             {
@@ -9307,7 +9544,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 279
+            "y": 283
           },
           "targets": [
             {
@@ -9375,7 +9612,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 279
+            "y": 283
           },
           "targets": [
             {
@@ -9424,7 +9661,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 279
+            "y": 283
           },
           "targets": [
             {
@@ -9473,7 +9710,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 279
+            "y": 283
           },
           "targets": [
             {
@@ -9523,7 +9760,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 283
+            "y": 287
           },
           "targets": [
             {
@@ -9569,7 +9806,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 289
+            "y": 293
           },
           "panels": []
         },
@@ -9585,7 +9822,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 290
+            "y": 294
           },
           "targets": [
             {
@@ -9653,7 +9890,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 290
+            "y": 294
           },
           "targets": [
             {
@@ -9702,7 +9939,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 290
+            "y": 294
           },
           "targets": [
             {
@@ -9761,7 +9998,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 294
+            "y": 298
           },
           "targets": [
             {
@@ -9810,7 +10047,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 300
+            "y": 304
           },
           "targets": [
             {
@@ -9856,7 +10093,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 306
+            "y": 310
           },
           "panels": []
         },
@@ -9872,7 +10109,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 307
+            "y": 311
           },
           "targets": [
             {
@@ -9927,7 +10164,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 307
+            "y": 311
           },
           "targets": [
             {
@@ -9984,7 +10221,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 307
+            "y": 311
           },
           "targets": [
             {
