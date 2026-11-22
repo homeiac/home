@@ -133,7 +133,10 @@ print(json.dumps(dict(rows=db.execute('SELECT count(*) FROM reconciled_summaries
     unique_files=db.execute('SELECT count(*) FROM (SELECT DISTINCT path,size_bytes FROM reconciled_summaries)').fetchone()[0],
     states=db.execute('SELECT state,count(*) FROM reconciled_summaries GROUP BY state').fetchall(),
     needs_visual_review=db.execute('SELECT count(*) FROM reconciled_summaries WHERE needs_visual_review').fetchone()[0],
-    runners=db.execute("SELECT runner,count(*) FROM reconciled_summaries WHERE state='ok' GROUP BY runner").fetchall())))
+    runners=db.execute("SELECT runner,count(*) FROM reconciled_summaries WHERE state='ok' GROUP BY runner").fetchall(),
+    policy_results=db.execute("SELECT prompt_version,runner,risk_level,count(*) FROM reconciled_summaries WHERE state='ok' GROUP BY ALL ORDER BY ALL").fetchall())))
+with sqlite3.connect((root/'luna-backfill/luna-ledger.sqlite3').as_uri()+'?mode=ro',uri=True) as ledger:
+    print(json.dumps(dict(unsettled_versions=ledger.execute("SELECT prompt_version,state,count(*) FROM reconciliations WHERE state IN ('pending','reserved','sent') GROUP BY prompt_version,state").fetchall())))
 '''
         if args.mode=='review':
             code+='''print(json.dumps(db.execute("SELECT local_summary,luna_summary,reconciled_summary,conflicts,notes FROM reconciled_summaries WHERE state='ok' ORDER BY needs_visual_review DESC,id LIMIT 3").fetchall(),ensure_ascii=False))
