@@ -95,5 +95,25 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(len(grant['items']),20)
         self.assertEqual(self.claim(21)['items'],[])
 
+    def test_immich_context_and_missing_landmark_cache_never_defer(self):
+        import json
+        with sqlite3.connect(self.host.ROOT/'immich-context.sqlite3') as snapshot:
+            snapshot.execute('CREATE TABLE context(path TEXT,size INTEGER,metadata TEXT)')
+            snapshot.execute('INSERT INTO context VALUES (?,?,?)',(
+                'a',12,json.dumps(dict(place={'city':'Example City'},people=['Example Person']))))
+        connection = MagicMock()
+        connection.execute.return_value.fetchall.return_value = []
+        connection.execute.return_value.fetchone.return_value = None
+        grant = self.claim()
+        with patch.object(self.host, 'connect') as connect:
+            connect.return_value.__enter__.return_value = connection
+            result = self.host.add_context(self.db, grant)
+        self.assertEqual(len(result['items']), 2)
+        metadata = result['items'][0]['metadata']
+        self.assertEqual(metadata['immich_place'], {'city':'Example City'})
+        self.assertEqual(metadata['immich_named_people'], ['Example Person'])
+        self.assertEqual(metadata['location_context_source'], 'immich')
+        self.assertEqual(self.db.execute("SELECT count(*) FROM jobs WHERE state='reserved'").fetchone()[0], 2)
+
 
 if __name__=='__main__':unittest.main()

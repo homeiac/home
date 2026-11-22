@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh Immich photo context every 30 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=30min
+
+[Install]
+WantedBy=timers.target

@@ -1,5 +1,6 @@
 """Piglet-side Luna queue, cost ledger, and Parquet outbox. Only frames leave Piglet."""
 import base64
+from contextlib import closing, nullcontext
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,6 @@ import duckdb
 sys.path[:0] = ['/opt/photo-enrichment/context', '/opt/knowledge-index/enrichers']
 from photo_enrichment.snapshots import analytical_connection
 from photo_enrichment import places
-from photo_enrichment.context_worker import lookup
 from photo_enrichment.postgres import connect
 from media_summary import VIDEO_EXTS, jpeg_frame, video_duration
 
@@ -26,7 +26,6 @@ LIMIT = 250_000_000
 MIN_PROJECTION = 2_000  # $0.002 per request
 LEGACY_HOLDS = ('unknown usage or exceeded reservation', 'interrupted request with unknown usage')
 MODEL = 'gpt-6-luna'
-PROMPT_VERSION = 'saved-context-v2'
 os.umask(0o077)
 
 
@@ -87,44 +86,50 @@ def schedule_corrections(db):
     with db:
         db.execute("""INSERT OR IGNORE INTO previous_captions SELECT id,metadata,result,cost,state FROM jobs
             WHERE published=1 AND ((state='ok' AND json_type(metadata,'$.gps')='object'
-            AND json_type(metadata,'$.place_lookup') IS NULL) OR (state='source_error' AND ext IN ('mp4','mov','3gp','avi','mpg','m4v')))""")
+            AND json_type(metadata,'$.place_lookup') IS NULL AND json_type(metadata,'$.location_context_source') IS NULL)
+            OR (state='source_error' AND ext IN ('mp4','mov','3gp','avi','mpg','m4v')))""")
         db.execute("""UPDATE jobs SET origin_batch=batch,state='pending',cost=0,published=0
             WHERE origin_batch IS NULL AND id IN (SELECT job_id FROM previous_captions)""")
 
 
+def immich_context():
+    path = ROOT/'immich-context.sqlite3'
+    return closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True)) if path.exists() else nullcontext(None)
+
+
 def add_context(db, grant):
-    """Attach saved event/venue hints and hydrate GPS from the shared budgeted Wikimedia cache."""
+    """Reuse Immich metadata and cached landmarks without remote lookups in the claim path."""
     if not grant['items']:
         return grant
     os.environ.setdefault('PGSERVICEFILE','/etc/photo-enrichment/pg_service.conf')
     os.environ.setdefault('PGPASSFILE','/etc/photo-enrichment/pgpass')
-    ready=[]
-    with connect() as pg:
+    with connect() as pg, immich_context() as snapshot:
         for item in grant['items']:
             m=item['metadata']
             groups=pg.execute("""SELECT DISTINCT g.event,g.location,g.venue FROM photo_groups g
                 JOIN group_members gm ON gm.group_id=g.id WHERE gm.path=%s AND gm.size_bytes=%s""",
                 [item['path'],item['size']]).fetchall()
             m['saved_groups']=[dict(event=e,location=l,venue=v) for e,l,v in groups if e or l or v]
+            context = snapshot.execute('SELECT metadata FROM context WHERE path=? AND size=?',
+                                       (item['path'],item['size'])).fetchone() if snapshot else None
+            if context:
+                saved = json.loads(context[0])
+                m['immich_place'] = saved['place']
+                m['immich_named_people'] = saved['people']
             gps=m.get('gps')
+            m['location_context_source'] = 'immich' if m.get('immich_place') else 'saved_metadata'
             if gps and not m.get('place_lookup'):
-                try:
-                    feed,hit=lookup(pg,gps['latitude'],gps['longitude'])
-                except (places.LookupDeferred,RuntimeError,OSError) as exc:
-                    retry=getattr(exc,'seconds',300)
-                    with db:
-                        db.execute("""UPDATE jobs SET state='pending',cost=0,batch=NULL,available_after=?
-                            WHERE id=? AND batch=? AND state='reserved'""",
-                            [time.time()+retry,item['id'],grant['batch']])
-                    continue
-                m['place_lookup']=feed.get('provider',places.VERSION)
-                m['nearby_candidates']=[dict(name=c['title'],description=c.get('description',''),
-                    distance_m=places.distance(gps['latitude'],gps['longitude'],c['latitude'],c['longitude']))
-                    for c in feed.get('candidates',[])[:5]]
+                key=places.cache_key(gps['latitude'],gps['longitude'])
+                cached=pg.execute('SELECT context FROM photo_place_cache WHERE key=%s',[key]).fetchone()
+                if cached:
+                    feed=cached[0]
+                    m['place_lookup']=feed.get('provider',places.VERSION)
+                    m['nearby_candidates']=[dict(name=c['title'],description=c.get('description',''),
+                        distance_m=places.distance(gps['latitude'],gps['longitude'],c['latitude'],c['longitude']))
+                        for c in feed.get('candidates',[])[:5]]
+                    m['location_context_source'] = 'cached_landmarks'
             with db:
                 db.execute("UPDATE jobs SET metadata=? WHERE id=? AND state='reserved'",[json.dumps(m),item['id']])
-            ready.append(item)
-    grant['items']=ready
     return grant
 
 
@@ -191,6 +196,9 @@ def recover(db):
     """Release unsent leases and account for interrupted submissions without retrying them."""
     db.execute('BEGIN IMMEDIATE')
     with db:
+        if not db.execute("SELECT 1 FROM config WHERE key='location_deferrals_cleared'").fetchone():
+            db.execute("UPDATE jobs SET available_after=0 WHERE state='pending' AND available_after>0")
+            db.execute("INSERT INTO config VALUES ('location_deferrals_cleared','1')")
         db.execute("UPDATE jobs SET state='pending',cost=0,batch=NULL WHERE state='reserved' AND started<datetime('now','-45 minutes')")
         stale = db.execute("SELECT id,ext FROM jobs WHERE state='sent' AND started<datetime('now','-45 minutes')").fetchall()
         for job_id, ext in stale:
@@ -260,7 +268,8 @@ def publish(db):
                 records=[]
                 for path,size,ext,meta,result,cost,state,ts in db.execute('SELECT path,size_bytes,ext,metadata,result,cost,state,finished FROM jobs WHERE coalesce(origin_batch,batch)=?',[batch]):
                     r=json.loads(result)
-                    records.append((path,size,MODEL,PROMPT_VERSION,'video' if ext in VIDEO_EXTS else 'photo',meta,
+                    records.append((path,size,MODEL,r.get('prompt_version','saved-context-v2'),
+                                    'video' if ext in VIDEO_EXTS else 'photo',meta,
                                     r.get('summary'),r.get('tags'),r.get('input'),r.get('cached'),r.get('output'),
                                     r.get('seconds'),cost/1e6 if state=='ok' else None,state,ts))
                 con.executemany('INSERT INTO captions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',records)

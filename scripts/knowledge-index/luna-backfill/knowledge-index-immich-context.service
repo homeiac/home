@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh Luna photo context from Immich metadata
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/knowledge-index/luna-backfill/export-immich-context.py
+UMask=0077
+Nice=10
+TimeoutStartSec=360
