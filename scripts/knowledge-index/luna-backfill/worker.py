@@ -153,21 +153,44 @@ def reconcile_process(batch,item,_frames):
              '-m',reconciliation.MODEL,'-c','model_reasoning_effort="low"','-']
         # If start cannot be acknowledged, do not invoke the model.
         host(op='reconcile_start',batch=batch,id=item['id'])
-        result={'state':'unknown','failure':'response_unavailable'}
+        result={'state':'skipped','failure':'response_unavailable'}
         try:
             response=subprocess.run(cmd,input=reconciliation.PROMPT+'\n'+json.dumps(item['inputs'],ensure_ascii=False),
                                     capture_output=True,text=True,timeout=180,check=True)
-            events=[json.loads(line) for line in response.stdout.splitlines() if line.startswith('{')]
+            # Keep reported usage even if the answer cannot be accepted. Ignore
+            # malformed diagnostic lines when a later completed event is usable.
+            events=[]
+            for line in response.stdout.splitlines():
+                try:
+                    event=json.loads(line)
+                    if isinstance(event,dict):events.append(event)
+                except ValueError:continue
+            result['failure']='missing_usage'
             usage=next(e['usage'] for e in reversed(events) if e.get('type')=='turn.completed')
-            answer=json.loads(last.read_text());reconciliation.validate_answer(answer)
-            result=dict(state='ok',answer=answer,input=usage['input_tokens'],
-                        cached=usage.get('cached_input_tokens',0),output=usage['output_tokens'])
+            reported=dict(input=usage['input_tokens'],cached=usage.get('cached_input_tokens',0),output=usage['output_tokens'])
+            reconciliation.usage_cost(reported)
+            result.update(reported)
+            result['failure']='response_missing'
+            raw=last.read_text()
+            result['response_text']=raw[:16000]  # Private ledger only, never logs/metrics.
+            result['failure']='invalid_json'
+            answer=json.loads(raw)
+            result['failure']='invalid_answer'
+            reconciliation.validate_answer(answer)
+            result=dict(state='ok',answer=answer,**reported)
         except subprocess.CalledProcessError as exc:
             diagnostics=(str(exc.stderr)+' '+str(exc.stdout)).lower()
             result['failure']='rate_limit' if any(t in diagnostics for t in
                 ('rate_limit','rate limit','usage limit','too many requests','http 429')) else 'cli_exit'
+            if any(t in diagnostics for t in ('unauthorized','authentication','not logged in','http 401','login required')):
+                result['failure']='authentication'
         except subprocess.TimeoutExpired:result['failure']='timeout'
-        except (OSError,ValueError,KeyError,StopIteration):pass
+        except (OSError,ValueError,KeyError,StopIteration,TypeError,AttributeError) as exc:
+            result['error_type']=type(exc).__name__
+            # Validation messages are our own fixed strings, never response text.
+            if result['failure']=='invalid_answer':result['failure_detail']=str(exc)[:200]
+        if result['state']!='ok':
+            result['state']='unknown' if result['failure'] in reconciliation.SYSTEM_FAILURES else 'skipped'
         # Retry only the idempotent durable write, never the model request.
         for attempt in range(3):
             try:

@@ -341,7 +341,7 @@ def main():
         migrate(db)
         if op.startswith('reconcile_'):
             result=reconciliation.handle(db,ROOT,request)
-            if op=='reconcile_publish':
+            if op in ('reconcile_publish','reconcile_skip_unresolved'):
                 reconciliation.export_metrics(db,Path('/var/lib/prometheus/node-exporter/knowledge_index_reconciliation.prom'))
             print(json.dumps(result,ensure_ascii=False))
             return

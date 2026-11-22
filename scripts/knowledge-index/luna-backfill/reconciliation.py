@@ -11,6 +11,9 @@ MODEL = 'gpt-6-luna'
 VERSION = 'summary-reconcile-v1'
 RESERVE = 1_000_000
 CAMPAIGN_LIMIT = 250_000_000
+SYSTEM_FAILURES = {'rate_limit', 'authentication'}
+ISOLATED_FAILURES = {'response_unavailable', 'response_missing', 'invalid_json',
+                     'invalid_answer', 'missing_usage', 'timeout', 'cli_exit', 'interrupted_request'}
 SCHEMA = {'type':'object','properties':{
     'reconciled_summary':{'type':'string'},
     'conflicts':{'type':'array','items':{'type':'string'}},
@@ -48,7 +51,9 @@ def initialize(db: sqlite3.Connection) -> None:
         source_generation TEXT,seeded REAL,state TEXT DEFAULT 'pending',batch TEXT,runner TEXT,
         cost INTEGER DEFAULT 0,result TEXT,started REAL,finished REAL,published INTEGER DEFAULT 0);
         CREATE INDEX IF NOT EXISTS reconciliations_queue ON reconciliations(state,seeded,id);
-        CREATE TABLE IF NOT EXISTS reconciliation_config(key TEXT PRIMARY KEY,value TEXT);''')
+        CREATE TABLE IF NOT EXISTS reconciliation_config(key TEXT PRIMARY KEY,value TEXT);
+        CREATE TABLE IF NOT EXISTS reconciliation_actions(
+            id TEXT PRIMARY KEY,action TEXT,details TEXT,created REAL);''')
 
 
 def configure(db: sqlite3.Connection, budget_usd: int, runners: dict, global_parallel: int) -> dict:
@@ -184,31 +189,40 @@ def validate_answer(answer: dict) -> None:
         raise ValueError('Invalid evidence sources')
 
 
+def usage_cost(result: dict) -> int:
+    """Validate reported usage and compute the existing API-equivalent estimate."""
+    i,c,o=(result[k] for k in ('input','cached','output'))
+    if any(type(n) is not int for n in (i,c,o)) or not 0<=c<=i or o<0:
+        raise ValueError('Invalid usage')
+    mult=2 if i>272000 else 1
+    return ((i-c)*10*mult+c*mult+o*(75 if mult==2 else 50)+99)//100
+
+
 def finish(db: sqlite3.Connection, request: dict) -> dict:
     """Settle once; replaying an acknowledged result never charges or submits twice."""
     result=request['result']
     state=result['state']
-    if state not in ('ok','unknown'):raise ValueError('Invalid result state')
+    if state not in ('ok','unknown','skipped'):raise ValueError('Invalid result state')
     if state=='ok':
         validate_answer(result['answer'])
-        i,c,o=(result[k] for k in ('input','cached','output'))
-        if any(type(n) is not int for n in (i,c,o)) or not 0<=c<=i or o<0:
-            raise ValueError('Invalid usage')
-        mult=2 if i>272000 else 1
-        cost=((i-c)*10*mult+c*mult+o*(75 if mult==2 else 50)+99)//100
-    else:cost=RESERVE
+        cost=usage_cost(result)
+    else:
+        # Bad output is an item outcome, not a reason to strand unrelated work.
+        state='unknown' if result.get('failure') in SYSTEM_FAILURES else 'skipped'
+        cost=usage_cost(result) if all(k in result for k in ('input','cached','output')) else RESERVE
     encoded=canonical(result)
     db.execute('BEGIN IMMEDIATE')
     with db:
         row=db.execute('SELECT state,result FROM reconciliations WHERE id=? AND batch=?',
                        [request['id'],request['batch']]).fetchone()
-        if row and row[0] in ('ok','unknown') and row[1]==encoded:
+        if row and row[0] in ('ok','unknown','skipped') and row[1]==encoded:
             return {'recorded':False,'replayed':True}
         if not row or row[0]!='sent':raise ValueError('Stale or unstarted claim')
         db.execute('UPDATE reconciliations SET state=?,result=?,cost=?,finished=? WHERE id=?',
                    [state,encoded,cost,time.time(),request['id']])
         if state=='unknown' or cost>RESERVE:
-            db.execute("INSERT OR REPLACE INTO reconciliation_config VALUES ('blocked',?)",[result.get('failure','usage over reservation')])
+            reason='usage over reservation' if cost>RESERVE else result['failure']
+            db.execute("INSERT OR REPLACE INTO reconciliation_config VALUES ('blocked',?)",[reason])
     return {'recorded':True}
 
 
@@ -218,9 +232,30 @@ def recover(db: sqlite3.Connection) -> dict:
     with db:
         cutoff=time.time()-2700
         db.execute("UPDATE reconciliations SET state='pending',cost=0,batch=NULL WHERE state='reserved' AND started<?",[cutoff])
-        lost=db.execute("UPDATE reconciliations SET state='unknown',finished=? WHERE state='sent' AND started<?",[time.time(),cutoff]).rowcount
-        if lost:db.execute("INSERT OR REPLACE INTO reconciliation_config VALUES ('blocked','interrupted request')")
-    return {'unknown':lost}
+        lost=db.execute("UPDATE reconciliations SET state='skipped',finished=?,result=?,published=0 WHERE state='sent' AND started<?",
+            [time.time(),canonical(dict(state='skipped',failure='interrupted_request')),cutoff]).rowcount
+    return {'skipped':lost}
+
+
+def skip_unresolved(db: sqlite3.Connection, expected: int = 1) -> dict:
+    """Admin recovery: quarantine isolated legacy failures without retrying or releasing cost."""
+    if type(expected) is not int or not 1<=expected<=100:
+        raise ValueError('Invalid expected unresolved count')
+    db.execute('BEGIN IMMEDIATE')
+    with db:
+        candidates=[key for key,raw,cost in db.execute(
+            "SELECT id,result,cost FROM reconciliations WHERE state='unknown'")
+            if json.loads(raw or '{}').get('failure') in ISOLATED_FAILURES and cost<=RESERVE]
+        if len(candidates)>expected:raise ValueError('More unresolved items than expected; inspect first')
+        db.executemany("UPDATE reconciliations SET state='skipped',published=0 WHERE id=?",[(key,) for key in candidates])
+        blocked=db.execute("SELECT value FROM reconciliation_config WHERE key='blocked'").fetchone()
+        remaining=db.execute("SELECT count(*) FROM reconciliations WHERE state='unknown' OR cost>?",[RESERVE]).fetchone()[0]
+        cleared=bool(candidates and not remaining and blocked and blocked[0] in ISOLATED_FAILURES)
+        if cleared:db.execute("DELETE FROM reconciliation_config WHERE key='blocked'")
+        if candidates:
+            db.execute('INSERT INTO reconciliation_actions VALUES (?,?,?,?)',
+                [uuid.uuid4().hex,'skip_unresolved',canonical(dict(ids=candidates,cleared_block=cleared)),time.time()])
+    return dict(skipped=len(candidates),cleared_block=cleared,**status(db))
 
 
 def status(db: sqlite3.Connection) -> dict:
@@ -228,7 +263,8 @@ def status(db: sqlite3.Connection) -> dict:
     return dict(states=dict(db.execute('SELECT state,count(*) FROM reconciliations GROUP BY state')),
                 runners=[dict(runner=r,state=s,count=n) for r,s,n in db.execute('SELECT runner,state,count(*) FROM reconciliations GROUP BY runner,state')],
                 estimated_completed_usd=db.execute("SELECT coalesce(sum(cost),0) FROM reconciliations WHERE state='ok'").fetchone()[0]/1e6,
-                reserved_or_unknown_usd=db.execute("SELECT coalesce(sum(cost),0) FROM reconciliations WHERE state IN ('reserved','sent','unknown')").fetchone()[0]/1e6,
+                estimated_skipped_usd=db.execute("SELECT coalesce(sum(cost),0) FROM reconciliations WHERE state='skipped' AND json_type(result,'$.input') IS NOT NULL").fetchone()[0]/1e6,
+                reserved_or_unknown_usd=db.execute("SELECT coalesce(sum(cost),0) FROM reconciliations WHERE state IN ('reserved','sent','unknown') OR (state='skipped' AND json_type(result,'$.input') IS NULL)").fetchone()[0]/1e6,
                 estimated_and_held_usd=extra_cost(db)/1e6,
                 campaign_estimated_and_held_usd=(legacy_cost(db)+extra_cost(db))/1e6,
                 blocked=bool(db.execute("SELECT 1 FROM reconciliation_config WHERE key='blocked'").fetchone()))
@@ -320,7 +356,7 @@ def export_metrics(db: sqlite3.Connection, destination: Path) -> None:
     """Publish only aggregate queue, runner and usage measurements."""
     counts=dict(db.execute('SELECT state,count(*) FROM reconciliations GROUP BY state'))
     lines=['# TYPE knowledge_index_reconciliation_jobs gauge']
-    for state in ('pending','reserved','sent','ok','unknown'):
+    for state in ('pending','reserved','sent','ok','unknown','skipped'):
         lines.append(f'knowledge_index_reconciliation_jobs{{state="{state}"}} {counts.get(state,0)}')
     lines.extend(['# TYPE knowledge_index_reconciliation_estimated_and_held_usd gauge',
                   f'knowledge_index_reconciliation_estimated_and_held_usd {extra_cost(db)/1e6}',
@@ -336,6 +372,14 @@ def handle(db: sqlite3.Connection, root: Path, request: dict) -> dict:
     """Fixed bridge operations; seeding/configuration remain administrator-only."""
     initialize(db)
     op=request['op'].removeprefix('reconcile_')
+    if op=='skip_unresolved':
+        backups=root/'reconciliation-backups';backups.mkdir(mode=0o700,exist_ok=True)
+        backup=backups/('before-skip-'+uuid.uuid4().hex+'.sqlite3')
+        with sqlite3.connect(backup) as target:db.backup(target)
+        backup.chmod(0o600)
+        result=skip_unresolved(db,request.get('expected',1))
+        publish(db,root)
+        return result
     if op=='configure':return configure(db,request['budget_usd'],request['runners'],request['global_parallel'])
     if op=='seed':return seed(db,root,request['limit'])
     if op=='reserve':return reserve(db,request['runner'],request['parallel'])

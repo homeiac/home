@@ -31,7 +31,7 @@ def install(host: str, name: str) -> None:
 def main() -> None:
     """Keep enabling/scaling explicit, with Git policy controlling worker admission."""
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','status','start','verify','review'))
+    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','status','start','verify','review','skip-unresolved'))
     parser.add_argument('--piglet',required=True)
     parser.add_argument('--runner',required=True)
     parser.add_argument('--budget-usd',type=int,default=2)
@@ -39,6 +39,7 @@ def main() -> None:
     parser.add_argument('--mac-slots',type=int,default=0)
     parser.add_argument('--global-slots',type=int,default=2)
     parser.add_argument('--limit',type=int,default=10)
+    parser.add_argument('--expected-unresolved',type=int,default=1)
     args=parser.parse_args()
     if args.mode=='probe':
         code='''import json,os,socket
@@ -75,6 +76,7 @@ for line in raw.splitlines():
         b=json.loads(line.split(' ',1)[1]);results=b.pop('results')
         b['ok']=sum(r['state']=='ok' for r in results)
         b['unknown']=sum(r['state']=='unknown' for r in results)
+        b['skipped']=sum(r['state']=='skipped' for r in results)
         lines.append(json.dumps(b))
     elif line.startswith('RECONCILIATION_IDLE '):lines.append(line)
 print('\\n'.join(lines[-4:]))
@@ -89,6 +91,7 @@ print('MemAvailable',memory['MemAvailable'])
                     batch=json.loads(line.split(' ',1)[1]);results=batch.pop('results')
                     batch['ok']=sum(r['state']=='ok' for r in results)
                     batch['unknown']=sum(r['state']=='unknown' for r in results)
+                    batch['skipped']=sum(r['state']=='skipped' for r in results)
                     print(json.dumps(batch))
                 else:print(line)
         return
@@ -136,7 +139,8 @@ print(json.dumps(dict(rows=db.execute('SELECT count(*) FROM reconciled_summaries
 '''
         print(ssh(args.piglet,'/opt/photo-enrichment/context/venv/bin/python -c '+shlex.quote(code)).decode())
         return
-    request={'op':'reconcile_'+args.mode}
+    request={'op':'reconcile_'+args.mode.replace('-','_')}
+    if args.mode=='skip-unresolved':request['expected']=args.expected_unresolved
     if args.mode=='seed':request['limit']=args.limit
     if args.mode=='configure':
         request.update(budget_usd=args.budget_usd,global_parallel=args.global_slots,

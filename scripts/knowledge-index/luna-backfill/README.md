@@ -9,9 +9,12 @@ unresolved contradictions are marked `needs_visual_review`.
 Piglet's shared ledger has separate `reconciliations` tables. The original caption
 jobs, captions and Immich descriptions are preserved. The original campaign and
 reconciliation share the $250 estimated-cost ceiling. The reconciliation ledger
-also enforces an independent cap, global slots and per-runner slots. Unknown
-responses retain a $1 reservation and block new submissions; never automatically
-retry a request whose result may have been charged.
+also enforces an independent cap, global slots and per-runner slots. Malformed,
+missing or timed-out responses are marked `skipped`; other items continue. A skipped
+item is never automatically resubmitted. Reported usage is charged to the estimate
+even when the answer is invalid; missing usage retains its $1 reservation. Rate
+limits, authentication failures and usage exceeding the reservation still block
+new submissions. Budget ceilings continue to include skipped-item holds.
 
 Each exact input revision has a stable fingerprint. Multiple runners claim different
 rows transactionally. Only completed batches are published, atomically, into private
@@ -41,6 +44,19 @@ Git policy chooses which runners may execute. `start --mac-slots 20` starts the
 existing still-fawn service and a detached Mac worker; their local locks prevent
 duplicates. Still-fawn's timer resumes after reboot. The detached Mac worker lasts
 for this run; still-fawn continues if the Mac stops.
+
+For the earlier global stop caused by an isolated bad answer, run
+`skip-unresolved --expected-unresolved 1` before `start --mac-slots 20`. This
+administrator-only operation backs up the SQLite ledger, records an audit entry,
+marks the isolated unresolved item `skipped`, and republishes its existing batch.
+It preserves the result, input fingerprint and cost hold. It clears only an
+isolated-response block, never an authentication, rate-limit or budget block.
+New bad responses record a specific failure category and, when available, bounded
+raw answer text in the private ledger for later diagnosis; logs contain no captions.
+
+`review-disagreements.py --host root@…` creates a temporary offline HTML page with
+two original-photo previews, the three summary columns and unresolved conflicts.
+Private page contents stay outside Git and no photos are submitted to a model.
 
 Tests: `python -m unittest discover -s scripts/knowledge-index/luna-backfill -p 'test_*.py'`.
 

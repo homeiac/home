@@ -23,8 +23,10 @@ uploads, new face inference, knowledge graph, or changes to Immich descriptions.
 
 The existing $250 campaign estimate includes the original caption campaign and
 reconciliation. Reserve $1 per active request and settle with reported token usage.
-Unknown outcomes retain their reservation, pause new work and are not retried
-automatically. Estimates are accounting proxies, not an Enterprise invoice.
+An isolated bad answer is skipped without automatic retry; other items continue.
+Missing usage retains the reservation, while reported usage is accounted even for
+invalid answers. Rate limits, authentication failures and reservation overruns
+still pause submissions. Estimates are accounting proxies, not an Enterprise invoice.
 
 Rerunning the same seed does not resubmit identical inputs. Changed captions or
 metadata create a new fingerprint and preserve history. The published file shows
