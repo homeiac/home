@@ -25,6 +25,714 @@ data:
       ],
       "panels": [
         {
+          "id": 175,
+          "type": "row",
+          "title": "Summary reconciliation \u00b7 Luna",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "panels": []
+        },
+        {
+          "id": 176,
+          "type": "stat",
+          "title": "Reconciled summaries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"ok\"}))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "One successful current revision per file. Earlier revisions remain in history; reassessment can move a file back to pending."
+        },
+        {
+          "id": 177,
+          "type": "stat",
+          "title": "Still to reconcile",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 178,
+          "type": "stat",
+          "title": "Critical reviews for you",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_reconciliation_risk{instance=~\"$instance\",risk=\"critical\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Only material contradictions about the main person or an important life, family or work event that cannot safely be omitted. Minor details and unknown background people never require review."
+        },
+        {
+          "id": 179,
+          "type": "stat",
+          "title": "Minor differences handled",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_reconciliation_risk{instance=~\"$instance\",risk=\"low\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Uncertain minor details were omitted or generalized automatically. These are not waiting for human review."
+        },
+        {
+          "id": 180,
+          "type": "stat",
+          "title": "Skipped responses",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"skipped\"}))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Isolated unusable responses are skipped without retrying or stopping the queue. No action required from you; originals remain intact."
+        },
+        {
+          "id": 181,
+          "type": "stat",
+          "title": "Last progress report",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 180
+                  },
+                  {
+                    "color": "red",
+                    "value": 600
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Age of the most recent aggregate publication. A stale report does not prove either worker is running."
+        },
+        {
+          "id": 182,
+          "type": "timeseries",
+          "title": "Reconciliation progress",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"ok\"}))",
+              "legendFormat": "Reconciled",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))",
+              "legendFormat": "Remaining",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"skipped\"}))",
+              "legendFormat": "Skipped",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Current revisions only, one row per file. New policy reassessments move affected results back to pending; older results remain preserved."
+        },
+        {
+          "id": 183,
+          "type": "timeseries",
+          "title": "Reconciliations saved per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[$__rate_interval])) * 60",
+              "legendFormat": "{{runner}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Luna requests are submitted by still-fawn and the Mac. These are cloud text-only reconciliations, not local GPU inference. Counts completed revisions, including intentional reassessments."
+        },
+        {
+          "id": 184,
+          "type": "stat",
+          "title": "Worker safety check",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 0,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "No safety block",
+                      "color": "green"
+                    },
+                    "1": {
+                      "text": "Paused \u2014 check worker",
+                      "color": "orange"
+                    }
+                  }
+                }
+              ],
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Authentication, rate-limit or usage-overrun protections pause new submissions. No safety block does not mean a worker is online or budget is available; check report age, saved/min and Luna budget available."
+        },
+        {
+          "id": 185,
+          "type": "stat",
+          "title": "Reconciliation usage estimate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 8,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_reconciliation_known_usage_usd{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 3,
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Reported token usage valued at Luna API rates, including failed answers with usage and prior revisions. This is not an invoice. Excludes temporary holds and the earlier caption campaign."
+        },
+        {
+          "id": 186,
+          "type": "stat",
+          "title": "Reserved or unreported usage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 8,
+            "x": 16,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_reconciliation_held_usd{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2,
+              "noValue": "No recent data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Temporary reservations for in-flight requests plus retained holds for skipped requests without usage. Released when known usage is recorded; not actual spending."
+        },
+        {
+          "id": 187,
+          "type": "timeseries",
+          "title": "Review decisions over time",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_reconciliation_risk{instance=~\"$instance\",risk=\"critical\"})",
+              "legendFormat": "Critical \u2014 needs you",
+              "refId": "A"
+            },
+            {
+              "expr": "max(knowledge_index_reconciliation_risk{instance=~\"$instance\",risk=\"low\"})",
+              "legendFormat": "Minor \u2014 handled automatically",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "fillOpacity": 0,
+                "showPoints": "never",
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Only current completed results. Aliases confirmed by you are treated as the same person. Earlier broad review flags are reassessed under the critical-only policy."
+        },
+        {
           "id": 137,
           "type": "row",
           "title": "Work remaining & bottleneck",
@@ -33,7 +741,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 24
           },
           "panels": []
         },
@@ -49,7 +757,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 1
+            "y": 25
           },
           "targets": [
             {
@@ -102,7 +810,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 1
+            "y": 25
           },
           "targets": [
             {
@@ -182,7 +890,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 12,
-            "y": 1
+            "y": 25
           },
           "targets": [
             {
@@ -236,7 +944,7 @@ data:
             "h": 4,
             "w": 7,
             "x": 17,
-            "y": 1
+            "y": 25
           },
           "targets": [
             {
@@ -288,7 +996,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 5
+            "y": 29
           },
           "panels": []
         },
@@ -304,7 +1012,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 0,
-            "y": 6
+            "y": 30
           },
           "targets": [
             {
@@ -354,7 +1062,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 6,
-            "y": 6
+            "y": 30
           },
           "targets": [
             {
@@ -411,7 +1119,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 12,
-            "y": 6
+            "y": 30
           },
           "targets": [
             {
@@ -521,7 +1229,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 18,
-            "y": 6
+            "y": 30
           },
           "targets": [
             {
@@ -578,7 +1286,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 11
+            "y": 35
           },
           "targets": [
             {
@@ -632,7 +1340,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 11
+            "y": 35
           },
           "targets": [
             {
@@ -685,7 +1393,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 11
+            "y": 35
           },
           "targets": [
             {
@@ -738,7 +1446,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 11
+            "y": 35
           },
           "targets": [
             {
@@ -791,7 +1499,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 15
+            "y": 39
           },
           "targets": [
             {
@@ -873,7 +1581,7 @@ data:
             "h": 7,
             "w": 14,
             "x": 10,
-            "y": 15
+            "y": 39
           },
           "targets": [
             {
@@ -996,7 +1704,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 22
+            "y": 46
           },
           "targets": [
             {
@@ -1047,7 +1755,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 22
+            "y": 46
           },
           "targets": [
             {
@@ -1100,11 +1808,11 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 22
+            "y": 46
           },
           "targets": [
             {
-              "expr": "250 - max(knowledge_index_luna_proxy_usd{instance=~\"$instance\"}) - max(knowledge_index_luna_budget_held_usd{instance=~\"$instance\"})",
+              "expr": "250 - max(knowledge_index_luna_proxy_usd{instance=~\"$instance\"}) - max(knowledge_index_luna_budget_held_usd{instance=~\"$instance\"}) - max(knowledge_index_reconciliation_estimated_and_held_usd{instance=~\"$instance\"})",
               "legendFormat": "",
               "refId": "A",
               "instant": true,
@@ -1139,7 +1847,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The $250 Luna allowance less reported and projected costs, a $1 allowance for earlier pilots, and $1 reserved per request in flight."
+          "description": "The shared $250 Luna estimate allowance less original caption costs and holds, reconciliation costs and holds, and the earlier pilot allowance. Not actual billing."
         },
         {
           "id": 157,
@@ -1153,7 +1861,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 26
+            "y": 50
           },
           "targets": [
             {
@@ -1229,7 +1937,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 56
           },
           "targets": [
             {
@@ -1280,7 +1988,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 56
           },
           "targets": [
             {
@@ -1331,7 +2039,7 @@ data:
             "h": 6,
             "w": 14,
             "x": 0,
-            "y": 38
+            "y": 62
           },
           "targets": [
             {
@@ -1392,7 +2100,7 @@ data:
             "h": 6,
             "w": 10,
             "x": 14,
-            "y": 38
+            "y": 62
           },
           "targets": [
             {
@@ -1445,7 +2153,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 44
+            "y": 68
           },
           "targets": [
             {
@@ -1499,7 +2207,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 44
+            "y": 68
           },
           "targets": [
             {
@@ -1553,7 +2261,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 44
+            "y": 68
           },
           "targets": [
             {
@@ -1607,7 +2315,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 52
+            "y": 76
           },
           "targets": [
             {
@@ -1659,7 +2367,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 52
+            "y": 76
           },
           "targets": [
             {
@@ -1739,7 +2447,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 52
+            "y": 76
           },
           "targets": [
             {
@@ -1792,7 +2500,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 52
+            "y": 76
           },
           "targets": [
             {
@@ -1845,7 +2553,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 52
+            "y": 76
           },
           "targets": [
             {
@@ -1896,7 +2604,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 56
+            "y": 80
           },
           "panels": []
         },
@@ -1912,7 +2620,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 57
+            "y": 81
           },
           "targets": [
             {
@@ -1996,7 +2704,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 57
+            "y": 81
           },
           "targets": [
             {
@@ -2073,7 +2781,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 57
+            "y": 81
           },
           "targets": [
             {
@@ -2143,7 +2851,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 64
+            "y": 88
           },
           "panels": []
         },
@@ -2159,7 +2867,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 65
+            "y": 89
           },
           "targets": [
             {
@@ -2210,7 +2918,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 65
+            "y": 89
           },
           "targets": [
             {
@@ -2261,7 +2969,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 65
+            "y": 89
           },
           "targets": [
             {
@@ -2312,7 +3020,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 65
+            "y": 89
           },
           "targets": [
             {
@@ -2363,7 +3071,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 65
+            "y": 89
           },
           "targets": [
             {
@@ -2414,7 +3122,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 65
+            "y": 89
           },
           "targets": [
             {
@@ -2465,7 +3173,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 69
+            "y": 93
           },
           "targets": [
             {
@@ -2515,7 +3223,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 69
+            "y": 93
           },
           "targets": [
             {
@@ -2564,7 +3272,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 69
+            "y": 93
           },
           "targets": [
             {
@@ -2614,7 +3322,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 69
+            "y": 93
           },
           "targets": [
             {
@@ -2665,7 +3373,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 69
+            "y": 93
           },
           "targets": [
             {
@@ -2715,7 +3423,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 97
           },
           "targets": [
             {
@@ -2770,7 +3478,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 97
           },
           "targets": [
             {
@@ -2821,7 +3529,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 80
+            "y": 104
           },
           "panels": []
         },
@@ -2837,7 +3545,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 81
+            "y": 105
           },
           "targets": [
             {
@@ -2940,7 +3648,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 81
+            "y": 105
           },
           "targets": [
             {
@@ -2992,7 +3700,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 81
+            "y": 105
           },
           "targets": [
             {
@@ -3053,7 +3761,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 81
+            "y": 105
           },
           "targets": [
             {
@@ -3106,7 +3814,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 85
+            "y": 109
           },
           "targets": [
             {
@@ -3211,7 +3919,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 95
+            "y": 119
           },
           "targets": [
             {
@@ -3265,7 +3973,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 95
+            "y": 119
           },
           "targets": [
             {
@@ -3376,7 +4084,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 101
+            "y": 125
           },
           "targets": [
             {
@@ -3438,7 +4146,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 101
+            "y": 125
           },
           "targets": [
             {
@@ -3491,7 +4199,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 108
+            "y": 132
           },
           "targets": [
             {
@@ -3553,7 +4261,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 108
+            "y": 132
           },
           "targets": [
             {
@@ -3603,7 +4311,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 115
+            "y": 139
           },
           "panels": []
         },
@@ -3619,7 +4327,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 116
+            "y": 140
           },
           "targets": [
             {
@@ -3712,7 +4420,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 116
+            "y": 140
           },
           "targets": [
             {
@@ -3773,7 +4481,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 116
+            "y": 140
           },
           "targets": [
             {
@@ -3826,7 +4534,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 116
+            "y": 140
           },
           "targets": [
             {
@@ -3879,7 +4587,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 120
+            "y": 144
           },
           "targets": [
             {
@@ -3941,7 +4649,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 120
+            "y": 144
           },
           "targets": [
             {
@@ -4027,7 +4735,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 127
+            "y": 151
           },
           "targets": [
             {
@@ -4082,7 +4790,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 127
+            "y": 151
           },
           "targets": [
             {
@@ -4135,7 +4843,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 134
+            "y": 158
           },
           "targets": [
             {
@@ -4189,7 +4897,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 134
+            "y": 158
           },
           "targets": [
             {
@@ -4242,7 +4950,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 134
+            "y": 158
           },
           "targets": [
             {
@@ -4293,7 +5001,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 160
+            "y": 184
           },
           "panels": []
         },
@@ -4309,7 +5017,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 161
+            "y": 185
           },
           "targets": [
             {
@@ -4378,7 +5086,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 161
+            "y": 185
           },
           "targets": [
             {
@@ -4431,7 +5139,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 161
+            "y": 185
           },
           "targets": [
             {
@@ -4484,7 +5192,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 161
+            "y": 185
           },
           "targets": [
             {
@@ -4538,7 +5246,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 165
+            "y": 189
           },
           "targets": [
             {
@@ -4592,7 +5300,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 165
+            "y": 189
           },
           "targets": [
             {
@@ -4642,7 +5350,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 141
+            "y": 165
           },
           "panels": []
         },
@@ -4658,7 +5366,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 142
+            "y": 166
           },
           "targets": [
             {
@@ -4707,7 +5415,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 142
+            "y": 166
           },
           "targets": [
             {
@@ -4761,7 +5469,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 149
+            "y": 173
           },
           "targets": [
             {
@@ -4825,7 +5533,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 149
+            "y": 173
           },
           "targets": [
             {
@@ -4874,7 +5582,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 149
+            "y": 173
           },
           "targets": [
             {
@@ -4923,7 +5631,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 149
+            "y": 173
           },
           "targets": [
             {
@@ -4980,7 +5688,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 153
+            "y": 177
           },
           "targets": [
             {
@@ -5029,7 +5737,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 153
+            "y": 177
           },
           "targets": [
             {
@@ -5075,7 +5783,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 172
+            "y": 196
           },
           "panels": []
         },
@@ -5091,7 +5799,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 173
+            "y": 197
           },
           "targets": [
             {
@@ -5141,7 +5849,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 173
+            "y": 197
           },
           "targets": [
             {
@@ -5195,7 +5903,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 173
+            "y": 197
           },
           "targets": [
             {
@@ -5244,7 +5952,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 173
+            "y": 197
           },
           "targets": [
             {
@@ -5293,7 +6001,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 173
+            "y": 197
           },
           "targets": [
             {
@@ -5343,7 +6051,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 173
+            "y": 197
           },
           "targets": [
             {
@@ -5392,7 +6100,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 177
+            "y": 201
           },
           "targets": [
             {
@@ -5456,7 +6164,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 177
+            "y": 201
           },
           "targets": [
             {
@@ -5505,7 +6213,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 177
+            "y": 201
           },
           "targets": [
             {
@@ -5555,7 +6263,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 177
+            "y": 201
           },
           "targets": [
             {
@@ -5604,7 +6312,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 177
+            "y": 201
           },
           "targets": [
             {
@@ -5653,7 +6361,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 177
+            "y": 201
           },
           "targets": [
             {
@@ -5706,7 +6414,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 181
+            "y": 205
           },
           "targets": [
             {
@@ -5765,7 +6473,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 181
+            "y": 205
           },
           "targets": [
             {
@@ -5814,7 +6522,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 181
+            "y": 205
           },
           "targets": [
             {
@@ -5861,7 +6569,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 188
+            "y": 212
           },
           "panels": []
         },
@@ -5877,7 +6585,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 189
+            "y": 213
           },
           "targets": [
             {
@@ -5931,7 +6639,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 189
+            "y": 213
           },
           "targets": [
             {
@@ -5981,7 +6689,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 189
+            "y": 213
           },
           "targets": [
             {
@@ -6039,7 +6747,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 189
+            "y": 213
           },
           "targets": [
             {
@@ -6089,7 +6797,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 189
+            "y": 213
           },
           "targets": [
             {
@@ -6147,7 +6855,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 189
+            "y": 213
           },
           "targets": [
             {
@@ -6201,7 +6909,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 193
+            "y": 217
           },
           "targets": [
             {
@@ -6269,7 +6977,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 193
+            "y": 217
           },
           "targets": [
             {
@@ -6319,7 +7027,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 193
+            "y": 217
           },
           "targets": [
             {
@@ -6378,7 +7086,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 193
+            "y": 217
           },
           "targets": [
             {
@@ -6428,7 +7136,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 193
+            "y": 217
           },
           "targets": [
             {
@@ -6477,7 +7185,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 193
+            "y": 217
           },
           "targets": [
             {
@@ -6526,7 +7234,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6595,7 +7303,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6663,7 +7371,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6731,7 +7439,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6795,7 +7503,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6846,7 +7554,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6897,7 +7605,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 197
+            "y": 221
           },
           "targets": [
             {
@@ -6947,7 +7655,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 201
+            "y": 225
           },
           "targets": [
             {
@@ -6996,7 +7704,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 201
+            "y": 225
           },
           "targets": [
             {
@@ -7050,7 +7758,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 208
+            "y": 232
           },
           "targets": [
             {
@@ -7104,7 +7812,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 208
+            "y": 232
           },
           "targets": [
             {
@@ -7150,7 +7858,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 215
+            "y": 239
           },
           "panels": []
         },
@@ -7166,7 +7874,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 216
+            "y": 240
           },
           "targets": [
             {
@@ -7234,7 +7942,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 216
+            "y": 240
           },
           "targets": [
             {
@@ -7291,7 +7999,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 216
+            "y": 240
           },
           "targets": [
             {
@@ -7340,7 +8048,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 216
+            "y": 240
           },
           "targets": [
             {
@@ -7389,7 +8097,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 216
+            "y": 240
           },
           "targets": [
             {
@@ -7438,7 +8146,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 216
+            "y": 240
           },
           "targets": [
             {
@@ -7488,7 +8196,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 220
+            "y": 244
           },
           "panels": []
         },
@@ -7504,7 +8212,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 221
+            "y": 245
           },
           "targets": [
             {
@@ -7554,7 +8262,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 221
+            "y": 245
           },
           "targets": [
             {
@@ -7603,7 +8311,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 221
+            "y": 245
           },
           "targets": [
             {
@@ -7652,7 +8360,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 221
+            "y": 245
           },
           "targets": [
             {
@@ -7705,7 +8413,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 221
+            "y": 245
           },
           "targets": [
             {
@@ -7754,7 +8462,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 221
+            "y": 245
           },
           "targets": [
             {
@@ -7804,7 +8512,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 225
+            "y": 249
           },
           "targets": [
             {
@@ -7854,7 +8562,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 225
+            "y": 249
           },
           "targets": [
             {
@@ -7900,7 +8608,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 233
+            "y": 257
           },
           "panels": []
         },
@@ -7916,7 +8624,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 234
+            "y": 258
           },
           "targets": [
             {
@@ -7965,7 +8673,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 234
+            "y": 258
           },
           "targets": [
             {
@@ -8018,7 +8726,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 234
+            "y": 258
           },
           "targets": [
             {
@@ -8067,7 +8775,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 234
+            "y": 258
           },
           "targets": [
             {
@@ -8117,7 +8825,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 234
+            "y": 258
           },
           "targets": [
             {
@@ -8181,7 +8889,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 234
+            "y": 258
           },
           "targets": [
             {
@@ -8230,7 +8938,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 238
+            "y": 262
           },
           "targets": [
             {
@@ -8365,7 +9073,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 246
+            "y": 270
           },
           "targets": [
             {
@@ -8419,7 +9127,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 246
+            "y": 270
           },
           "targets": [
             {
@@ -8470,7 +9178,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 254
+            "y": 278
           },
           "panels": []
         },
@@ -8486,7 +9194,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 255
+            "y": 279
           },
           "targets": [
             {
@@ -8550,7 +9258,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 255
+            "y": 279
           },
           "targets": [
             {
@@ -8599,7 +9307,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 255
+            "y": 279
           },
           "targets": [
             {
@@ -8667,7 +9375,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 255
+            "y": 279
           },
           "targets": [
             {
@@ -8716,7 +9424,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 255
+            "y": 279
           },
           "targets": [
             {
@@ -8765,7 +9473,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 255
+            "y": 279
           },
           "targets": [
             {
@@ -8815,7 +9523,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 259
+            "y": 283
           },
           "targets": [
             {
@@ -8861,7 +9569,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 265
+            "y": 289
           },
           "panels": []
         },
@@ -8877,7 +9585,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 266
+            "y": 290
           },
           "targets": [
             {
@@ -8945,7 +9653,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 266
+            "y": 290
           },
           "targets": [
             {
@@ -8994,7 +9702,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 266
+            "y": 290
           },
           "targets": [
             {
@@ -9053,7 +9761,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 270
+            "y": 294
           },
           "targets": [
             {
@@ -9102,7 +9810,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 276
+            "y": 300
           },
           "targets": [
             {
@@ -9148,7 +9856,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 282
+            "y": 306
           },
           "panels": []
         },
@@ -9164,7 +9872,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 283
+            "y": 307
           },
           "targets": [
             {
@@ -9219,7 +9927,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 283
+            "y": 307
           },
           "targets": [
             {
@@ -9276,7 +9984,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 283
+            "y": 307
           },
           "targets": [
             {

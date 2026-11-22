@@ -325,9 +325,9 @@ def panels():
     luna = [stat("Luna captions saved to Parquet", 'max(knowledge_index_luna_saved' + INST + ')', 0, 12, w=8, unit="locale"),
             stat("Luna estimated token cost", 'max(knowledge_index_luna_proxy_usd' + INST + ')', 8, 12, w=8, unit="currencyUSD", decimals=3,
                  description="Reported Codex tokens valued at standard Luna API rates, plus projected cost for requests without a usage report. The Enterprise account supplies inference."),
-            stat("Luna budget available", '250 - max(knowledge_index_luna_proxy_usd' + INST + ') - max(knowledge_index_luna_budget_held_usd' + INST + ')',
+            stat("Luna budget available", '250 - max(knowledge_index_luna_proxy_usd' + INST + ') - max(knowledge_index_luna_budget_held_usd' + INST + ') - max(knowledge_index_reconciliation_estimated_and_held_usd' + INST + ')',
                  16, 12, w=8, unit="currencyUSD", decimals=2,
-                 description="The $250 Luna allowance less reported and projected costs, a $1 allowance for earlier pilots, and $1 reserved per request in flight.")]
+                 description="The shared $250 Luna estimate allowance less original caption costs and holds, reconciliation costs and holds, and the earlier pilot allowance. Not actual billing.")]
     for panel in luna:
         panel['targets'][0].update(instant=True, range=False)
     backend_series = [(backend_pace(name), label) for name, label in
@@ -422,7 +422,48 @@ def panels():
         panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting fresh data"
     all_panels = intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy] + priority_stages, 10) + shift(details, THROUGHPUT_HEIGHT + 39) + shift(p, 56 + THROUGHPUT_HEIGHT)
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
-    return all_panels + shift(immich_face_panels(), bottom)
+    all_panels += shift(immich_face_panels(), bottom)
+    return reconciliation_panels() + shift(all_panels, 24)
+
+
+def reconciliation_panels():
+    """Current input counts and critical-only review, with separate worker throughput."""
+    def jobs(state):
+        return f'sum(max by(state) (knowledge_index_reconciliation_jobs{{instance=~"$instance",state=~"{state}"}}))'
+    def risk(level):
+        return f'max(knowledge_index_reconciliation_risk{{instance=~"$instance",risk="{level}"}})'
+    p=[row('Summary reconciliation · Luna',0),
+       stat('Reconciled summaries',jobs('ok'),0,1,unit='locale',description='One successful current revision per file. Earlier revisions remain in history; reassessment can move a file back to pending.'),
+       stat('Still to reconcile',jobs('pending|reserved|sent'),4,1,unit='locale'),
+       stat('Critical reviews for you',risk('critical'),8,1,unit='locale',thresholds=RED_IF_POS,
+            description='Only material contradictions about the main person or an important life, family or work event that cannot safely be omitted. Minor details and unknown background people never require review.'),
+       stat('Minor differences handled',risk('low'),12,1,unit='locale',
+            description='Uncertain minor details were omitted or generalized automatically. These are not waiting for human review.'),
+       stat('Skipped responses',jobs('skipped'),16,1,unit='locale',thresholds=[('text',None)],
+            description='Isolated unusable responses are skipped without retrying or stopping the queue. No action required from you; originals remain intact.'),
+       stat('Last progress report', 'time() - max(knowledge_index_reconciliation_updated_timestamp_seconds'+INST+')',20,1,unit='s',
+            thresholds=[('green',None),('orange',180),('red',600)],description='Age of the most recent aggregate publication. A stale report does not prove either worker is running.'),
+       series('Reconciliation progress',[(jobs('ok'),'Reconciled'),(jobs('pending|reserved|sent'),'Remaining'),(jobs('skipped'),'Skipped')],0,5,12,7,
+              description='Current revisions only, one row per file. New policy reassessments move affected results back to pending; older results remain preserved.'),
+       series('Reconciliations saved per minute',[
+           ('max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total'+INST+'[$__rate_interval])) * 60','{{runner}}')],12,5,12,7,decimals=1,
+              description='Luna requests are submitted by still-fawn and the Mac. These are cloud text-only reconciliations, not local GPU inference. Counts completed revisions, including intentional reassessments.'),
+       stat('Worker safety check', 'max(knowledge_index_reconciliation_blocked'+INST+')',0,12,w=8,
+            mappings={'0':{'text':'No safety block','color':'green'},'1':{'text':'Paused — check worker','color':'orange'}},
+            description='Authentication, rate-limit or usage-overrun protections pause new submissions. No safety block does not mean a worker is online or budget is available; check report age, saved/min and Luna budget available.'),
+       stat('Reconciliation usage estimate', 'max(knowledge_index_reconciliation_known_usage_usd'+INST+')',8,12,w=8,unit='currencyUSD',decimals=3,
+            description='Reported token usage valued at Luna API rates, including failed answers with usage and prior revisions. This is not an invoice. Excludes temporary holds and the earlier caption campaign.'),
+       stat('Reserved or unreported usage', 'max(knowledge_index_reconciliation_held_usd'+INST+')',16,12,w=8,unit='currencyUSD',decimals=2,
+            description='Temporary reservations for in-flight requests plus retained holds for skipped requests without usage. Released when known usage is recorded; not actual spending.'),
+       series('Review decisions over time',[(risk('critical'),'Critical — needs you'),(risk('low'),'Minor — handled automatically')],0,16,24,7,
+              description='Only current completed results. Aliases confirmed by you are treated as the same person. Earlier broad review flags are reassessed under the critical-only policy.')]
+    for panel in p:
+        if panel['type']=='stat':
+            panel['targets'][0].update(instant=True,range=False)
+            panel['fieldConfig']['defaults']['noValue']='No recent data'
+        elif panel['type']=='timeseries':
+            panel['fieldConfig']['defaults']['custom']={'drawStyle':'line','lineInterpolation':'linear','lineWidth':2,'fillOpacity':0,'showPoints':'never','spanNulls':False}
+    return p
 
 
 def immich_face_panels():

@@ -178,6 +178,28 @@ class ReconciliationTests(unittest.TestCase):
         self.assertIn('knowledge_index_reconciliation_jobs{state="pending"} 5',text)
         self.assertNotIn('outdoors',text);self.assertNotIn('.jpg',text)
 
+    def test_metrics_count_current_revisions_but_keep_throughput_history(self):
+        self.db.execute('DELETE FROM reconciliations');self.db.commit()
+        with patch.object(r,'VERSION','summary-reconcile-v1'):
+            r.seed_records(self.db,self.records,'generation1')
+        grant=r.reserve(self.db,'mac',2,version='summary-reconcile-v1')
+        for item in grant['items']:self.settle(grant,item)
+        first,second=grant['items']
+        low=json.loads(self.db.execute('SELECT result FROM reconciliations WHERE id=?',[first['id']]).fetchone()[0])
+        low['answer']['risk_level']='low'
+        old=copy.deepcopy(low);old['answer'].pop('risk_level')
+        old['answer'].update(needs_visual_review=True,conflicts=['Minor arrangement differs'])
+        self.db.execute('UPDATE reconciliations SET result=? WHERE id=?',[r.canonical(low),first['id']])
+        self.db.execute("UPDATE reconciliations SET result=?,prompt_version='summary-reconcile-v1' WHERE id=?",[r.canonical(old),second['id']])
+        self.db.commit();r.refresh_policy(self.db,self.root)
+        target=self.root/'metrics.prom';r.export_metrics(self.db,target);text=target.read_text()
+        self.assertIn('knowledge_index_reconciliation_jobs{state="ok"} 1',text)
+        self.assertIn('knowledge_index_reconciliation_jobs{state="pending"} 4',text)
+        self.assertIn('knowledge_index_reconciliation_risk{risk="low"} 1',text)
+        self.assertIn('knowledge_index_reconciliation_risk{risk="critical"} 0',text)
+        self.assertIn('knowledge_index_reconciliation_finished_total 2',text)
+        self.assertIn('knowledge_index_reconciliation_runner_finished_total{runner="mac"} 2',text)
+
     def test_alias_correction_versions_pending_and_flagged_inputs_without_duplicate_files(self):
         record=copy.deepcopy(self.records[0])
         record['path']='alias.jpg';record['inputs']['saved_metadata']['confirmed_people']=['A']

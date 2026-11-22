@@ -465,16 +465,36 @@ def publish(db: sqlite3.Connection, root: Path) -> dict:
 
 def export_metrics(db: sqlite3.Connection, destination: Path) -> None:
     """Publish only aggregate queue, runner and usage measurements."""
-    counts=dict(db.execute('SELECT state,count(*) FROM reconciliations GROUP BY state'))
+    current='''WITH current AS (SELECT *,row_number() OVER(
+        PARTITION BY path,size_bytes ORDER BY seeded DESC,id) AS revision FROM reconciliations) '''
+    counts=dict(db.execute(current+'SELECT state,count(*) FROM current WHERE revision=1 GROUP BY state'))
+    risks=dict(db.execute(current+'''SELECT coalesce(json_extract(result,'$.answer.risk_level'),
+        CASE WHEN json_extract(result,'$.answer.needs_visual_review') THEN 'unassessed' ELSE 'none' END),count(*)
+        FROM current WHERE revision=1 AND state='ok' GROUP BY 1'''))
+    completed=db.execute("SELECT count(*) FROM reconciliations WHERE state='ok'").fetchone()[0]
     lines=['# TYPE knowledge_index_reconciliation_jobs gauge']
     for state in ('pending','reserved','sent','ok','unknown','skipped'):
         lines.append(f'knowledge_index_reconciliation_jobs{{state="{state}"}} {counts.get(state,0)}')
     lines.extend(['# TYPE knowledge_index_reconciliation_estimated_and_held_usd gauge',
                   f'knowledge_index_reconciliation_estimated_and_held_usd {extra_cost(db)/1e6}',
                   '# TYPE knowledge_index_reconciliation_finished_total counter',
-                  f'knowledge_index_reconciliation_finished_total {counts.get("ok",0)}',
+                  f'knowledge_index_reconciliation_finished_total {completed}',
                   '# TYPE knowledge_index_reconciliation_updated_timestamp_seconds gauge',
                   f'knowledge_index_reconciliation_updated_timestamp_seconds {int(time.time())}'])
+    lines.append('# TYPE knowledge_index_reconciliation_risk gauge')
+    for risk in ('none','low','critical','unassessed'):
+        lines.append(f'knowledge_index_reconciliation_risk{{risk="{risk}"}} {risks.get(risk,0)}')
+    lines.append('# TYPE knowledge_index_reconciliation_runner_finished_total counter')
+    for runner in ('mac','still-fawn'):
+        done=db.execute("SELECT count(*) FROM reconciliations WHERE runner=? AND state='ok'",[runner]).fetchone()[0]
+        lines.append(f'knowledge_index_reconciliation_runner_finished_total{{runner="{runner}"}} {done}')
+    snapshot=status(db)
+    lines.extend(['# TYPE knowledge_index_reconciliation_blocked gauge',
+                  f'knowledge_index_reconciliation_blocked {int(snapshot["blocked"])}',
+                  '# TYPE knowledge_index_reconciliation_known_usage_usd gauge',
+                  f'knowledge_index_reconciliation_known_usage_usd {snapshot["estimated_completed_usd"]+snapshot["estimated_skipped_usd"]}',
+                  '# TYPE knowledge_index_reconciliation_held_usd gauge',
+                  f'knowledge_index_reconciliation_held_usd {snapshot["reserved_or_unknown_usd"]}'])
     temporary=destination.with_name(destination.name+'.'+uuid.uuid4().hex+'.tmp')
     temporary.write_text('\n'.join(lines)+'\n');temporary.chmod(0o644);temporary.replace(destination)
 
