@@ -486,6 +486,7 @@ def pipeline_panels():
     graph["targets"][0]["expr"] += ' or ' + node('histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name="photo-review",stage="duckdb.query"}[$__rate_interval])))','photo_gallery','Gallery DuckDB query p95 (seconds)')
     graph["targets"][0]["expr"] += ' or ' + node('histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name="photo-review",stage="db.query"}[$__rate_interval])))','photo_live_db','GUI PostgreSQL calls p95 (seconds)')
     graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_pipeline_edge_info'+INST+') or max by(id,source,target)(photo_review_edge_info'+INST+')'
+    graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_immich_edge_info'+INST+')'
     graph["targets"][1]["expr"] += ' or max by(id,source,target)(photo_app_edge_info'+INST+')'
     context_rate='rate(photo_context_stage_seconds_total'+INST+'[$__rate_interval])'
     graph["targets"][0]["expr"] += ' or label_replace(((100 * sum by(id,title) ('+context_rate+') / scalar(sum('+context_rate+')) >= 0) or sum by(id,title)(photo_context_stage_seconds_total'+INST+') * 0), "title", "$1 (%)", "title", "(.+)")'

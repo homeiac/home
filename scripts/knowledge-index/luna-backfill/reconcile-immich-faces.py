@@ -114,9 +114,9 @@ def publish(count):
     tmp.write_text('# TYPE photo_immich_face_reconciliation gauge\n' + ''.join(
         f'photo_immich_face_reconciliation{{result="{key}"}} {value}\n'
         for key, value in values.items()) + f'photo_immich_context_timestamp_seconds {time.time()}\n'
-        'photo_pipeline_edge_info{id="immich-context",source="immich_metadata",target="immich_named_faces"} 1\n'
-        'photo_pipeline_edge_info{id="immich-review",source="immich_named_faces",target="photo_export"} 1\n'
-        'photo_pipeline_edge_info{id="immich-place",source="immich_metadata",target="photo_search"} 1\n')
+        'photo_immich_edge_info{id="immich-context",source="immich_metadata",target="immich_named_faces"} 1\n'
+        'photo_immich_edge_info{id="immich-review",source="immich_named_faces",target="photo_export"} 1\n'
+        'photo_immich_edge_info{id="immich-place",source="immich_metadata",target="photo_search"} 1\n')
     tmp.chmod(0o644)
     tmp.replace(METRICS)
 
