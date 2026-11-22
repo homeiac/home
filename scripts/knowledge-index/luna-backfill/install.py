@@ -15,6 +15,8 @@ def main():
     os.umask(0o077)
     target=os.environ['CB_HOST']
     ssh=['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',target]
+    subprocess.run(ssh+['install -d -m 0700 /opt/knowledge-index/luna-backfill && install -m 0644 /dev/stdin /opt/knowledge-index/luna-backfill/reconciliation.py'],
+                   input=(HERE/'reconciliation.py').read_bytes(),check=True)
     subprocess.run(ssh+["set -eu; d=/opt/knowledge-index/luna-backfill; install -d -m 700 \"$d\"; "
                         "p=$(mktemp \"$d/host.XXXXXX\"); cat > \"$p\"; "
                         "/opt/photo-enrichment/context/venv/bin/python -m py_compile \"$p\"; mv \"$p\" \"$d/host.py\""],
@@ -29,6 +31,7 @@ def main():
     tmp=path/'worker.new'
     shutil.copyfile(HERE/'worker.py',tmp)
     tmp.replace(path/'worker.py')
+    shutil.copyfile(HERE/'reconciliation.py',path/'reconciliation.py')
     plist=Path.home()/'Library/LaunchAgents'/(LABEL+'.plist')
     plist.parent.mkdir(exist_ok=True)
     codex=shutil.which('codex')

@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import time
 import uuid
+import reconciliation
 
 import duckdb
 
@@ -139,6 +140,7 @@ def reserve(db, request):
     cap = min(int(request['estimated_limit_usd'])*1_000_000,LIMIT)
     db.execute('BEGIN IMMEDIATE')
     used = db.execute('SELECT coalesce(sum(cost),0) FROM jobs').fetchone()[0]
+    used += reconciliation.extra_cost(db)
     used += db.execute('SELECT coalesce(sum(cost),0) FROM previous_captions').fetchone()[0]
     pilot = int(db.execute("SELECT value FROM config WHERE key='pilot_cost'").fetchone()[0])
     blocked = db.execute("SELECT value FROM config WHERE key='blocked'").fetchone()
@@ -324,7 +326,9 @@ def main():
     request=json.load(sys.stdin)
     op=request['op']
     if os.environ.get('KI_LUNA_BRIDGE') == '1' and op not in {
-        'status','recover','reserve','frames','start','finish','release','publish'
+        'status','recover','reserve','frames','start','finish','release','publish',
+        'reconcile_status','reconcile_recover','reconcile_reserve','reconcile_start',
+        'reconcile_finish','reconcile_release','reconcile_publish'
     }:
         raise ValueError('Unexpected bridge operation')
     with sqlite3.connect(ROOT/'luna-ledger.sqlite3',timeout=60) as db:
@@ -335,6 +339,10 @@ def main():
             CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state,id);
             CREATE INDEX IF NOT EXISTS jobs_batch ON jobs(batch);""")
         migrate(db)
+        if op.startswith('reconcile_'):
+            result=reconciliation.handle(db,ROOT,request)
+            print(json.dumps(result,ensure_ascii=False))
+            return
         if op=='init':
             if not 0 < request['pilot_microdollars'] <= 1_000_000:
                 raise ValueError('Invalid prior pilot estimate')

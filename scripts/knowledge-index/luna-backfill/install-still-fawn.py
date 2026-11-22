@@ -85,6 +85,7 @@ test -f {BASE}/host.py
     install(piglet, '/var/lib/ki-luna-bridge/.ssh/authorized_keys', authorized.encode(), '0600', 'ki-luna-bridge')
     install(runner, f'{STATE}/piglet_known_hosts', f'{piglet} {host_key}\n'.encode(), '0600', 'ki-luna')
     install(runner, '/etc/knowledge-index-luna.conf', f'CB_HOST=ki-luna-bridge@{piglet}\n'.encode())
+    install(runner, f'{BASE}/reconciliation.py', (HERE/'reconciliation.py').read_bytes())
     install(runner, f'{BASE}/worker.py', (HERE/'worker.py').read_bytes())
     for name in ('knowledge-index-luna.service','knowledge-index-luna.timer'):
         install(runner, f'/etc/systemd/system/{name}', (HERE/name).read_bytes())
