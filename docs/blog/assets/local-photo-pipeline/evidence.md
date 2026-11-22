@@ -83,30 +83,43 @@ five cache tests and all 27 enricher integration assertions.
 
 ## Frontier model versus local GPU
 
-Slide 7 compares two recorded production configurations, not an intrinsic model
-speed or quality ranking. Local Bonsai used two concurrent RTX requests and saved
-943 distinct photos in 30 minutes (31.4/min). Luna used 20 concurrent requests,
-four preparation slots and 48-item batches (69.3 mixed items/min). Their inputs
-were different. Projecting those rates to 1,000 items gives 31.85 and 14.43 minutes,
-a 2.21× throughput ratio; the projected times are not an identical-input trial.
+Slide 7 compares elapsed time to the 70,000th currently published Luna photo with
+an estimate for the RTX 3070 and Mac GPU running together. The 31.4 photos/min
+measurement is **both local GPUs combined**, not the RTX alone: 943 distinct photos
+in a 30-minute photos-first window. Do not add the Mac's rate to it again.
 
-The Luna trial's estimated cost at an 85% photo / 15% video mix was $0.000581 per
-saved caption, or $0.581 per 1,000. This values reported usage at the pipeline's
-configured standard API rates; Enterprise Codex supplies the inference. It does
-not establish an incremental charge on the user's subscription.
+The read-only `scripts/knowledge-index/luna-backfill/measure-campaign.sh` query
+reported these retained ledger timestamps on November 22:
 
-The local electricity figure is deliberately illustrative: assumed 150 W GPU draw
-× (1,000 / 31.4 / 60 hours) × the dashboard's assumed $0.35/kWh = $0.0279 per
-1,000 photos. It excludes host power, hardware purchase, idle allocation and
-maintenance. It is not measured caption-only electricity or a total-cost comparison.
+| Event | Pacific time | UTC |
+|---|---|---|
+| First retained attempt | Nov 21, 9:08:44 a.m. | 2026-11-21 17:08:44 |
+| 70,000th successful published photo, ordered by finish time and ID | Nov 22, 6:54:17 a.m. | 2026-11-22 14:54:17 |
+| Last successful photo/video | Nov 22, 7:47:37 a.m. | 2026-11-22 15:47:37 |
 
-At the November 22 completion check, Luna had 77,707 successfully published jobs,
-no pending or in-flight work, and 14 exceptional outcomes. Its reported/projected
-API-equivalent cost was $42.33019, plus a separate $1 pilot allowance: $43.33019
-in total estimated accounting. Slide 7 rounds this to about $43. The campaign
-figure includes prior attempts/corrections and is separate from the standardized
-trial's per-1,000 estimate. No actual billing savings or comparative caption quality
-has been established by these measurements.
+The 70,000-photo milestone spans 78,333 seconds: **21h 45m 33s**, displayed as
+**21h 46m**. This elapsed time includes the other work and pauses during the run;
+it is not photo-only model time. Retained finish timestamps include corrections,
+so the query identifies the 70,000th current saved result, not necessarily the
+first historical moment when 70,000 items had any version of a caption.
+
+The combined local projection is `70,000 / 31.4 / 60 = 37.155 hours`, or
+**37h 09m**, assuming both GPUs remain available at that sustained rate. The
+observed Luna interval is about **15h 24m shorter than this projection**. This
+is not a completed local run of the same 70,000 photos or a controlled model
+speed/quality comparison. Earlier individual-GPU trials used different workloads
+and are not added to this combined rate.
+
+The full Luna campaign published **71,643 photos and 6,064 videos** (77,707 total).
+Reported/projected API-equivalent cost was $42.33019, plus a $1 pilot allowance:
+**$43.33019**. The slide rounds this to about $43 and labels it as the **full
+campaign**, not the cost of precisely 70,000 photos. Enterprise Codex supplied
+inference; this accounting does not establish an incremental subscription charge.
+
+The earlier electricity illustration used only assumed RTX draw against a rate
+that already included the Mac. It has been removed. No combined RTX-host/Mac
+energy measurement or hardware allocation is available in this comparison;
+therefore the slide makes no numerical local-cost or billed-savings claim.
 
 
 ## Closing the final caption gaps
