@@ -338,7 +338,7 @@ class PipelineTests(unittest.TestCase):
         # A cached suggestion for a face already confirmed elsewhere is excluded.
         matches['stable-face']=dict(person='Stale suggestion',score=.99)
         before=self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n']
-        with patch.object(self.store,'matching_pass',return_value=matches):
+        with patch.object(self.store,'matching_pass',return_value=matches),patch.object(self.store,'_matching_cache',dict(matches=matches),create=True):
             selected=self.store.suggested_selection(.9)
             self.assertEqual(selected['total'],124)
             self.assertEqual(len({f['id'] for f in selected['faces']}),124)
@@ -480,6 +480,48 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.store.face_library(status='suggested')['total'],0)
         self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
         self.assertEqual(self.store.rows('SELECT count(*) n FROM face_scans')[0]['n'],3)
+
+    def test_rejection_overrides_stale_background_cache_and_pending_selections(self):
+        prior=self.add_review_faces()
+        reference=self.store.face('stable-face')
+        self.store.db.execute("INSERT INTO faces VALUES (?,?,?,?,?,?,?,?,?,'user',current_timestamp)",
+            ['second-reference',reference['path'],reference['size_bytes'],reference['mtime_ns'],reference['box'],.9,[.99,.01],MODEL_ID,reference['person']])
+        background=PostgresStore(self.index,self.library,self.state)
+        try:
+            background.matching_pass()
+            old=background._matching_cache
+            group=next(key for key,ids in old['groups'].items() if 'review-a' in ids)
+            self.store.suggestion_source=background
+            with self.store.request_session(False) as writer:writer.reject('review-a','stable-face')
+            with patch.object(background,'matching_pass',side_effect=AssertionError('HTTP must not wait for background matching')):
+                for snapshot in (False,True):
+                    if snapshot:export_snapshot(self.state)
+                    # Simulate an in-flight pass publishing its pre-rejection result.
+                    background._matching_cache=dict(old)
+                    with self.store.request_session() as reader:
+                        page=reader.face_library(status='suggested')
+                        self.assertEqual([face['id'] for face in page['faces']],['review-b'])
+                        self.assertEqual(page['counts']['suggested'],1)
+                        all_faces=reader.face_library(status='all')['faces']
+                        rejected=next(face for face in all_faces if face['id']=='review-a')
+                        self.assertIsNone(rejected['suggestion'])
+                        self.assertEqual(rejected['match_details']['reason'],'rejected')
+                        self.assertFalse(rejected['match_details']['qualified'])
+                        self.assertIsNotNone(rejected['match_details']['score'])
+                        self.assertEqual([face['id'] for face in reader.suggested_selection(0)['faces']],['review-b'])
+                        self.assertEqual([face['id'] for face in reader.group_selection(group,old['generation'])['faces']],['review-b'])
+                        self.assertEqual(reader.face_library(group=group)['total'],1)
+                        self.assertEqual(reader.face_library(grouped=True,scope='ungrouped')['total'],2)
+                        self.assertEqual(reader.suggestions('review-a'),[])
+                        photo=reader.detail(reference['path'])
+                        self.assertEqual(next(face for face in photo['faces'] if face['id']=='review-a')['match_details']['reason'],'rejected')
+            self.assertIn('review-a',old['matches'],'The shared cache must remain immutable')
+            self.assertTrue(old['details']['review-a']['qualified'])
+            with self.assertRaises(ValueError):self.store.label_faces([prior[0]],reference['person'])
+            self.assertIsNone(self.store.face('review-a')['person'])
+        finally:
+            del self.store.suggestion_source
+            background.close()
 
     def test_review_groups_explain_all_faces_and_select_members_safely(self):
         reference=self.store.face('stable-face')

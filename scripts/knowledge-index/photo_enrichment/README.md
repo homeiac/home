@@ -390,6 +390,14 @@ acceptance. Missing/invalid embeddings, incompatible reference models, no refere
 and background calculation have explicit reasons instead of a fabricated zero.
 A confirmed face never compares to itself; its saved identity stays unchanged.
 
+**Not this person** takes effect immediately: durable rejections override the last
+background cache, including a pass that was already running when the decision was
+saved. The face leaves that person's suggestions and cached group, remains available
+with a rejected-candidate explanation, and cannot be included by suggestion-based
+bulk selection. Rejection changes the face revision so an older selection cannot
+silently confirm it. Other reference photos of the rejected person cannot reintroduce
+the same suggestion.
+
 The default **Review groups** collection displays one representative per repeated group,
 with the number of member detections. Single detections remain accessible in the
 separate **Ungrouped faces** collection and in **All faces**, with closest-match

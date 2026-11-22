@@ -92,7 +92,7 @@ async function showPhoto(path) {
       if(!matches.length)suggestions.append(element('p','No matching confirmed faces yet. Name a face first.','muted'));
       for(const match of matches){const item=element('div',undefined,'suggestion');item.append(element('span',match.person+' · similarity '+match.score.toFixed(3)+' (not a probability)'));
         item.append(button('Confirm',async()=>{await api('/api/faces/label',{id:face.id,person:match.person,revision:face.revision});await showPhoto(path);status('You confirmed the suggested face label.');}));
-        item.append(button('Reject',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:match.reference_id});item.remove();status('Suggestion rejected.');}));suggestions.append(item);}
+        item.append(button('Reject',async()=>{await rejectFace(face,match.reference_id);await showPhoto(path);}));suggestions.append(item);}
     }));
     if(state.frigate)card.append(button('Ask Frigate',async()=>{const match=await api('/api/faces/frigate',{id:face.id});suggestions.replaceChildren();
       const empty={no_face:'Frigate could not detect a face in this crop.',below_threshold:'Frigate found no confident identity match.',no_match:'Frigate returned no match. After startup, its face library may still be warming up.'};
@@ -157,6 +157,13 @@ function selectFace(face) {
   // Keep the displayed name and revision: confirmation must not silently use a newer suggestion.
   state.faceSelection.set(face.id,{id:face.id,revision:face.revision,person:face.person?null:face.suggestion?.person||null});
 }
+async function rejectFace(face,referenceId){
+  await api('/api/faces/reject',{id:face.id,reference_id:referenceId});
+  state.faceSelection.delete(face.id);
+  if(state.review?.id===face.id)$('face-review').close();
+  await loadFaces();
+  status('Rejected this candidate and removed it from suggested matches. The face remains available in All faces.');
+}
 function renderPeople() {
   $('people').replaceChildren();const term=$('people-search').value.toLocaleLowerCase();
   for(const person of state.people.filter(p=>p.person.toLocaleLowerCase().includes(term))){
@@ -204,10 +211,10 @@ async function loadFaces() {
     const check=element('input');check.type='checkbox';check.setAttribute('aria-label','Select '+(face.person||face.suggestion?.person||'unnamed face'));check.onchange=()=>{if(!state.busy){if(check.checked)selectFace(face);else state.faceSelection.delete(face.id);}faceSelection();};
     const label=element('label',undefined,'face-select');label.append(check);label.hidden=Boolean(face.review_group);
     const labelStatus={automatic:'Auto-accepted · editable',immich:'From Immich · editable',user:'Confirmed by you'};
-    const body=element('div',undefined,'face-info');body.append(element('strong',face.person||face.suggestion?.person||'Unnamed face'),element('span',face.person?(labelStatus[face.label_source]||'Saved name'):face.suggestion?'Suggested name':'Needs review','badge'),element('p',face.latitude==null?'Location not recorded':'Location available','muted'));
+    const body=element('div',undefined,'face-info');body.append(element('strong',face.person||face.suggestion?.person||'Unnamed face'),element('span',face.person?(labelStatus[face.label_source]||'Saved name'):face.suggestion?'Suggested name':face.match_details?.reason==='rejected'?'Rejected candidate':'Needs review','badge'),element('p',face.latitude==null?'Location not recorded':'Location available','muted'));
     appendMatchDetails(body,face);
     if(face.review_group){body.append(element('p',face.review_group.count+(face.review_group.count===1?' face in this review group':' faces in this review group'),'group-size'),button('Review group',()=>filterFaces('unreviewed','',face.review_group.id)));}
-    else if(face.suggestion){body.append(button('Not this person',async()=>{await api('/api/faces/reject',{id:face.id,reference_id:face.suggestion.reference_id});state.faceSelection.delete(face.id);await loadFaces();status('Suggestion rejected; your existing labels are unchanged.');}));}
+    else if(face.suggestion){body.append(button('Not this person',()=>rejectFace(face,face.suggestion.reference_id)));}
     body.append(element('p',face.capture_ts?new Date(face.capture_ts*1000).toLocaleDateString(undefined,{timeZone:timezone()}):'Date unknown','muted'));card.append(crop,label,body);$('face-grid').append(card);
   }
   faceSelection();facePagination();
@@ -253,7 +260,7 @@ for(const [id,step] of [['review-previous',-1],['review-next',1]])$(id).onclick=
 $('review-suggest').onclick=()=>run(async()=>{
   const matches=await api(query('/api/suggestions',{face:state.review.id}));$('review-suggestions').replaceChildren();
   if(!matches.length)$('review-suggestions').append(element('p','No matching confirmed faces yet. Name a few faces to build your reference library.','muted'));
-  for(const match of matches){const item=element('div',undefined,'suggestion');item.append(element('p',match.person+' · similarity '+match.score.toFixed(3)+' (not a probability)'),button('Confirm',()=>confirmFace(match.person)),button('Reject',async()=>{await api('/api/faces/reject',{id:state.review.id,reference_id:match.reference_id});item.remove();}));$('review-suggestions').append(item);}
+  for(const match of matches){const item=element('div',undefined,'suggestion');item.append(element('p',match.person+' · similarity '+match.score.toFixed(3)+' (not a probability)'),button('Confirm',()=>confirmFace(match.person)),button('Reject',()=>rejectFace(state.review,match.reference_id)));$('review-suggestions').append(item);}
 });
 $('review-frigate').onclick=()=>run(async()=>{
   const match=await api('/api/faces/frigate',{id:state.review.id});$('review-suggestions').replaceChildren(element('p',match.name?'Frigate suggests '+match.name+' · score '+match.score:'No confident Frigate match for this crop.'));

@@ -247,8 +247,7 @@ class PostgresStore(Store):
 
     def detail(self,path):
         photo=super().detail(path)
-        self.matching_pass()
-        review=getattr(getattr(self,'suggestion_source',self),'_matching_cache',None) or {}
+        review=self.review_state()
         for face in photo['faces']:
             face['match_details']=review.get('details',{}).get(face['id'],dict(reason='pending',score=None,person=None,qualified=False))
         if self.rows("SELECT to_regclass('public.photo_context') IS NOT NULL AS present")[0]['present']:
@@ -332,20 +331,47 @@ class PostgresStore(Store):
                 details=details,groups=review_groups.groups,generation=uuid.uuid4().hex)
             return matches
 
+    def review_state(self) -> dict:
+        """Overlay durable rejections on the last pass, without waiting for a rebuild.
+
+        Read fresh decisions even when another process or an in-flight matching
+        pass published the cache. Never mutate the shared background snapshot.
+        """
+        self.matching_pass()
+        review=getattr(getattr(self,'suggestion_source',self),'_matching_cache',None) or {}
+        blocked={(row['face_id'],row['person']) for row in self.rows("""SELECT r.face_id,ref.person
+            FROM rejected_matches r JOIN faces ref ON ref.id=r.reference_id WHERE ref.person IS NOT NULL""")}
+        matches=review.get('matches',{})
+        removed={face_id for face_id,match in matches.items() if (face_id,match['person']) in blocked}
+        details={face_id:dict(detail,qualified=False,reason='rejected')
+                 if (face_id,detail.get('person')) in blocked else detail
+                 for face_id,detail in review.get('details',{}).items()}
+        result=dict(review,matches={key:match for key,match in matches.items() if key not in removed},details=details)
+        if removed and 'groups' in review:
+            # A rejected identity must also leave its cached suggested-person
+            # collection. Keep the detection as a singleton until regrouping.
+            groups={key:[face_id for face_id in ids if face_id not in removed]
+                    for key,ids in review['groups'].items()}
+            groups={key:ids for key,ids in groups.items() if ids}
+            for face_id in removed:
+                # Preserve the old group ID when its anchor was rejected, so
+                # an open group still shows its remaining members.
+                groups['rejected:'+face_id]=[face_id]
+            result['groups']=groups
+        return result
+
     def face_library(self, person: str = '', status: str = 'unreviewed', offset: int = 0, limit: int = 48,
                      grouped: bool = False, group: str = '', scope: str = 'repeated') -> dict:
         """Group previously processed unnamed faces into bulk-review suggestions."""
         if status not in ('all','unreviewed','named','suggested') or offset<0 or not 1<=limit<=100:
             raise ValueError('Invalid face filter')
-        matches=self.matching_pass()
-        source=getattr(self,'suggestion_source',self)
-        review=getattr(source,'_matching_cache',None) or {}
+        review=self.review_state()
+        matches=review.get('matches',{})
         if (self.state/'analytics/current.json').exists():
             result=self.gallery_query('faces',person,status,offset,limit,matches,review,grouped,group,scope)
             result['suggestions_refreshing']=hasattr(self,'suggestion_source') and not getattr(self.suggestion_source,'_matching_cache',None)
             return result
         with self.lock:
-            matches=self.matching_pass()
             # Paginate before fetching captions. Joining the global latest-caption
             # view before LIMIT can repeatedly scan every caption for every face.
             base="""FROM faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
@@ -408,8 +434,7 @@ class PostgresStore(Store):
 
     def group_selection(self, group: str, generation: str) -> dict:
         """Snapshot explicitly selected group members; never propagate a name here."""
-        self.matching_pass()
-        review=getattr(getattr(self,'suggestion_source',self),'_matching_cache',None) or {}
+        review=self.review_state()
         if not generation or generation != review.get('generation'):
             raise ValueError('Face groups changed; refresh the group before selecting it')
         ids=review.get('groups',{}).get(group,[])
@@ -437,7 +462,7 @@ class PostgresStore(Store):
         if not 0<=threshold<=1:
             raise ValueError('Similarity must be between 0 and 1')
         with self.lock:
-            matches=self.matching_pass()
+            matches=self.review_state().get('matches',{})
             ids=sorted(face_id for face_id,match in matches.items()
                 if match['score']>=threshold and (not person or match['person']==person))
             faces=[]
@@ -448,6 +473,12 @@ class PostgresStore(Store):
                     WHERE f.id=ANY(?) AND f.person IS NULL ORDER BY f.id""",[ids[offset:offset+1000]])
                 faces.extend(dict(id=row['id'],revision=row['revision'],person=matches[row['id']]['person']) for row in rows)
             return dict(faces=faces,total=len(faces),threshold=threshold)
+
+    def reject(self, face_id: str, reference_id: str) -> None:
+        """Save a rejection and invalidate selections made before that decision."""
+        with self.lock,self.connection.transaction():
+            super().reject(face_id,reference_id)
+            self.db.execute('UPDATE faces SET updated_at=clock_timestamp() WHERE id=?',[face_id])
 
     def label_face(self, face_id: str, person: str, revision=None) -> None:
         """Check revisions while holding the row lock; audit the actual prior value."""

@@ -36,12 +36,20 @@ function harness(){
     if(options?.body){
       const body=JSON.parse(options.body);posts.push(body);
       if(url==='/api/auto-accept'){automatic={...automatic,...body};result=automatic;}
+      else if(url==='/api/faces/reject'){
+        const face=rows.find(face=>face.id===body.id);
+        face.match_details={...face.suggestion,reason:'rejected',qualified:false};face.suggestion=null;result={rejected:true};
+      }
       else if(url==='/api/group-suggestions')result={location:'Near synthetic landmark',event:'2026-01-02',tags:['Synthetic G','celebration'],photos:body.paths.length,inferred:true};
       else result={saved:true};
     }
     else if(url==='/api/config')result={csrf:'synthetic',auto_accept:true};
     else if(url==='/api/auto-accept')result=automatic;
     else if(url.startsWith('/api/photo?'))result={faces:rows,groups:[],latitude:null,people:[]};
+    else if(url.startsWith('/api/suggestions?')){
+      const face=rows.find(face=>face.id===new URLSearchParams(url.split('?')[1]).get('face'));
+      result=face?.suggestion?[face.suggestion]:[];
+    }
     else if(url.startsWith('/api/faces/group-selection?'))result={faces:groupOffered,total:groupOffered.length};
     else if(url.startsWith('/api/faces/selection?')){
       const params=new URLSearchParams(url.split('?')[1]);
@@ -50,7 +58,7 @@ function harness(){
     }
     else if(url.startsWith('/api/faces?')){
       const params=new URLSearchParams(url.split('?')[1]);
-      const faces=rows.filter(face=>!params.get('person')||face.suggestion?.person===params.get('person'));
+      const faces=rows.filter(face=>(params.get('status')!=='suggested'||face.suggestion)&&(!params.get('person')||face.suggestion?.person===params.get('person')));
       result={faces,total:faces.length,people:[],counts:{total:3,unreviewed:3,suggested:2},suggested_people:[],...reviewMeta};
     }
     return {ok:true,json:async()=>result};
@@ -150,6 +158,36 @@ test('automatic acceptance starts off, saves a chosen rule and can be paused',as
 });
 
 function textTree(node){return [node.textContent||'',...(node.children||[]).map(textTree)].join(' ');}
+
+test('reject removes the suggestion and selection immediately, retaining the face with its reason',async()=>{
+  const h=harness();await ready(h);
+  h.rows[0].suggestion.reference_id='confirmed-a';
+  await h.run("filterFaces('suggested','Synthetic G')");
+  h.nodes.get('face-select-page').onclick();
+  const card=h.nodes.get('face-grid').children[0];
+  const reject=card.children.flatMap(node=>node.children||[]).find(node=>node.tag==='button'&&node.textContent==='Not this person');
+  await reject.onclick();
+  assert.equal(h.run('state.faceSelection.size'),0);
+  assert.equal(h.run('state.faceItems.length'),0);
+  assert.equal(h.posts[0].reference_id,'confirmed-a');
+  await h.run("filterFaces('all')");
+  const rejected=h.nodes.get('face-grid').children[0];
+  assert.match(textTree(rejected),/Unnamed face.*Rejected candidate.*You rejected this candidate/);
+  assert.doesNotMatch(textTree(rejected),/Qualifies as a suggestion|Not this person/);
+});
+
+test('rejecting in face review closes the obsolete confirmation and refreshes the collection',async()=>{
+  const h=harness();await ready(h);
+  h.rows[0].suggestion.reference_id='confirmed-a';
+  await h.run("filterFaces('suggested','Synthetic G');");
+  await h.run('reviewFace(state.faceItems[0])');
+  await h.nodes.get('review-suggest').onclick();
+  const reject=h.nodes.get('review-suggestions').children[0].children.find(node=>node.textContent==='Reject');
+  await reject.onclick();
+  assert.equal(h.nodes.get('face-review').open,false);
+  assert.equal(h.run('state.faceItems.length'),0);
+  assert.match(h.nodes.get('status').textContent,/removed it from suggested matches/);
+});
 
 test('every card explains its nearest candidate without inventing probabilities',async()=>{
   const h=harness();await ready(h);

@@ -400,7 +400,8 @@ class Store:
             raise ValueError("Invalid similarity threshold")
         face = self.face(face_id)
         references = self.rows("""SELECT * FROM faces f WHERE person IS NOT NULL AND label_source='user' AND model=? AND id<>?
-            AND NOT EXISTS (SELECT 1 FROM rejected_matches r WHERE r.face_id=? AND r.reference_id=f.id)""", [face["model"], face_id, face_id])
+            AND NOT EXISTS (SELECT 1 FROM rejected_matches r JOIN faces ref ON ref.id=r.reference_id
+                WHERE r.face_id=? AND ref.person=f.person)""", [face["model"], face_id, face_id])
         candidates = []
         for reference in references:
             try:
