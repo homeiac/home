@@ -228,6 +228,25 @@ jobs, retries, oldest unfinished job age, export status/duration/size, snapshot
 freshness and GUI review operations. Node titles explicitly distinguish percent,
 job counts and seconds. Snapshot age is not query execution time or GPU time.
 
+### Reuse names and places from Immich
+
+The Immich context timer publishes one private SQLite snapshot on Piglet every
+30 minutes. The snapshot contains local reverse-geocoded places and visible
+named people for unambiguous external-library files, identified by relative
+path and byte size. Luna reads it for caption context. The Parquet export
+indexes the same places for Photos search and group suggestions, with
+user-entered locations taking precedence. Previously cached landmarks remain
+searchable. These operations make no external location requests.
+
+The timer also matches current Photos face boxes against Immich boxes on the
+same file. Both boxes must choose each other with IoU of at least 0.50 and an
+advantage of at least 0.20 over the next candidate. It only fills unnamed
+faces. Existing names, cleared labels and rejected matches are preserved.
+Photos shows imported names as **From Immich** and lets you edit them.
+Low-overlap or ambiguous detections stay in review. Imported names remain
+separate from the human-confirmed examples used for embedding matching.
+The reconciliation command defaults to a dry run and reports aggregate counts.
+
 Validation: `TEST_PYTHON=<venv>/bin/python bash scripts/knowledge-index/test-photo-postgres.sh`
 uses a disposable loopback PostgreSQL container and synthetic photos. It checks
 migration preservation, zero-face completion, retry backoff, claim fencing,

@@ -420,7 +420,22 @@ def panels():
     for panel in combined:
         panel["targets"][0].update(instant=True, range=False)
         panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting fresh data"
-    return intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy] + priority_stages, 10) + shift(details, THROUGHPUT_HEIGHT + 39) + shift(p, 56 + THROUGHPUT_HEIGHT)
+    all_panels = intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy] + priority_stages, 10) + shift(details, THROUGHPUT_HEIGHT + 39) + shift(p, 56 + THROUGHPUT_HEIGHT)
+    bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
+    return all_panels + shift(immich_face_panels(), bottom)
+
+
+def immich_face_panels():
+    def result(kind):
+        return f'max(photo_immich_face_reconciliation{{instance=~"$instance",result="{kind}"}})'
+    return [row("Immich face reconciliation", 0),
+            series("Imported names and remaining review", [
+                (result("imported"), "Faces named from Immich"),
+                (result("unreviewed"), "Unnamed current faces")],
+                0, 1, 12, 7, description="Counts after the last successful refresh. Names require an unambiguous match on the same photo. Local reviews and rejections are preserved."),
+            stat("Immich context refresh age", "time()-max(photo_immich_context_timestamp_seconds"+INST+")",
+                 12, 1, w=6, unit="s", thresholds=[("green",None),("orange",2100),("red",4200)]),
+            stat("Names saved last refresh", result("applied"), 18, 1, w=6)]
 
 
 def pipeline_panels():
@@ -465,6 +480,8 @@ def pipeline_panels():
         return 'label_replace(label_replace((' + expression + '), "id", "' + node_id + '", "", ""), "title", "' + title + '", "", "")'
     graph["targets"][0]["expr"] += ' or ' + node('sum(photo_enrichment_jobs{instance=~"$instance",kind=~"ready|retry"})','photo_jobs','PostgreSQL queue (jobs)')
     graph["targets"][0]["expr"] += ' or ' + node('max(photo_snapshot_export_seconds'+INST+')','photo_export','Parquet export (seconds)')
+    graph["targets"][0]["expr"] += ' or ' + node('time()-max(photo_immich_context_timestamp_seconds'+INST+')','immich_metadata','Immich context refresh age (seconds)')
+    graph["targets"][0]["expr"] += ' or ' + node('max(photo_immich_face_reconciliation{instance=~"$instance",result="imported"})','immich_named_faces','Faces named from Immich')
     graph["targets"][0]["expr"] += ' or ' + node('time()-min(photo_snapshot_captured_timestamp_seconds'+INST+')','photo_analytics','DuckDB snapshot age (seconds)')
     graph["targets"][0]["expr"] += ' or ' + node('histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name="photo-review",stage="duckdb.query"}[$__rate_interval])))','photo_gallery','Gallery DuckDB query p95 (seconds)')
     graph["targets"][0]["expr"] += ' or ' + node('histogram_quantile(0.95,sum by(le)(rate(photo_app_db_duration_seconds_bucket{service_name="photo-review",stage="db.query"}[$__rate_interval])))','photo_live_db','GUI PostgreSQL calls p95 (seconds)')

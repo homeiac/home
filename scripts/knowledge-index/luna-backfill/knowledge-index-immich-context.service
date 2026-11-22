@@ -1,9 +1,12 @@
 [Unit]
-Description=Refresh Luna photo context from Immich metadata
+Description=Refresh shared photo context and reconcile named Immich faces
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /opt/knowledge-index/luna-backfill/export-immich-context.py
+ExecStart=/opt/photo-enrichment/gui/venv/bin/python /opt/knowledge-index/luna-backfill/reconcile-immich-faces.py --apply
+Environment=PGSERVICEFILE=/etc/photo-enrichment/pg_service.conf
+Environment=PGPASSFILE=/etc/photo-enrichment/pgpass
 UMask=0077
 Nice=10
-TimeoutStartSec=360
+TimeoutStartSec=600

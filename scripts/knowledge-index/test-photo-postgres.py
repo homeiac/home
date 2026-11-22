@@ -23,6 +23,44 @@ class FakeFaces:
 
 
 class PipelineTests(unittest.TestCase):
+    def test_immich_matches_same_face_without_overwriting_reviews_and_indexes_place(self):
+        import json
+        import runpy
+        import sqlite3
+        code = runpy.run_path(str(Path(__file__).parent/'luna-backfill/reconcile-immich-faces.py'))
+        connection = self.store.connection
+        size = (self.library/self.path).stat().st_size
+        for face_id, box, source in (
+            ('unreviewed', [.6,.6,.8,.8], None),
+            ('cleared', [.7,.1,.8,.3], 'user_cleared'),
+            ('rejected', [.1,.7,.2,.8], None),
+        ):
+            connection.execute("""INSERT INTO faces
+                SELECT %s,path,size_bytes,mtime_ns,%s,confidence,embedding,model,NULL,%s,clock_timestamp()
+                FROM faces WHERE id='stable-face'""", [face_id,box,source])
+        connection.execute("INSERT INTO rejected_matches VALUES ('rejected','stable-face')")
+        snapshot = self.state/'luna-backfill/immich-context.sqlite3'
+        snapshot.parent.mkdir()
+        with sqlite3.connect(snapshot) as db:
+            db.execute('CREATE TABLE context(path TEXT,size INTEGER,metadata TEXT)')
+            db.execute('INSERT INTO context VALUES (?,?,?)',(self.path,size,json.dumps({
+                'place': {'city':'Budapest','country':'Hungary'},
+                'faces': [['Different name',.1,.1,.5,.5],['Imported name',.6,.6,.8,.8],
+                          ['Cleared name',.7,.1,.8,.3],['Rejected name',.1,.7,.2,.8]],
+            })))
+        dry_run = code['reconcile'](connection,snapshot,False)
+        self.assertEqual((dry_run['eligible'],dry_run['protected'],dry_run['disagree']),(1,2,1))
+        self.assertIsNone(self.store.face('unreviewed')['person'])
+        self.assertEqual(code['reconcile'](connection,snapshot,True)['applied'],1)
+        self.assertEqual(code['reconcile'](connection,snapshot,True)['applied'],0)
+        self.assertEqual(self.store.face('stable-face')['person'],'Synthetic person')
+        self.assertEqual(self.store.face('unreviewed')['label_source'],'immich')
+        export_snapshot(self.state)
+        self.assertEqual(self.store.search('Budapest Imported name')['total'],1)
+        self.assertEqual(self.store.group_suggestions([self.path])['location'],'Budapest, Hungary')
+        self.assertEqual(code['match']([[.2,.2,.6,.6]],
+            [['Named',.2,.2,.6,.6],[None,.21,.2,.61,.6]]),{})
+
     def test_names_without_gps_enrich_reindex_and_clear_on_correction(self):
         from photo_enrichment.context_worker import initialize,seed,process
         from photo_enrichment.metrics import Metrics

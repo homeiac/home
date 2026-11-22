@@ -153,4 +153,4 @@ class GalleryReader:
         tags=sorted({t for t,n in counts.items() if n>=max(1,len(rows)/2)}|set(people))[:50]
         return dict(location=next(iter(locations)) if len(locations)==1 else '',
             event=next(iter(dates)) if len(dates)==1 else '',tags=tags,people=people,
-            photos=len(rows),inferred=any(r['location_source']=='nearby_gps' for r in rows))
+            photos=len(rows),inferred=any(r['location_source'] in ('nearby_gps','immich') for r in rows))

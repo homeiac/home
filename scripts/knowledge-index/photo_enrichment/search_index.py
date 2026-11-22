@@ -1,16 +1,33 @@
 """Rebuildable local Parquet search/group index; PostgreSQL facts remain authoritative."""
 import json
+import sqlite3
+from contextlib import closing
 from .places import distance
 from .store import sql_path
 
 TABLES=('photo_search','photo_group_index')
 
 
-def build(db,directory):
+def immich_places(snapshot):
+    """Read the same immutable, exact-file metadata snapshot as the caption workers."""
+    if snapshot is None or not snapshot.is_file():
+        return
+    with closing(sqlite3.connect(snapshot.resolve().as_uri()+'?mode=ro&immutable=1',uri=True)) as source:
+        for path,size,raw in source.execute("""SELECT path,size,json_extract(metadata,'$.place')
+            FROM context WHERE json_extract(metadata,'$.place')<>'{}'"""):
+            place=json.loads(raw)
+            label=', '.join(dict.fromkeys(place[key] for key in ('city','state','country') if place.get(key)))
+            yield dict(path=path,size_bytes=size,location=label)
+
+
+def build(db,directory,immich_snapshot=None):
     for name in ('enriched_media','faces','face_scans','photo_groups','group_members','album_duplicates'):
         db.execute(f'CREATE TEMP VIEW idx_{name} AS SELECT * FROM read_parquet({sql_path(directory/(name+".parquet"))})')
     db.execute('CREATE TEMP TABLE idx_context(path VARCHAR,size_bytes BIGINT,context_location VARCHAR,place_terms VARCHAR,context_tags VARCHAR[],people VARCHAR[],summary VARCHAR)')
     db.execute('CREATE TEMP TABLE idx_places(latitude DOUBLE,longitude DOUBLE,place_label VARCHAR,place_words VARCHAR)')
+    db.execute("""CREATE TEMP TABLE idx_immich_places AS SELECT unnest(?::STRUCT(
+        path VARCHAR,size_bytes BIGINT,location VARCHAR)[],recursive:=true)""",
+        [list(immich_places(immich_snapshot))])
     cache_file=directory/'photo_place_cache.parquet'
     if cache_file.exists():
         cells={}
@@ -49,8 +66,9 @@ def build(db,directory):
                 flatten(list(g.tags)) AS annotation_tags
             FROM idx_group_members gm JOIN idx_photo_groups g ON g.id=gm.group_id GROUP BY gm.path,gm.size_bytes)
         SELECT m.path,m.size_bytes,CAST(to_timestamp(m.capture_ts) AS DATE) AS capture_day,
-            coalesce(p.names,[]::VARCHAR[]) AS people,coalesce(a.annotation_location,c.context_location,pc.place_label) AS location,
-            CASE WHEN a.annotation_location IS NOT NULL THEN 'user' WHEN coalesce(c.context_location,pc.place_label) IS NOT NULL THEN 'nearby_gps' END AS location_source,
+            coalesce(p.names,[]::VARCHAR[]) AS people,coalesce(a.annotation_location,i.location,c.context_location,pc.place_label) AS location,
+            CASE WHEN a.annotation_location IS NOT NULL THEN 'user' WHEN i.location IS NOT NULL THEN 'immich'
+                WHEN coalesce(c.context_location,pc.place_label) IS NOT NULL THEN 'nearby_gps' END AS location_source,
             list_sort(list_distinct(list_concat(coalesce(m.summary_tags,[]::VARCHAR[]),coalesce(c.context_tags,[]::VARCHAR[]),
                 coalesce(a.annotation_tags,[]::VARCHAR[]),coalesce(p.names,[]::VARCHAR[])))) AS tags,
             lower(concat_ws(' ',m.name,m.summary,array_to_string(m.people,' '),array_to_string(tags,' '),
@@ -60,6 +78,7 @@ def build(db,directory):
         LEFT JOIN idx_context c ON c.path=m.path AND c.size_bytes=m.size_bytes
             AND list_sort(list_distinct(c.people))=coalesce(p.names,[]::VARCHAR[])
         LEFT JOIN idx_places pc ON pc.latitude=round(m.latitude,3) AND pc.longitude=round(m.longitude,3)
+        LEFT JOIN idx_immich_places i ON i.path=m.path AND i.size_bytes=m.size_bytes
         LEFT JOIN annotations a ON a.path=m.path AND a.size_bytes=m.size_bytes
         WHERE NOT EXISTS(SELECT 1 FROM idx_album_duplicates d WHERE d.path=m.path)""")
     db.execute(f'COPY idx_photo_search TO {sql_path(directory/"photo_search.parquet")} (FORMAT parquet, COMPRESSION zstd)')

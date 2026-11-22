@@ -64,7 +64,7 @@ def export_snapshot(state: Path, prom: Path | None = None) -> dict:
                     result['tables'][table] = {'file':str(target),'rows':count,'bytes':target.stat().st_size}
                 db.execute('COMMIT')
                 from .search_index import build
-                build(db,directory)
+                build(db,directory,state/'luna-backfill/immich-context.sqlite3')
                 for table in SEARCH_TABLES:
                     target=directory/(table+'.parquet')
                     count=db.execute('SELECT count(*) FROM read_parquet(?)',[str(target)]).fetchone()[0]
