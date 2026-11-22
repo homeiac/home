@@ -290,7 +290,7 @@ nav{display:none}
 </section>
 <section class="slide" data-title="70,000 photos: Luna vs both GPUs" aria-label="Slide 7: 70,000 photos: Luna vs both GPUs">
 <div class="eyebrow">06 / Total time · 70,000 photos</div>
-<h2>Luna: ~22 hours. Both local GPUs: ~37 hours.</h2>
+<h2>Consumer GPUs are competitive. Cloud scales further.</h2>
 <div class="body">
 <div class="row">
 <div>
@@ -298,7 +298,7 @@ nav{display:none}
 <div class="compare"><span>Luna · actual</span><div class="bar" style="--w:58.56%"></div><b>21h 46m</b></div>
 <div class="compare"><span>RTX + Mac<br><small>projected</small></span><div class="bar before" style="--w:100%"></div><b>37h 09m</b></div>
 <p class="note">Luna reached 70,000 photos on Nov 22 at 6:54 a.m. Pacific.<br>The local estimate uses both GPUs' measured 31.4 photos/min.</p>
-<div class="stat"><strong>~15 hours shorter</strong><div class="unit">Luna elapsed time versus the local projection</div></div>
+<div class="stat"><strong>41% less elapsed time</strong><div class="unit">Luna: ~15 hours shorter than the RTX + Mac projection</div></div>
 </div>
 <div>
 <div class="tag">Cost context · the full Luna campaign</div>
@@ -308,11 +308,11 @@ nav{display:none}
 </div>
 </div>
 <div class="flow">
-<div class="node"><b>Luna · measured elapsed time</b>Includes videos, retries and interruptions.<br>20 cloud requests at once in the final configuration.</div>
-<div class="node"><b>RTX 3070 + Mac GPU · estimate</b>70,000 ÷ 31.4 photos/min ÷ 60.<br>Assumes both stay available throughout.</div>
+<div class="node"><b>Local: quality and value</b>Our assessment: competitive captions for this library.<br>A modest RTX 3070 plus the Mac puts existing hardware to work.</div>
+<div class="node"><b>Cloud: more work in parallel</b>20 concurrent requests helped clear the backlog sooner.<br>The measured advantage is capacity and elapsed time.</div>
 </div>
 </div>
-<div class="source">Luna milestone uses retained job timestamps: Nov 21 9:08:44 a.m. → Nov 22 6:54:17 a.m. Pacific. Local rate: 943 distinct photos in 30 minutes, RTX + Mac combined. Different workloads; not an identical-input race. Luna's ~$43 covers the whole campaign, including the pilot allowance, and is not an actual Enterprise bill. <a href="assets/local-photo-pipeline/evidence.md#frontier-model-versus-local-gpu">Calculations and evidence</a>.</div>
+<div class="source">41.4% = 1 − Luna elapsed / local projected time. Luna includes videos, retries and interruptions; the local estimate assumes both GPUs stay available. Different workloads, not a controlled race. Quality is the author's practical assessment, not a scored blind test. ~$43 is full-campaign API-equivalent accounting, not an invoice. <a href="assets/local-photo-pipeline/evidence.md#frontier-model-versus-local-gpu">Calculations and evidence</a>.</div>
 </section>
 <section class="slide" data-title="Database responsibilities" aria-label="Slide 8: Database responsibilities">
 <div class="eyebrow">07 / Give each database a clear job</div>

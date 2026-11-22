@@ -105,7 +105,11 @@ first historical moment when 70,000 items had any version of a caption.
 
 The combined local projection is `70,000 / 31.4 / 60 = 37.155 hours`, or
 **37h 09m**, assuming both GPUs remain available at that sustained rate. The
-observed Luna interval is about **15h 24m shorter than this projection**. This
+observed Luna interval is about **15h 24m shorter than this projection**.
+The percentage reduction is `100 × (1 − 78,333 / 133,757.962) = 41.4368%`,
+displayed as **41% less elapsed time** with the local projection as denominator.
+Equivalently, the local projection is 70.76% longer than Luna, using Luna as the
+denominator; the slide uses only the first percentage to avoid mixing bases. This
 is not a completed local run of the same 70,000 photos or a controlled model
 speed/quality comparison. Earlier individual-GPU trials used different workloads
 and are not added to this combined rate.
@@ -121,6 +125,21 @@ that already included the Mac. It has been removed. No combined RTX-host/Mac
 energy measurement or hardware allocation is available in this comparison;
 therefore the slide makes no numerical local-cost or billed-savings claim.
 
+
+### What the local result supports
+
+The slide's editorial takeaway is that a consumer RTX 3070, alongside the Mac GPU,
+is a competitive practical setup for this library: useful captions, existing
+hardware, and no per-request API fee. The quality statement records the author's
+practical assessment supplied in the conversation. No scored blind comparison,
+quality-equivalence rate or price/performance superiority has been established.
+The timing estimate remains the **combined RTX + Mac** result, not RTX-only.
+
+Luna's final configuration submitted 20 requests concurrently. Higher concurrency
+and shorter campaign elapsed time support the cloud-capacity point, but do not
+isolate a causal contribution from model architecture or cloud infrastructure.
+The actual cloud hardware allocated to these requests was not measured, so the
+comparison does not pit the home GPUs against an entire provider data center.
 
 ## Closing the final caption gaps
 
