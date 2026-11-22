@@ -1,271 +1,176 @@
-# Delete From the Cloud Without Fear: Backing Up Google Drive, Google Photos and OneDrive to Your Homelab (2026 Guide)
+# A local photo library that earns its keep
 
-*"Your storage is almost full." Instead of paying for the next tier, I pulled everything home, proved the copies were good, and only then deleted from the cloud. Here's the exact, scripted, step-by-step way to do it, including the 2025 Google Photos API change that breaks every tutorial you'll find.*
+*Updated November 21, 2026. [Animated ten-slide presentation](local-photo-pipeline-slides.html) · [Measurements and screenshot provenance](assets/local-photo-pipeline/evidence.md).*
 
-> **Status:** living guide. Steps marked ✅ are built and verified; 🚧 steps land before this guide is final.
-> Everything here is a committed script or a GitOps manifest. Design spec: [`docs/plans/cloud-drive-backup-and-reclaim.md`](../plans/cloud-drive-backup-and-reclaim.md).
+The value is straightforward: make the “Google storage almost full” warning actionable, keep recoverable local copies, and turn an archive into a library you can search by place, person and description. The same system is a useful real-world test of data pipelines: what belongs in PostgreSQL, what belongs in Parquet, and when DuckDB saves work instead of repeating it.
 
----
+The result is a preserved archive, an Immich library, a queryable inventory, and resumable photo/video captioning. Local RTX and Mac workers sustained **31.4 photos per minute over a measured 30-minute window**. An optional cloud caption worker reached **69.3 saves per minute** in a separate tuning trial. These measure different workloads and routes, not interchangeable benchmark scores.
 
-## TL;DR
+| Value | What the system delivers | What remains a separate responsibility |
+|---|---|---|
+| Reduce cloud-storage pressure | An inventory of likely quota-consuming files and a path to verify local copies before reclaiming space | Copying files does not free Google quota; this report does not establish how much cloud storage was actually deleted |
+| Keep local backups | Originals and sidecars, version preservation, ZFS and an independent USB copy workflow | Verify both copies and restoration; two disks in one home do not provide an off-site copy |
+| Make images useful | Immich dates/GPS, thumbnails, search, faces and OCR; captions using saved context | Suggested names and generated descriptions still need appropriate confidence and review policies |
+| Evaluate data pipelines and DuckDB | Durable progress counters, stage timings, portable outputs and Git-controlled live tuning | A busy GPU or a successful request is not necessarily completed, persisted work |
 
-1. **Measure first.** My "Google Drive is full" problem was actually a **Google Photos + Gmail** problem. Drive was about 8% of the quota.
-2. **rclone can't back up Google Photos anymore.** Since 2025-03-31, the Photos API only exposes photos *the app itself uploaded*. Use **scheduled Google Takeout** instead.
-3. **Never `rclone sync` a backup you plan to delete from.** The day after you delete in the cloud, `sync` deletes your only copy. Use `rclone copy`.
-4. **Two copies, two disks, matching hashes, an approved list.** Only then delete, and to the Trash first.
-5. **Keep your laptop out of the data path.** Do the OAuth sign-in through an SSH tunnel; the data goes cloud → server directly.
+## The end architecture
 
----
+![Final architecture: preserved originals feed Immich and the catalog; PostgreSQL coordinates live state; Parquet and DuckDB serve analytical reads; local and optional cloud caption routes publish durable results.](assets/local-photo-pipeline/architecture.svg)
 
-## Why this is harder than "just run rclone"
+The storage host owns Takeout extraction and indexing. Drive and OneDrive use the existing Kubernetes `rclone copy` job into the backup area; Google Photos arrives through Takeout archives with JSON sidecars. Validation and atomic publication keep incomplete archives out of the visible library. Each ingested unit produces Parquet facts. Replaying a unit replaces its output instead of adding duplicate rows.
 
-Copying files is easy. The hard part is the **delete**. Once you remove a file from Google or Microsoft, your homelab copy is the only one, and every shortcut stops being a shortcut:
+Immich reads the originals through a read-only external mount. Its saved metadata, places and named faces become caption context instead of being rediscovered for each request. The context exporter matches source path and file size, skips ambiguous matches, and preserves provenance. Optional cached place references can help; a cache miss proceeds without blocking the caption queue. Immich edits live in its database, so backing up originals alone does not preserve those edits. [Immich external-library documentation](https://docs.immich.app/features/libraries/).
 
-| Shortcut | What goes wrong |
-|----------|-----------------|
-| `rclone sync` nightly | Mirrors your cloud deletions → wipes the backup |
-| One copy on one disk | One dead disk = data gone |
-| "It finished, so it's fine" | Partial runs, quota errors, skipped files |
-| Google Photos via rclone | Since 2025 it only sees photos rclone uploaded |
-| Deleting by gut feel | You delete the one folder that didn't copy |
+PostgreSQL owns the photo application's jobs, leases, human labels and rejections. Published Parquet snapshots support DuckDB browsing and analysis. Recent PostgreSQL edits overlay those snapshots immediately: a refresh must never resurrect a rejected name.
 
-So the design is built around one rule: **you may delete a cloud file only if you can prove it exists, byte-identical, in two independent local copies.**
+Piglet owns caption inputs and durable outputs. Local capacity comes from RTX/Ollama plus an optional Mac/Metal worker. An optional Luna submitter on always-on still-fawn uses a shared reservation/accounting ledger and publishes into its own Parquet dataset. **This optional route sends images or video frames and context to a cloud service.** Local archival and captioning remain usable without it. Separate model outputs make comparisons explicit.
 
-## What you'll build
+Applications stay behind private Traefik access. Kubernetes resources use Git/Flux; host workers use versioned installers and systemd. Some components still use the feature branch's Flux preview: implemented architecture does not mean every rollout change has merged to main.
 
+## Before and after: count work that actually landed
+
+“Ingest” hides three jobs: transferring/extracting originals, indexing metadata, and enriching media. The strongest throughput evidence here concerns **caption enrichment saved to Parquet**, not internet download speed.
+
+| Change or trial | Before | After | Interpretation |
+|---|---:|---:|---|
+| Add Mac capacity to RTX | 16.0 saves/min | 22.3 saves/min | **39% higher observed throughput**, ten-minute production windows; 223 distinct saved items verified after |
+| Batch barriers → continuous refill | 21.4 saves/min | 28.0 saves/min | The windows contained 38 vs. 1 videos; do not attribute the whole increase to scheduling |
+| Sustain photos-first local work | — | 31.4 photos/min | 943 distinct photos, zero videos, 30 minutes; excludes Luna and cache hits |
+| Luna request slots 4 → 8 → 20 | ~31 → ~53 | ~66 saves/min | Different production media mixes; preparation became the next bottleneck |
+| Luna: 20 requests, four preparation slots; batch 24 → 48 | 62.6 saves/min | 69.3 saves/min | About 11% higher in sequential production trials, not identical-input benchmarking |
+| Mac benchmark: concurrent requests 4 → 20 | 9.62 saves/min; p95 48 s | 9.65 saves/min; p95 124 s | Throughput essentially flat; retain four slots |
+
+The local photos-first rate estimates a photo backlog only while both GPUs remain available. Videos cost differently. Combined captions can include another model's answer for an already-described item, so completion estimates use **first captions on distinct items**, not total outputs.
+
+![Actual Grafana backend throughput, separating all captions from first captions on distinct items.](assets/local-photo-pipeline/grafana-throughput.jpg)
+
+*Actual dashboard capture; fixed window November 21 11:00–November 22 02:00 UTC. The combined-output and first-caption lines answer different questions. Screenshot dollar figures are configured estimates, not an invoice or independently measured savings.*
+
+### How speed improved
+
+**Refill a free slot immediately.** A batch barrier makes a fast request wait for the slowest item in its batch. Continuous dispatch feeds available capacity while other requests remain in flight.
+
+**Route work according to cost.** In one mixed window, photo model requests averaged 14.3 seconds versus 25.6 seconds for video. On the Mac, prompt evaluation alone was 4.3 seconds for photos versus 41.1 seconds for video. Photos-first scheduling and photo-first Mac routing made the chosen backlog cheaper to process. This prioritizes photos; it does not eliminate deferred video work.
+
+**Reuse existing computation.** Immich supplies saved location and face context. Face matching reuses embeddings. Repeated Parquet scans became one streaming query with bounded batches. Optional place lookups no longer hold up the cloud queue.
+
+**Separate preparation from model concurrency.** At 20 Luna requests, frame preparation plus its wait exceeded median model-request duration. Increasing preparation workers from four to six reduced throughput from 62.6 to 55.9 saves/min in the 24-job trials. Returning to four preparation slots with a 48-job batch produced 69.3/min. More workers was a hypothesis to measure.
+
+**Stop when a knob stops helping.** Matched photo-only local trials with 24- and 48-item pages both saved 32/min. The Mac's 20-request experiment mostly added latency. Both results prevented tuning from becoming a search for ever-larger settings.
+
+## How live tuning helped
+
+![Actual Grafana GPU-slot occupancy, applied Git policy and per-stage timings.](assets/local-photo-pipeline/grafana-live-tuning.jpg)
+
+*Same fixed UTC window. The applied-policy panel records continuous dispatch, page size 48, photos-first ordering and the activation time. Photo, video and query/write timings remain separate.*
+
+The feedback loop is **change one Git setting → verify its applied time → watch short-window feedback → compare a complete window → verify persisted rows → keep or revert**.
+
+The worker checks policy at queue boundaries, at most once every 30 seconds, resolving content by commit. Changes take effect after outstanding requests finish. Failed fetches retain the last valid settings. Dispatch tuning therefore does not require restarting the backfill or throwing away completed work.
+
+Grafana combines a value stream map with stage durations, queue depth, slot occupancy, worker freshness, errors and host/VM utilization and saturation. The map exposes dependencies; its nodes use different units. Concurrent stage-operation seconds are not wall-clock flow efficiency, and “model request” includes service waiting, not only GPU execution.
+
+Use the two-minute graph for feedback, then compare a full ten-minute window with both GPUs available and a similar media mix. The measurement tool checks Prometheus counters against saved Parquet rows:
+
+```bash
+CB_HOST=root@<storage-host> python3 scripts/knowledge-index/measure-bonsai-dispatch.py \
+  --before <baseline-window-end-UTC> --after <candidate-window-end-UTC> \
+  --minutes 10 --follow
 ```
- Google Photos ──scheduled Takeout (.tgz)──▶ OneDrive / Drive
- Google Drive ─┐
- OneDrive ─────┤  rclone COPY (never sync) — nightly K8s CronJob
-               ▼
-   PRIMARY   <smb-share>/cloud-backup/{gdrive,onedrive,gphotos}
-             browseable from any device · ZFS snapshots for history
-               │  host timer: mount share READ-ONLY → rclone copy
-               ▼
-   SECONDARY <usb-ssd> (exFAT) — separate physical disk, readable on any laptop
-               │
-               ▼
-   RECLAIM   report → verify in BOTH copies → you approve a list → delete to Trash
-```
 
-### Aliases used in this guide
+At the sustained photos-first measurement, model requests accounted for about 96% of recorded stage time; queue reads and writes together were under 1%. That supported stopping queue-page tuning. The Luna trials also checked the local worker: it saved 112 and 128 photos in equal four-minute windows before and during the larger-batch trial. This was a useful guardrail, not proof of zero interference under every workload.
 
-Replace these with your own values. All the scripts read them from environment variables, with defaults in `scripts/backup/cloud-backup-common.sh`.
+Historical before/after cards are recorded trials. Separately labeled current-rate lines describe the present run. See the [dispatch measurement procedure](../../scripts/knowledge-index/bonsai-dispatch.md) and [Luna operating policy and trials](../../scripts/knowledge-index/luna-backfill/README.md).
 
-| Alias | Meaning | Env var |
-|-------|---------|---------|
-| `<backup-host>` | Linux box (mine is a Proxmox node) that runs rclone and has the USB SSD | `CB_HOST=root@<backup-host>` |
-| `<k8s-node>` | Kubernetes node that hosts the SMB share's storage | (manifest `nodeSelector`) |
-| `<smb-share>` | Your SMB share, e.g. `\\nas\secure` | — |
-| `<usb-ssd-serial>` | USB serial of the second-copy disk (`lsblk -dno NAME,SERIAL`) | `CB_SSK_SERIAL` |
-| `gdrive-backup`, `onedrive` | rclone remote names | `CB_GDRIVE_REMOTE`, `CB_ONEDRIVE_REMOTE` |
+## PostgreSQL and DuckDB each have a job
 
-### What you need
+PostgreSQL handles changing records and concurrent application activity: reserve work, save a review, reject a candidate. Parquet provides portable outputs. DuckDB queries them for inventory and analysis without turning every historical fact into a transactional row.
 
-- A Linux server that stays on (any distro with `bash`, `curl`, `python3`)
-- An SMB share with room for everything (or any directory you can browse; the SMB part is optional)
-- A second disk for the second copy, ideally a USB SSD
-- A browser, once per provider, for sign-in
-- Optional: Kubernetes + Flux, if you want the nightly job as GitOps (a systemd timer works too)
+`knowledge.duckdb` contains derived views. Rebuilding that catalog is different from re-extracting originals, recreating embeddings or rerunning captions. Normal ingest indexes the new archive's delivered paths; full backfill is an initial-load/recovery operation. Snapshot refreshes are deliberate work. Scanning all embeddings for each result page was an implementation problem, not a necessary DuckDB cost.
 
----
+The face-matching fix opened one query and streamed 256-row batches. A bounded profile reduced later batch reads from approximately 0.96–1.16 seconds to 8–10 milliseconds, following roughly 0.86 seconds of setup. This measures the **read phase**, not a hundredfold improvement in total face matching. Likewise, the dashboard's quota-query comparison uses a configured 2,280-second sidecar-scan baseline; it is not a universal database benchmark.
 
-## Step 1 ✅ Install a pinned, verified rclone
+## Build the final system, step by step
+
+These are steps for the final design. Scripts contain homelab-specific inventory and storage assumptions; adapt them before use elsewhere. Run from the repository root, choose the storage host from inventory, and keep credentials outside Git.
+
+### 1. Measure sources and provision two destinations
+
+Measure Drive and OneDrive separately from Photos and Gmail. Allow space for originals, sidecars, versions and extraction on the primary and second disk. Configure rclone on the storage host so the laptop is only the sign-in interface.
 
 ```bash
 scripts/backup/cloud-backup-install-rclone.sh
-```
-
-Distro packages lag badly: Debian 12 ships rclone **1.60 (2022)**, too old for today's OneDrive API. The script installs a pinned official release and checks it against rclone's published `SHA256SUMS` before installing:
-
-```bash
-V=v1.76.0; F=rclone-$V-linux-amd64.deb
-curl -fsSLO https://downloads.rclone.org/$V/$F
-curl -fsSL https://downloads.rclone.org/$V/SHA256SUMS | grep " $F$" | sha256sum -c -
-dpkg -i "$F"
-```
-
-Re-running it does nothing if that version is already installed.
-
-## Step 2 ✅ Connect Google Drive
-
-If you already have an rclone Google remote (I had one for Postgres backups, stored as a **SOPS-encrypted** Kubernetes secret), reuse it:
-
-```bash
-scripts/backup/cloud-backup-seed-gdrive-config.sh
-```
-
-It decrypts the secret on your workstation and **streams** it over SSH into the server's rclone config: no plaintext file on your laptop, nothing printed. It merges by remote section, so other remotes on the server are kept.
-
-No existing remote? Follow Step 3 with `drive` in place of `onedrive`.
-
-> ⚠️ **2026 gotcha:** if rclone prints *"This remote uses rclone's shared Google Drive client_id, which is being retired"*, create your own OAuth client (Google Cloud Console → APIs & Services → enable **Drive API** → OAuth client ID → *Desktop app*) and put `client_id` and `client_secret` in the remote. Otherwise your backups stop working partway through 2026.
-
-## Step 3 ✅ Connect OneDrive without your laptop in the data path
-
-OAuth needs a browser once. The trick: run rclone's config **on the server**, inside an SSH session that tunnels rclone's callback port back to your laptop.
-
-```bash
 scripts/backup/cloud-backup-auth-onedrive.sh
-# which is essentially:
-ssh -t -L 53682:127.0.0.1:53682 root@<backup-host> \
-  "rclone config create onedrive onedrive"
-```
-
-1. rclone prints a URL → open it in your browser → sign in to Microsoft.
-2. Microsoft redirects to `127.0.0.1:53682`. On your laptop that's the tunnel, so the token is delivered **to the server**.
-3. Answer rclone's prompts: *OneDrive Personal or Business*, then pick your drive.
-
-Your browser only ever sees the login page. Tokens live only in the server's rclone config: never in git, never on the SMB share.
-
-## Step 4 ✅ Measure before you design anything
-
-```bash
 scripts/backup/cloud-backup-measure.sh
 ```
 
-For each remote it runs `rclone about` (quota) and **one** recursive `rclone lsjson`, and prints:
+Reuse an existing encrypted Drive configuration with `cloud-backup-seed-gdrive-config.sh`, or configure a new provider remote. Google Photos uses Takeout here because Google's Library API focuses on app-created content following its March 31, 2025 changes. [Google's API update](https://developers.googleblog.com/en/google-photos-picker-api-launch-and-library-api-updates/).
 
-- total size and file count
-- Google-native Docs/Sheets/Slides (they don't use quota, and back up as `.docx`/`.xlsx`/`.pptx` exports)
-- size per top-level folder, and the 30 largest files
-- a **capacity gate**: does the total fit on *both* the primary and the second disk?
+### 2. Copy and ingest on the storage host
 
-My result, anonymized:
-
-```
-Total:   100 GiB
-Used:      9.2 GiB    <- Google Drive
-Other:    80.2 GiB    <- Google Photos + Gmail (same quota!)
-Free:     10.6 GiB
-
-Files with data : ~23k   total  8.25 GB
-Google-native   : 114 Docs/Sheets/Slides
-```
-
-**Drive wasn't the problem.** Without measuring, I'd have built a careful Drive pipeline that freed 8 GB of an 80 GB problem.
-
-> 💡 A Google `rclone about` shows **Used** (Drive) vs **Other** (Photos + Gmail). Run it before you plan anything.
-
-## Step 5 ✅ Prepare the second-copy disk
+The existing cloud-drive-pull CronJob performs the Drive/OneDrive copy; the host performs Takeout extraction. Use `copy` semantics so source deletion does not delete destination files. Preserve overwritten versions through the backup workflow. Validate Takeout archives, retain JSON sidecars, and atomically publish completed extraction units. [rclone copy semantics](https://rclone.org/commands/rclone_copy/).
 
 ```bash
-CB_SSK_SERIAL=<usb-ssd-serial> scripts/backup/cloud-backup-format-ssk.sh --yes
+scripts/backup/cloud-backup-run-now.sh
+scripts/backup/gphotos-ingest-ctl.sh start
+scripts/backup/gphotos-ingest-ctl.sh status
 ```
 
-This step is **destructive**, so the script:
+The ledger skips completed archives. An index failure records pending recovery work without discarding preserved originals. Keep Takeout extraction and index builds outside the K3s VM's control-plane I/O path. See the [backup scripts](../../scripts/backup/README.md) and [host ingest implementation](../../scripts/backup/host/gphotos-ingest-host.sh).
 
-- finds the disk by **USB serial**, never by `/dev/sdX` (which can change between boots)
-- refuses if any partition is mounted or belongs to an imported ZFS pool
-- writes a fresh GPT with one partition and formats it **exFAT**
+### 3. Verify backup and restoration before cloud reclamation
 
-**Why exFAT?** If the server is dead, you can plug the disk into any Mac, Windows or Linux laptop. **Not FAT32:** its 4 GB file-size limit rejects videos and Takeout archives.
+Inspect the mirror targets before using `cloud-backup-install-mirror.sh`; check `cloud-backup-status.sh` and mirror reports. The current USB SSD policy copies Drive/OneDrive plus only the Photos quota-candidate subset because the full photo library does not fit. The additional HDD target excludes Photos. Thus this setup does **not** establish two complete copies of every photo. Expand destination capacity and coverage if that is the requirement; verify every proposed reclaim item independently. Verify selected files and metadata against **both** physical destinations, including hashes where available and restore/open tests. A successful mirror exit code alone is not that proof.
 
-> 🧯 Mine turned out to be an old Proxmox boot disk. Before wiping it I imported its ZFS pool **read-only** (`zpool import -o readonly=on -N -R /mnt/x <id>`) to check nothing irreplaceable was on it. Do the same with any "spare" disk.
+Cloud deletion is a separate reviewed operation. The quota view estimates candidates from sidecar rules; it is not Google's billing authority. This article does not claim completed reclaim automation or a measured decrease in cloud quota. Keep an off-site copy if removing the cloud copy.
 
-## Step 6 🚧 Google Photos: scheduled Takeout
-
-**Why not rclone?** On **2025-03-31** Google restricted the Photos Library API: apps can only read media **they uploaded**. rclone's `googlephotos` backend, and every other third-party tool, can no longer download your existing library, and old tokens don't keep full access. The Picker API needs you to select items by hand.
-
-**What works:** Google Takeout, which since June 2026 can run on a **schedule**.
-
-1. Go to takeout.google.com → **Deselect all** → tick **Google Photos only** (a Photos-only selection is required for scheduled exports).
-2. **Frequency:** *Export every 2 months for 1 year*.
-3. **File type and size:** `.tgz`, **50 GB**.
-4. **Destination:** *Add to OneDrive* or *Add to Drive*. Pick the one with **free space ≥ your Photos size**. The archives temporarily count against that drive's quota. My Google account had 10.6 GiB free for an ~80 GiB library, so the first full export went to OneDrive.
-5. Set a calendar reminder for **11 months from now**: the schedule expires after a year.
-
-The nightly pull (Step 7) picks the archives up like any other file. An **ingest job** then:
-
-- checks each archive (`tar -tzf` completes; size matches the cloud copy)
-- extracts it into `cloud-backup/gphotos/`, keeping Takeout's `.json` sidecars (date taken, GPS, description)
-- records it in a ledger (`_ingested.tsv`)
-- marks the cloud copy of the archive deletable **only after** the extracted files are on the second disk too
-
-> Reports disagree on whether exports after the first are incremental. Check the size of your second export before relying on it.
-
-## Step 7 🚧 The nightly pull: `copy`, never `sync`
-
-A Kubernetes CronJob (Flux-managed) on `<k8s-node>`, writing into the SMB share:
+### 4. Build the inventory; append new units thereafter
 
 ```bash
-rclone copy gdrive-backup: /backup/gdrive \
-  --backup-dir /backup/.versions/gdrive/$(date +%F) \
-  --drive-export-formats docx,xlsx,pptx,svg \
-  --fast-list --checksum
+scripts/knowledge-index/install-duckdb.sh
+scripts/knowledge-index/knowledge-index-ctl.sh install
+scripts/knowledge-index/knowledge-index-ctl.sh backfill start
+scripts/knowledge-index/knowledge-index-ctl.sh backfill status
+scripts/knowledge-index/knowledge-index-ctl.sh quota-diff
 ```
 
-- **`copy`** only adds or updates. A cloud delete never propagates to your backup.
-- **`--backup-dir`** keeps the old version of any file that changed.
-- The job writes a status file **only on success**, so a half-finished run never looks finished.
+The initial backfill covers existing files. Subsequent ingestion invokes the per-unit hook. Check pending units and compare the quota view with the independent sidecar oracle. The [index runbook](../runbooks/knowledge-index.md) documents schemas and recovery. Drive/OneDrive adapters and automated copy-proof refresh remain separate from the implemented Photos index.
 
-## Step 8 🚧 History: ZFS snapshots
+### 5. Add Immich over preserved originals
 
-The share's storage gets daily (×14) and monthly (×6) ZFS snapshots with `sanoid`. Ransomware or a fat-fingered `rm -rf` on the share can be rolled back.
+Use the [versioned Immich manifests](../../gitops/clusters/homelab/apps/photo-enrichment/immich-pilot/) through Flux, a read-only external mount, persistent database storage and private Traefik access. Process metadata/thumbnails before downstream face, search and OCR work. Back up Immich's database too. Follow the [external-library guide](https://docs.immich.app/guides/external-library/) and [GPU OCR runbook](../runbooks/immich-ocr-gpu.md).
 
-## Step 9 🚧 The second copy
+Native Immich indexing can finish while captioning or custom-metadata reconciliation remains pending. At the captured endpoint, native queues were zero, while synchronization still had pending assets and conflicts. These have separate completion criteria.
 
-A systemd timer on `<backup-host>`:
+### 6. Add live review state and resumable captioning
 
-1. mounts the SMB share **read-only**, so the mirror job can't damage the primary
-2. checks the USB disk's serial
-3. runs `rclone copy` share → disk, then `rclone check` to confirm they match
+Follow the [photo application's deployment guide](../../scripts/knowledge-index/photo_enrichment/README.md) for PostgreSQL, periodic Parquet export and the private review route. Preserve human decisions and provenance. Default review should focus on actionable suggestions for selected people, rather than treating every unnamed detection as mandatory work.
 
-## Step 10 🚧 Reclaim: delete only what you can prove you have
+Evaluate a sample against the configured local endpoint before starting the resumable worker:
 
 ```bash
-scripts/backup/cloud-reclaim-report.sh      # read-only
-# → reclaim-candidates-<date>.csv: path, size, hash, in_primary, in_second_copy, verified
+export CB_HOST=root@<storage-host>
+export KI_ENDPOINT=http://<existing-ollama-service> KI_MODEL=bonsai-27b KI_API=ollama
+scripts/knowledge-index/knowledge-index-ctl.sh enrich sample 20
+scripts/knowledge-index/knowledge-index-ctl.sh enrich start
+scripts/knowledge-index/knowledge-index-ctl.sh enrich status
 ```
 
-Open the CSV and keep the rows you want deleted. Then:
+Add the [Mac worker](../../scripts/knowledge-index/mac-bonsai/README.md) when available. For cloud assistance, follow the [Luna setup/cutover procedure](../../scripts/knowledge-index/luna-backfill/README.md): interactive sign-in, one active submitter, shared reservations and an estimated-cost budget. Reuse saved Immich context. Keep model/version identities separate for intentional comparisons; retries should not duplicate successful outputs.
 
-```bash
-scripts/backup/cloud-reclaim-delete.sh --approved my-approved-list.csv
-```
+### 7. Instrument and tune with evidence
 
-It re-verifies every row against **both** copies, shows the total, and makes you **type the GB figure** to confirm. Files go to **Drive Trash / OneDrive Recycle Bin**; you empty those yourself, later.
+Deploy dashboards and alerts through Flux. Check freshness, errors, utilization and saturation at workload and host layers. Record a baseline, change one policy, verify its applied time, and compare persisted results and media mix. Keep a useful setting or restore the prior Git policy. `scripts/knowledge-index/check-promql.sh` validates expressions against Prometheus. The [Immich observability guide](../runbooks/immich-observability.md) covers native-processing signals.
 
-**Google Photos** can't be deleted through the API either. The report gives you verified album and date ranges, and you delete them in the Photos web UI. They sit in Photos Trash for 60 days.
+## Interesting, weird problems
 
----
+| Symptom | Actual cause | Useful lesson |
+|---|---|---|
+| Copying an archive disturbed Kubernetes | Bulk writes through the VM/storage path could stall control-plane I/O | Ingest on the host; inspect guest and host I/O together |
+| Correct-size archive would not decompress | File length did not prove valid content | Validate archive integrity; range repair verifies returned byte ranges |
+| Throughput rose and fell every five minutes | Row totals were sampled every five minutes; a trend over that staircase manufactured waves | Measure durable saves directly and label the rate window |
+| Twenty Mac requests barely beat four | Additional requests waited behind the same capacity; p95 grew 48 → 124 seconds | Measure latency as well as throughput |
+| Cloud work stopped when the laptop slept | Submission/accounting depended on an intermittently awake client; missing usage retained a budget hold | Use an always-on submitter and explicit shared accounting state |
+| “Not this person” still displayed the same name | A saved rejection and cached analytical view had different freshness | Overlay live PostgreSQL decisions and invalidate stale matches |
 
-## The safety rules (enforced in code, not good intentions)
-
-| # | Rule | Enforcement |
-|---|------|-------------|
-| 1 | Backups never delete local data because it vanished upstream | `copy` + `--backup-dir`; a test greps for `rclone sync` |
-| 2 | The mirror can't modify the primary | read-only SMB mount |
-| 3 | Delete only if hash-identical in **both** copies | `rclone check` against both before listing a file |
-| 4 | Delete only what you approved | `--approved` list plus typed confirmation |
-| 5 | Deletes are recoverable | Trash / Recycle Bin first |
-| 6 | Right disk, every time | located by serial, mounted by UUID |
-| 7 | Stale backups block deletes | status files older than 48 h → reclaim refuses to run |
-| 8 | Takeout archives survive until extracted **and** mirrored | ingest ledger + second-copy check |
-
-## Mistakes I made so you don't have to
-
-- **Planned around the wrong service.** Measure first (Step 4).
-- **Trusted an API that changed.** Google Photos via rclone stopped working in 2025. Takeout is the way now.
-- **Nearly used `sync`.** It's the default in most tutorials and the worst choice when you plan to delete.
-- **Gave a laptop network adapter a static IP with no gateway.** macOS made that adapter primary and the whole laptop lost internet. If you hand-configure a second interface, check `netstat -rn` afterwards.
-
-## FAQ
-
-**Why not Google Drive for Desktop or the OneDrive app on a laptop?** That puts the laptop in the data path and ties the backup to it being on, synced, and not low on disk.
-
-**Is two copies in one house enough?** Not against fire or theft. Add an offsite third copy for anything irreplaceable, e.g. a disk at a friend's place or a cold-storage bucket.
-
-**What about Gmail?** Same quota, same Takeout. Select *Mail* in a separate export. It isn't covered here yet.
-
----
-
-*All scripts: [`scripts/backup/`](../../scripts/backup/) · Design: [`docs/plans/cloud-drive-backup-and-reclaim.md`](../plans/cloud-drive-backup-and-reclaim.md)*
-
-### Sources
-
-- [rclone forum: Google Photos no longer allowing rclone access](https://forum.rclone.org/t/google-photos-no-longer-allowing-rclone-access-to-all-photos-any-workarounds-why-not-add-this-feature-to-gphotosdl/54310)
-- [TrueNAS: Google Photos cloud sync limitations](https://www.truenas.com/docs/scale/25.10/scaletutorials/dataprotection/cloudsynctasks/addgooglephotoscloudsynctask/)
-- [Google: How to download your Google data (Takeout, scheduled exports)](https://support.google.com/accounts/answer/3024190)
-- [9to5Google: Google Photos scheduled exports (June 2026)](https://9to5google.com/2026/06/01/google-photos-schedule-export/)
-- [rclone: Making your own Google Drive client_id](https://rclone.org/drive/#making-your-own-client-id)
+The durable result is preserved data, useful enrichment, and a feedback loop that can tell whether the next change actually helps. The [evidence notes](assets/local-photo-pipeline/evidence.md) distinguish measurements, architectural facts and outstanding work.

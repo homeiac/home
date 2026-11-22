@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 450" role="img" aria-labelledby="title desc">
+<title id="title">The final photo pipeline</title>
+<desc id="desc">Photos Takeout is validated and ingested on the host into ZFS originals. The independent USB policy covers a quota subset. Originals feed the inventory, read-only Immich and caption workers. PostgreSQL owns live decisions. Local and optional cloud captions and PostgreSQL snapshots publish Parquet for DuckDB. Git and Grafana form a feedback loop.</desc>
+<defs>
+<marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+<path d="M0 0L7 3.5L0 7" fill="#377b75"/>
+</marker>
+</defs>
+<rect width="1200" height="450" rx="20" fill="#f3f4ed"/>
+<g stroke="#377b75" stroke-width="2.5" fill="none" marker-end="url(#arrow)">
+<path d="M225 75H270"/>
+<path d="M485 75H535"/>
+<path d="M750 75H920"/>
+<path d="M640 115V147H117V180"/>
+<path d="M640 147H377V180"/>
+<path d="M750 100H840V147H1040V180"/>
+<path d="M485 220H535"/>
+<path d="M750 220H920"/>
+<path d="M640 260V325"/>
+<path d="M1040 260H1175V365H750"/>
+<path d="M535 365H225"/>
+<path d="M117 260V325"/>
+</g>
+<g stroke="#afc4bc" stroke-width="2" fill="#fff">
+<rect x="10" y="35" width="215" height="80" rx="10"/>
+<rect x="270" y="35" width="215" height="80" rx="10"/>
+<rect x="535" y="35" width="215" height="80" rx="10"/>
+<rect x="920" y="35" width="270" height="80" rx="10"/>
+<rect x="10" y="180" width="215" height="80" rx="10"/>
+<rect x="270" y="180" width="215" height="80" rx="10"/>
+<rect x="535" y="180" width="215" height="80" rx="10"/>
+<rect x="920" y="180" width="270" height="80" rx="10"/>
+<rect x="10" y="325" width="215" height="80" rx="10"/>
+<rect x="535" y="325" width="215" height="80" rx="10"/>
+</g>
+<g font-family="system-ui,sans-serif" fill="#143c39" font-size="23" font-weight="650">
+<text x="26" y="68">Photos Takeout</text>
+<text x="286" y="68">Host ingest</text>
+<text x="551" y="68">ZFS originals</text>
+<text x="936" y="68">Independent USB</text>
+<text x="26" y="213">Inventory Parquet</text>
+<text x="286" y="213">Immich</text>
+<text x="551" y="213">PostgreSQL</text>
+<text x="936" y="213">Caption workers</text>
+<text x="26" y="358">DuckDB</text>
+<text x="551" y="358">Published Parquet</text>
+</g>
+<g font-family="system-ui,sans-serif" fill="#4e6864" font-size="17">
+<text x="26" y="94">Originals + sidecars</text>
+<text x="286" y="94">Validate · ledger</text>
+<text x="551" y="94">Read-only inputs</text>
+<text x="936" y="94">Current policy: quota subset</text>
+<text x="26" y="239">One output per unit</text>
+<text x="286" y="239">Places · faces · OCR</text>
+<text x="551" y="239">Jobs · human edits</text>
+<text x="936" y="239">RTX + Mac · optional Luna*</text>
+<text x="26" y="384">Views + analytical reads</text>
+<text x="551" y="384">Snapshots + captions</text>
+<text x="785" y="205">context</text>
+<text x="794" y="300">* Cloud route sends media + context.</text>
+</g>
+<text x="275" y="438" font-family="system-ui,sans-serif" font-size="19" fill="#143c39">Git policy → applied timestamp → Grafana + saved rows → keep / revert</text>
+</svg>

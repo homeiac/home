@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A local photo library that earns its keep</title>
+<style>
+:root{--paper:#f3f4ed;--ink:#143c39;--muted:#536c67;--teal:#2f8e7f;--lime:#d9ef92;--orange:#bf592c;--line:#b7cbc1}
+*{box-sizing:border-box}
+body{margin:0;background:#112f2d;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+button,a{touch-action:manipulation}
+button:focus-visible,a:focus-visible{outline:3px solid var(--orange);outline-offset:5px}
+.slide{display:none;position:relative;min-height:calc(100vh - 64px);padding:4.5vh 5.5vw 3vh;background:var(--paper);overflow:hidden}
+.slide.active{display:flex;flex-direction:column}
+.eyebrow{font-size:13px;letter-spacing:2.7px;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:12px}
+h1{font-size:clamp(42px,5.3vw,82px);font-weight:650;line-height:1.04;letter-spacing:-3px;margin:0 0 24px;max-width:1050px}
+h2{font-size:clamp(32px,3.6vw,56px);line-height:1.08;letter-spacing:-1.6px;margin:0 0 22px}
+p{font-size:clamp(17px,1.5vw,23px);line-height:1.45;margin:0 0 18px;max-width:980px}
+.sub{color:var(--muted)}
+.body{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:35px;align-items:center}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:25px}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.value{border-top:3px solid var(--teal);padding-top:18px}
+.value b{font-size:25px;display:block;margin-bottom:10px}
+.value span{font-size:18px;color:var(--muted);line-height:1.45}
+.big{font-size:clamp(48px,5vw,78px);letter-spacing:-3px;line-height:1.1;font-weight:650}
+.unit{font-size:18px;color:var(--muted);margin-top:8px}
+.tag{font-size:13px;letter-spacing:1px;font-weight:700;text-transform:uppercase;color:var(--orange);margin-bottom:14px}
+.source{font-size:12px;color:var(--muted);margin-top:16px;line-height:1.45}
+.source a{color:inherit}
+.note{font-size:15px;color:var(--muted);line-height:1.45;margin-top:12px}
+.chart{width:100%;max-height:410px}
+.shot{display:block;max-width:100%;width:auto;max-height:48vh;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#101217}
+.architecture{width:100%;max-height:58vh;object-fit:contain}
+.focus-shot{width:100%;overflow:hidden;border:1px solid var(--line);border-radius:8px;aspect-ratio:1512/230;background:#101217}
+.focus-shot img{display:block;width:100%;max-width:none;margin-top:-24.6%}
+.focus-shot.policy img{margin-top:-22%}
+.badge{display:inline-block;background:var(--lime);padding:7px 11px;font-size:15px;border-radius:5px}
+.dark{background:var(--ink);color:var(--paper)}
+.dark .eyebrow,.dark .sub,.dark .source,.dark .note{color:#b7cbc1}
+.dark .value{border-color:var(--lime)}
+.dark .value span{color:#b7cbc1}
+.accent{color:var(--orange)}
+.dark .accent{color:var(--lime)}
+.flow{display:flex;align-items:stretch;gap:9px;margin:18px 0}
+.flow .node{background:#fff;border:1px solid var(--line);border-radius:9px;padding:18px 12px;flex:1;font-size:18px;line-height:1.35}
+.flow .node b{display:block;font-size:30px;color:var(--teal);margin-bottom:8px}
+.flow .arrow{align-self:center;color:var(--teal);font-size:25px}
+.small{font-size:15px;color:var(--muted)}
+.compare{display:grid;grid-template-columns:160px 1fr 80px;gap:14px;align-items:center;margin:15px 0;font-size:18px}
+.bar{height:29px;background:var(--teal);width:var(--w);border-radius:0 4px 4px 0;transform-origin:left}
+.bar.before{background:#afc4bc}
+.active .bar{animation:grow .9s both}
+.stat{border-left:3px solid var(--orange);padding:10px 20px;margin:10px 0}
+.stat strong{font-size:34px}
+.gridnotes{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.problem{padding:20px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.problem h3{font-size:22px;margin:0 0 15px}
+.problem p{font-size:17px;margin:0}
+.problem .cause{color:var(--orange);margin-bottom:10px}
+.legend{font-size:15px;color:var(--muted);display:flex;gap:25px}
+.swatch{display:inline-block;width:14px;height:14px;margin-right:7px;background:var(--teal)}
+.waiting{background:#e4c4af}
+.timeline{width:100%;max-height:320px}
+.active .packet{animation:travel 4s linear infinite}
+.active .pulse{animation:pulse 2.3s ease-in-out infinite}
+.active .body{animation:reveal .5s both}
+nav{height:64px;display:flex;align-items:center;gap:15px;padding:0 5.5vw;color:var(--paper);background:#112f2d}
+nav button{border:1px solid #6d8c83;color:var(--paper);background:transparent;border-radius:6px;padding:7px 16px;font-size:19px;cursor:pointer}
+nav button:disabled{opacity:.3;cursor:default}
+nav a{color:#c8d9d3;font-size:13px;text-decoration:none}
+#count{font-variant-numeric:tabular-nums;min-width:62px;font-size:14px}
+.progress{flex:1;height:3px;background:#42665d}
+.progress span{height:100%;display:block;background:var(--lime);transition:width .3s}
+.keyhint{font-size:12px;color:#b7cbc1}
+svg text{font-family:inherit}
+ @keyframes grow{from{transform:scaleX(0)}
+to{transform:scaleX(1)}
+}
+@keyframes reveal{from{opacity:0;transform:translateY(8px)}
+to{opacity:1;transform:none}
+}
+@keyframes travel{from{transform:translateX(0)}
+to{transform:translateX(560px)}
+}
+@keyframes pulse{50%{opacity:.45}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
+}
+@media(max-width:760px){.slide{padding:28px 22px;min-height:calc(100vh - 64px)}
+h1{letter-spacing:-1.5px}
+h2{letter-spacing:-.7px}
+.row,.three,.four,.gridnotes{grid-template-columns:1fr;gap:18px}
+.four{grid-template-columns:1fr 1fr}
+.value b{font-size:20px}
+.value span{font-size:16px}
+.flow{flex-wrap:wrap}
+.flow .node{min-width:130px}
+.flow .arrow{display:none}
+.shot{max-height:40vh}
+.architecture{max-height:none}
+.compare{grid-template-columns:110px 1fr 58px;font-size:15px}
+.source{font-size:11px}
+.keyhint{display:none}
+nav{padding:0 15px;gap:9px}
+.big{font-size:46px}
+.body{justify-content:flex-start}
+.chart{max-height:none}
+}
+@media print{@page{size:landscape;margin:0}
+.slide,.slide.active{display:flex;break-after:page;height:100vh;min-height:0;padding:30px 50px}
+.slide:last-of-type{break-after:auto}
+nav{display:none}
+*{animation:none!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.shot{max-height:48vh}
+}
+
+</style>
+</head>
+<body>
+<section class="slide dark active" data-title="Value first" aria-label="Slide 1: Value first">
+<div class="eyebrow">Local photo pipeline · November 2026</div>
+<div class="body">
+<h1>A local photo library<br>that earns its keep.</h1>
+<p class="sub">Own the copies. Enrich the memories.<br>Measure the work that makes them searchable.</p>
+<div class="four" style="margin-top:35px">
+<div class="value">
+<b>Cloud headroom</b>
+<span>Know what can be reclaimed after verification.</span>
+</div>
+<div class="value">
+<b>Recoverable copies</b>
+<span>Originals, sidecars and independent storage.</span>
+</div>
+<div class="value">
+<b>Useful images</b>
+<span>Places, people, OCR and descriptions.</span>
+</div>
+<div class="value">
+<b>Pipeline evidence</b>
+<span>Learn where PostgreSQL and DuckDB fit.</span>
+</div>
+</div>
+</div>
+<div class="source">Copying alone does not reduce Google quota. Cloud space freed has not been established in this report.</div>
+</section>
+<section class="slide" data-title="Final architecture" aria-label="Slide 2: Final architecture">
+<div class="eyebrow">01 / Design from the finished system</div>
+<h2>Preserve once. Reuse the facts.</h2>
+<div class="body">
+<img class="architecture" src="assets/local-photo-pipeline/architecture.svg" alt="Cloud sources feed validated host ingest, ZFS originals and an independent copy. Immich and PostgreSQL supply context to local or optional cloud caption workers. Parquet and DuckDB support analysis. Git and Grafana form a feedback loop.">
+</div>
+<div class="source">Photos path shown; Drive/OneDrive use the existing copy job. USB covers the quota subset, not all photos. Optional Luna sends media/context to a cloud service. Some deployment resources remain on the Flux preview branch.</div>
+</section>
+<section class="slide" data-title="Measured gains" aria-label="Slide 3: Measured gains">
+<div class="eyebrow">02 / Before and after</div>
+<h2>More durable captions per minute.</h2>
+<div class="body">
+<div class="row">
+<div>
+<div class="tag">Local capacity · ten-minute windows</div>
+<div class="compare">
+<span>RTX alone</span>
+<div class="bar before" style="--w:53%">
+</div>
+<b>16.0</b>
+</div>
+<div class="compare">
+<span>RTX + Mac</span>
+<div class="bar" style="--w:74%">
+</div>
+<b>22.3</b>
+</div>
+<p class="note">39% higher observed rate; 223 distinct items saved.<br>Production windows, not identical media.</p>
+</div>
+<div>
+<div class="tag">Optional Luna · 20 requests, four prep slots</div>
+<div class="compare">
+<span>Batch 24</span>
+<div class="bar before" style="--w:78%">
+</div>
+<b>62.6</b>
+</div>
+<div class="compare">
+<span>Batch 48</span>
+<div class="bar" style="--w:87%">
+</div>
+<b>69.3</b>
+</div>
+<p class="note">About 11% higher observed rate.<br>Sequential production trials with different inputs.</p>
+</div>
+</div>
+<div class="stat" style="margin-top:35px">
+<strong>31.4 photos/min</strong>
+<p class="note">Sustained local photos-first run: 943 distinct photos in 30 minutes. Zero videos. Excludes Luna and cache hits.</p>
+</div>
+</div>
+<div class="source">These are caption-save rates, not download bandwidth. <a href="assets/local-photo-pipeline/evidence.md">Trial scope and provenance</a>.</div>
+</section>
+<section class="slide" data-title="Grafana evidence" aria-label="Slide 4: Grafana evidence">
+<div class="eyebrow">03 / Real dashboard evidence</div>
+<h2>A saved caption is not always a new item.</h2>
+<div class="body">
+<div class="focus-shot">
+<img src="assets/local-photo-pipeline/grafana-throughput.jpg" alt="Cropped view of the actual Grafana throughput panel: RTX, Mac, Luna, combined captions and first captions on distinct items.">
+</div>
+<p class="note">Use the first-caption line for library completion. Combined output includes additional model answers on already-described items.</p>
+</div>
+<div class="source">Actual capture · November 21 11:00–November 22 02:00 UTC. Dollar figures are estimated accounting values, not invoices. <a href="assets/local-photo-pipeline/grafana-throughput.jpg">Open full-size image</a>.</div>
+</section>
+<section class="slide" data-title="Continuous refill" aria-label="Slide 5: Continuous refill">
+<div class="eyebrow">04 / Fix the scheduling gap</div>
+<h2>Let the next photo use a free slot.</h2>
+<div class="body">
+<svg class="timeline" viewBox="0 0 1100 330" role="img" aria-label="Conceptual scheduling diagram: a batch barrier leaves slots waiting for one long request; continuous refill starts new work on each free slot.">
+<defs>
+<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse">
+<path d="M0 8L8 0" stroke="#bf592c" opacity=".3"/>
+</pattern>
+<clipPath id="lane">
+<rect x="250" y="205" width="760" height="95"/>
+</clipPath>
+</defs>
+<g font-size="21" fill="#143c39">
+<text x="10" y="60">Batch barrier</text>
+<text x="10" y="230">Continuous refill</text>
+<text x="250" y="20" font-size="15">time →</text>
+</g>
+<g fill="#2f8e7f">
+<rect x="250" y="40" width="210" height="35" rx="5"/>
+<rect x="250" y="85" width="410" height="35" rx="5"/>
+<rect x="250" y="130" width="630" height="35" rx="5"/>
+</g>
+<g fill="url(#hatch)">
+<rect x="460" y="40" width="420" height="35"/>
+<rect x="660" y="85" width="220" height="35"/>
+</g>
+<path d="M890 30V175" stroke="#bf592c" stroke-width="3" stroke-dasharray="5 5"/>
+<text x="910" y="105" fill="#bf592c" font-size="16">wait for all</text>
+<g fill="#2f8e7f">
+<rect x="250" y="205" width="210" height="35" rx="5"/>
+<rect x="475" y="205" width="210" height="35" rx="5"/>
+<rect x="700" y="205" width="210" height="35" rx="5"/>
+<rect x="250" y="250" width="410" height="35" rx="5"/>
+<rect x="675" y="250" width="335" height="35" rx="5"/>
+</g>
+<g clip-path="url(#lane)">
+<circle class="packet" cx="260" cy="222" r="6" fill="#d9ef92"/>
+</g>
+</svg>
+<div class="legend">
+<span>
+<i class="swatch">
+</i>Active request</span>
+<span>
+<i class="swatch waiting">
+</i>Idle behind a barrier</span>
+</div>
+<p class="note">Observed local rate: 21.4 → 28.0/min. The windows also changed from 38 videos to 1; scheduling alone does not explain the whole increase.</p>
+</div>
+<div class="source">Diagram illustrates the mechanism; bar lengths are not measured task durations. <a href="../../scripts/knowledge-index/bonsai-dispatch.md">Dispatch policy</a>.</div>
+</section>
+<section class="slide" data-title="Live tuning loop" aria-label="Slide 6: Live tuning loop">
+<div class="eyebrow">05 / Tune without restarting the backfill</div>
+<h2>Every setting gets a feedback loop.</h2>
+<div class="body">
+<div class="flow">
+<div class="node">
+<b>1</b>Change one<br>Git setting</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>2</b>Verify applied<br>timestamp</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>3</b>Watch 2 min;<br>compare 10 min</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>4</b>Check saved rows<br>and media mix</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>5</b>Keep or<br>revert in Git</div>
+</div>
+<div class="focus-shot policy">
+<img src="assets/local-photo-pipeline/grafana-live-tuning.jpg" alt="Cropped actual Grafana panels showing GPU slots and the applied policy timestamp.">
+</div>
+<p class="note">No dispatch restart: check policy at queue boundaries, at most every 30 seconds; finish outstanding requests first. A failed fetch keeps the last valid settings.</p>
+</div>
+<div class="source">Actual Grafana panel crop; November 21 11:00–November 22 02:00 UTC. <a href="assets/local-photo-pipeline/grafana-live-tuning.jpg">Open full-size image</a>.</div>
+</section>
+<section class="slide" data-title="Concurrency limits" aria-label="Slide 7: Concurrency limits">
+<div class="eyebrow">06 / The useful negative results</div>
+<h2>More concurrency can buy only more waiting.</h2>
+<div class="body">
+<div class="row">
+<div>
+<div class="tag">Mac · benchmark</div>
+<div class="big">4 → 20</div>
+<div class="unit">concurrent requests</div>
+<div class="stat">
+<strong>9.62 → 9.65</strong>
+<div class="unit">saves/min · essentially flat</div>
+</div>
+<div class="stat">
+<strong>48 → 124 s</strong>
+<div class="unit">p95 latency · keep four slots</div>
+</div>
+</div>
+<div>
+<div class="tag">Luna · 20 requests held fixed</div>
+<div class="compare">
+<span>4 prep / 24 jobs</span>
+<div class="bar" style="--w:78%">
+</div>
+<b>62.6</b>
+</div>
+<div class="compare">
+<span>6 prep / 24 jobs</span>
+<div class="bar before" style="--w:70%">
+</div>
+<b>55.9</b>
+</div>
+<div class="compare">
+<span>4 prep / 48 jobs</span>
+<div class="bar" style="--w:87%">
+</div>
+<b>69.3</b>
+</div>
+<p class="note">Saved captions/min. Preparation became the bottleneck; six prep workers did worse.</p>
+<span class="badge">Local page 24 vs. 48: both 32 photos/min</span>
+</div>
+</div>
+</div>
+<div class="source">Mac results are benchmark measurements. Luna results are sequential production samples, not identical inputs. Local page trial was photo-only. <a href="assets/local-photo-pipeline/evidence.md">Evidence notes</a>.</div>
+</section>
+<section class="slide" data-title="Database responsibilities" aria-label="Slide 8: Database responsibilities">
+<div class="eyebrow">07 / Evaluate the pipeline, not the database logo</div>
+<h2>Live decisions. Published facts.</h2>
+<div class="body">
+<div class="three">
+<div class="value">
+<b>PostgreSQL</b>
+<span>Reserve jobs.<br>Save human edits.<br>Reject a face candidate.</span>
+</div>
+<div class="value">
+<b>Parquet</b>
+<span>Publish durable outputs.<br>Keep model versions.<br>Replay units safely.</span>
+</div>
+<div class="value">
+<b>DuckDB</b>
+<span>Query the inventory.<br>Browse snapshots.<br>Aggregate history.</span>
+</div>
+</div>
+<div class="flow">
+<div class="node">Live edits overlay<br>the current snapshot</div>
+<span class="arrow">→</span>
+<div class="node">Refresh derived views<br>without recaptioning</div>
+<span class="arrow">→</span>
+<div class="node">Stream embeddings once<br>instead of rescanning per page</div>
+</div>
+<div class="stat">
+<strong>~1 second → 8–10 ms</strong>
+<div class="unit">Later 256-row batch reads, after ~0.86 s query setup.</div>
+</div>
+</div>
+<div class="source">Bounded face-reader profile; not a total matching speedup or a PostgreSQL-vs-DuckDB benchmark. <a href="assets/local-photo-pipeline/evidence.md">Scope and source</a>.</div>
+</section>
+<section class="slide" data-title="Build sequence" aria-label="Slide 9: Build sequence">
+<div class="eyebrow">08 / How to reproduce the final design</div>
+<h2>Seven steps, with a check at each boundary.</h2>
+<div class="body">
+<div class="flow">
+<div class="node">
+<b>01</b>Measure sources<br>
+<span class="small">Capacity on both disks</span>
+</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>02</b>Host-side ingest<br>
+<span class="small">Archive validation + ledger</span>
+</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>03</b>Verify copies<br>
+<span class="small">Hashes + restore/open test</span>
+</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>04</b>Build inventory<br>
+<span class="small">Per-unit Parquet + quota check</span>
+</div>
+</div>
+<div class="flow">
+<div class="node">
+<b>05</b>Read-only Immich<br>
+<span class="small">Metadata → thumbnails → ML</span>
+</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>06</b>Review + caption<br>
+<span class="small">Live state + resumable work</span>
+</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>07</b>Measure + tune<br>
+<span class="small">Git policy + durable counters</span>
+</div>
+</div>
+<p class="note">Cloud reclamation is a separate reviewed operation after verification. Preserve an off-site copy. Native Immich indexing and caption completion are different milestones.</p>
+</div>
+<div class="source">
+<a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md#build-the-final-system-step-by-step">Article: commands, manifests and runbooks for every step</a>.</div>
+</section>
+<section class="slide dark" data-title="Weird problems" aria-label="Slide 10: Weird problems">
+<div class="eyebrow">09 / The problems that changed the design</div>
+<h2>The surprising failures crossed boundaries.</h2>
+<div class="body">
+<div class="gridnotes">
+<div class="problem" style="color:var(--ink)">
+<h3>Backup copy → Kubernetes stalls</h3>
+<p class="cause">Shared VM/storage I/O path</p>
+<p>Move bulk ingest onto the host; diagnose both layers.</p>
+</div>
+<div class="problem" style="color:var(--ink)">
+<h3>Five-minute throughput waves</h3>
+<p class="cause">A trend over a sampled staircase</p>
+<p>Count actual durable saves, then calculate the rate.</p>
+</div>
+<div class="problem" style="color:var(--ink)">
+<h3>Laptop sleeps → cloud queue stops</h3>
+<p class="cause">Submission and accounting depend on the client</p>
+<p>Always-on submitter; explicit shared budget holds.</p>
+</div>
+<div class="problem" style="color:var(--ink)">
+<h3>Rejected face → same suggestion</h3>
+<p class="cause">Live decisions outpace cached views</p>
+<p>Overlay PostgreSQL edits; invalidate stale matches.</p>
+</div>
+</div>
+<p style="margin-top:28px" class="sub">Preserved originals. Reusable enrichment. Measured progress.</p>
+</div>
+<div class="source">
+<a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md">Full article and implementation links</a> · <a href="assets/local-photo-pipeline/evidence.md">Measurement caveats and sources</a>
+</div>
+</section>
+<nav aria-label="Slide navigation">
+<button id="prev" aria-label="Previous slide">←</button>
+<span id="count" aria-live="polite">1 / 10</span>
+<button id="next" aria-label="Next slide">→</button>
+<div class="progress" aria-hidden="true">
+<span id="progress">
+</span>
+</div>
+<span class="keyhint">← → keys · Home / End</span>
+<a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md">Article</a>
+</nav>
+<script>
+(()=>{'use strict';const slides=[...document.querySelectorAll('.slide')],prev=document.getElementById('prev'),next=document.getElementById('next');let current=0;function show(i){current=Math.max(0,Math.min(slides.length-1,i));slides.forEach((s,n)=>{s.classList.toggle('active',n===current);s.setAttribute('aria-hidden',String(n!==current));});document.getElementById('count').textContent=`${current+1} / ${slides.length}`;document.getElementById('progress').style.width=`${(current+1)/slides.length*100}%`;prev.disabled=current===0;next.disabled=current===slides.length-1;history.replaceState(null,'',`#${current+1}`);document.title=`${current+1}. ${slides[current].dataset.title} — Local photo pipeline`;window.scrollTo(0,0)}prev.addEventListener('click',()=>show(current-1));next.addEventListener('click',()=>show(current+1));document.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='ArrowRight'||(e.key===' '&&e.target===document.body)){e.preventDefault();show(current+1)}if(e.key==='ArrowLeft'){e.preventDefault();show(current-1)}if(e.key==='Home'){e.preventDefault();show(0)}if(e.key==='End'){e.preventDefault();show(slides.length-1)}});window.addEventListener('hashchange',()=>show((parseInt(location.hash.slice(1),10)||1)-1));show((parseInt(location.hash.slice(1),10)||1)-1)})();
+</script>
+</body>
+</html>
