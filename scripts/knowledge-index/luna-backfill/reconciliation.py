@@ -393,6 +393,7 @@ def write_rows(rows: sqlite3.Cursor, target: Path) -> int:
             con.execute("SET threads=2; SET memory_limit='512MB'")
             con.execute('BEGIN')
             con.execute('CREATE TABLE output('+OUTPUT_SCHEMA+')')
+            output_columns=[c[0] for c in con.execute('DESCRIBE output').fetchall()]
             columns=[c[0] for c in rows.description]
             count=0
             while chunk:=rows.fetchmany(500):
@@ -404,7 +405,9 @@ def write_rows(rows: sqlite3.Cursor, target: Path) -> int:
                         a.get('reconciled_summary'),canonical(inputs['saved_metadata']),a.get('conflicts'),
                         a.get('needs_visual_review'),a.get('supported_by'),a.get('notes'),r['model'],
                         r['prompt_version'],r['source_generation'],r['state'],r['runner'],r['finished'],a.get('risk_level')])
-                con.executemany('INSERT INTO output VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',records)
+                # Bind a whole batch once rather than executing one insert per row.
+                con.execute('INSERT INTO output SELECT unnest(?::STRUCT('+OUTPUT_SCHEMA+')[],recursive:=true)',
+                            [[dict(zip(output_columns,record)) for record in records]])
                 count+=len(records)
             con.execute('COPY output TO ? (FORMAT parquet, COMPRESSION zstd)',[str(temporary)])
             con.execute('COMMIT')
