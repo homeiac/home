@@ -160,7 +160,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
         def dispatch_safely(self):
             try:
                 route=urllib.parse.urlsplit(self.path).path
-                if route.startswith('/api/') and route not in ('/api/config','/api/diagnostics') and hasattr(store,'request_session'):
+                if route.startswith('/api/') and route != '/api/diagnostics' and hasattr(store,'request_session'):
                     with store.request_session(readonly=self.command=='GET' or route=='/api/group-suggestions') as reader:
                         self.request_store=reader
                         self.dispatch()
