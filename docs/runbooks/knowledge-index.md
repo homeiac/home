@@ -97,10 +97,12 @@ a `status='error'` row and stays queued.
 ```bash
 export CB_HOST=root@<host> KI_ENDPOINT=http://<existing-ollama-service> KI_MODEL=bonsai-27b KI_API=ollama
 scripts/knowledge-index/knowledge-index-ctl.sh enrich sample 20   # print 20 summaries, write nothing: judge quality first
-scripts/knowledge-index/knowledge-index-ctl.sh enrich start       # background unit knowledge-index-enrich (nice, idle I/O)
 scripts/knowledge-index/knowledge-index-ctl.sh enrich status      # unit state, last log lines, rows per enricher/status
-scripts/knowledge-index/knowledge-index-ctl.sh enrich stop
 ```
+Worker installation, start/stop, reboot recovery and drift repair are managed by the
+[caption Job + ConfigMap workflow](../../scripts/knowledge-index/caption-gitops/README.md).
+Set `enabled` in its `config.json`, regenerate and push; the old transient `enrich start/stop` commands are retired.
+
 Prerequisites: `ffmpeg` for video on the host, the pinned HEIC decoder in the Python environments, and the model assets on the GPU VM.
 Re-run with a better model or prompt by changing `KI_ENRICHER` (e.g. `qwen25vl-7b-p2`): the whole library is queued again and the old
 summaries stay under their own id. **GPU sharing with Frigate:** the 3070 (8 GB) also runs Frigate's detector. The guard
@@ -184,7 +186,7 @@ Use the **Pipeline enricher** filter to select a model/prompt run. Existing tota
   rename. Normal batching creates bursts in the saved line. Counters reset when the worker restarts; queries use
   `rate()` to handle resets. No per-file paths, transcripts, prompts or summaries enter metric labels.
 
-`enrich start` now supplies `--prom /var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom`.
+The permanent GitOps service supplies `KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom`.
 `enrichers/pipeline_metrics.py` writes that file atomically at stage boundaries and every five seconds, independently
 of the five-minute index scan. Publication failures log an error and leave summary processing running. The node-exporter
 directory must already exist and be writable by the worker. `enrich sample` writes no metrics, even with `--prom`.

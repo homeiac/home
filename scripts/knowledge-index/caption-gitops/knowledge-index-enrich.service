@@ -1,0 +1,24 @@
+[Unit]
+Description=GitOps photo and video caption worker
+Wants=network-online.target
+After=network-online.target zfs-mount.service
+RequiresMountsFor=/local-3TB-backup/knowledge-index /local-3TB-backup/gphotos
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/knowledge-index
+Environment=PYTHONUNBUFFERED=1
+Environment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom
+Environment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json
+ExecStart=/opt/knowledge-index/venv/bin/python /opt/knowledge-index/caption-gitops/run.py
+Restart=always
+RestartSec=60
+RestartPreventExitStatus=75
+TimeoutStopSec=45
+KillMode=control-group
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

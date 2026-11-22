@@ -16,6 +16,8 @@ import time
 
 
 def main() -> None:
+    if Path('/opt/knowledge-index/caption-gitops/applied.json').exists():
+        raise RuntimeError("Caption worker is GitOps-managed; regenerate and push its ConfigMap")
     payload = json.load(sys.stdin)
     os.umask(0o077)
     root = Path("/opt/knowledge-index")

@@ -23,6 +23,7 @@ sends nothing outside the given endpoint. Telemetry never contains media paths o
 import argparse
 import base64
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -344,13 +345,26 @@ class DispatchPolicy:
                         getattr(args, "mac_routing", "photo-first"))
         self.url = os.environ.get("KI_GPU_DISPATCH_POLICY_URL") if not args.dry_run else None
         self.ref = os.environ.get("KI_GPU_DISPATCH_GIT_REF")
+        self.local_policy = os.environ.get("KI_GPU_DISPATCH_POLICY_FILE") if not args.dry_run else None
         self.revision = None
         self.queue_order = "newest"
         self.next_poll = 0
 
     def poll(self):
         now = time.monotonic()
-        if self.url and self.ref and now >= self.next_poll:
+        if self.local_policy and now >= self.next_poll:
+            self.next_poll = now + 30
+            try:
+                with open(self.local_policy, encoding="utf-8") as stream:
+                    policy = json.load(stream)
+                mode, size, routing, order = (policy[k] for k in ("mode", "page_size", "mac_routing", "queue_order"))
+                if (mode not in ("batch", "continuous") or type(size) is not int or not 0 <= size <= 512
+                        or routing not in ("fifo", "photo-first") or order not in ("newest", "photos-first")):
+                    raise ValueError("Invalid applied dispatch policy")
+                self.current, self.queue_order = (mode, size, routing), order
+            except (OSError, ValueError, KeyError, TypeError):
+                print("WARN: keeping the last valid applied dispatch policy", file=sys.stderr)
+        if not self.local_policy and self.url and self.ref and now >= self.next_poll:
             self.next_poll = now + 30
             try:
                 result = subprocess.check_output(
@@ -494,7 +508,17 @@ def main(argv):
     if not 0 <= args.dispatch_size <= 512:
         ap.error("--dispatch-size must be between 0 and 512")
     args.extra = json.loads(args.extra_json)
-    return run(args)
+    if args.dry_run:
+        return run(args)
+    # One writer owns queue selection and publication for this index. The kernel
+    # releases the lock even after an abrupt exit or host reboot.
+    with open(os.path.join(args.index, ".media-summary.lock"), "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Another summary worker already owns this index", file=sys.stderr)
+            return 75
+        return run(args)
 
 
 if __name__ == "__main__":

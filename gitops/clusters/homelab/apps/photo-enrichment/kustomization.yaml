@@ -13,3 +13,4 @@ resources:
   - gpu-maintenance
   - immich-ocr-recovery
   - bonsai.yaml
+  - caption-worker

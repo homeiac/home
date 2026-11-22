@@ -11,7 +11,7 @@
 #                                                    (also live in Grafana > Knowledge Index > Backfill progress)
 #                                                    (systemd unit knowledge-index-backfill, nice + idle I/O); clears _index_pending.tsv
 #   ./knowledge-index-ctl.sh enrich sample [N]       summarize N (default 10) queued photos/videos, print them, write nothing
-#   ./knowledge-index-ctl.sh enrich start|status|stop   run the summary enricher as systemd unit knowledge-index-enrich
+#   ./knowledge-index-ctl.sh enrich status          inspect the GitOps-managed knowledge-index-enrich service
 #                                                    needs KI_ENDPOINT (OpenAI-compatible vision server on the LAN, e.g. http://<gpu-vm>:11434);
 #                                                    KI_API (ollama or openai), KI_MODEL, KI_ENRICHER id (default gemma4-e2b-p1)
 #   ./knowledge-index-ctl.sh quota-diff              diff `SELECT path FROM gphotos_quota` against gphotos-quota-list.py on the real library
@@ -30,7 +30,12 @@ MOUNTS="IDX=\$(zfs get -H -o value mountpoint $IDX_DATASET); PH=\$(zfs get -H -o
 
 install_files() {
   cb_ssh "mkdir -p $KI/adapters $KI/enrichers $KI/oracle"
-  ( cd "$HERE" && tar -cf - adapters/gphotos.py enrichers/media_summary.py enrichers/pipeline_metrics.py enrichers/summary_cache.py kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
+  local worker_files=()
+  # A metrics/index refresh must not overwrite the GitOps-managed worker.
+  if ! cb_ssh "test -f $KI/caption-gitops/applied.json"; then
+    worker_files=(enrichers/media_summary.py enrichers/pipeline_metrics.py enrichers/summary_cache.py)
+  fi
+  ( cd "$HERE" && tar -cf - adapters/gphotos.py "${worker_files[@]}" kidx.py progress.py export-metrics.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"
   # Prometheus textfile exporter: systemd timer every 5 min (node-exporter on the host already reads /var/lib/prometheus/node-exporter)
   for u in knowledge-index-metrics.service knowledge-index-metrics.timer; do
@@ -72,6 +77,10 @@ case "${1:-}" in
     esac
     ;;
   enrich)
+    if [[ "${2:-}" == start || "${2:-}" == stop ]]; then
+      echo 'Caption service lifecycle is GitOps-managed. Edit caption-gitops/config.json enabled, regenerate and push.' >&2
+      exit 2
+    fi
     KI_MODEL="${KI_MODEL:-gemma4:e2b}"; KI_ENRICHER="${KI_ENRICHER:-gemma4-e2b-p1}"; KI_MIN_FREE_MIB="${KI_MIN_FREE_MIB:-3000}"
     KI_API="${KI_API:-ollama}"
     case "$KI_API" in
@@ -90,13 +99,8 @@ case "${1:-}" in
     case "${2:-}" in
       sample) install_files
               cb_ssh "command -v ffmpeg >/dev/null || { echo 'ffmpeg missing on the host: apt-get install ffmpeg (ask first)'; exit 1; }; $MOUNTS; $(run_cmd --dry-run --limit "${3:-10}")";;
-      start)  install_files
-              cb_ssh "command -v ffmpeg >/dev/null || { echo 'ffmpeg missing on the host: apt-get install ffmpeg (ask first)'; exit 1; }; \
-                      systemctl is-active -q knowledge-index-enrich && { echo 'already running'; exit 0; }; systemctl reset-failed knowledge-index-enrich 2>/dev/null; \
-                      $MOUNTS; systemd-run --unit=knowledge-index-enrich --collect -p Nice=10 -p IOSchedulingClass=idle bash -c \"$(run_cmd | sed 's/"/\\"/g')\" && echo started";;
       status) cb_ssh "systemctl is-active knowledge-index-enrich 2>/dev/null || true; journalctl -u knowledge-index-enrich --no-pager -n 6 2>/dev/null || true; \
                       $MOUNTS; $KI/venv/bin/python $KI/kidx.py query \"\$IDX\" \"SELECT enricher, status, count(*) n FROM media_summaries GROUP BY ALL ORDER BY 1,2\"";;
-      stop)   cb_ssh "systemctl stop knowledge-index-enrich && echo stopped";;
       *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
     esac
     ;;

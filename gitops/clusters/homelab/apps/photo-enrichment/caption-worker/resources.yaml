@@ -1,0 +1,531 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caption-worker-2244713d49e0
+  namespace: monitoring
+data:
+  bundle.json: '{"config.json": "{\n  \"enabled\": true,\n  \"index\": \"/local-3TB-backup/knowledge-index\",\n  \"library\":
+    \"/local-3TB-backup/gphotos/library\",\n  \"model\": \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\":
+    2,\n  \"batch_size\": 16,\n  \"mac_assist\": true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\"think\": false, \"options\":
+    {\"num_ctx\": 8192, \"num_predict\": 384, \"temperature\": 0.2}}\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\":
+    48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "knowledge-index-enrich.service":
+    "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index
+    /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
+    /opt/knowledge-index/caption-gitops/run.py\nRestart=always\nRestartSec=60\nRestartPreventExitStatus=75\nTimeoutStopSec=45\nKillMode=control-group\nNice=10\nIOSchedulingClass=idle\n\n[Install]\nWantedBy=multi-user.target\n",
+    "media_summary.py": "#!/usr/bin/env python3\n\"\"\"Photo/video summary enricher for the knowledge index (issue #212, OpenSpec
+    change add-media-summaries-enricher).\n\nUsage:\n  media_summary.py run --index DIR --library DIR --endpoint URL --model
+    NAME --enricher ID\n                       [--limit N] [--batch-size 50] [--parallel 1] [--frames 8] [--min-free-mib 3000]
+    [--dry-run]\n\n  --index      knowledge-index dataset mount (reads knowledge.duckdb, writes summaries/<enricher>/<batch>.parquet)\n  --library    photos
+    library root, read-only: the folder that holds \"Google Photos/\" (<dataset>/library)\n  --endpoint   OpenAI-compatible
+    server on the home network, e.g. http://<gpu-vm>:11434 (Ollama) or a llama.cpp server\n  --enricher   id of this model+prompt
+    combination, e.g. qwen25vl-3b-p1 (bump it to re-summarize with a new model/prompt)\n  --api ollama       use Ollama native
+    /api/chat (recommended with Ollama: honors think:false; --num-ctx sets the context)\n  --extra-json JSON  extra chat-request
+    fields, e.g. ''{\"think\": false}'' (thinking models: 10x slower and wasteful otherwise)\n  --dry-run    summarize --limit
+    files, print them, write nothing (the \"sample\" mode)\n  --prom FILE  publish live stage / Ollama timings for node-exporter
+    (ignored in sample mode)\n  --min-free-mib  refuse to start when the GPU has less free memory (nvidia-smi); 0 disables;
+    --smi-cmd overrides the binary\n\nQueue: SELECT ... FROM gphotos_to_summarize(<enricher>): media with no `ok` row for
+    their current bytes (errors are retried).\nPhoto: one image (long edge 1024). Video: --frames frames across the clip +
+    audio transcript (faster-whisper, if installed).\nReads media read-only, writes summaries below <index>/summaries and
+    optional telemetry to --prom,\nsends nothing outside the given endpoint. Telemetry never contains media paths or contents.\n\"\"\"\nimport
+    argparse\nimport base64\nimport datetime\nimport fcntl\nimport json\nimport os\nimport re\nimport subprocess\nimport sys\nimport
+    time\nimport urllib.request\nfrom collections import deque\nfrom concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor,
+    wait\nfrom copy import copy\nfrom contextlib import nullcontext\nfrom functools import partial\n\nimport duckdb\nfrom
+    pipeline_metrics import PipelineMetrics\nfrom summary_cache import SummaryCache\n\nVIDEO_EXTS = {\"mp4\", \"mov\", \"3gp\",
+    \"avi\", \"mpg\", \"m4v\"}\nSCHEMA = (\"source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR,
+    prompt_version VARCHAR, \"\n          \"summary VARCHAR, tags VARCHAR[], frames_sampled INTEGER, duration_s DOUBLE, status
+    VARCHAR, error VARCHAR, \"\n          \"created_at TIMESTAMP\")\nPROMPT_VERSION = \"p1\"\n\n\ndef free_gpu_mib(smi_cmd):\n    \"\"\"Free
+    GPU memory in MiB (minimum over GPUs), or None when nvidia-smi is unavailable.\"\"\"\n    try:\n        out = subprocess.run([smi_cmd,
+    \"--query-gpu=memory.free\", \"--format=csv,noheader,nounits\"],\n                             capture_output=True, text=True,
+    timeout=20, check=True).stdout\n        return min(int(x) for x in out.split())\n    except (OSError, subprocess.SubprocessError,
+    ValueError):\n        return None\n\n\ndef _ffmpeg(args, timeout=120):\n    return subprocess.run([\"ffmpeg\", \"-v\",
+    \"error\", \"-nostdin\"] + args, capture_output=True, timeout=timeout)\n\n\ndef jpeg_frame(path, t=None):\n    \"\"\"One
+    JPEG (long edge <= 1024) from an image or from second `t` of a video; raises RuntimeError when undecodable.\"\"\"\n    if
+    t is None and os.path.splitext(path)[1].lower() in {''.heic'', ''.heif'', ''.hif''}:\n        import io\n        from
+    PIL import Image, ImageOps\n        from pillow_heif import register_heif_opener\n\n        register_heif_opener()\n        with
+    Image.open(path) as source:\n            image = ImageOps.exif_transpose(source)\n            image.thumbnail((1024, 1024),
+    Image.Resampling.LANCZOS)\n            result = io.BytesIO()\n            image.convert(''RGB'').save(result, ''JPEG'',
+    quality=88)\n            return result.getvalue()\n    scale = \"scale=''if(gt(iw,ih),min(1024,iw),-2)'':''if(gt(iw,ih),-2,min(1024,ih))''\"\n    pre
+    = [\"-ss\", \"%.2f\" % t] if t is not None else []\n    r = _ffmpeg(pre + [\"-i\", path, \"-vf\", scale, \"-frames:v\",
+    \"1\", \"-f\", \"image2pipe\", \"-vcodec\", \"mjpeg\", \"-\"])\n    if r.returncode != 0 or not r.stdout:\n        raise
+    RuntimeError(\"cannot decode %s: %s\" % (os.path.basename(path), \" \".join(r.stderr.decode(errors=\"replace\").split())[:200]))\n    return
+    r.stdout\n\n\ndef video_duration(path):\n    r = subprocess.run([\"ffprobe\", \"-v\", \"error\", \"-show_entries\", \"format=duration\",
+    \"-of\", \"default=nw=1:nk=1\", path],\n                       capture_output=True, text=True, timeout=60)\n    try:\n        return
+    float(r.stdout.strip())\n    except ValueError:\n        raise RuntimeError(\"cannot read duration of %s\" % os.path.basename(path))\n\n\ndef
+    transcript(path):\n    \"\"\"Speech transcript via faster-whisper when installed and the video has audio; '''' otherwise.\"\"\"\n    try:\n        from
+    faster_whisper import WhisperModel\n    except ImportError:\n        return \"\"\n    r = subprocess.run([\"ffprobe\",
+    \"-v\", \"error\", \"-select_streams\", \"a\", \"-show_entries\", \"stream=index\", \"-of\", \"csv=p=0\", path],\n                       capture_output=True,
+    text=True, timeout=60)\n    if not r.stdout.strip():\n        return \"\"\n    model = WhisperModel(os.environ.get(\"KI_WHISPER_MODEL\",
+    \"small\"), compute_type=\"int8\")\n    segs, _ = model.transcribe(path)\n    return \" \".join(s.text.strip() for s in
+    segs)[:4000]\n\n\ndef build_prompt(row, is_video, nframes, speech):\n    ctx = []\n    if row[\"taken_ts\"]:\n        ctx.append(\"taken
+    \" + datetime.datetime.fromtimestamp(row[\"taken_ts\"], datetime.timezone.utc).strftime(\"%Y-%m-%d\"))\n    if row[\"album\"]:\n        ctx.append(\"album
+    ''%s''\" % row[\"album\"])\n    if row[\"has_geo\"]:\n        ctx.append(\"it has GPS location\")\n    if row[\"people\"]:\n        ctx.append(\"people
+    tagged: \" + \", \".join(row[\"people\"]))\n    what = (\"%d frames sampled evenly across a video clip\" % nframes) if
+    is_video else \"a photo\"\n    p = [\"You are given %s. Context: %s.\" % (what, \"; \".join(ctx) or \"none\"),\n         \"Describe
+    what is happening: who or what is shown, the setting, the activity\" + (\", and how it changes over the clip\" if is_video
+    else \"\") + \".\",\n         \"Be factual; say ''unclear'' instead of guessing.\"]\n    if speech:\n        p.append(\"Audio
+    transcript: \" + speech)\n    p.append(''Answer ONLY with JSON: {\"summary\": \"<2-3 sentences>\", \"tags\": [\"<up to
+    8 short keywords>\"]}'')\n    return \"\\n\".join(p)\n\n\ndef parse_answer(text):\n    \"\"\"Extract {\"summary\",\"tags\"}
+    from a model reply (tolerates code fences / chatter around the JSON).\"\"\"\n    m = re.search(r\"\\{.*\\}\", text, re.S)\n    if
+    not m:\n        raise ValueError(\"no JSON in model reply\")\n    d = json.loads(m.group(0))\n    summary = str(d.get(\"summary\",
+    \"\")).strip()\n    if not summary:\n        raise ValueError(\"empty summary\")\n    tags = [str(t).strip() for t in
+    (d.get(\"tags\") or []) if str(t).strip()][:8]\n    return summary, tags\n\n\ndef ask_model(endpoint, model, prompt, jpegs,
+    timeout=600, extra=None, api=\"openai\", num_ctx=8192, keep_alive=\"30m\", metrics=None, kind=\"photo\", headers=None):\n    \"\"\"One
+    chat request with all images. api=\"ollama\" uses Ollama''s native /api/chat: it honors `think: false`\n    (the OpenAI-compatible
+    /v1 endpoint did not on 2026-11-16: reasoning models then spent ~500 hidden tokens, 18-45 s/item instead of ~2-5 s).\"\"\"\n    b64
+    = [base64.b64encode(j).decode() for j in jpegs]\n    if api == \"ollama\":\n        body = {\"model\": model, \"stream\":
+    False, \"keep_alive\": keep_alive, \"options\": {\"num_ctx\": num_ctx, \"temperature\": 0.2},\n                \"messages\":
+    [{\"role\": \"user\", \"content\": prompt, \"images\": b64}]}\n        body.update(extra or {})\n        url = endpoint.rstrip(\"/\")
+    + \"/api/chat\"\n    else:\n        content = [{\"type\": \"text\", \"text\": prompt}] + [{\"type\": \"image_url\", \"image_url\":
+    {\"url\": \"data:image/jpeg;base64,\" + x}} for x in b64]\n        body = {\"model\": model, \"messages\": [{\"role\":
+    \"user\", \"content\": content}], \"temperature\": 0.2, **(extra or {})}\n        url = endpoint.rstrip(\"/\") + \"/v1/chat/completions\"\n    req
+    = urllib.request.Request(url, json.dumps(body).encode(), {\"Content-Type\": \"application/json\", **(headers or {})})\n    mac_frames
+    = metrics.mac_request(jpegs) if endpoint == MAC_ENDPOINT and metrics is not None else None\n    started = time.monotonic()\n    backend
+    = \"metal\" if endpoint == MAC_ENDPOINT else \"primary\"\n    tracking = metrics.backend_request(backend) if metrics is
+    not None else nullcontext()\n    with tracking, urllib.request.urlopen(req, timeout=timeout) as resp:\n        out = json.load(resp)\n    if
+    mac_frames is not None:\n        metrics.mac_response(mac_frames, kind, time.monotonic() - started, out)\n    if api ==
+    \"ollama\" and metrics is not None:\n        metrics.ollama(out, kind)\n    return out[\"message\"][\"content\"] if api
+    == \"ollama\" else out[\"choices\"][0][\"message\"][\"content\"]\n\n\ndef summarize(row, library, a, metrics=None, cache=None):\n    \"\"\"->
+    dict of result columns for one queue row; never raises (errors become status=''error'' rows).\"\"\"\n    base = {\"source\":
+    \"gphotos\", \"path\": row[\"path\"], \"size_bytes\": row[\"size_bytes\"], \"enricher\": a.enricher, \"model\": a.model,\n            \"prompt_version\":
+    PROMPT_VERSION, \"summary\": None, \"tags\": None, \"frames_sampled\": None, \"duration_s\": None,\n            \"status\":
+    \"error\", \"error\": None, \"inference_backend\": getattr(a, \"backend\", \"primary\")}\n    ap = os.path.join(library,
+    row[\"path\"])\n    metrics = metrics or PipelineMetrics(None, a.enricher)\n    kind = \"video\" if row[\"ext\"] in VIDEO_EXTS
+    else \"photo\"\n    try:\n        with metrics.measure(\"decode\", kind):\n            if kind == \"video\":\n                dur
+    = video_duration(ap)\n                n = max(1, min(a.frames, int(dur) or 1))\n                jpegs = [jpeg_frame(ap,
+    dur * (i + 0.5) / n) for i in range(n)]\n            else:\n                jpegs = [jpeg_frame(ap)]\n        speech =
+    \"\"\n        if kind == \"video\":\n            with metrics.measure(\"transcribe\", kind):\n                speech =
+    transcript(ap)\n            base.update(frames_sampled=n, duration_s=dur)\n        with metrics.measure(\"prompt\", kind):\n            prompt
+    = build_prompt(row, kind == \"video\", len(jpegs), speech)\n        cache_key = SummaryCache.key(prompt, jpegs, {\n            \"endpoint\":
+    a.endpoint, \"enricher\": a.enricher, \"model\": a.model,\n            \"prompt_version\": PROMPT_VERSION, \"api\": a.api,
+    \"num_ctx\": a.num_ctx, \"extra\": a.extra,\n        }) if cache is not None else None\n        cached = cache.get(cache_key)
+    if cache is not None else None\n        if cached is None:\n            base[\"_model_failure\"] = True\n            with
+    metrics.measure(\"inference\", kind):\n                answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra,
+    api=a.api,\n                                   num_ctx=a.num_ctx, metrics=metrics, kind=kind, timeout=getattr(a, \"request_timeout\",
+    600),\n                                   headers=getattr(a, \"model_headers\", None))\n            with metrics.measure(\"parse\",
+    kind):\n                summary, tags = parse_answer(answer)\n            base.pop(\"_model_failure\", None)\n            if
+    cache is not None:\n                cache.put(cache_key, summary, tags)\n        else:\n            summary, tags = cached\n            metrics.cache_hit(kind)\n            base[\"inference_backend\"]
+    = \"cache\"\n        base.update(summary=summary, tags=tags, status=\"ok\")\n    except Exception as exc:  # one bad file
+    must not stop the run\n        base[\"error\"] = (\"%s: %s\" % (type(exc).__name__, exc))[:500]\n    metrics.item(kind,
+    base[\"status\"])\n    return base\n\n\ndef write_batch(rows, out_dir, enricher):\n    d = os.path.join(out_dir, \"summaries\",
+    enricher)\n    os.makedirs(d, exist_ok=True)\n    target = os.path.join(d, \"b%s-%04d.parquet\" % (datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y%m%dT%H%M%S%f\"),
+    len(os.listdir(d))))\n    tmp = target + \".tmp\"\n    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)\n    con
+    = duckdb.connect()\n    con.execute(\"CREATE TABLE t (%s)\" % SCHEMA)\n    cols = [\"source\", \"path\", \"size_bytes\",
+    \"enricher\", \"model\", \"prompt_version\", \"summary\", \"tags\", \"frames_sampled\",\n            \"duration_s\", \"status\",
+    \"error\"]\n    con.executemany(\"INSERT INTO t VALUES (%s)\" % \",\".join(\"?\" * 13), [tuple(r[c] for c in cols) + (now,)
+    for r in rows])\n    con.execute(\"COPY t TO ''%s'' (FORMAT parquet, COMPRESSION zstd)\" % tmp.replace(\"''\", \"''''\"))\n    os.replace(tmp,
+    target)\n    return target\n\n\ndef queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):\n    \"\"\"Select
+    pending work while skipping paths already attempted in this run.\"\"\"\n    priority = \"coalesce(list_contains(?, lower(ext)),
+    false), \" if photos_first else \"\"\n    params = [enricher, sorted(VIDEO_EXTS), limit + len(seen)] if photos_first else
+    [enricher, limit + len(seen)]\n    with duckdb.connect(os.path.join(index, \"knowledge.duckdb\"), read_only=True) as con:\n        cur
+    = con.execute(\"SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) \"\n                          f\"ORDER
+    BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?\", params)\n        names = [column[0] for column in cur.description[:-1]]\n        rows
+    = cur.fetchall()\n    if metrics is not None:\n        metrics.queue_size(rows[0][-1] if rows else 0)\n    return [r for
+    r in (dict(zip(names, row[:-1])) for row in rows) if r[\"path\"] not in seen][:limit]\n\n\nMAC_ENDPOINT = \"http://127.0.0.1:19476\"\n\n\ndef
+    mac_headers():\n    with open(\"/opt/knowledge-index/mac-bonsai.key\", encoding=\"ascii\") as file:\n        return {\"Authorization\":
+    \"Bearer \" + file.read().strip()}\n\n\ndef mac_route(args):\n    \"\"\"Discover the authenticated Mac server''s Git-configured
+    request limit.\"\"\"\n    if not getattr(args, \"mac_assist\", False) or args.model != \"bonsai-27b\" or args.dry_run:\n        return
+    0, None\n    try:\n        headers = mac_headers()\n        probe = urllib.request.Request(MAC_ENDPOINT + \"/v1/models\",
+    headers=headers)\n        with urllib.request.urlopen(probe, timeout=1) as response:\n            models = json.load(response)[\"data\"]\n        for
+    model in models:\n            if model[\"id\"] == \"bonsai-27b-metal\":\n                for tag in model[\"tags\"]:\n                    match
+    = re.fullmatch(r\"backfill-parallel=([1-9]|1[0-9]|20)\", tag)\n                    if match:\n                        return
+    int(match[1]), headers\n    except (OSError, ValueError, KeyError, TypeError):\n        pass\n    return 0, None\n\n\ndef
+    split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False):\n    \"\"\"Keep slots
+    fed across queue reads. Retry interrupted Mac work on the RTX.\"\"\"\n    pending = deque(rows)\n    retry = deque()\n    disabled
+    = False\n    with ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:\n        active = {}\n\n        def
+    submit(backend):\n            nonlocal refill\n            if backend == \"metal\" and disabled:\n                return\n            if
+    not pending and not retry and refill is not None and not disabled:\n                pending.extend(refill())\n                if
+    not pending:\n                    refill = None\n            candidates = retry if backend == \"primary\" and retry else
+    pending\n            if candidates:\n                if backend == \"metal\" and prefer_photos:\n                    #
+    Long visual prompts take substantially longer on the Mac.\n                    photo = next((i for i, row in enumerate(candidates)
+    if row[\"ext\"] not in VIDEO_EXTS), 0)\n                    row = candidates[photo]\n                    del candidates[photo]\n                else:\n                    row
+    = candidates.popleft()\n                task = metal if backend == \"metal\" else primary\n                active[pool.submit(task,
+    row)] = (backend, row)\n\n        for backend, count in ((\"primary\", primary_slots), (\"metal\", mac_slots)):\n            for
+    _ in range(count):\n                submit(backend)\n        while active:\n            completed, _ = wait(active, return_when=FIRST_COMPLETED)\n            for
+    future in completed:\n                backend, row = active.pop(future)\n                result = future.result()\n                if
+    backend == \"metal\" and result[\"status\"] != \"ok\" and result.get(\"_model_failure\"):\n                    disabled
+    = True\n                    retry.append(row)\n                    submit(backend)\n                else:\n                    submit(backend)\n                    yield
+    row, result\n            # Primary slots may already have drained when a late Mac request fails.\n            primary_active
+    = sum(backend == \"primary\" for backend, _ in active.values())\n            for _ in range(min(len(retry), primary_slots
+    - primary_active)):\n                submit(\"primary\")\n\n\ndef persist(batch, args, metrics, seen):\n    \"\"\"Only
+    the host writes Parquet and advances durable counters.\"\"\"\n    with metrics.measure(\"write\"):\n        write_batch([result
+    for _, result in batch], args.index, args.enricher)\n    for row, result in batch:\n        kind = \"video\" if row[\"ext\"]
+    in VIDEO_EXTS else \"photo\"\n        metrics.item(kind, result[\"status\"], persisted=True, backend=result.get(\"inference_backend\",
+    \"primary\"))\n        if result[\"status\"] == \"ok\":\n            seen.discard(row[\"path\"])\n\n\nclass DispatchPolicy:\n    \"\"\"Poll
+    the deployed Git policy and retain the last valid settings during outages.\"\"\"\n\n    def __init__(self, args):\n        self.current
+    = (getattr(args, \"dispatch_mode\", \"continuous\"),\n                        getattr(args, \"dispatch_size\", 0),\n                        getattr(args,
+    \"mac_routing\", \"photo-first\"))\n        self.url = os.environ.get(\"KI_GPU_DISPATCH_POLICY_URL\") if not args.dry_run
+    else None\n        self.ref = os.environ.get(\"KI_GPU_DISPATCH_GIT_REF\")\n        self.local_policy = os.environ.get(\"KI_GPU_DISPATCH_POLICY_FILE\")
+    if not args.dry_run else None\n        self.revision = None\n        self.queue_order = \"newest\"\n        self.next_poll
+    = 0\n\n    def poll(self):\n        now = time.monotonic()\n        if self.local_policy and now >= self.next_poll:\n            self.next_poll
+    = now + 30\n            try:\n                with open(self.local_policy, encoding=\"utf-8\") as stream:\n                    policy
+    = json.load(stream)\n                mode, size, routing, order = (policy[k] for k in (\"mode\", \"page_size\", \"mac_routing\",
+    \"queue_order\"))\n                if (mode not in (\"batch\", \"continuous\") or type(size) is not int or not 0 <= size
+    <= 512\n                        or routing not in (\"fifo\", \"photo-first\") or order not in (\"newest\", \"photos-first\")):\n                    raise
+    ValueError(\"Invalid applied dispatch policy\")\n                self.current, self.queue_order = (mode, size, routing),
+    order\n            except (OSError, ValueError, KeyError, TypeError):\n                print(\"WARN: keeping the last
+    valid applied dispatch policy\", file=sys.stderr)\n        if not self.local_policy and self.url and self.ref and now
+    >= self.next_poll:\n            self.next_poll = now + 30\n            try:\n                result = subprocess.check_output(\n                    [\"git\",
+    \"ls-remote\", \"--exit-code\", \"https://github.com/homeiac/home.git\", self.ref],\n                    timeout=3, stderr=subprocess.DEVNULL,
+    text=True,\n                )\n                revision, _ = result.strip().split(\"\\t\")\n                if not re.fullmatch(r\"[0-9a-f]{40}\",
+    revision):\n                    raise ValueError(\"Invalid Git dispatch revision\")\n                if revision == self.revision:\n                    return
+    self.current\n                with urllib.request.urlopen(self.url.format(revision=revision), timeout=2) as response:\n                    policy
+    = json.load(response)\n                mode, size, routing = policy[\"mode\"], policy[\"page_size\"], policy[\"mac_routing\"]\n                order
+    = policy.get(\"queue_order\", \"newest\")\n                if (mode not in (\"batch\", \"continuous\") or type(size) is
+    not int or not 0 <= size <= 512\n                        or routing not in (\"fifo\", \"photo-first\") or order not in
+    (\"newest\", \"photos-first\")):\n                    raise ValueError(\"Invalid Git dispatch policy\")\n                self.current
+    = mode, size, routing\n                self.queue_order = order\n                self.revision = revision\n            except
+    (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):\n                print(\"WARN: keeping the last
+    valid Git dispatch policy\", file=sys.stderr)\n        return self.current\n\n\ndef run(a):\n    if a.min_free_mib > 0:\n        free
+    = free_gpu_mib(a.smi_cmd)\n        if free is None:\n            print(\"WARN: cannot read GPU memory (%s unavailable);
+    continuing\" % a.smi_cmd, file=sys.stderr)\n        elif free < a.min_free_mib:\n            print(\"not starting: free
+    GPU memory %d MiB < %d MiB (Frigate needs it)\" % (free, a.min_free_mib), file=sys.stderr)\n            return 3\n    done
+    = errors = 0\n    t0 = time.time()\n    remaining = a.limit\n    policy = DispatchPolicy(a)\n    seen = set()\n    cache_context
+    = nullcontext(None) if a.dry_run else SummaryCache(os.path.join(a.index, \"summary-cache.sqlite3\"))\n    with cache_context
+    as cache, PipelineMetrics(None if a.dry_run else getattr(a, \"prom\", None), a.enricher) as metrics:\n        primary
+    = partial(summarize, library=a.library, a=a, metrics=metrics, cache=cache)\n        metal_args = copy(a)\n        metal_args.model
+    = \"bonsai-27b-metal\"\n        metal_args.endpoint = MAC_ENDPOINT\n        metal_args.api = \"openai\"\n        metal_args.extra
+    = {\"max_tokens\": 384, \"chat_template_kwargs\": {\"enable_thinking\": False}}\n        metal_args.backend = \"metal\"\n        metal_args.request_timeout
+    = 180\n        metal = partial(summarize, library=a.library, a=metal_args, metrics=metrics, cache=cache)\n        while
+    remaining > 0:\n            settings = policy.poll()\n            queue_order = policy.queue_order\n            dispatch_mode,
+    dispatch_size, mac_routing = settings\n            metrics.dispatch_policy(*settings, queue_order=queue_order)\n            mac_slots,
+    metal_args.model_headers = mac_route(a)\n            metrics.mac_capacity(mac_slots)\n            fetch_size = a.batch_size\n            if
+    mac_slots:\n                fetch_size = dispatch_size or max(a.batch_size, 4 * (a.parallel + mac_slots))\n            def
+    fetch():\n                nonlocal remaining\n                if remaining <= 0:\n                    return []\n                with
+    metrics.measure(\"queue\"):\n                    rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics,\n                                 photos_first=queue_order
+    == \"photos-first\")\n                seen.update(r[\"path\"] for r in rows)\n                remaining -= len(rows)\n                return
+    rows\n\n            rows = fetch()\n            if not rows:\n                break\n            previous_errors = errors\n            batch
+    = []\n            # Keep the existing single-write cadence while refilling slots independently.\n            def refill():\n                #
+    Finish outstanding requests before activating a changed policy.\n                return [] if (policy.poll() != settings
+    or policy.queue_order != queue_order\n                              or (errors and not done)) else fetch()\n\n            for
+    row, result in split_batch(\n                rows, a.parallel, mac_slots, primary, metal,\n                refill=refill
+    if mac_slots and dispatch_mode == \"continuous\" else None,\n                prefer_photos=mac_routing == \"photo-first\",\n            ):\n                done
+    += result[\"status\"] == \"ok\"\n                errors += result[\"status\"] != \"ok\"\n                if a.dry_run:\n                    print(\"%s\\t%s\\t%s\\t%s\"
+    % (result[\"status\"], row[\"path\"], result[\"summary\"] or result[\"error\"], \",\".join(result[\"tags\"] or [])))\n                    continue\n                batch.append((row,
+    result))\n                if len(batch) == a.batch_size:\n                    persist(batch, a, metrics, seen)\n                    batch.clear()\n            if
+    a.dry_run:\n                break\n            if batch:\n                persist(batch, a, metrics, seen)\n            if
+    errors > previous_errors and not done:   # no working backend\n                print(\"whole batch failed; stopping\",
+    file=sys.stderr)\n                break\n    n = done + errors\n    print(\"ok=%d errors=%d seconds=%.1f per_item=%.1f\"
+    % (done, errors, time.time() - t0, (time.time() - t0) / max(n, 1)))\n    return 0\n\n\ndef main(argv):\n    ap = argparse.ArgumentParser(description=__doc__,
+    formatter_class=argparse.RawDescriptionHelpFormatter)\n    ap.add_argument(\"cmd\", choices=[\"run\"])\n    ap.add_argument(\"--index\",
+    required=True)\n    ap.add_argument(\"--library\", required=True)\n    ap.add_argument(\"--endpoint\", required=True)\n    ap.add_argument(\"--model\",
+    required=True)\n    ap.add_argument(\"--enricher\", required=True)\n    ap.add_argument(\"--limit\", type=int, default=10
+    ** 9)\n    ap.add_argument(\"--batch-size\", type=int, default=50)\n    ap.add_argument(\"--parallel\", type=int, default=os.environ.get(\"KI_SUMMARY_PARALLEL\",
+    \"1\"),\n                    help=\"Maximum summaries in flight, sharing a single Parquet writer\")\n    ap.add_argument(\"--mac-assist\",
+    action=\"store_true\", default=os.environ.get(\"KI_MAC_BONSAI\") == \"1\",\n                    help=\"Share pending Bonsai
+    summaries with the authenticated Mac worker while it is available\")\n    ap.add_argument(\"--dispatch-mode\", choices=(\"batch\",
+    \"continuous\"),\n                    default=os.environ.get(\"KI_GPU_DISPATCH_MODE\", \"continuous\"))\n    ap.add_argument(\"--dispatch-size\",
+    type=int, default=os.environ.get(\"KI_GPU_DISPATCH_SIZE\", \"0\"),\n                    help=\"Items per queue read with
+    the Mac available. Zero chooses a size from the slot count.\")\n    ap.add_argument(\"--mac-routing\", choices=(\"fifo\",
+    \"photo-first\"),\n                    default=os.environ.get(\"KI_MAC_ROUTING\", \"photo-first\"))\n    ap.add_argument(\"--frames\",
+    type=int, default=8)\n    ap.add_argument(\"--min-free-mib\", type=int, default=3000)\n    ap.add_argument(\"--smi-cmd\",
+    default=\"nvidia-smi\")\n    ap.add_argument(\"--api\", choices=[\"openai\", \"ollama\"], default=\"openai\", help=\"openai
+    = /v1/chat/completions; ollama = native /api/chat (honors think:false)\")\n    ap.add_argument(\"--num-ctx\", type=int,
+    default=8192, help=\"context length for --api ollama (8 frames x ~300 tokens + transcript)\")\n    ap.add_argument(\"--extra-json\",
+    default=\"{}\", help=''extra request fields merged into the chat body, e.g. \\''{\"think\": false}\\'' to stop reasoning
+    models burning tokens'')\n    ap.add_argument(\"--dry-run\", action=\"store_true\")\n    ap.add_argument(\"--prom\", default=os.environ.get(\"KI_PIPELINE_PROM\"),\n                    help=\"live
+    pipeline metrics textfile for node-exporter (or KI_PIPELINE_PROM); ignored by --dry-run\")\n    args = ap.parse_args(argv)\n    if
+    args.parallel < 1:\n        ap.error(\"--parallel must be positive\")\n    if not 0 <= args.dispatch_size <= 512:\n        ap.error(\"--dispatch-size
+    must be between 0 and 512\")\n    args.extra = json.loads(args.extra_json)\n    if args.dry_run:\n        return run(args)\n    #
+    One writer owns queue selection and publication for this index. The kernel\n    # releases the lock even after an abrupt
+    exit or host reboot.\n    with open(os.path.join(args.index, \".media-summary.lock\"), \"a\") as lock:\n        try:\n            fcntl.flock(lock,
+    fcntl.LOCK_EX | fcntl.LOCK_NB)\n        except BlockingIOError:\n            print(\"Another summary worker already owns
+    this index\", file=sys.stderr)\n            return 75\n        return run(args)\n\n\nif __name__ == \"__main__\":\n    sys.exit(main(sys.argv[1:]))\n",
+    "pipeline_metrics.py": "\"\"\"Bounded-label, live textfile telemetry for the media summary pipeline.\n\nThe worker writes
+    this independently of the expensive five-minute index exporter.\nCounters reset on process restart; Prometheus rate/increase
+    handles the reset.\nNo media paths, prompts, transcripts, or summaries enter these metrics.\n\"\"\"\nfrom collections
+    import OrderedDict, defaultdict\nimport hashlib\nfrom contextlib import contextmanager\nimport json\nimport logging\nimport
+    math\nimport os\nimport threading\nimport time\n\nSTAGES = {\"idle\": 0, \"queue\": 1, \"decode\": 2, \"transcribe\":
+    3,\n          \"prompt\": 4, \"inference\": 5, \"parse\": 6, \"write\": 7,\n          \"complete\": 8, \"failed\": 9}\nTITLES
+    = {\"queue\": \"Select batch\", \"decode\": \"Read / decode\", \"transcribe\": \"Audio transcript\",\n          \"prompt\":
+    \"Build prompt\", \"inference\": \"Model request\", \"parse\": \"Parse answer\", \"write\": \"Write Parquet\"}\nEDGES
+    = [(\"queue\", \"decode\"), (\"decode\", \"transcribe\"), (\"transcribe\", \"prompt\"),\n         (\"decode\", \"prompt\"),
+    (\"prompt\", \"inference\"), (\"inference\", \"parse\"),\n         (\"parse\", \"decode\"), (\"parse\", \"write\"), (\"write\",
+    \"queue\")]\nPIPELINE_HELP = {\n    \"media_pipeline_backend_in_flight\": (\"gauge\", \"HTTP model requests currently
+    awaiting a response, by backend\"),\n    \"media_pipeline_dispatch_policy_applied_timestamp_seconds\": (\"gauge\", \"When
+    the active dispatch policy was applied\"),\n    \"media_pipeline_mac_request_limit\": (\"gauge\", \"Mac request capacity
+    discovered at the latest batch selection\"),\n    \"media_pipeline_mac_candidate_bytes_total\": (\"counter\", \"Base64
+    JPEG bytes offered to Metal after caption cache misses\"),\n    \"media_pipeline_mac_cache_reusable_bytes_total\": (\"counter\",
+    \"Base64 bytes reusable under a bounded simulated LRU of successful frame transfers\"),\n    \"media_pipeline_mac_phase_seconds_total\":
+    (\"counter\", \"Seconds by Mac request phase; round trip includes upload, queue, compute and return\"),\n    \"media_pipeline_mac_phase_observations_total\":
+    (\"counter\", \"Responses reporting the corresponding Mac request phase\"),\n    \"media_pipeline_backend_saved_total\":
+    (\"counter\", \"Successful Parquet writes by execution backend or cache hit\"),\n    \"media_pipeline_cache_hits_total\":
+    (\"counter\", \"Successful captions reused for identical model inputs; inference requests avoided\"),\n    \"media_pipeline_stage_seconds_total\":
+    (\"counter\", \"Wall seconds in each stage, including in-flight work; inference includes transport and server time\"),\n    \"media_pipeline_stage_completed_seconds_total\":
+    (\"counter\", \"Wall seconds in completed stage operations, including failed attempts\"),\n    \"media_pipeline_stage_operations_total\":
+    (\"counter\", \"Completed stage operations including failed attempts; queue/write operate on batches\"),\n    \"media_pipeline_items_total\":
+    (\"counter\", \"Attempted items by kind and result, before batch persistence\"),\n    \"media_pipeline_persisted_items_total\":
+    (\"counter\", \"Items successfully written to Parquet by kind and result\"),\n    \"media_pipeline_worker_stage\": (\"gauge\",
+    \"Worker state code: idle=0 queue=1 decode=2 transcribe=3 prompt=4 inference=5 parse=6 write=7 complete=8 failed=9\"),\n    \"media_pipeline_stage_started_timestamp_seconds\":
+    (\"gauge\", \"Unix time the current stage started\"),\n    \"media_pipeline_heartbeat_timestamp_seconds\": (\"gauge\",
+    \"Unix time the worker last published telemetry\"),\n    \"media_pipeline_running\": (\"gauge\", \"1 while the instrumented
+    worker runs; check heartbeat for abrupt termination\"),\n    \"media_pipeline_queue\": (\"gauge\", \"Pending items from
+    the last worker queue scan less subsequent successful writes\"),\n    \"media_pipeline_in_flight\": (\"gauge\", \"Operations
+    currently running in each stage and media type\"),\n    \"media_pipeline_ollama_seconds_total\": (\"counter\", \"Ollama
+    response timings converted from nanoseconds; total overlaps load/prompt/generation\"),\n    \"media_pipeline_ollama_observations_total\":
+    (\"counter\", \"Responses containing each Ollama duration field\"),\n    \"media_pipeline_ollama_tokens_total\": (\"counter\",
+    \"Ollama reported prompt or generated token count\"),\n    \"media_pipeline_edge_info\": (\"gauge\", \"Pipeline topology;
+    decode to prompt skips transcription for photos; parse loops for the next item\"),\n}\n\n\nclass MediaCacheProbe:\n    \"\"\"Simulate
+    a bounded JPEG cache. Store only digests and sizes on the queue host.\"\"\"\n\n    def __init__(self, capacity):\n        self.capacity
+    = capacity\n        self.entries = OrderedDict()\n        self.used = self.reusable = 0\n\n    def observe(self, frames):\n        for
+    digest, size in frames:\n            if digest in self.entries:\n                self.reusable += 4 * ((size + 2) // 3)\n                self.entries.move_to_end(digest)\n\n    def
+    delivered(self, frames):\n        for digest, size in frames:\n            if digest in self.entries:\n                self.entries.move_to_end(digest)\n                continue\n            if
+    size > self.capacity:\n                continue\n            while self.used + size > self.capacity:\n                _,
+    dropped = self.entries.popitem(last=False)\n                self.used -= dropped\n            self.entries[digest] = size\n            self.used
+    += size\n\n\nclass PipelineMetrics:\n    \"\"\"Measure stages with a monotonic clock and publish atomically every five
+    seconds.\"\"\"\n\n    def __init__(self, path: str | None, enricher: str, every: float = 5.0):\n        self.path, self.enricher,
+    self.every = path, enricher, every\n        self.seconds = defaultdict(float)\n        self.operations = defaultdict(int)\n        self.items
+    = defaultdict(int)\n        self.persisted = defaultdict(int)\n        self.mac_cache = {mib: MediaCacheProbe(mib * 1024**2)
+    for mib in (64, 256, 1024)}\n        self.mac_bytes = 0\n        self.mac_seconds = defaultdict(float)\n        self.mac_counts
+    = defaultdict(int)\n        self.backend_active = {\"primary\": 0, \"metal\": 0}\n        self.mac_limit = 0\n        self.dispatch
+    = None\n        self.backend_saved = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0)\n        self.ollama_seconds
+    = defaultdict(float)\n        self.ollama_observations = defaultdict(int)\n        self.tokens = defaultdict(int)\n        self.cache_hits
+    = {\"photo\": 0, \"video\": 0}\n        for stage in TITLES:\n            for kind in ((\"batch\",) if stage in (\"queue\",
+    \"write\") else (\"photo\", \"video\")):\n                self.seconds[stage, kind] = 0.0\n                self.operations[stage,
+    kind] = 0\n        for kind in (\"photo\", \"video\"):\n            for status in (\"ok\", \"error\"):\n                self.items[kind,
+    status] = self.persisted[kind, status] = 0\n        self.active = {}\n        self.stage = \"idle\"\n        self.pending
+    = None\n        self.started = time.time()\n        self.running = 1\n        self.lock = threading.RLock()\n        self.stop
+    = threading.Event()\n        self.thread = None\n        self.warned = False\n\n    def __enter__(self):\n        if self.path:\n            self.publish()\n            self.thread
+    = threading.Thread(target=self._heartbeat, daemon=True)\n            self.thread.start()\n        return self\n\n    def
+    __exit__(self, exc_type, exc, tb):\n        self.stop.set()\n        if self.thread:\n            self.thread.join()\n        with
+    self.lock:\n            self.running = 0\n            self.stage = \"failed\" if exc_type else \"complete\"\n            self.started
+    = time.time()\n            self.publish()\n\n    def _heartbeat(self) -> None:\n        while not self.stop.wait(self.every):\n            self.publish()\n\n    @contextmanager\n    def
+    measure(self, stage: str, kind: str = \"batch\"):\n        \"\"\"Account for successful and failed work, including a currently
+    blocked operation.\"\"\"\n        operation = object()\n        with self.lock:\n            self.active[operation] =
+    stage, kind, time.time(), time.monotonic()\n            self.publish()\n        try:\n            yield\n        finally:\n            with
+    self.lock:\n                _, _, _, started = self.active.pop(operation)\n                self.seconds[stage, kind] +=
+    max(0, time.monotonic() - started)\n                self.operations[stage, kind] += 1\n                self.stage, self.started
+    = \"idle\", time.time()\n                self.publish()\n\n    def queue_size(self, count: int) -> None:\n        \"\"\"Record
+    a fresh queue snapshot.\"\"\"\n        with self.lock:\n            self.pending = count\n\n    def item(self, kind: str,
+    status: str, persisted: bool = False, backend: str = \"primary\") -> None:\n        \"\"\"Distinguish completed inference
+    from durable Parquet output.\"\"\"\n        with self.lock:\n            (self.persisted if persisted else self.items)[kind,
+    status] += 1\n            if persisted and status == \"ok\":\n                self.backend_saved[backend] += 1\n            if
+    persisted and status == \"ok\" and self.pending is not None:\n                self.pending = max(0, self.pending - 1)\n\n    def
+    cache_hit(self, kind: str) -> None:\n        \"\"\"Count a caption reused from the local cache.\"\"\"\n        with self.lock:\n            self.cache_hits[kind]
+    += 1\n\n    @contextmanager\n    def backend_request(self, backend):\n        with self.lock:\n            self.backend_active[backend]
+    += 1\n        try:\n            yield\n        finally:\n            with self.lock:\n                self.backend_active[backend]
+    -= 1\n\n    def mac_capacity(self, offered):\n        with self.lock:\n            self.mac_limit = offered\n\n    def
+    dispatch_policy(self, mode, page_size, routing, *, queue_order=\"newest\"):\n        with self.lock:\n            settings
+    = (mode, page_size, routing, queue_order)\n            if self.dispatch is None or settings != self.dispatch[0]:\n                self.dispatch
+    = settings, time.time()\n\n    def mac_request(self, jpegs):\n        frames = [(hashlib.sha256(jpeg).digest(), len(jpeg))
+    for jpeg in jpegs]\n        with self.lock:\n            self.mac_bytes += sum(4 * ((size + 2) // 3) for _, size in frames)\n            for
+    cache in self.mac_cache.values():\n                cache.observe(frames)\n        return frames\n\n    def mac_response(self,
+    frames, kind, elapsed, response):\n        timings = response.get(\"timings\") or {}\n        with self.lock:\n            for
+    cache in self.mac_cache.values():\n                cache.delivered(frames)\n            self.mac_seconds[\"round_trip\",
+    kind] += elapsed\n            self.mac_counts[\"round_trip\", kind] += 1\n            for phase, key in ((\"prompt\",
+    \"prompt_ms\"), (\"generation\", \"predicted_ms\")):\n                value = timings.get(key)\n                if isinstance(value,
+    (float, int)) and math.isfinite(value) and value >= 0:\n                    self.mac_seconds[phase, kind] += value / 1000\n                    self.mac_counts[phase,
+    kind] += 1\n\n    def ollama(self, response: dict, kind: str) -> None:\n        \"\"\"Keep only numeric timing and token
+    fields; missing fields remain absent.\"\"\"\n        with self.lock:\n            for phase, field in ((\"load\", \"load_duration\"),
+    (\"prompt\", \"prompt_eval_duration\"),\n                                 (\"generation\", \"eval_duration\"), (\"total\",
+    \"total_duration\")):\n                value = response.get(field)\n                if isinstance(value, (int, float))
+    and math.isfinite(value) and value >= 0:\n                    self.ollama_seconds[phase, kind] += value / 1e9\n                    self.ollama_observations[phase,
+    kind] += 1\n            # Pair token counts with their durations so throughput excludes incomplete observations.\n            for
+    phase, field, duration in ((\"prompt\", \"prompt_eval_count\", \"prompt_eval_duration\"),\n                                           (\"generation\",
+    \"eval_count\", \"eval_duration\")):\n                value, seconds = response.get(field), response.get(duration)\n                if
+    (isinstance(value, (int, float)) and math.isfinite(value) and value >= 0\n                        and isinstance(seconds,
+    (int, float)) and math.isfinite(seconds) and seconds > 0):\n                    self.tokens[phase, kind] += value\n\n    def
+    render(self) -> str:\n        \"\"\"Render Prometheus exposition with bounded labels and no explicit sample timestamps.\"\"\"\n        with
+    self.lock:\n            rows = defaultdict(list)\n\n            def add(name, value, **labels):\n                labels[\"enricher\"]
+    = self.enricher\n                lab = \",\".join(f\"{k}={json.dumps(str(v), ensure_ascii=False)}\" for k, v in sorted(labels.items()))\n                rows[name].append(f\"{name}{{{lab}}}
+    {value}\")\n\n            active_seconds = defaultdict(float)\n            active_counts = defaultdict(int)\n            stage_now,
+    stage_started = self.stage, self.started\n            if self.active:\n                stage_now, _, stage_started, _
+    = next(iter(self.active.values()))\n                now = time.monotonic()\n                for stage, kind, _, started
+    in self.active.values():\n                    active_seconds[stage, kind] += max(0, now - started)\n                    active_counts[stage,
+    kind] += 1\n            for (stage, kind), value in sorted(self.seconds.items()):\n                add(\"media_pipeline_stage_completed_seconds_total\",
+    value, stage=stage, kind=kind)\n                add(\"media_pipeline_stage_seconds_total\", value + active_seconds[stage,
+    kind],\n                    stage=stage, kind=kind, id=stage, title=TITLES[stage])\n                add(\"media_pipeline_stage_operations_total\",
+    self.operations[stage, kind], stage=stage, kind=kind)\n                add(\"media_pipeline_in_flight\", active_counts[stage,
+    kind], stage=stage, kind=kind)\n            for name, values in ((\"media_pipeline_items_total\", self.items), (\"media_pipeline_persisted_items_total\",
+    self.persisted)):\n                for (kind, status), value in sorted(values.items()):\n                    add(name,
+    value, kind=kind, status=status)\n            for backend, count in self.backend_active.items():\n                add(\"media_pipeline_backend_in_flight\",
+    count, backend=backend)\n            add(\"media_pipeline_mac_request_limit\", self.mac_limit)\n            if self.dispatch
+    is not None:\n                (mode, page, routing, queue_order), applied = self.dispatch\n                add(\"media_pipeline_dispatch_policy_applied_timestamp_seconds\",
+    applied,\n                    mode=mode, page_size=page, mac_routing=routing, queue_order=queue_order)\n            add(\"media_pipeline_mac_candidate_bytes_total\",
+    self.mac_bytes)\n            for mib, cache in self.mac_cache.items():\n                add(\"media_pipeline_mac_cache_reusable_bytes_total\",
+    cache.reusable, capacity_mib=mib)\n            for (phase, kind), seconds in self.mac_seconds.items():\n                add(\"media_pipeline_mac_phase_seconds_total\",
+    seconds, phase=phase, kind=kind)\n                add(\"media_pipeline_mac_phase_observations_total\", self.mac_counts[phase,
+    kind], phase=phase, kind=kind)\n            for backend, count in self.backend_saved.items():\n                add(\"media_pipeline_backend_saved_total\",
+    count, backend=backend)\n            if self.pending is not None:\n                add(\"media_pipeline_queue\", self.pending)\n            for
+    name, value in ((\"worker_stage\", STAGES[stage_now]), (\"stage_started_timestamp_seconds\", stage_started),\n                                (\"heartbeat_timestamp_seconds\",
+    time.time()), (\"running\", self.running)):\n                add(\"media_pipeline_\" + name, value)\n            for name,
+    values in ((\"seconds\", self.ollama_seconds), (\"observations\", self.ollama_observations), (\"tokens\", self.tokens)):\n                for
+    (phase, kind), value in sorted(values.items()):\n                    add(f\"media_pipeline_ollama_{name}_total\", value,
+    phase=phase, kind=kind)\n            for kind, count in self.cache_hits.items():\n                add(\"media_pipeline_cache_hits_total\",
+    count, kind=kind)\n            for source, target in EDGES:\n                add(\"media_pipeline_edge_info\", 1, id=source
+    + \"-\" + target, source=source, target=target)\n            lines = []\n            for name, samples in sorted(rows.items()):\n                typ,
+    help_text = PIPELINE_HELP[name]\n                lines.extend([f\"# HELP {name} {help_text}\", f\"# TYPE {name} {typ}\",
+    *samples])\n            return \"\\n\".join(lines) + \"\\n\"\n\n    def publish(self) -> None:\n        \"\"\"A telemetry
+    failure must not discard summaries or abort a batch.\"\"\"\n        if not self.path:\n            return\n        with
+    self.lock:\n            tmp = self.path + \".tmp\"\n            try:\n                with open(tmp, \"w\", encoding=\"utf-8\")
+    as fh:\n                    fh.write(self.render())\n                os.chmod(tmp, 0o644)\n                os.replace(tmp,
+    self.path)\n                self.warned = False\n            except OSError:\n                if not self.warned:\n                    logging.exception(\"Could
+    not publish pipeline telemetry\")\n                    self.warned = True\n                try:\n                    os.unlink(tmp)\n                except
+    OSError:\n                    pass\n", "run.py": "#!/usr/bin/env python3\n\"\"\"Run the existing worker with GitOps settings
+    and the host-local Ollama endpoint.\"\"\"\nimport json\nimport os\nfrom pathlib import Path\nimport sys\n\n\ndef main()
+    -> None:\n    \"\"\"Keep model identity stable; endpoint and Mac authentication remain host-local.\"\"\"\n    root = Path(''/opt/knowledge-index'')\n    config
+    = json.loads((root / ''caption-gitops/config.json'').read_text())\n    endpoint = os.environ[''KI_OLLAMA_URL'']\n    args
+    = [str(root / ''venv/bin/python''), str(root / ''enrichers/media_summary.py''), ''run'']\n    for name in (''index'',
+    ''library'', ''model'', ''enricher'', ''api'', ''parallel'', ''batch_size'', ''min_free_mib''):\n        args.extend([''--''
+    + name.replace(''_'', ''-''), str(config[name])])\n    args.extend([''--endpoint'', endpoint, ''--extra-json'', json.dumps(config[''extra''])])\n    if
+    config[''mac_assist'']:\n        args.append(''--mac-assist'')\n    os.execv(args[0], args)\n\n\nif __name__ == ''__main__'':\n    main()\n",
+    "summary_cache.py": "\"\"\"Persistent reuse of successful captions for identical model inputs.\n\nPaths are deliberately
+    excluded, but prompt context, image bytes, model and\ninference settings must match. No filename/size heuristic can cause
+    a hit.\n\"\"\"\nimport hashlib\nimport json\nimport sqlite3\nfrom pathlib import Path\nfrom threading import Lock\n\n\nclass
+    SummaryCache:\n    \"\"\"Store only parsed successful answers; survive batch retries and restarts.\"\"\"\n\n    def __init__(self,
+    path: str):\n        Path(path).parent.mkdir(parents=True, exist_ok=True)\n        self.connection = sqlite3.connect(path,
+    check_same_thread=False)\n        self.lock = Lock()\n        self.connection.execute(\"CREATE TABLE IF NOT EXISTS answers
+    (key TEXT PRIMARY KEY, answer TEXT NOT NULL)\")\n\n    @staticmethod\n    def key(prompt: str, images: list[bytes], settings:
+    dict) -> str:\n        \"\"\"Fingerprint exact inputs with unambiguous boundaries and a cache version.\"\"\"\n        digest
+    = hashlib.sha256()\n        for part in [b\"summary-cache-v1\", json.dumps(settings, sort_keys=True, separators=(\",\",
+    \":\")).encode(),\n                     prompt.encode(), *images]:\n            digest.update(len(part).to_bytes(8, \"big\"))\n            digest.update(part)\n        return
+    digest.hexdigest()\n\n    def get(self, key: str) -> tuple[str, list[str]] | None:\n        \"\"\"Return a previously
+    validated answer, if present.\"\"\"\n        with self.lock:\n            row = self.connection.execute(\"SELECT answer
+    FROM answers WHERE key=?\", (key,)).fetchone()\n        if row is None:\n            return None\n        summary, tags
+    = json.loads(row[0])\n        return summary, tags\n\n    def put(self, key: str, summary: str, tags: list[str]) -> None:\n        \"\"\"Atomically
+    save a successful parsed answer, independently of Parquet batches.\"\"\"\n        with self.lock, self.connection:\n            self.connection.execute(\"INSERT
+    OR IGNORE INTO answers VALUES (?, ?)\",\n                                    (key, json.dumps([summary, tags])))\n\n    def
+    close(self) -> None:\n        \"\"\"Release the connection.\"\"\"\n        self.connection.close()\n\n    def __enter__(self):\n        return
+    self\n\n    def __exit__(self, *exc):\n        self.close()\n"}'
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: caption-worker-2244713d49e0
+  namespace: monitoring
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 240
+  template:
+    metadata:
+      labels:
+        app: caption-worker-installer
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: install
+        image: alpine/git:v2.49.1@sha256:53a6239398162098fed2f49a46512f9cbba9e3f31b9f2cea4fa90129ee069a99
+        command:
+        - /bin/sh
+        - -ec
+        - cp /credentials/id_ed25519 /work/deploy.key; chmod 600 /work/deploy.key; exec ssh -T -o BatchMode=yes -o ConnectTimeout=10
+          -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/credentials/known_hosts
+          -i /work/deploy.key root@pumped-piglet.maas caption-reconcile < /bundle/bundle.json
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: bundle
+          mountPath: /bundle
+          readOnly: true
+        - name: credentials
+          mountPath: /credentials
+          readOnly: true
+        - name: work
+          mountPath: /work
+      volumes:
+      - name: bundle
+        configMap:
+          name: caption-worker-2244713d49e0
+      - name: credentials
+        secret:
+          secretName: caption-worker-deploy
+          defaultMode: 288
+      - name: work
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: caption-worker-reconcile
+  namespace: monitoring
+spec:
+  schedule: '*/5 * * * *'
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 240
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 240
+      template:
+        metadata:
+          labels:
+            app: caption-worker-installer
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: install
+            image: alpine/git:v2.49.1@sha256:53a6239398162098fed2f49a46512f9cbba9e3f31b9f2cea4fa90129ee069a99
+            command:
+            - /bin/sh
+            - -ec
+            - cp /credentials/id_ed25519 /work/deploy.key; chmod 600 /work/deploy.key; exec ssh -T -o BatchMode=yes -o ConnectTimeout=10
+              -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/credentials/known_hosts
+              -i /work/deploy.key root@pumped-piglet.maas caption-reconcile < /bundle/bundle.json
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+            volumeMounts:
+            - name: bundle
+              mountPath: /bundle
+              readOnly: true
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
+            - name: work
+              mountPath: /work
+          volumes:
+          - name: bundle
+            configMap:
+              name: caption-worker-2244713d49e0
+          - name: credentials
+            secret:
+              secretName: caption-worker-deploy
+              defaultMode: 288
+          - name: work
+            emptyDir:
+              medium: Memory
+              sizeLimit: 1Mi
