@@ -51,17 +51,46 @@ print(json.dumps(dict(host=socket.gethostname(),cpus=os.cpu_count(),available_ki
         print(ssh(args.runner,'python3 -c '+shlex.quote(code)).decode())
         return
     if args.mode=='health':
+        piglet='''import json,os,time
+from pathlib import Path
+processes=[]
+for p in Path('/proc').glob('[0-9]*'):
+    try:
+        args=p.joinpath('cmdline').read_bytes().split(b'\\0')
+        if b'/opt/knowledge-index/luna-backfill/host.py' not in args:continue
+        s=dict(line.split(':',1) for line in p.joinpath('status').read_text().splitlines())
+        processes.append(dict(pid=p.name,rss=s.get('VmRSS',''),state=s.get('State',''),wait=p.joinpath('wchan').read_text()))
+    except (FileNotFoundError,ProcessLookupError,PermissionError):pass
+root=Path('/local-3TB-backup/photo-enrichment/summary-reconciliation')
+print(json.dumps(dict(ledger_processes=processes,publication_files=[dict(name=p.name,bytes=p.stat().st_size,age_seconds=round(time.time()-p.stat().st_mtime)) for p in root.glob('*') if p.is_file()])))
+'''
+        print(ssh(args.piglet,'python3 -c '+shlex.quote(piglet)).decode())
         code='''import json,subprocess
 from pathlib import Path
 print(subprocess.check_output(['systemctl','show','knowledge-index-luna.service','-p','ActiveState','-p','SubState','-p','ExecMainStatus','-p','MemoryCurrent','-p','MemoryPeak'],text=True))
 raw=subprocess.check_output(['journalctl','-u','knowledge-index-luna.service','--since','10 minutes ago','--no-pager','-o','cat'],text=True)
-print('\\n'.join(raw.splitlines()[-25:]))
+lines=[]
+for line in raw.splitlines():
+    if line.startswith('RECONCILIATION_BATCH '):
+        b=json.loads(line.split(' ',1)[1]);results=b.pop('results')
+        b['ok']=sum(r['state']=='ok' for r in results)
+        b['unknown']=sum(r['state']=='unknown' for r in results)
+        lines.append(json.dumps(b))
+    elif line.startswith('RECONCILIATION_IDLE '):lines.append(line)
+print('\\n'.join(lines[-4:]))
 memory=dict(line.split(':',1) for line in Path('/proc/meminfo').read_text().splitlines())
 print('MemAvailable',memory['MemAvailable'])
 '''
         print(ssh(args.runner,'python3 -c '+shlex.quote(code)).decode())
         local=Path.home()/'Library/Application Support/knowledge-index-luna/reconciliation.log'
-        if local.exists():print('\n'.join(local.read_text().splitlines()[-8:]))
+        if local.exists():
+            for line in local.read_text().splitlines()[-4:]:
+                if line.startswith('RECONCILIATION_BATCH '):
+                    batch=json.loads(line.split(' ',1)[1]);results=batch.pop('results')
+                    batch['ok']=sum(r['state']=='ok' for r in results)
+                    batch['unknown']=sum(r['state']=='unknown' for r in results)
+                    print(json.dumps(batch))
+                else:print(line)
         return
     if args.mode=='inspect':
         print(ssh(args.runner,"hostname; nproc; free -m; runuser -u ki-luna -- /opt/knowledge-index/luna-backfill/bin/codex login status").decode())

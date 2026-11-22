@@ -227,6 +227,8 @@ def status(db: sqlite3.Connection) -> dict:
     """Return aggregates only; no private captions, names or file paths in logs."""
     return dict(states=dict(db.execute('SELECT state,count(*) FROM reconciliations GROUP BY state')),
                 runners=[dict(runner=r,state=s,count=n) for r,s,n in db.execute('SELECT runner,state,count(*) FROM reconciliations GROUP BY runner,state')],
+                estimated_completed_usd=db.execute("SELECT coalesce(sum(cost),0) FROM reconciliations WHERE state='ok'").fetchone()[0]/1e6,
+                reserved_or_unknown_usd=db.execute("SELECT coalesce(sum(cost),0) FROM reconciliations WHERE state IN ('reserved','sent','unknown')").fetchone()[0]/1e6,
                 estimated_and_held_usd=extra_cost(db)/1e6,
                 campaign_estimated_and_held_usd=(legacy_cost(db)+extra_cost(db))/1e6,
                 blocked=bool(db.execute("SELECT 1 FROM reconciliation_config WHERE key='blocked'").fetchone()))
@@ -246,6 +248,7 @@ def write_rows(rows: sqlite3.Cursor, target: Path) -> int:
     try:
         with duckdb.connect() as con:
             con.execute("SET threads=2; SET memory_limit='512MB'")
+            con.execute('BEGIN')
             con.execute('CREATE TABLE output('+OUTPUT_SCHEMA+')')
             columns=[c[0] for c in rows.description]
             count=0
@@ -261,6 +264,7 @@ def write_rows(rows: sqlite3.Cursor, target: Path) -> int:
                 con.executemany('INSERT INTO output VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',records)
                 count+=len(records)
             con.execute('COPY output TO ? (FORMAT parquet, COMPRESSION zstd)',[str(temporary)])
+            con.execute('COMMIT')
         temporary.chmod(0o600)
         with temporary.open('rb') as handle:os.fsync(handle.fileno())
         temporary.replace(target)
