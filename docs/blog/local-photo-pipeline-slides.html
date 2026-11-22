@@ -288,50 +288,32 @@ nav{display:none}
 </div>
 <div class="source">Actual Grafana panel crop; November 21 11:00–November 22 02:00 UTC. <a href="assets/local-photo-pipeline/grafana-live-tuning.jpg">Open full-size image</a>.</div>
 </section>
-<section class="slide" data-title="Concurrency limits" aria-label="Slide 7: Concurrency limits">
-<div class="eyebrow">06 / What did not help</div>
-<h2>More jobs at once did not always help.</h2>
+<section class="slide" data-title="Frontier vs local GPU" aria-label="Slide 7: Frontier vs local GPU">
+<div class="eyebrow">06 / Time and cost · Luna vs RTX 3070</div>
+<h2>Luna saved twice as many captions per minute.</h2>
 <div class="body">
 <div class="row">
 <div>
-<div class="tag">Mac · benchmark</div>
-<div class="big">4 → 20</div>
-<div class="unit">jobs sent at once</div>
-<div class="stat">
-<strong>9.62 → 9.65</strong>
-<div class="unit">saved descriptions/min · almost unchanged</div>
-</div>
-<div class="stat">
-<strong>48 → 124 s</strong>
-<div class="unit">95% of requests finished within this time · keep four jobs</div>
-</div>
+<div class="tag">Time for 1,000 items · projected from measured rates</div>
+<div class="compare"><span>Local GPU</span><div class="bar before" style="--w:100%"></div><b>32 min</b></div>
+<div class="compare"><span>Luna</span><div class="bar" style="--w:45.3%"></div><b>14 min</b></div>
+<p class="note">Local: 31.4 photos/min · Luna: 69.3 mixed items/min.<br>20 cloud requests at once; two local GPU requests.</p>
+<div class="stat"><strong>~2.2× throughput</strong><div class="unit">in these runs; different photo/video mixes</div></div>
 </div>
 <div>
-<div class="tag">Luna · 20 requests held fixed</div>
-<div class="compare">
-<span>4 prep / 24 jobs</span>
-<div class="bar" style="--w:78%">
-</div>
-<b>62.6</b>
-</div>
-<div class="compare">
-<span>6 prep / 24 jobs</span>
-<div class="bar before" style="--w:70%">
-</div>
-<b>55.9</b>
-</div>
-<div class="compare">
-<span>4 prep / 48 jobs</span>
-<div class="bar" style="--w:87%">
-</div>
-<b>69.3</b>
-</div>
-<p class="note">Saved descriptions/min. Preparing images held up the cloud worker. Six preparation workers were slower than four.</p>
-<span class="badge">Local page 24 vs. 48: both 32 photos/min</span>
+<div class="tag">Cost for 1,000 items · estimates, not bills</div>
+<div class="compare"><span>GPU electricity*</span><div class="bar before" style="--w:4.8%"></div><b>~$0.03</b></div>
+<div class="compare"><span>Luna API value</span><div class="bar" style="--w:100%"></div><b>~$0.58</b></div>
+<p class="note">*Illustration: 150 W × 32 min × $0.35/kWh.<br>Excludes the host, GPU purchase and other running costs.</p>
+<div class="stat"><strong>77,707 saved</strong><div class="unit">Luna campaign · ~$43 API-equivalent total</div></div>
 </div>
 </div>
+<div class="flow">
+<div class="node"><b>Frontier model</b>Use parallel cloud capacity<br>to finish a large backlog sooner.</div>
+<div class="node"><b>Existing local GPU</b>No API fee; keep media at home.<br>Pay for hardware and electricity.</div>
 </div>
-<div class="source">Mac results are benchmark measurements. Luna results are sequential production samples, not identical inputs. Local page trial was photo-only. <a href="assets/local-photo-pipeline/evidence.md">Evidence notes</a>.</div>
+</div>
+<div class="source">Luna uses Enterprise Codex; API-equivalent values are usage estimates, not an invoice or claimed savings. $0.58/1,000 uses the measured 85% photo / 15% video sample; ~$43 includes the campaign's $1 pilot allowance. GPU power is an explicit assumption. This is not a controlled model-quality or cost benchmark. <a href="assets/local-photo-pipeline/evidence.md#frontier-model-versus-local-gpu">Calculations and evidence</a>.</div>
 </section>
 <section class="slide" data-title="Database responsibilities" aria-label="Slide 8: Database responsibilities">
 <div class="eyebrow">07 / Give each database a clear job</div>

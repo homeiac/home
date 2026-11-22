@@ -79,3 +79,61 @@ Reproduce with `scripts/knowledge-index/caption-gitops/audit-host.sh verify` and
 `check-host.sh`; `check-flux.sh` reads installer and scheduled-reconciliation logs.
 Local validation passed nine reconciliation/locking/audit tests, 16 metrics tests,
 five cache tests and all 27 enricher integration assertions.
+
+
+## Frontier model versus local GPU
+
+Slide 7 compares two recorded production configurations, not an intrinsic model
+speed or quality ranking. Local Bonsai used two concurrent RTX requests and saved
+943 distinct photos in 30 minutes (31.4/min). Luna used 20 concurrent requests,
+four preparation slots and 48-item batches (69.3 mixed items/min). Their inputs
+were different. Projecting those rates to 1,000 items gives 31.85 and 14.43 minutes,
+a 2.21× throughput ratio; the projected times are not an identical-input trial.
+
+The Luna trial's estimated cost at an 85% photo / 15% video mix was $0.000581 per
+saved caption, or $0.581 per 1,000. This values reported usage at the pipeline's
+configured standard API rates; Enterprise Codex supplies the inference. It does
+not establish an incremental charge on the user's subscription.
+
+The local electricity figure is deliberately illustrative: assumed 150 W GPU draw
+× (1,000 / 31.4 / 60 hours) × the dashboard's assumed $0.35/kWh = $0.0279 per
+1,000 photos. It excludes host power, hardware purchase, idle allocation and
+maintenance. It is not measured caption-only electricity or a total-cost comparison.
+
+At the November 22 completion check, Luna had 77,707 successfully published jobs,
+no pending or in-flight work, and 14 exceptional outcomes. Its reported/projected
+API-equivalent cost was $42.33019, plus a separate $1 pilot allowance: $43.33019
+in total estimated accounting. Slide 7 rounds this to about $43. The campaign
+figure includes prior attempts/corrections and is separate from the standardized
+trial's per-1,000 estimate. No actual billing savings or comparative caption quality
+has been established by these measurements.
+
+
+## Closing the final caption gaps
+
+The combined audit excluded album copies using the existing name-and-size rule,
+then compared current `(path, size_bytes)` identities with both published datasets.
+It found 12 gaps: six readable items with failed/interrupted requests and six
+source-file problems. The existing local GPU worker prioritized the frozen repair
+manifest through Flux; its normal success filter and single-writer lock remained
+in force. Two photos and four videos each received exactly one successful local
+caption. The temporary repair priority was removed after verification.
+
+Combined coverage is now **85,889 of 85,890 photos** and **6,909 of 6,914 videos**:
+92,798 captioned items out of 92,804 under that album-copy rule. This does not claim
+hash-level deduplication or that every album copy has a separate caption.
+
+The six permitted exceptions remain uncaptioned and their originals are unchanged:
+
+| Count | Finding |
+|---:|---|
+| 3 MOVs | Metadata-only containers; no video stream and only eight payload bytes |
+| 1 MOV | Roughly 138 MB of trailing zero bytes, including the missing playback index |
+| 1 MPG | Roughly 10 MB of zero-filled blocks; no MPEG video start codes found |
+| 1 PNG | Malformed data after about 41 KB; tolerant decoding recovers only 79 of 1,161 rows |
+
+The retained-version and configured USB-backup searches found a PNG backup with
+exactly the same SHA-256, so it was not substituted. No blank, partial or fabricated
+caption was counted as a success. The user accepted leaving these files out.
+Private filenames and diagnostic manifests remain on Piglet; the repository stores
+only the read-only diagnosis, coverage and verification scripts.

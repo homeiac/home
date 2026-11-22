@@ -82,3 +82,17 @@ The service uses `RequiresMountsFor`, `WantedBy=multi-user.target`, and a 60-sec
 restart delay. Checking `systemctl is-enabled`, the permanent `FragmentPath`, a
 fresh heartbeat and new Parquet after a service restart verifies recovery without
 rebooting the Proxmox host or disturbing its other workloads.
+
+
+## Prioritize a bounded repair
+
+An optional `priority_manifest` in `config.json` points to a private host-local
+JSON list of objects with `path` keys (up to 1,000). The existing worker puts those
+paths first while retaining its normal pending-work filter and single-writer lock.
+Completed and in-flight items are not submitted again. Generate and push the
+ConfigMap after changing this option; remove the option after the repair.
+
+The November 22 diagnosis and frozen-cohort verification use
+`../diagnose-caption-gaps.sh` and `../verify-caption-gaps.sh`. Combined coverage is
+checked by `../check-caption-coverage.sh`. These report counts or opaque ledger IDs,
+not photo identities. Their private incident manifest stays in `/var/tmp` on Piglet.
