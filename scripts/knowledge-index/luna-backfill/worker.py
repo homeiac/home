@@ -17,6 +17,7 @@ RUNNER=os.environ.get('KI_LUNA_RUNNER','mac')
 POLICY='https://raw.githubusercontent.com/homeiac/home/{revision}/scripts/knowledge-index/luna-backfill/policy.json'
 REF='refs/heads/codex/photo-enrichment-217'
 BRIDGE_SLOTS=threading.BoundedSemaphore(8)
+RECONCILE_BRIDGE_SLOTS=threading.BoundedSemaphore(4)
 SCHEMA={'type':'object','properties':{'summary':{'type':'string'},'tags':{'type':'array','items':{'type':'string'}}},
         'required':['summary','tags'],'additionalProperties':False}
 PROMPT=("Write a factual searchable caption in one or two sentences and up to eight tags. "
@@ -37,7 +38,9 @@ def host(**request):
     else:
         cmd.extend([os.environ['CB_HOST'],
                     '/opt/photo-enrichment/context/venv/bin/python /opt/knowledge-index/luna-backfill/host.py'])
-    with BRIDGE_SLOTS:
+    # Two runners share Piglet's SSH admission capacity; model requests remain
+    # independently concurrent while their short ledger calls are bounded.
+    with RECONCILE_BRIDGE_SLOTS if request['op'].startswith('reconcile_') else BRIDGE_SLOTS:
         proc=subprocess.run(cmd,
                             input=json.dumps(request),text=True,capture_output=True,timeout=240)
     if proc.returncode:
