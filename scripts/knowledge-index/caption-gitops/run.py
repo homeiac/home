@@ -11,6 +11,8 @@ def main() -> None:
     root = Path('/opt/knowledge-index')
     config = json.loads((root / 'caption-gitops/config.json').read_text())
     endpoint = os.environ['KI_OLLAMA_URL']
+    if config.get('priority_manifest'):
+        os.environ['KI_SUMMARY_PRIORITY_MANIFEST'] = config['priority_manifest']
     args = [str(root / 'venv/bin/python'), str(root / 'enrichers/media_summary.py'), 'run']
     for name in ('index', 'library', 'model', 'enricher', 'api', 'parallel', 'batch_size', 'min_free_mib'):
         args.extend(['--' + name.replace('_', '-'), str(config[name])])

@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-2244713d49e0
+  name: caption-worker-cea517c4c493
   namespace: monitoring
 data:
   bundle.json: '{"config.json": "{\n  \"enabled\": true,\n  \"index\": \"/local-3TB-backup/knowledge-index\",\n  \"library\":
     \"/local-3TB-backup/gphotos/library\",\n  \"model\": \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\":
-    2,\n  \"batch_size\": 16,\n  \"mac_assist\": true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\"think\": false, \"options\":
-    {\"num_ctx\": 8192, \"num_predict\": 384, \"temperature\": 0.2}}\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\":
-    48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "knowledge-index-enrich.service":
-    "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index
-    /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
+    2,\n  \"batch_size\": 16,\n  \"mac_assist\": true,\n  \"priority_manifest\": \"/var/tmp/caption-gaps-20261122.json\",\n  \"min_free_mib\":
+    3000,\n  \"extra\": {\"think\": false, \"options\": {\"num_ctx\": 8192, \"num_predict\": 384, \"temperature\": 0.2}}\n}\n",
+    "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\": 48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\":
+    \"photos-first\"\n}\n", "knowledge-index-enrich.service": "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target
+    zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
     /opt/knowledge-index/caption-gitops/run.py\nRestart=always\nRestartSec=60\nRestartPreventExitStatus=75\nTimeoutStopSec=45\nKillMode=control-group\nNice=10\nIOSchedulingClass=idle\n\n[Install]\nWantedBy=multi-user.target\n",
     "media_summary.py": "#!/usr/bin/env python3\n\"\"\"Photo/video summary enricher for the knowledge index (issue #212, OpenSpec
     change add-media-summaries-enricher).\n\nUsage:\n  media_summary.py run --index DIR --library DIR --endpoint URL --model
@@ -116,9 +116,14 @@ data:
     target)\n    return target\n\n\ndef queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):\n    \"\"\"Select
     pending work while skipping paths already attempted in this run.\"\"\"\n    priority = \"coalesce(list_contains(?, lower(ext)),
     false), \" if photos_first else \"\"\n    params = [enricher, sorted(VIDEO_EXTS), limit + len(seen)] if photos_first else
-    [enricher, limit + len(seen)]\n    with duckdb.connect(os.path.join(index, \"knowledge.duckdb\"), read_only=True) as con:\n        cur
-    = con.execute(\"SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) \"\n                          f\"ORDER
-    BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?\", params)\n        names = [column[0] for column in cur.description[:-1]]\n        rows
+    [enricher, limit + len(seen)]\n    manifest = os.environ.get(''KI_SUMMARY_PRIORITY_MANIFEST'')\n    if manifest:\n        with
+    open(manifest, encoding=''utf-8'') as stream:\n            items = json.load(stream)\n        if not isinstance(items,
+    list) or len(items) > 1000:\n            raise ValueError(''Expected at most 1000 repair items'')\n        paths = [item[''path'']
+    for item in items]\n        if any(not isinstance(path, str) for path in paths):\n            raise ValueError(''Repair
+    paths must be strings'')\n        priority = ''list_contains(?, path) DESC, '' + priority\n        params.insert(1, paths)\n    with
+    duckdb.connect(os.path.join(index, \"knowledge.duckdb\"), read_only=True) as con:\n        cur = con.execute(\"SELECT
+    *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) \"\n                          f\"ORDER BY {priority}taken_ts
+    DESC NULLS LAST, path LIMIT ?\", params)\n        names = [column[0] for column in cur.description[:-1]]\n        rows
     = cur.fetchall()\n    if metrics is not None:\n        metrics.queue_size(rows[0][-1] if rows else 0)\n    return [r for
     r in (dict(zip(names, row[:-1])) for row in rows) if r[\"path\"] not in seen][:limit]\n\n\nMAC_ENDPOINT = \"http://127.0.0.1:19476\"\n\n\ndef
     mac_headers():\n    with open(\"/opt/knowledge-index/mac-bonsai.key\", encoding=\"ascii\") as file:\n        return {\"Authorization\":
@@ -363,7 +368,8 @@ data:
     OSError:\n                    pass\n", "run.py": "#!/usr/bin/env python3\n\"\"\"Run the existing worker with GitOps settings
     and the host-local Ollama endpoint.\"\"\"\nimport json\nimport os\nfrom pathlib import Path\nimport sys\n\n\ndef main()
     -> None:\n    \"\"\"Keep model identity stable; endpoint and Mac authentication remain host-local.\"\"\"\n    root = Path(''/opt/knowledge-index'')\n    config
-    = json.loads((root / ''caption-gitops/config.json'').read_text())\n    endpoint = os.environ[''KI_OLLAMA_URL'']\n    args
+    = json.loads((root / ''caption-gitops/config.json'').read_text())\n    endpoint = os.environ[''KI_OLLAMA_URL'']\n    if
+    config.get(''priority_manifest''):\n        os.environ[''KI_SUMMARY_PRIORITY_MANIFEST''] = config[''priority_manifest'']\n    args
     = [str(root / ''venv/bin/python''), str(root / ''enrichers/media_summary.py''), ''run'']\n    for name in (''index'',
     ''library'', ''model'', ''enricher'', ''api'', ''parallel'', ''batch_size'', ''min_free_mib''):\n        args.extend([''--''
     + name.replace(''_'', ''-''), str(config[name])])\n    args.extend([''--endpoint'', endpoint, ''--extra-json'', json.dumps(config[''extra''])])\n    if
@@ -390,7 +396,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-2244713d49e0
+  name: caption-worker-cea517c4c493
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -445,7 +451,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-2244713d49e0
+          name: caption-worker-cea517c4c493
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -520,7 +526,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-2244713d49e0
+              name: caption-worker-cea517c4c493
           - name: credentials
             secret:
               secretName: caption-worker-deploy

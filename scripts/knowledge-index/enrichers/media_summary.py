@@ -238,6 +238,17 @@ def queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):
     """Select pending work while skipping paths already attempted in this run."""
     priority = "coalesce(list_contains(?, lower(ext)), false), " if photos_first else ""
     params = [enricher, sorted(VIDEO_EXTS), limit + len(seen)] if photos_first else [enricher, limit + len(seen)]
+    manifest = os.environ.get('KI_SUMMARY_PRIORITY_MANIFEST')
+    if manifest:
+        with open(manifest, encoding='utf-8') as stream:
+            items = json.load(stream)
+        if not isinstance(items, list) or len(items) > 1000:
+            raise ValueError('Expected at most 1000 repair items')
+        paths = [item['path'] for item in items]
+        if any(not isinstance(path, str) for path in paths):
+            raise ValueError('Repair paths must be strings')
+        priority = 'list_contains(?, path) DESC, ' + priority
+        params.insert(1, paths)
     with duckdb.connect(os.path.join(index, "knowledge.duckdb"), read_only=True) as con:
         cur = con.execute("SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) "
                           f"ORDER BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?", params)

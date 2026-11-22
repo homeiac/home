@@ -33,6 +33,19 @@ def bundle() -> dict:
 
 
 class GitOpsTests(unittest.TestCase):
+    def test_repair_manifest_prioritizes_old_video_without_retrying_inflight(self):
+        with tempfile.TemporaryDirectory() as td:
+            with duckdb.connect(str(Path(td)/'knowledge.duckdb')) as db:
+                db.execute("""CREATE MACRO gphotos_to_summarize(e) AS TABLE
+                    SELECT * FROM (VALUES ('new.jpg','jpg',2),('old.mov','mov',1)) t(path,ext,taken_ts)""")
+            manifest=Path(td)/'repair.json'
+            manifest.write_text(json.dumps([{'path':'old.mov'}]))
+            with patch.dict(os.environ, {'KI_SUMMARY_PRIORITY_MANIFEST':str(manifest)}):
+                rows=media_summary.queue(td,'e',1,photos_first=True)
+                self.assertEqual([r['path'] for r in rows],['old.mov'])
+                rows=media_summary.queue(td,'e',1,seen={'old.mov'},photos_first=True)
+                self.assertEqual([r['path'] for r in rows],['new.jpg'])
+
     def test_idle_clean_exit_is_healthy_but_crash_is_not(self):
         for status, expected in [('0', True), ('1', False), ('75', False)]:
             with patch.object(install, 'command', side_effect=[

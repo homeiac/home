@@ -8,6 +8,7 @@
   "parallel": 2,
   "batch_size": 16,
   "mac_assist": true,
+  "priority_manifest": "/var/tmp/caption-gaps-20261122.json",
   "min_free_mib": 3000,
   "extra": {"think": false, "options": {"num_ctx": 8192, "num_predict": 384, "temperature": 0.2}}
 }
