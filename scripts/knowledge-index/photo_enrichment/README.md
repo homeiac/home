@@ -254,6 +254,17 @@ concurrent-edit snapshot consistency, stale edit rejection and failed publicatio
 
 ### Review previously processed faces together
 
+When priority names are configured, **Priority matches** is the default view.
+It shows only qualifying suggestions for those names, and its bulk threshold
+selection uses the same filter. Saved Immich faces provide review examples for
+priority people who have no manually confirmed examples. Automatic acceptance
+still requires a manually confirmed reference. The other collections remain
+available. Pet shortcuts use photo search.
+
+Use `scripts/knowledge-index/set-priority-review.py` against the photo database
+with a private JSON object on stdin containing a `people` list and optional
+`pets` list. The names are stored in PostgreSQL settings.
+
 The PostgreSQL GUI compares saved embeddings with confirmed named faces when
 loading the face library. No original photos, EXIF, face detections, embeddings,
 confirmed names or rejections are rewritten by that matching pass. Suggestions

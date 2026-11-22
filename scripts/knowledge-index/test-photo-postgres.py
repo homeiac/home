@@ -350,6 +350,28 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.store.rows('SELECT count(*) n FROM annotation_history')[0]['n'],before)
         self.assertEqual(self.store.rows('SELECT count(*) n FROM faces WHERE person IS NULL')[0]['n'],125)
 
+    def test_priority_review_filters_pages_and_bulk_and_uses_immich_reference(self):
+        self.add_review_faces()
+        connection=self.store.connection
+        connection.execute("""INSERT INTO pipeline_state VALUES ('priority_review',
+            '{"people":["priority person"],"pets":[]}',now())""")
+        connection.execute("""UPDATE faces SET person='Priority Person',label_source='immich',embedding=ARRAY[0.,1.]
+            WHERE id='review-a'""")
+        connection.execute("UPDATE faces SET embedding=ARRAY[0.,1.] WHERE id='review-b'")
+        export_snapshot(self.state)
+        queue=self.store.face_library(status='suggested',scope='priority')
+        self.assertEqual(queue['total'],1)
+        self.assertEqual(queue['faces'][0]['suggestion']['reference_id'],'review-a')
+        self.assertEqual(self.store.suggested_selection(.9,priority=True)['total'],1)
+        self.store.configure_auto_accept(True,.9)
+        self.assertEqual(self.store.auto_accept_pass()['saved'],0)
+        with patch.object(self.store,'review_state',return_value={'matches':{
+            'review-b':dict(person='Other person',score=.99),
+        }}):
+            self.assertEqual(self.store.face_library(status='suggested')['total'],1)
+            self.assertEqual(self.store.face_library(status='suggested',scope='priority')['total'],0)
+            self.assertEqual(self.store.suggested_selection(.9,priority=True)['total'],0)
+
     def test_automatic_acceptance_is_opt_in_and_preserves_review_work(self):
         self.add_review_faces()
         self.assertFalse(self.store.auto_accept_settings()['enabled'])

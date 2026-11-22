@@ -265,6 +265,16 @@ class PostgresStore(Store):
     def group_suggestions(self,paths,timezone='UTC'):
         return self.gallery_query('group_suggestions',paths,timezone)
 
+    def priority_review(self) -> dict:
+        """Read private review preferences from the photo database."""
+        rows=self.rows("SELECT value FROM pipeline_state WHERE key='priority_review'")
+        return rows[0]['value'] if rows else {}
+
+    def priority_matches(self, matches: dict) -> dict:
+        people=set(self.priority_review().get('people', []))
+        return {face_id:match for face_id,match in matches.items()
+                if match['person'].strip().lower() in people}
+
     def matching_pass(self) -> dict:
         """Read saved embeddings in bounded batches; never change confirmed labels.
 
@@ -282,6 +292,8 @@ class PostgresStore(Store):
                 (SELECT count(*) FROM rejected_matches) AS rejected FROM faces""")[0]
             manifest=self.state/'analytics/current.json'
             signature['snapshot']=manifest.stat().st_mtime_ns if manifest.exists() else None
+            priority=set(self.priority_review().get('people', []))
+            signature['priority']=priority
             cache=getattr(self,'_matching_cache',None)
             if cache and cache['signature']==signature:
                 return cache['matches']
@@ -303,6 +315,10 @@ class PostgresStore(Store):
                 with self.metrics.measure('match'),self.connection.transaction():
                     self.db.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
                     references=read('SELECT f.id,f.person,f.model,f.embedding '+base+" AND f.person IS NOT NULL AND f.label_source='user'")
+                    missing=priority-{ref['person'].strip().lower() for ref in references}
+                    if missing:
+                        references.extend(read('SELECT f.id,f.person,f.model,f.embedding '+base+
+                            " AND f.label_source='immich' AND lower(trim(f.person))=ANY(?)",[sorted(missing)]))
                     reference_groups=vectors(references)
                     def candidate_batches():
                         query='SELECT f.id,f.person,f.model,f.embedding '+base
@@ -367,6 +383,8 @@ class PostgresStore(Store):
             raise ValueError('Invalid face filter')
         review=self.review_state()
         matches=review.get('matches',{})
+        if status=='suggested' and scope=='priority':
+            matches=self.priority_matches(matches)
         if (self.state/'analytics/current.json').exists():
             result=self.gallery_query('faces',person,status,offset,limit,matches,review,grouped,group,scope)
             result['suggestions_refreshing']=hasattr(self,'suggestion_source') and not getattr(self.suggestion_source,'_matching_cache',None)
@@ -399,7 +417,7 @@ class PostgresStore(Store):
                 ids=[r['id'] for r in self.rows('SELECT f.id '+dated+filters+
                     ' ORDER BY coalesce(e.capture_ts,m.taken_ts) DESC NULLS LAST,f.id LIMIT ? OFFSET ?',[*params,limit,offset])]
             else:
-                selected=sorted((face_id for face_id,m in matches.items() if not person or m['person']==person),
+                selected=sorted((face_id for face_id,m in matches.items() if face_id in visible and (not person or m['person']==person)),
                     key=lambda face_id:(matches[face_id]['person'],-matches[face_id]['score'],face_id))
                 data['total'],data['offset']=len(selected),offset
                 ids=selected[offset:offset+limit]
@@ -457,12 +475,14 @@ class PostgresStore(Store):
         if file.stat().st_size!=rows[0]['size_bytes']:raise ValueError('Photo changed since indexing; re-index it before enrichment')
         return file
 
-    def suggested_selection(self, threshold: float = .9, person: str = '') -> dict:
+    def suggested_selection(self, threshold: float = .9, person: str = '', priority: bool = False) -> dict:
         """Snapshot all eligible displayed names/revisions for explicit bulk review."""
         if not 0<=threshold<=1:
             raise ValueError('Similarity must be between 0 and 1')
         with self.lock:
             matches=self.review_state().get('matches',{})
+            if priority:
+                matches=self.priority_matches(matches)
             ids=sorted(face_id for face_id,match in matches.items()
                 if match['score']>=threshold and (not person or match['person']==person))
             faces=[]

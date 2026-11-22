@@ -72,7 +72,9 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     return self.send((STATIC / name).read_bytes(), content_type=kind)
                 if parsed.path == "/api/config":
                     import os
-                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False), "auto_accept": hasattr(store,'auto_accept_pass'), "search_index": hasattr(store,'search')})
+                    priority=store.priority_review() if hasattr(store,'priority_review') else {}
+                    return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False), "auto_accept": hasattr(store,'auto_accept_pass'), "search_index": hasattr(store,'search'),
+                        "priority_review": bool(priority.get('people')), "priority_pet_searches": priority.get('pets',[])})
                 if parsed.path == "/api/auto-accept":
                     return self.send(store.auto_accept_settings())
                 if parsed.path == "/api/status":
@@ -83,7 +85,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 if parsed.path == "/api/faces/group-selection":
                     return self.send(store.group_selection(query.get("group",""),query.get("generation","")))
                 if parsed.path == "/api/faces/selection":
-                    return self.send(store.suggested_selection(float(query.get("threshold",".9")),query.get("person","")))
+                    return self.send(store.suggested_selection(float(query.get("threshold",".9")),query.get("person",""),
+                        priority=query.get("scope")=="priority"))
                 if parsed.path == "/api/dates":
                     return self.send(store.dates(query.get("timezone", "UTC")))
                 if parsed.path == "/api/photos":
