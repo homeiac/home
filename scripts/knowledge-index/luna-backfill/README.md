@@ -14,6 +14,10 @@ Push `enabled: false` in `policy.json` and wait for the existing Mac batch to fi
 
 The service allocates no GPU on still-fawn. It submits to Enterprise Codex with the saved context and writes through the same Piglet ledger.
 
+## Reuse Immich context
+
+The Piglet timer refreshes a private snapshot every 30 minutes from Immich's saved external-library metadata. It matches source path and file size and omits ambiguous duplicate rows. City, state, country and visible named people are caption hints. Saved confirmed annotations are still included. Existing Wikimedia landmark cache entries can add more specific references. A cache miss proceeds with the available context, so it cannot hold up caption submissions. Install the exporter with `install-immich-context.sh` from the committed checkout.
+
 ## Measure a concurrency change
 
 Set `parallel`, `batch_size`, and `frame_slots` in the Git policy. The worker reads each new commit between batches. The shared ledger supports up to 48 reservations per batch and the worker allows up to 20 concurrent tasks. The $250 budget includes reserved work and every settled request.

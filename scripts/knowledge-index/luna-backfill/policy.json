@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "runner": "still-fawn",
   "model": "gpt-6-luna",
   "estimated_limit_usd": 250,
