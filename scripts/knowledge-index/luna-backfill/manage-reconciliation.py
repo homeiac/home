@@ -31,7 +31,7 @@ def install(host: str, name: str) -> None:
 def main() -> None:
     """Keep enabling/scaling explicit, with Git policy controlling worker admission."""
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','install','configure','seed','status','start','verify','review'))
+    parser.add_argument('mode',choices=('inspect','health','install','configure','seed','status','start','verify','review'))
     parser.add_argument('--piglet',required=True)
     parser.add_argument('--runner',required=True)
     parser.add_argument('--budget-usd',type=int,default=2)
@@ -40,6 +40,19 @@ def main() -> None:
     parser.add_argument('--global-slots',type=int,default=2)
     parser.add_argument('--limit',type=int,default=10)
     args=parser.parse_args()
+    if args.mode=='health':
+        code='''import json,subprocess
+from pathlib import Path
+print(subprocess.check_output(['systemctl','show','knowledge-index-luna.service','-p','ActiveState','-p','SubState','-p','ExecMainStatus','-p','MemoryCurrent','-p','MemoryPeak'],text=True))
+raw=subprocess.check_output(['journalctl','-u','knowledge-index-luna.service','--since','10 minutes ago','--no-pager','-o','cat'],text=True)
+print('\\n'.join(raw.splitlines()[-25:]))
+memory=dict(line.split(':',1) for line in Path('/proc/meminfo').read_text().splitlines())
+print('MemAvailable',memory['MemAvailable'])
+'''
+        print(ssh(args.runner,'python3 -c '+shlex.quote(code)).decode())
+        local=Path.home()/'Library/Application Support/knowledge-index-luna/reconciliation.log'
+        if local.exists():print('\n'.join(local.read_text().splitlines()[-8:]))
+        return
     if args.mode=='inspect':
         print(ssh(args.runner,"hostname; nproc; free -m; runuser -u ki-luna -- /opt/knowledge-index/luna-backfill/bin/codex login status").decode())
         print(subprocess.check_output(['codex','login','status'],stderr=subprocess.STDOUT,text=True).strip())

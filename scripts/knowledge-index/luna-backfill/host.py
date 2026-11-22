@@ -8,11 +8,11 @@ import sqlite3
 import sys
 import time
 import uuid
-import reconciliation
 
 import duckdb
 
-sys.path[:0] = ['/opt/photo-enrichment/context', '/opt/knowledge-index/enrichers']
+sys.path[:0] = [str(Path(__file__).resolve().parent), '/opt/photo-enrichment/context', '/opt/knowledge-index/enrichers']
+import reconciliation
 from photo_enrichment.snapshots import analytical_connection
 from photo_enrichment import places
 from photo_enrichment.postgres import connect
