@@ -73,6 +73,8 @@ def shift(items, dy):
 SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
 RECONCILIATION_HEIGHT = 28
+# Derived unit rate only; private account readings remain in the local usage DB.
+OBSERVED_RECONCILIATION_USD_PER_SUMMARY = 0.000869
 # Observed production transitions in UTC.
 ONE_SLOT_REFERENCE = 1795280280  # Last clean 10-minute window ending Nov 21 16:58 UTC.
 TWO_SLOT_START = 1795280415      # Runner accepted work Nov 21 17:00:14 UTC.
@@ -479,7 +481,14 @@ def reconciliation_panels():
              description='Current time plus the estimated duration, shown in browser local time. This is an estimate, not a deadline.')]
     for panel in estimates[-2:]:
         panel['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Complete','color':'green'}}}]
+    for panel,x,w in zip(estimates,(0,4,9,14),(4,5,5,5)):
+        panel['gridPos'].update(x=x,w=w)
+    remaining_cost=stat('Remaining cost · observed',
+        f'({remaining}) * {OBSERVED_RECONCILIATION_USD_PER_SUMMARY}',19,1,w=5,
+        unit='currencyUSD',decimals=2,
+        description='Last reported pending and in-flight files × observed $0.869 per 1,000 successful reconciliations. Skipped files are excluded. Assumes similar work and overhead; this forecasts plan usage, not an invoice. Account usage readings remain only in the private local database. Token-based usage and reservation accounting below are separate.')
     p[1:1]=estimates
+    p.insert(5,remaining_cost)
     for panel in p:
         if panel['type']=='stat':
             panel['targets'][0].update(instant=True,range=False)
