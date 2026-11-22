@@ -1,5 +1,10 @@
 {
   "enabled": true,
+  "mode": "reconciliation",
+  "reconciliation_runners": {"still-fawn": 2},
+  "reconciliation_budget_usd": 2,
+  "reconciliation_global_parallel": 2,
+  "reconciliation_seed_limit": 10,
   "runner": "still-fawn",
   "model": "gpt-6-luna",
   "estimated_limit_usd": 250,
