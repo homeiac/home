@@ -35,3 +35,16 @@ data is a recorded snapshot rather than a live claim about later review edits.
 The original Luna timer and Git-selected scheduling policy are reused. Caption
 mode remains available. Reconciliation policy admits only configured runners;
 the ledger enforces its own limits even if a runner sends a larger request.
+
+## Pilot result — November 22, 2026
+
+Ten of ten pairs produced separate reconciled summaries, with ten unique files,
+no failed requests and three visual-review flags. Estimated incremental usage was
+$0.011471. A sample review found explicit uncertainty about a disputed pouring
+action and an unconfirmed full person name, rather than silently promoting them.
+At that sample rate, 1,000 pairs would cost about $1.15; this is a projection.
+
+The next policy allows 20 requests each on still-fawn and the Mac, with 40 global
+slots. The combined campaign ceiling remains $250, including the earlier captions.
+Pve, chief-horse and fun-bedbug had no existing Luna CLI/sign-in; pve and chief-horse
+also had less than 1 GiB available at inspection. No credentials were copied.

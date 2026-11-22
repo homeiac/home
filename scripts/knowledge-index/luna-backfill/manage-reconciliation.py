@@ -31,7 +31,7 @@ def install(host: str, name: str) -> None:
 def main() -> None:
     """Keep enabling/scaling explicit, with Git policy controlling worker admission."""
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','health','install','configure','seed','status','start','verify','review'))
+    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','status','start','verify','review'))
     parser.add_argument('--piglet',required=True)
     parser.add_argument('--runner',required=True)
     parser.add_argument('--budget-usd',type=int,default=2)
@@ -40,6 +40,16 @@ def main() -> None:
     parser.add_argument('--global-slots',type=int,default=2)
     parser.add_argument('--limit',type=int,default=10)
     args=parser.parse_args()
+    if args.mode=='probe':
+        code='''import json,os,socket
+from pathlib import Path
+m=dict(line.split(':',1) for line in Path('/proc/meminfo').read_text().splitlines())
+print(json.dumps(dict(host=socket.gethostname(),cpus=os.cpu_count(),available_kib=int(m['MemAvailable'].split()[0]),
+    existing_luna_cli=Path('/opt/knowledge-index/luna-backfill/bin/codex').is_file(),
+    existing_luna_signin=Path('/var/lib/ki-luna/.codex/auth.json').is_file())))
+'''
+        print(ssh(args.runner,'python3 -c '+shlex.quote(code)).decode())
+        return
     if args.mode=='health':
         code='''import json,subprocess
 from pathlib import Path

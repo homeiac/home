@@ -1,5 +1,49 @@
 # Luna submission worker
 
+## Text-only summary reconciliation
+
+The `reconciliation` policy mode uses existing local and Luna captions plus saved
+metadata. It does not upload images or video. Results are model-generated and
+unresolved contradictions are marked `needs_visual_review`.
+
+Piglet's shared ledger has separate `reconciliations` tables. The original caption
+jobs, captions and Immich descriptions are preserved. The original campaign and
+reconciliation share the $250 estimated-cost ceiling. The reconciliation ledger
+also enforces an independent cap, global slots and per-runner slots. Unknown
+responses retain a $1 reservation and block new submissions; never automatically
+retry a request whose result may have been charged.
+
+Each exact input revision has a stable fingerprint. Multiple runners claim different
+rows transactionally. Only completed batches are published, atomically, into private
+`/local-3TB-backup/photo-enrichment/summary-reconciliation/batches/*.parquet`.
+The DuckDB file beside that directory contains a `reconciled_summaries` view:
+
+```sql
+SELECT path, local_summary, luna_summary, reconciled_summary,
+       conflicts, needs_visual_review
+FROM reconciled_summaries
+WHERE state = 'ok';
+```
+
+Open `/local-3TB-backup/photo-enrichment/summary-reconciliation/reconciliation.duckdb`
+read-only. Source text is retained beside the new column. `current_inputs.parquet`
+selects the newest explicitly seeded input revision, so a pending revision does not
+silently return an older answer. No catalog rebuild runs during these queries.
+The graph work remains out of scope.
+
+Use `manage-reconciliation.py` with inventory-verified `--piglet root@…` and
+`--runner root@…`. `inspect`, `probe`, `health`, `status` and `verify` report
+aggregates; `review` deliberately displays three private examples for quality checks.
+`install` backs up and updates existing runner code without copying credentials.
+`configure` sets the independent ledger limits; `seed --limit 10` creates the pilot
+and `seed --limit 0` selects all eligible pairs. Seeding does not submit requests.
+Git policy chooses which runners may execute. `start --mac-slots 20` starts the
+existing still-fawn service and a detached Mac worker; their local locks prevent
+duplicates. Still-fawn's timer resumes after reboot. The detached Mac worker lasts
+for this run; still-fawn continues if the Mac stops.
+
+Tests: `python -m unittest discover -s scripts/knowledge-index/luna-backfill -p 'test_*.py'`.
+
 Piglet owns the work queue, the $250 estimated-cost ledger and the Luna Parquet dataset. The Git policy chooses the host that submits to Enterprise Codex. The Mac and still-fawn use the same worker code.
 
 ## Prepare still-fawn

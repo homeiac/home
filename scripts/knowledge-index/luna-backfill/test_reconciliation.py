@@ -117,6 +117,13 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ValueError):r.finish(self.db,dict(id=item['id'],batch=grant['batch'],
             result=dict(state='ok',answer=self.answer(),input=1,cached=2,output=1)))
 
+    def test_metrics_contain_no_private_source_text(self):
+        target=self.root/'metrics.prom'
+        r.export_metrics(self.db,target)
+        text=target.read_text()
+        self.assertIn('knowledge_index_reconciliation_jobs{state="pending"} 5',text)
+        self.assertNotIn('outdoors',text);self.assertNotIn('.jpg',text)
+
     def test_runner_sends_only_text_and_retries_only_persistence(self):
         calls=[];model_calls=[];finish_calls=[]
         def host(**request):

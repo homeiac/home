@@ -312,6 +312,22 @@ def publish(db: sqlite3.Connection, root: Path) -> dict:
     return dict(rows=count,**status(db))
 
 
+def export_metrics(db: sqlite3.Connection, destination: Path) -> None:
+    """Publish only aggregate queue, runner and usage measurements."""
+    counts=dict(db.execute('SELECT state,count(*) FROM reconciliations GROUP BY state'))
+    lines=['# TYPE knowledge_index_reconciliation_jobs gauge']
+    for state in ('pending','reserved','sent','ok','unknown'):
+        lines.append(f'knowledge_index_reconciliation_jobs{{state="{state}"}} {counts.get(state,0)}')
+    lines.extend(['# TYPE knowledge_index_reconciliation_estimated_and_held_usd gauge',
+                  f'knowledge_index_reconciliation_estimated_and_held_usd {extra_cost(db)/1e6}',
+                  '# TYPE knowledge_index_reconciliation_finished_total counter',
+                  f'knowledge_index_reconciliation_finished_total {counts.get("ok",0)}',
+                  '# TYPE knowledge_index_reconciliation_updated_timestamp_seconds gauge',
+                  f'knowledge_index_reconciliation_updated_timestamp_seconds {int(time.time())}'])
+    temporary=destination.with_name(destination.name+'.'+uuid.uuid4().hex+'.tmp')
+    temporary.write_text('\n'.join(lines)+'\n');temporary.chmod(0o644);temporary.replace(destination)
+
+
 def handle(db: sqlite3.Connection, root: Path, request: dict) -> dict:
     """Fixed bridge operations; seeding/configuration remain administrator-only."""
     initialize(db)
