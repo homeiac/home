@@ -31,7 +31,7 @@ class ReconciliationTests(unittest.TestCase):
 
     def answer(self):
         return dict(reconciled_summary='Two people eating at an outdoor table.',
-                    conflicts=[],needs_visual_review=False,supported_by=['local_summary','luna_summary'],notes='')
+                    conflicts=[],needs_visual_review=False,risk_level='none',supported_by=['local_summary','luna_summary'],notes='')
 
     def settle(self,grant,item):
         r.handle(self.db,self.root,dict(op='reconcile_start',batch=grant['batch'],id=item['id']))
@@ -163,7 +163,7 @@ class ReconciliationTests(unittest.TestCase):
     def test_invalid_answers_and_usage_are_not_accepted(self):
         invalid=self.answer();invalid['conflicts']=['Different location']
         with self.assertRaises(ValueError):r.validate_answer(invalid)
-        invalid['needs_visual_review']=True;r.validate_answer(invalid)
+        invalid['needs_visual_review']=True;invalid['risk_level']='critical';r.validate_answer(invalid)
         for change in ({'supported_by':['imagined']},{'reconciled_summary':''},{'extra':'field'}):
             with self.assertRaises(ValueError):r.validate_answer(dict(self.answer(),**change))
         grant=r.reserve(self.db,'mac',1);item=grant['items'][0]
@@ -177,6 +177,60 @@ class ReconciliationTests(unittest.TestCase):
         text=target.read_text()
         self.assertIn('knowledge_index_reconciliation_jobs{state="pending"} 5',text)
         self.assertNotIn('outdoors',text);self.assertNotIn('.jpg',text)
+
+    def test_alias_correction_versions_pending_and_flagged_inputs_without_duplicate_files(self):
+        record=copy.deepcopy(self.records[0])
+        record['path']='alias.jpg';record['inputs']['saved_metadata']['confirmed_people']=['A']
+        r.seed_records(self.db,[record],'generation2')
+        outcome=r.apply_aliases(self.db,self.root,'Alex Example',['A','Alex E.'])
+        self.assertEqual(outcome['new_revisions'],1)
+        rows=self.db.execute("SELECT state,inputs FROM reconciliations WHERE path='alias.jpg' ORDER BY seeded").fetchall()
+        self.assertEqual([v[0] for v in rows],['superseded','pending'])
+        aliases=json.loads(rows[-1][1])['saved_metadata']['person_aliases'][0]
+        self.assertEqual(aliases['canonical_name'],'Alex Example')
+        self.assertEqual(set(aliases['aliases']),{'A','Alex E.','Alex Example'})
+        self.assertEqual(r.apply_aliases(self.db,self.root,'Alex Example',['A','Alex E.'])['new_revisions'],0)
+        self.assertEqual(r.seed_records(self.db,[record],'generation3'),0)
+        with duckdb.connect(str(self.root.parent/'summary-reconciliation/reconciliation.duckdb'),read_only=True) as con:
+            self.assertEqual(con.execute("SELECT count(*) FROM reconciled_summaries WHERE path='alias.jpg'").fetchone()[0],1)
+        with self.assertRaises(ValueError):r.apply_aliases(self.db,self.root,'Different person',['A'])
+
+    def test_alias_correction_does_not_resubmit_skipped_or_active_requests(self):
+        inputs=copy.deepcopy(self.records[0]['inputs']);inputs['saved_metadata']['confirmed_people']=['A']
+        self.db.execute('UPDATE reconciliations SET inputs=?',[r.canonical(inputs)]);self.db.commit()
+        grant=r.reserve(self.db,'mac',2)
+        for item in grant['items']:r.handle(self.db,self.root,dict(op='reconcile_start',batch=grant['batch'],id=item['id']))
+        r.finish(self.db,dict(id=grant['items'][0]['id'],batch=grant['batch'],result=dict(state='skipped',failure='timeout')))
+        result=r.apply_aliases(self.db,self.root,'Alex Example',['A'])
+        self.assertEqual(result,{'new_revisions':3,'deferred_inflight':1})
+        self.assertEqual(self.db.execute('SELECT state FROM reconciliations WHERE id=?',[grant['items'][0]['id']]).fetchone()[0],'skipped')
+
+    def test_only_critical_risk_can_ask_for_human_review(self):
+        answer=self.answer();answer['risk_level']='low';answer['notes']='Omitted boot arrangement.'
+        r.validate_answer(answer)
+        answer['conflicts']=['Boots upright or crossed'];answer['needs_visual_review']=True
+        with self.assertRaisesRegex(ValueError,'Only critical'):r.validate_answer(answer)
+        self.assertIn('unidentified person in the background/corner MUST NOT trigger review',r.PROMPT)
+
+    def test_policy_refresh_preserves_legacy_results_and_skips_but_versions_pending_and_flags(self):
+        self.db.execute('DELETE FROM reconciliations');self.db.commit()
+        with patch.object(r,'VERSION','summary-reconcile-v1'):
+            r.seed_records(self.db,self.records,'legacy-generation')
+        grant=r.reserve(self.db,'mac',2,version='summary-reconcile-v1')
+        old=self.answer();old.pop('risk_level');old['conflicts']=['Boot arrangement'];old['needs_visual_review']=True
+        for item in grant['items']:r.handle(self.db,self.root,dict(op='reconcile_start',batch=grant['batch'],id=item['id']))
+        r.finish(self.db,dict(id=grant['items'][0]['id'],batch=grant['batch'],result=dict(state='ok',answer=old,input=10,cached=0,output=10)))
+        r.finish(self.db,dict(id=grant['items'][1]['id'],batch=grant['batch'],result=dict(state='skipped',failure='timeout')))
+        r.publish(self.db,self.root)
+        result=r.refresh_policy(self.db,self.root)
+        self.assertEqual(result,{'new_revisions':4,'deferred_inflight':0})
+        self.assertEqual(r.refresh_policy(self.db,self.root)['new_revisions'],0)
+        r.configure(self.db,3,{'mac':2,'still-fawn':2},2)
+        self.assertEqual(r.handle(self.db,self.root,dict(op='reconcile_reserve',runner='mac',parallel=1))['items'],[])
+        self.assertEqual(len(r.reserve(self.db,'mac',1)['items']),1)
+        with duckdb.connect(str(self.root.parent/'summary-reconciliation/reconciliation.duckdb'),read_only=True) as con:
+            self.assertEqual(con.execute('SELECT count(*),count(DISTINCT path) FROM reconciled_summaries').fetchone(),(5,5))
+            self.assertEqual(con.execute('SELECT count(*) FROM reconciled_summaries WHERE needs_visual_review').fetchone()[0],0)
 
     def test_runner_sends_only_text_and_retries_only_persistence(self):
         calls=[];model_calls=[];finish_calls=[]

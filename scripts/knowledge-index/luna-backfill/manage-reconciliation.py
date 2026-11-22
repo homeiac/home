@@ -31,7 +31,7 @@ def install(host: str, name: str) -> None:
 def main() -> None:
     """Keep enabling/scaling explicit, with Git policy controlling worker admission."""
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','status','start','verify','review','skip-unresolved'))
+    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','status','start','verify','review','skip-unresolved','aliases','refresh-policy'))
     parser.add_argument('--piglet',required=True)
     parser.add_argument('--runner',required=True)
     parser.add_argument('--budget-usd',type=int,default=2)
@@ -40,6 +40,7 @@ def main() -> None:
     parser.add_argument('--global-slots',type=int,default=2)
     parser.add_argument('--limit',type=int,default=10)
     parser.add_argument('--expected-unresolved',type=int,default=1)
+    parser.add_argument('--aliases-file',type=Path)
     args=parser.parse_args()
     if args.mode=='probe':
         code='''import json,os,socket
@@ -140,6 +141,10 @@ print(json.dumps(dict(rows=db.execute('SELECT count(*) FROM reconciled_summaries
         print(ssh(args.piglet,'/opt/photo-enrichment/context/venv/bin/python -c '+shlex.quote(code)).decode())
         return
     request={'op':'reconcile_'+args.mode.replace('-','_')}
+    if args.mode=='aliases':
+        if args.aliases_file is None:parser.error('aliases requires a private --aliases-file')
+        values=json.loads(args.aliases_file.read_text())
+        request.update(canonical_name=values['canonical_name'],aliases=values['aliases'])
     if args.mode=='skip-unresolved':request['expected']=args.expected_unresolved
     if args.mode=='seed':request['limit']=args.limit
     if args.mode=='configure':

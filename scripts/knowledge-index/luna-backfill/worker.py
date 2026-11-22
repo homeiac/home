@@ -211,7 +211,7 @@ def run_reconciliation():
         if not policy or policy.get('mode')!='reconciliation':return
         began=time.monotonic()
         parallel=policy['parallel']
-        grant=host(op='reconcile_reserve',runner=RUNNER,parallel=parallel)
+        grant=host(op='reconcile_reserve',runner=RUNNER,parallel=parallel,version=reconciliation.VERSION)
         if not grant['items']:
             print('RECONCILIATION_IDLE '+json.dumps(host(op='reconcile_status')),flush=True)
             return

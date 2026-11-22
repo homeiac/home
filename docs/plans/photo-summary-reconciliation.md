@@ -8,8 +8,11 @@ uploads, new face inference, knowledge graph, or changes to Immich descriptions.
    album copies using the existing inventory rule. Freeze source text, model IDs,
    dates, saved places, human-confirmed names and group annotations.
 2. Ask Luna to preserve supported detail, use explicit human annotations to resolve
-   names/events, and flag unresolved contradictions for visual review. Agreement
-   between models is not independent confirmation. Do not infer kinship or jobs.
+   names/events, and use confirmed aliases as name equivalence. Omit or generalize
+   low-risk visual differences and unidentified background people. Human review is
+   reserved for critical contradictions about the main person's identity or an
+   important life/family/work event when a safe neutral summary is not possible.
+   Agreement between models is not independent confirmation. Do not infer kinship or jobs.
 3. Store each input fingerprint, result, unresolved conflicts, review flag, model,
    prompt version and reported usage in a separate SQLite ledger table on Piglet.
    Publish private Parquet with `local_summary`, `luna_summary`, and

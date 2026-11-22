@@ -6,6 +6,20 @@ The `reconciliation` policy mode uses existing local and Luna captions plus save
 metadata. It does not upload images or video. Results are model-generated and
 unresolved contradictions are marked `needs_visual_review`.
 
+Policy v2 makes review risk-based: minor visual differences and unidentified
+background people are omitted or generalized (`risk_level=low`, no review flag).
+Only a critical contradiction about a main person's identity or important life,
+family or work event, which cannot safely be omitted, can require human review.
+User-confirmed aliases are private metadata, not uncertain identities. Register
+them with `aliases --aliases-file /private/path.json` containing `canonical_name`
+and `aliases`; these personal values must remain outside Git.
+
+`refresh-policy` versions pending work and previously flagged v1 results for v2
+assessment. Completed history and skipped requests are preserved. Workers claim
+only their supported prompt version, so old processes cannot process new-policy
+jobs. Re-run the refresh after old in-flight requests drain. DuckDB shows one
+current input revision per file and requests review only for `risk_level=critical`.
+
 Piglet's shared ledger has separate `reconciliations` tables. The original caption
 jobs, captions and Immich descriptions are preserved. The original campaign and
 reconciliation share the $250 estimated-cost ceiling. The reconciliation ledger
