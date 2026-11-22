@@ -1,8 +1,8 @@
-# A local photo library that earns its keep
+# Back up your photos. Find them faster.
 
 *Updated November 21, 2026. [Animated ten-slide presentation](local-photo-pipeline-slides.html) · [Measurements and screenshot provenance](assets/local-photo-pipeline/evidence.md).*
 
-The value is straightforward: make the “Google storage almost full” warning actionable, keep recoverable local copies, and turn an archive into a library you can search by place, person and description. The same system is a useful real-world test of data pipelines: what belongs in PostgreSQL, what belongs in Parquet, and when DuckDB saves work instead of repeating it.
+Keep local copies of your photos, check them before deleting anything from Google, and make the library easier to search. Find photos by person, place or description. Along the way, test which database and processing choices actually save time.
 
 The result is a preserved archive, an Immich library, a queryable inventory, and resumable photo/video captioning. Local RTX and Mac workers sustained **31.4 photos per minute over a measured 30-minute window**. An optional cloud caption worker reached **69.3 saves per minute** in a separate tuning trial. These measure different workloads and routes, not interchangeable benchmark scores.
 
@@ -27,7 +27,7 @@ Piglet owns caption inputs and durable outputs. Local capacity comes from RTX/Ol
 
 Applications stay behind private Traefik access. Kubernetes resources use Git/Flux; host workers use versioned installers and systemd. Some components still use the feature branch's Flux preview: implemented architecture does not mean every rollout change has merged to main.
 
-## Before and after: count work that actually landed
+## Before and after: count saved descriptions
 
 “Ingest” hides three jobs: transferring/extracting originals, indexing metadata, and enriching media. The strongest throughput evidence here concerns **caption enrichment saved to Parquet**, not internet download speed.
 
@@ -40,7 +40,7 @@ Applications stay behind private Traefik access. Kubernetes resources use Git/Fl
 | Luna: 20 requests, four preparation slots; batch 24 → 48 | 62.6 saves/min | 69.3 saves/min | About 11% higher in sequential production trials, not identical-input benchmarking |
 | Mac benchmark: concurrent requests 4 → 20 | 9.62 saves/min; p95 48 s | 9.65 saves/min; p95 124 s | Throughput essentially flat; retain four slots |
 
-The local photos-first rate estimates a photo backlog only while both GPUs remain available. Videos cost differently. Combined captions can include another model's answer for an already-described item, so completion estimates use **first captions on distinct items**, not total outputs.
+The local photos-first rate estimates a photo backlog only while both GPUs remain available. Videos cost differently. We ran two models on some of the same photos. Two descriptions of one photo still count as one photo done. To measure library progress, count **files getting their first description**.
 
 ![Actual Grafana backend throughput, separating all captions from first captions on distinct items.](assets/local-photo-pipeline/grafana-throughput.jpg)
 
@@ -58,7 +58,7 @@ The local photos-first rate estimates a photo backlog only while both GPUs remai
 
 **Stop when a knob stops helping.** Matched photo-only local trials with 24- and 48-item pages both saved 32/min. The Mac's 20-request experiment mostly added latency. Both results prevented tuning from becoming a search for ever-larger settings.
 
-## How live tuning helped
+## Change one setting. Check if it helped.
 
 ![Actual Grafana GPU-slot occupancy, applied Git policy and per-stage timings.](assets/local-photo-pipeline/grafana-live-tuning.jpg)
 
@@ -174,3 +174,9 @@ Deploy dashboards and alerts through Flux. Check freshness, errors, utilization 
 | “Not this person” still displayed the same name | A saved rejection and cached analytical view had different freshness | Overlay live PostgreSQL decisions and invalidate stale matches |
 
 The durable result is preserved data, useful enrichment, and a feedback loop that can tell whether the next change actually helps. The [evidence notes](assets/local-photo-pipeline/evidence.md) distinguish measurements, architectural facts and outstanding work.
+
+### November 22: why both local worker panels went blank
+
+Piglet rebooted at **8:15:59 p.m. Pacific on November 21**. The local caption worker had been started as a temporary systemd service. It disappeared on reboot and did not start again. Its last heartbeat was at 8:13:49 p.m. Both the RTX and Mac panels use this worker's reports, so both showed “No recent report.” That does not establish a GPU failure. Luna had a separate, current heartbeat.
+
+The November 22 inspection found the local service absent and inactive. Recovery needs a permanent service that starts at boot, using the saved worker settings and existing completed outputs. This read-only diagnosis did not restart it. The cause of the host reboot has not been established.

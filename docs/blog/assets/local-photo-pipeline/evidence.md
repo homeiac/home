@@ -48,3 +48,9 @@ External behavior was checked against primary documentation: [rclone copy](https
 ## Editorial boundaries
 
 The article claims a path toward reducing Google's storage warning, not a measured amount of quota freed. It distinguishes native indexing, captioning, synchronization and review. The deck's comparison bars encode reported values, while its scheduling animation is conceptual. Optional cloud processing is explicitly labeled. No claim is made that every rollout component has merged to main or that the complete photo library has two verified independent local copies.
+
+## November 22 worker-status investigation
+
+Read-only inspection at approximately 08:36 Pacific found `knowledge-index-enrich.service` with `LoadState=not-found` and `ActiveState=inactive`. The previous boot journal ended at 2026-11-22 04:13:42 UTC; the new boot began at 04:15:59 UTC. The pipeline metrics file last changed at 04:13:49 UTC and still contained the previous running flag, but its heartbeat was stale. The node-exporter scrape-error flag was zero. Luna published a current heartbeat separately.
+
+The launcher uses `systemd-run --collect`; preview overrides are stored under `/run/systemd/system`. Those are temporary runtime units/settings. This explains why the worker did not return after reboot and why both local-backend panels lacked fresh reports. It does not establish why the host rebooted. No worker or host changes were made during this diagnosis. Reproduce the read-only checks with `scripts/knowledge-index/check-caption-health.sh`.

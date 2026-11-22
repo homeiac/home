@@ -122,32 +122,32 @@ nav{display:none}
 <section class="slide dark active" data-title="Value first" aria-label="Slide 1: Value first">
 <div class="eyebrow">Local photo pipeline · November 2026</div>
 <div class="body">
-<h1>A local photo library<br>that earns its keep.</h1>
-<p class="sub">Own the copies. Enrich the memories.<br>Measure the work that makes them searchable.</p>
+<h1>Back up your photos.<br>Find them faster.</h1>
+<p class="sub">Keep local copies. Find people and places.<br>Describe photos faster—and measure the progress.</p>
 <div class="four" style="margin-top:35px">
 <div class="value">
-<b>Cloud headroom</b>
-<span>Know what can be reclaimed after verification.</span>
+<b>Free cloud space</b>
+<span>Check local copies before deleting cloud files.</span>
 </div>
 <div class="value">
-<b>Recoverable copies</b>
-<span>Originals, sidecars and independent storage.</span>
+<b>Local backups</b>
+<span>Keep originals and their metadata on separate disks.</span>
 </div>
 <div class="value">
-<b>Useful images</b>
-<span>Places, people, OCR and descriptions.</span>
+<b>Find your photos</b>
+<span>Search by person, place, text or description.</span>
 </div>
 <div class="value">
-<b>Pipeline evidence</b>
-<span>Learn where PostgreSQL and DuckDB fit.</span>
+<b>Learn what works</b>
+<span>Test database choices and processing speed.</span>
 </div>
 </div>
 </div>
 <div class="source">Copying alone does not reduce Google quota. Cloud space freed has not been established in this report.</div>
 </section>
 <section class="slide" data-title="Final architecture" aria-label="Slide 2: Final architecture">
-<div class="eyebrow">01 / Design from the finished system</div>
-<h2>Preserve once. Reuse the facts.</h2>
+<div class="eyebrow">01 / How it works</div>
+<h2>Keep the originals. Reuse what we know.</h2>
 <div class="body">
 <img class="architecture" src="assets/local-photo-pipeline/architecture.svg" alt="Cloud sources feed validated host ingest, ZFS originals and an independent copy. Immich and PostgreSQL supply context to local or optional cloud caption workers. Parquet and DuckDB support analysis. Git and Grafana form a feedback loop.">
 </div>
@@ -155,11 +155,11 @@ nav{display:none}
 </section>
 <section class="slide" data-title="Measured gains" aria-label="Slide 3: Measured gains">
 <div class="eyebrow">02 / Before and after</div>
-<h2>More durable captions per minute.</h2>
+<h2>More photos described per minute.</h2>
 <div class="body">
 <div class="row">
 <div>
-<div class="tag">Local capacity · ten-minute windows</div>
+<div class="tag">Local computers · 10-minute samples</div>
 <div class="compare">
 <span>RTX alone</span>
 <div class="bar before" style="--w:53%">
@@ -172,10 +172,10 @@ nav{display:none}
 </div>
 <b>22.3</b>
 </div>
-<p class="note">39% higher observed rate; 223 distinct items saved.<br>Production windows, not identical media.</p>
+<p class="note">39% faster in these samples: 223 files described in 10 minutes.<br>The samples used different files.</p>
 </div>
 <div>
-<div class="tag">Optional Luna · 20 requests, four prep slots</div>
+<div class="tag">Cloud worker · same request and preparation limits</div>
 <div class="compare">
 <span>Batch 24</span>
 <div class="bar before" style="--w:78%">
@@ -188,30 +188,30 @@ nav{display:none}
 </div>
 <b>69.3</b>
 </div>
-<p class="note">About 11% higher observed rate.<br>Sequential production trials with different inputs.</p>
+<p class="note">About 11% faster in these samples.<br>The samples used different files.</p>
 </div>
 </div>
 <div class="stat" style="margin-top:35px">
 <strong>31.4 photos/min</strong>
-<p class="note">Sustained local photos-first run: 943 distinct photos in 30 minutes. Zero videos. Excludes Luna and cache hits.</p>
+<p class="note">943 photos described in 30 minutes using the RTX and Mac. No videos or cloud processing in this sample.</p>
 </div>
 </div>
-<div class="source">These are caption-save rates, not download bandwidth. <a href="assets/local-photo-pipeline/evidence.md">Trial scope and provenance</a>.</div>
+<div class="source">These rates count saved descriptions, not downloaded files. <a href="assets/local-photo-pipeline/evidence.md">Trial scope and provenance</a>.</div>
 </section>
 <section class="slide" data-title="Grafana evidence" aria-label="Slide 4: Grafana evidence">
 <div class="eyebrow">03 / Real dashboard evidence</div>
-<h2>A saved caption is not always a new item.</h2>
+<h2>Count newly described photos.</h2>
 <div class="body">
 <div class="focus-shot">
 <img src="assets/local-photo-pipeline/grafana-throughput.jpg" alt="Cropped view of the actual Grafana throughput panel: RTX, Mac, Luna, combined captions and first captions on distinct items.">
 </div>
-<p class="note">Use the first-caption line for library completion. Combined output includes additional model answers on already-described items.</p>
+<p class="note">We ran two models on some of the same photos. Two descriptions of one photo still count as one photo done.<br><strong>Blue: files getting their first description. Red: all descriptions saved.</strong></p>
 </div>
 <div class="source">Actual capture · November 21 11:00–November 22 02:00 UTC. Dollar figures are estimated accounting values, not invoices. <a href="assets/local-photo-pipeline/grafana-throughput.jpg">Open full-size image</a>.</div>
 </section>
-<section class="slide" data-title="Continuous refill" aria-label="Slide 5: Continuous refill">
-<div class="eyebrow">04 / Fix the scheduling gap</div>
-<h2>Let the next photo use a free slot.</h2>
+<section class="slide" data-title="Start the next job" aria-label="Slide 5: Start the next job">
+<div class="eyebrow">04 / Keep the computers working</div>
+<h2>Start the next photo as soon as one finishes.</h2>
 <div class="body">
 <svg class="timeline" viewBox="0 0 1100 330" role="img" aria-label="Conceptual scheduling diagram: a batch barrier leaves slots waiting for one long request; continuous refill starts new work on each free slot.">
 <defs>
@@ -223,8 +223,8 @@ nav{display:none}
 </clipPath>
 </defs>
 <g font-size="21" fill="#143c39">
-<text x="10" y="60">Batch barrier</text>
-<text x="10" y="230">Continuous refill</text>
+<text x="10" y="60">Wait for the batch</text>
+<text x="10" y="230">Start the next job</text>
 <text x="250" y="20" font-size="15">time →</text>
 </g>
 <g fill="#2f8e7f">
@@ -252,58 +252,58 @@ nav{display:none}
 <div class="legend">
 <span>
 <i class="swatch">
-</i>Active request</span>
+</i>Working</span>
 <span>
 <i class="swatch waiting">
-</i>Idle behind a barrier</span>
+</i>Waiting for other jobs</span>
 </div>
-<p class="note">Observed local rate: 21.4 → 28.0/min. The windows also changed from 38 videos to 1; scheduling alone does not explain the whole increase.</p>
+<p class="note">Saved descriptions rose from 21.4 to 28.0/min. The later sample also had fewer slow videos, so this was not all due to the code change.</p>
 </div>
 <div class="source">Diagram illustrates the mechanism; bar lengths are not measured task durations. <a href="../../scripts/knowledge-index/bonsai-dispatch.md">Dispatch policy</a>.</div>
 </section>
 <section class="slide" data-title="Live tuning loop" aria-label="Slide 6: Live tuning loop">
-<div class="eyebrow">05 / Tune without restarting the backfill</div>
-<h2>Every setting gets a feedback loop.</h2>
+<div class="eyebrow">05 / Change settings while work continues</div>
+<h2>Change one setting. Check if it helped.</h2>
 <div class="body">
 <div class="flow">
 <div class="node">
-<b>1</b>Change one<br>Git setting</div>
+<b>1</b>Save one change<br>in Git</div>
 <span class="arrow">→</span>
 <div class="node">
-<b>2</b>Verify applied<br>timestamp</div>
+<b>2</b>Check when<br>it took effect</div>
 <span class="arrow">→</span>
 <div class="node">
-<b>3</b>Watch 2 min;<br>compare 10 min</div>
+<b>3</b>Watch for 2 min;<br>measure for 10</div>
 <span class="arrow">→</span>
 <div class="node">
-<b>4</b>Check saved rows<br>and media mix</div>
+<b>4</b>Count saved files;<br>compare photos/videos</div>
 <span class="arrow">→</span>
 <div class="node">
-<b>5</b>Keep or<br>revert in Git</div>
+<b>5</b>Keep it or<br>undo it</div>
 </div>
 <div class="focus-shot policy">
 <img src="assets/local-photo-pipeline/grafana-live-tuning.jpg" alt="Cropped actual Grafana panels showing GPU slots and the applied policy timestamp.">
 </div>
-<p class="note">No dispatch restart: check policy at queue boundaries, at most every 30 seconds; finish outstanding requests first. A failed fetch keeps the last valid settings.</p>
+<p class="note">The worker checks for settings every 30 seconds or later, when ready for more work. It finishes current requests first. If it cannot fetch the change, it keeps the old settings.</p>
 </div>
 <div class="source">Actual Grafana panel crop; November 21 11:00–November 22 02:00 UTC. <a href="assets/local-photo-pipeline/grafana-live-tuning.jpg">Open full-size image</a>.</div>
 </section>
 <section class="slide" data-title="Concurrency limits" aria-label="Slide 7: Concurrency limits">
-<div class="eyebrow">06 / The useful negative results</div>
-<h2>More concurrency can buy only more waiting.</h2>
+<div class="eyebrow">06 / What did not help</div>
+<h2>More jobs at once did not always help.</h2>
 <div class="body">
 <div class="row">
 <div>
 <div class="tag">Mac · benchmark</div>
 <div class="big">4 → 20</div>
-<div class="unit">concurrent requests</div>
+<div class="unit">jobs sent at once</div>
 <div class="stat">
 <strong>9.62 → 9.65</strong>
-<div class="unit">saves/min · essentially flat</div>
+<div class="unit">saved descriptions/min · almost unchanged</div>
 </div>
 <div class="stat">
 <strong>48 → 124 s</strong>
-<div class="unit">p95 latency · keep four slots</div>
+<div class="unit">95% of requests finished within this time · keep four jobs</div>
 </div>
 </div>
 <div>
@@ -326,7 +326,7 @@ nav{display:none}
 </div>
 <b>69.3</b>
 </div>
-<p class="note">Saved captions/min. Preparation became the bottleneck; six prep workers did worse.</p>
+<p class="note">Saved descriptions/min. Preparing images held up the cloud worker. Six preparation workers were slower than four.</p>
 <span class="badge">Local page 24 vs. 48: both 32 photos/min</span>
 </div>
 </div>
@@ -334,110 +334,110 @@ nav{display:none}
 <div class="source">Mac results are benchmark measurements. Luna results are sequential production samples, not identical inputs. Local page trial was photo-only. <a href="assets/local-photo-pipeline/evidence.md">Evidence notes</a>.</div>
 </section>
 <section class="slide" data-title="Database responsibilities" aria-label="Slide 8: Database responsibilities">
-<div class="eyebrow">07 / Evaluate the pipeline, not the database logo</div>
-<h2>Live decisions. Published facts.</h2>
+<div class="eyebrow">07 / Give each database a clear job</div>
+<h2>Save edits now. Analyse saved results.</h2>
 <div class="body">
 <div class="three">
 <div class="value">
 <b>PostgreSQL</b>
-<span>Reserve jobs.<br>Save human edits.<br>Reject a face candidate.</span>
+<span>Track work and save your edits immediately.</span>
 </div>
 <div class="value">
 <b>Parquet</b>
-<span>Publish durable outputs.<br>Keep model versions.<br>Replay units safely.</span>
+<span>Store results as files, with a separate record for each model.</span>
 </div>
 <div class="value">
 <b>DuckDB</b>
-<span>Query the inventory.<br>Browse snapshots.<br>Aggregate history.</span>
+<span>Search and count the saved results.</span>
 </div>
 </div>
 <div class="flow">
-<div class="node">Live edits overlay<br>the current snapshot</div>
+<div class="node">Show your latest edits<br>without waiting</div>
 <span class="arrow">→</span>
-<div class="node">Refresh derived views<br>without recaptioning</div>
+<div class="node">Update search data<br>without describing photos again</div>
 <span class="arrow">→</span>
-<div class="node">Stream embeddings once<br>instead of rescanning per page</div>
+<div class="node">Read saved face data once<br>instead of once per page</div>
 </div>
 <div class="stat">
 <strong>~1 second → 8–10 ms</strong>
-<div class="unit">Later 256-row batch reads, after ~0.86 s query setup.</div>
+<div class="unit">Time to read the next 256 faces, after about 0.86 seconds to start the query.</div>
 </div>
 </div>
 <div class="source">Bounded face-reader profile; not a total matching speedup or a PostgreSQL-vs-DuckDB benchmark. <a href="assets/local-photo-pipeline/evidence.md">Scope and source</a>.</div>
 </section>
 <section class="slide" data-title="Build sequence" aria-label="Slide 9: Build sequence">
-<div class="eyebrow">08 / How to reproduce the final design</div>
-<h2>Seven steps, with a check at each boundary.</h2>
+<div class="eyebrow">08 / Set it up</div>
+<h2>Copy. Check. Index. Describe. Measure.</h2>
 <div class="body">
 <div class="flow">
 <div class="node">
-<b>01</b>Measure sources<br>
-<span class="small">Capacity on both disks</span>
+<b>01</b>Check sizes<br>
+<span class="small">Enough room on both disks</span>
 </div>
 <span class="arrow">→</span>
 <div class="node">
-<b>02</b>Host-side ingest<br>
-<span class="small">Archive validation + ledger</span>
+<b>02</b>Import originals<br>
+<span class="small">Check archives; record completed imports</span>
 </div>
 <span class="arrow">→</span>
 <div class="node">
 <b>03</b>Verify copies<br>
-<span class="small">Hashes + restore/open test</span>
+<span class="small">Compare files and test a restore</span>
 </div>
 <span class="arrow">→</span>
 <div class="node">
-<b>04</b>Build inventory<br>
-<span class="small">Per-unit Parquet + quota check</span>
+<b>04</b>Build the file list<br>
+<span class="small">Save metadata; check quota estimates</span>
 </div>
 </div>
 <div class="flow">
 <div class="node">
-<b>05</b>Read-only Immich<br>
-<span class="small">Metadata → thumbnails → ML</span>
+<b>05</b>Connect Immich<br>
+<span class="small">Keep originals read-only</span>
 </div>
 <span class="arrow">→</span>
 <div class="node">
-<b>06</b>Review + caption<br>
-<span class="small">Live state + resumable work</span>
+<b>06</b>Add descriptions<br>
+<span class="small">Save progress; avoid repeat work</span>
 </div>
 <span class="arrow">→</span>
 <div class="node">
-<b>07</b>Measure + tune<br>
-<span class="small">Git policy + durable counters</span>
+<b>07</b>Measure and improve<br>
+<span class="small">Change one setting at a time</span>
 </div>
 </div>
-<p class="note">Cloud reclamation is a separate reviewed operation after verification. Preserve an off-site copy. Native Immich indexing and caption completion are different milestones.</p>
+<p class="note">Only delete cloud files after checking your backups. Keep a copy outside your home. Immich can finish indexing while descriptions are still being generated.</p>
 </div>
 <div class="source">
 <a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md#build-the-final-system-step-by-step">Article: commands, manifests and runbooks for every step</a>.</div>
 </section>
 <section class="slide dark" data-title="Weird problems" aria-label="Slide 10: Weird problems">
 <div class="eyebrow">09 / The problems that changed the design</div>
-<h2>The surprising failures crossed boundaries.</h2>
+<h2>What went wrong—and what fixed it.</h2>
 <div class="body">
 <div class="gridnotes">
 <div class="problem" style="color:var(--ink)">
-<h3>Backup copy → Kubernetes stalls</h3>
-<p class="cause">Shared VM/storage I/O path</p>
-<p>Move bulk ingest onto the host; diagnose both layers.</p>
+<h3>Copying files slowed Kubernetes</h3>
+<p class="cause">Both were waiting on the same storage path.</p>
+<p>Run large archive imports on the storage host.</p>
 </div>
 <div class="problem" style="color:var(--ink)">
-<h3>Five-minute throughput waves</h3>
-<p class="cause">A trend over a sampled staircase</p>
-<p>Count actual durable saves, then calculate the rate.</p>
+<h3>The speed graph kept rising and falling</h3>
+<p class="cause">File totals were only updated every five minutes.</p>
+<p>Count descriptions as they are saved.</p>
 </div>
 <div class="problem" style="color:var(--ink)">
-<h3>Laptop sleeps → cloud queue stops</h3>
-<p class="cause">Submission and accounting depend on the client</p>
-<p>Always-on submitter; explicit shared budget holds.</p>
+<h3>The laptop slept. Cloud work stopped.</h3>
+<p class="cause">The laptop was sending the requests.</p>
+<p>Move that job to a computer that stays on.</p>
 </div>
 <div class="problem" style="color:var(--ink)">
-<h3>Rejected face → same suggestion</h3>
-<p class="cause">Live decisions outpace cached views</p>
-<p>Overlay PostgreSQL edits; invalidate stale matches.</p>
+<h3>A rejected face name kept coming back</h3>
+<p class="cause">The screen was showing old saved results.</p>
+<p>Show your latest decision immediately.</p>
 </div>
 </div>
-<p style="margin-top:28px" class="sub">Preserved originals. Reusable enrichment. Measured progress.</p>
+<p style="margin-top:28px" class="sub">Keep the photos safe. Make them useful. Know what is finished.</p>
 </div>
 <div class="source">
 <a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md">Full article and implementation links</a> · <a href="assets/local-photo-pipeline/evidence.md">Measurement caveats and sources</a>
