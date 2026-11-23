@@ -5,6 +5,8 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import threading
+import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -14,6 +16,38 @@ import worker
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_new_pair_scan_joins_metadata_and_excludes_album_copies(self):
+        cloud=self.root/'luna_codex_captions';cloud.mkdir()
+        with duckdb.connect() as db:
+            db.execute("""COPY (SELECT path AS source_path,10 AS size_bytes,'ok' AS state,
+                'Cloud caption' AS summary,'luna' AS model,'v1' AS prompt_version,
+                current_timestamp AS finished_at FROM (VALUES
+                ('/Photos from 2020/p.jpg'),('/Album/p.jpg')) t(path)) TO ?""",[str(cloud/'one.parquet')])
+        class Reader:
+            def __init__(self):
+                self.db=duckdb.connect()
+                self.db.execute("""CREATE SCHEMA ki;
+                    CREATE TABLE ki.gphotos_media AS SELECT path,'p.jpg' AS name,10 AS size_bytes,
+                        'media' AS kind,album,123 AS taken_ts FROM (VALUES
+                        ('/Photos from 2020/p.jpg',NULL),('/Album/p.jpg','Album')) t(path,album);
+                    CREATE TABLE ki.media_summaries AS SELECT path,size_bytes,'gphotos' AS source,
+                        'ok' AS status,'Local caption' AS summary,'local' AS model,'v1' AS prompt_version,
+                        current_timestamp AS created_at,'e' AS enricher FROM ki.gphotos_media;
+                    CREATE TABLE faces(path VARCHAR,size_bytes BIGINT,mtime_ns BIGINT,model VARCHAR,label_source VARCHAR,person VARCHAR);
+                    CREATE TABLE face_scans(path VARCHAR,size_bytes BIGINT,mtime_ns BIGINT,model VARCHAR);
+                    CREATE TABLE group_members(path VARCHAR,size_bytes BIGINT,group_id VARCHAR);
+                    CREATE TABLE photo_groups(id VARCHAR,event VARCHAR,location VARCHAR,venue VARCHAR);
+                    CREATE TABLE enriched_media(path VARCHAR,size_bytes BIGINT,capture_ts BIGINT,capture_source VARCHAR);
+                    CREATE TABLE photo_search(path VARCHAR,size_bytes BIGINT,location VARCHAR,location_source VARCHAR);""")
+            def execute(self,sql,*args):
+                if sql.startswith('ATTACH '):return self
+                return self.db.execute(sql,*args)
+            def close(self):self.db.close()
+        module=SimpleNamespace(analytical_connection=lambda _: (Reader(),{'generation':'g'}))
+        with patch.dict(sys.modules,{'photo_enrichment.snapshots':module}), patch.object(r,'publish_inputs'):
+            self.assertEqual(r.seed(self.db,self.root,0,only_new=True)['inserted'],1)
+            self.assertEqual(r.seed(self.db,self.root,0,only_new=True)['inserted'],0)
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)/'luna-backfill';self.root.mkdir()
@@ -62,6 +96,40 @@ class ReconciliationTests(unittest.TestCase):
         with self.assertRaises(ValueError):r.handle(self.db,self.root,dict(op='reconcile_start',batch=grant['batch'],id=item['id']))
         request['batch']='stale'
         with self.assertRaises(ValueError):r.finish(self.db,request)
+
+    def test_discovery_keeps_old_successes_skips_and_inflight_versions(self):
+        self.db.execute("UPDATE reconciliations SET prompt_version='summary-reconcile-v1',state='skipped'")
+        self.db.commit()
+        revised=copy.deepcopy(self.records)
+        revised[0]['inputs']['saved_metadata']['location']='changed metadata'
+        self.assertEqual(r.seed_records(self.db,revised,'new-generation',only_new=True),0)
+        revised.append(dict(path='new.jpg',size_bytes=100,inputs=self.records[0]['inputs']))
+        self.assertEqual(r.seed_records(self.db,revised,'new-generation',only_new=True),1)
+        self.assertEqual(r.seed_records(self.db,revised,'new-generation',only_new=True),0)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM reconciliations').fetchone()[0],6)
+
+    def test_discovery_is_bounded_and_another_runner_cannot_repeat_scan(self):
+        with patch.object(r,'seed',return_value=dict(inserted=3,eligible=8,generation='g')) as seed, \
+                patch.object(r.time,'time',return_value=1000):
+            self.assertTrue(r.discover(self.db,self.root)['scanned'])
+            self.assertFalse(r.discover(self.db,self.root)['scanned'])
+            seed.assert_called_once_with(self.db,self.root,0,only_new=True)
+        with patch.object(r,'seed',return_value=dict(inserted=1,eligible=9,generation='g2')) as seed, \
+                patch.object(r.time,'time',return_value=1301):
+            self.assertTrue(r.discover(self.db,self.root)['scanned'])
+            seed.assert_called_once()
+
+    def test_follow_local_waits_when_caught_up_then_rechecks_git_policy(self):
+        policy=dict(mode='reconciliation',parallel=2,reconciliation_follow_local=True)
+        calls=[]
+        def host(**request):
+            calls.append(request['op'])
+            return dict(items=[],blocked=False) if request['op']=='reconcile_reserve' else {}
+        with patch.object(worker,'read_policy',side_effect=[policy,None]), \
+                patch.object(worker,'host',side_effect=host), patch.object(worker.time,'sleep') as sleep:
+            worker.run_reconciliation()
+        self.assertIn('reconcile_discover',calls)
+        sleep.assert_called_once_with(30)
 
     def test_timeout_is_skipped_with_hold_and_other_host_can_continue(self):
         grant=r.reserve(self.db,'mac',1);item=grant['items'][0]

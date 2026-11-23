@@ -328,7 +328,7 @@ def main():
     if os.environ.get('KI_LUNA_BRIDGE') == '1' and op not in {
         'status','recover','reserve','frames','start','finish','release','publish',
         'reconcile_status','reconcile_recover','reconcile_reserve','reconcile_start',
-        'reconcile_finish','reconcile_release','reconcile_publish'
+        'reconcile_finish','reconcile_release','reconcile_publish','reconcile_discover'
     }:
         raise ValueError('Unexpected bridge operation')
     with sqlite3.connect(ROOT/'luna-ledger.sqlite3',timeout=60) as db:

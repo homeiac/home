@@ -1,6 +1,7 @@
 {
   "enabled": true,
   "mode": "reconciliation",
+  "reconciliation_follow_local": true,
   "reconciliation_runners": {"still-fawn": 20, "mac": 20},
   "reconciliation_budget_usd": 250,
   "reconciliation_global_parallel": 40,

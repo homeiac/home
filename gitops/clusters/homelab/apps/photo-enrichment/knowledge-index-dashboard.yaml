@@ -40,7 +40,7 @@ data:
         {
           "id": 188,
           "type": "stat",
-          "title": "Seeded batch complete",
+          "title": "Available pairs processed",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -89,7 +89,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Successful or deliberately skipped files divided by files in this seeded reconciliation batch. This is not whole-library coverage. Later local/Luna pairs require a new seed. Skipped files count as processed, not successful summaries."
+          "description": "Successful or deliberately skipped files divided by discovered local/Luna pairs. New pairs are added automatically every five minutes as local captions arrive, so this percentage can fall. 100% means caught up with discovered pairs, not both models complete over the whole library. Skipped files count as processed, not successful summaries."
         },
         {
           "id": 189,
@@ -189,7 +189,7 @@ data:
                   "type": "value",
                   "options": {
                     "0": {
-                      "text": "Complete",
+                      "text": "Caught up",
                       "color": "green"
                     }
                   }
@@ -253,7 +253,7 @@ data:
                   "type": "value",
                   "options": {
                     "0": {
-                      "text": "Complete",
+                      "text": "Caught up",
                       "color": "green"
                     }
                   }
@@ -379,12 +379,12 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Successful current revisions in the seeded batch, not whole-library caption coverage. Only files with both local and Luna captions at seeding were queued. New pairs require a later seed; earlier revisions remain in history."
+          "description": "Successful current revisions among discovered local/Luna pairs, not whole-library caption coverage. New pairs are discovered every five minutes. Earlier revisions remain in history."
         },
         {
           "id": 177,
           "type": "stat",
-          "title": "Remaining in seeded batch",
+          "title": "Ready pairs still to reconcile",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -432,7 +432,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Pending and active items already in this reconciliation batch. New local/Luna pairs are not automatically added."
+          "description": "Pending and active items with both local and Luna captions. New pairs join automatically as local descriptions arrive. Prior successes and skipped items are preserved."
         },
         {
           "id": 178,
@@ -600,7 +600,7 @@ data:
         {
           "id": 181,
           "type": "stat",
-          "title": "Last progress report",
+          "title": "Progress / new-pair check age",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -614,8 +614,15 @@ data:
           "targets": [
             {
               "expr": "time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"})",
-              "legendFormat": "",
+              "legendFormat": "Progress report",
               "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "time() - max(knowledge_index_reconciliation_discovery_timestamp_seconds{instance=~\"$instance\"})",
+              "legendFormat": "New pairs checked",
               "instant": true,
               "range": false
             }
@@ -654,9 +661,10 @@ data:
               ]
             },
             "colorMode": "value",
-            "graphMode": "none"
+            "graphMode": "none",
+            "textMode": "value_and_name"
           },
-          "description": "Age of the most recent aggregate publication. A stale report does not prove either worker is running."
+          "description": "Time since progress publication and since the last successful scan for new local/Luna pairs. Discovery runs at most every five minutes across both runners. Old successes and skipped items are not resubmitted."
         },
         {
           "id": 182,

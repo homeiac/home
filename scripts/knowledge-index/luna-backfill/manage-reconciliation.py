@@ -31,7 +31,7 @@ def install(host: str, name: str) -> None:
 def main() -> None:
     """Keep enabling/scaling explicit, with Git policy controlling worker admission."""
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','status','start','verify','review','skip-unresolved','aliases','refresh-policy'))
+    parser.add_argument('mode',choices=('inspect','probe','health','install','configure','seed','discover','status','start','verify','review','skip-unresolved','aliases','refresh-policy'))
     parser.add_argument('--piglet',required=True)
     parser.add_argument('--runner',required=True)
     parser.add_argument('--budget-usd',type=int,default=2)

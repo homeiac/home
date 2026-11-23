@@ -475,8 +475,8 @@ def reconciliation_panels():
     finish=f'((time() + (({eta}) > 0)) * 1000) or (({eta}) == 0)'
     percent=f'100 * ({jobs("ok|skipped")}) / ({jobs("pending|reserved|sent|ok|skipped|unknown")} > 0)'
     p=[row('Summary reconciliation · Luna',0),
-       stat('Reconciled summaries',jobs('ok'),0,1,unit='locale',description='Successful current revisions in the seeded batch, not whole-library caption coverage. Only files with both local and Luna captions at seeding were queued. New pairs require a later seed; earlier revisions remain in history.'),
-       stat('Remaining in seeded batch',jobs('pending|reserved|sent'),4,1,unit='locale',description='Pending and active items already in this reconciliation batch. New local/Luna pairs are not automatically added.'),
+       stat('Reconciled summaries',jobs('ok'),0,1,unit='locale',description='Successful current revisions among discovered local/Luna pairs, not whole-library caption coverage. New pairs are discovered every five minutes. Earlier revisions remain in history.'),
+       stat('Ready pairs still to reconcile',jobs('pending|reserved|sent'),4,1,unit='locale',description='Pending and active items with both local and Luna captions. New pairs join automatically as local descriptions arrive. Prior successes and skipped items are preserved.'),
        stat('Critical reviews for you',risk('critical'),8,1,unit='locale',thresholds=RED_IF_POS,
             description='Only material contradictions about the main person or an important life, family or work event that cannot safely be omitted. Minor details and unknown background people never require review.'),
        stat('Minor differences handled',risk('low'),12,1,unit='locale',
@@ -501,8 +501,8 @@ def reconciliation_panels():
               description='Only current completed results. Aliases confirmed by you are treated as the same person. Earlier broad review flags are reassessed under the critical-only policy.')]
     shift(p[1:],4)
     estimates=[
-        stat('Seeded batch complete',percent,0,1,w=6,unit='percent',decimals=1,
-             description='Successful or deliberately skipped files divided by files in this seeded reconciliation batch. This is not whole-library coverage. Later local/Luna pairs require a new seed. Skipped files count as processed, not successful summaries.'),
+        stat('Available pairs processed',percent,0,1,w=6,unit='percent',decimals=1,
+             description='Successful or deliberately skipped files divided by discovered local/Luna pairs. New pairs are added automatically every five minutes as local captions arrive, so this percentage can fall. 100% means caught up with discovered pairs, not both models complete over the whole library. Skipped files count as processed, not successful summaries.'),
         stat('Current speed · combined',f'({pace}) * 60 and on() {fresh}',6,1,w=6,decimals=1,unit='suffix: summaries/min',
              description='Combined successful completions per minute across still-fawn and Mac, averaged over the last five minutes.'),
         stat('Estimated time remaining',eta,12,1,w=6,unit='s',decimals=0,
@@ -510,7 +510,7 @@ def reconciliation_panels():
         stat('Estimated finish time',finish,18,1,w=6,unit='dateTimeAsLocal',
              description='Current time plus the estimated duration, shown in browser local time. This is an estimate, not a deadline.')]
     for panel in estimates[-2:]:
-        panel['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Complete','color':'green'}}}]
+        panel['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Caught up','color':'green'}}}]
     for panel,x,w in zip(estimates,(0,4,9,14),(4,5,5,5)):
         panel['gridPos'].update(x=x,w=w)
     remaining_cost=stat('Remaining cost · observed',
@@ -520,6 +520,14 @@ def reconciliation_panels():
     p[1:1]=estimates
     p.insert(5,remaining_cost)
     for panel in p:
+        if panel.get('title') == 'Last progress report':
+            panel['title'] = 'Progress / new-pair check age'
+            panel['targets'][0]['legendFormat'] = 'Progress report'
+            panel['targets'].append(dict(refId='B',
+                expr='time() - max(knowledge_index_reconciliation_discovery_timestamp_seconds'+INST+')',
+                legendFormat='New pairs checked',instant=True,range=False))
+            panel['options']['textMode'] = 'value_and_name'
+            panel['description'] = 'Time since progress publication and since the last successful scan for new local/Luna pairs. Discovery runs at most every five minutes across both runners. Old successes and skipped items are not resubmitted.'
         if panel['type']=='stat':
             panel['targets'][0].update(instant=True,range=False)
             panel['fieldConfig']['defaults']['noValue']='No recent data'

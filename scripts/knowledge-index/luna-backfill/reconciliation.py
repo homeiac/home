@@ -1,5 +1,6 @@
 """Text-only Luna reconciliation, shared claims and an independent Parquet column."""
 import hashlib
+import fcntl
 import json
 import os
 import re
@@ -65,6 +66,7 @@ def initialize(db: sqlite3.Connection) -> None:
         source_generation TEXT,seeded REAL,state TEXT DEFAULT 'pending',batch TEXT,runner TEXT,
         cost INTEGER DEFAULT 0,result TEXT,started REAL,finished REAL,published INTEGER DEFAULT 0);
         CREATE INDEX IF NOT EXISTS reconciliations_queue ON reconciliations(state,seeded,id);
+        CREATE INDEX IF NOT EXISTS reconciliations_file ON reconciliations(path,size_bytes);
         CREATE TABLE IF NOT EXISTS reconciliation_config(key TEXT PRIMARY KEY,value TEXT);
         CREATE TABLE IF NOT EXISTS reconciliation_actions(
             id TEXT PRIMARY KEY,action TEXT,details TEXT,created REAL);
@@ -180,7 +182,7 @@ def refresh_policy(db: sqlite3.Connection, root: Path) -> dict:
     return dict(new_revisions=changed,deferred_inflight=deferred)
 
 
-def seed_records(db: sqlite3.Connection, records: list[dict], generation: str) -> int:
+def seed_records(db: sqlite3.Connection, records: list[dict], generation: str, *, only_new: bool = False) -> int:
     """Insert new input revisions once; exclude incidental snapshot timestamps from identity."""
     inserted = 0
     registry={}
@@ -188,6 +190,9 @@ def seed_records(db: sqlite3.Connection, records: list[dict], generation: str) -
         registry.setdefault(name,[]).append(alias)
     with db:
         for record in records:
+            if only_new and db.execute('SELECT 1 FROM reconciliations WHERE path=? AND size_bytes=? LIMIT 1',
+                                       [record['path'],record['size_bytes']]).fetchone():
+                continue  # Preserve completed, skipped and in-flight work across policy revisions.
             enriched=alias_context(record['inputs'],registry)
             inputs = canonical(enriched)
             if len(inputs.encode()) > 40000:
@@ -201,7 +206,7 @@ def seed_records(db: sqlite3.Connection, records: list[dict], generation: str) -
     return inserted
 
 
-def seed(db: sqlite3.Connection, root: Path, limit: int) -> dict:
+def seed(db: sqlite3.Connection, root: Path, limit: int, *, only_new: bool = False) -> dict:
     """Join current local/Luna captions and metadata locally; no images are read."""
     from photo_enrichment.snapshots import analytical_connection
     if type(limit) is not int or not 0 <= limit <= 100000:
@@ -210,6 +215,9 @@ def seed(db: sqlite3.Connection, root: Path, limit: int) -> dict:
     try:
         reader.execute("ATTACH '/local-3TB-backup/knowledge-index/knowledge.duckdb' AS ki (READ_ONLY)")
         # Materialize once: no repeated Parquet/catalog scan per model call.
+        # The album-copy view expands gphotos_media twice; reuse one materialized
+        # catalog so a recurring scan does not reconstruct its sidecar joins.
+        reader.execute("CREATE TEMP TABLE rc_media AS SELECT * FROM ki.gphotos_media WHERE kind='media'")
         reader.execute('''CREATE TEMP TABLE rc_luna AS SELECT * FROM read_parquet(?,union_by_name=true)
             WHERE state='ok' AND nullif(trim(summary),'') IS NOT NULL
             QUALIFY row_number() OVER(PARTITION BY source_path,size_bytes ORDER BY finished_at DESC,model)=1''',
@@ -226,24 +234,50 @@ def seed(db: sqlite3.Connection, root: Path, limit: int) -> dict:
             FROM group_members gm JOIN photo_groups g ON gm.group_id=g.id GROUP BY gm.path,gm.size_bytes)
           SELECT m.path,m.size_bytes,l.summary,l.model,l.prompt_version,c.summary,c.model,c.prompt_version,
             coalesce(e.capture_ts,m.taken_ts),e.capture_source,n.people,g.annotations,s.location,s.location_source
-          FROM ki.gphotos_media m JOIN rc_local l ON l.path=m.path AND l.size_bytes=m.size_bytes
+          FROM rc_media m JOIN rc_local l ON l.path=m.path AND l.size_bytes=m.size_bytes
           JOIN rc_luna c ON c.source_path=m.path AND c.size_bytes=m.size_bytes
           LEFT JOIN enriched_media e ON e.path=m.path AND e.size_bytes=m.size_bytes
           LEFT JOIN names n ON n.path=m.path AND n.size_bytes=m.size_bytes
           LEFT JOIN groups g ON g.path=m.path AND g.size_bytes=m.size_bytes
           LEFT JOIN photo_search s ON s.path=m.path AND s.size_bytes=m.size_bytes
-          WHERE m.kind='media' AND NOT EXISTS(SELECT 1 FROM ki.gphotos_album_dup d WHERE d.path=m.path)
+          WHERE NOT (m.album IS NOT NULL AND EXISTS(SELECT 1 FROM rc_media y
+              WHERE y.album IS NULL AND y.name=m.name AND y.size_bytes=m.size_bytes))
           ORDER BY sha256(m.path) LIMIT ?''',[limit or 100000]).fetchall()
         records = [dict(path=r[0],size_bytes=r[1],inputs=dict(
             local_summary=dict(text=r[2],model=r[3],prompt_version=r[4]),
             luna_summary=dict(text=r[5],model=r[6],prompt_version=r[7]),
             saved_metadata=dict(capture_ts=r[8],capture_source=r[9],confirmed_people=r[10] or [],
                                 saved_groups=json.loads(r[11] or '[]'),location=r[12],location_source=r[13]))) for r in rows]
-        inserted=seed_records(db,records,manifest['generation'])
-        publish_inputs(db,root)
+        inserted=seed_records(db,records,manifest['generation'],only_new=only_new)
+        if inserted or not only_new:
+            publish_inputs(db,root)
         return dict(eligible=len(records),inserted=inserted,generation=manifest['generation'])
     finally:
         reader.close()
+
+
+def discover(db: sqlite3.Connection, root: Path) -> dict:
+    """Admit newly paired files at most every five minutes across all runners.
+
+    Never re-seed prior successes, skips or active requests. The filesystem lock
+    prevents concurrent analytical scans without holding a ledger write lock.
+    """
+    with (root/'reconciliation-discovery.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:
+            return dict(scanned=False,reason='another runner is checking')
+        config=dict(db.execute('SELECT key,value FROM reconciliation_config'))
+        now=time.time()
+        if now-float(config.get('discovery_attempt','0')) < 300:
+            return dict(scanned=False,reason='checked recently')
+        with db:
+            db.execute('INSERT OR REPLACE INTO reconciliation_config VALUES (?,?)',('discovery_attempt',str(now)))
+        result=seed(db,root,0,only_new=True)
+        with db:
+            db.executemany('INSERT OR REPLACE INTO reconciliation_config VALUES (?,?)',
+                           [('discovery_completed',str(time.time())),('discovery_inserted',str(result['inserted']))])
+        return dict(scanned=True,**result)
 
 
 def reserve(db: sqlite3.Connection, runner: str, requested: int, version: str = VERSION) -> dict:
@@ -423,7 +457,7 @@ def write_rows(rows: sqlite3.Cursor, target: Path) -> int:
 
 
 def publish_inputs(db: sqlite3.Connection, root: Path) -> None:
-    """Refresh the current-input map only when explicitly seeded, never per request."""
+    """Refresh the current-input map when new inputs are seeded, never per result."""
     import duckdb
     destination=root.parent/'summary-reconciliation'
     (destination/'batches').mkdir(mode=0o700,parents=True,exist_ok=True)
@@ -473,6 +507,9 @@ def export_metrics(db: sqlite3.Connection, destination: Path) -> None:
         FROM current WHERE revision=1 AND state='ok' GROUP BY 1'''))
     completed=db.execute("SELECT count(*) FROM reconciliations WHERE state='ok'").fetchone()[0]
     lines=['# TYPE knowledge_index_reconciliation_jobs gauge']
+    discovery=dict(db.execute('SELECT key,value FROM reconciliation_config'))
+    lines.extend(['# TYPE knowledge_index_reconciliation_discovery_timestamp_seconds gauge',
+                  'knowledge_index_reconciliation_discovery_timestamp_seconds '+discovery.get('discovery_completed','0')])
     for state in ('pending','reserved','sent','ok','unknown','skipped'):
         lines.append(f'knowledge_index_reconciliation_jobs{{state="{state}"}} {counts.get(state,0)}')
     lines.extend(['# TYPE knowledge_index_reconciliation_estimated_and_held_usd gauge',
@@ -515,6 +552,7 @@ def handle(db: sqlite3.Connection, root: Path, request: dict) -> dict:
         return result
     if op=='configure':return configure(db,request['budget_usd'],request['runners'],request['global_parallel'])
     if op=='seed':return seed(db,root,request['limit'])
+    if op=='discover':return discover(db,root)
     if op=='reserve':return reserve(db,request['runner'],request['parallel'],request.get('version','summary-reconcile-v1'))
     if op=='recover':return recover(db)
     if op=='finish':return finish(db,request)

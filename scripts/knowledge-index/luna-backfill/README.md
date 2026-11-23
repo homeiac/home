@@ -9,9 +9,13 @@ unresolved contradictions are marked `needs_visual_review`.
 Coverage is not the same as reconciliation completion. The original Luna campaign
 was seeded from the local worker's then-uncaptioned queue, excluding album copies;
 it was not an independent second caption pass over the entire library. Local GPUs
-continue to add captions afterward. Reconciliation snapshots only the pairs available
-when explicitly seeded, so 100% means that seeded batch is finished. New pairs do
-not automatically join it. `../check-caption-coverage.sh` reports local-only,
+continue to add captions afterward. With `reconciliation_follow_local: true`, runners
+discover new pairs every five minutes and wait when caught up. A shared lock and
+timestamp bound scanning across hosts. Discovery admits only previously unseen
+path/size pairs, preserving older successes, skips and active work even across
+prompt revisions. Explicit `seed` remains available for deliberate reassessments.
+100% means caught up with available pairs, not both caption sets complete over the
+whole library. `../check-caption-coverage.sh` reports local-only,
 Luna-only, both, neither, and paired files absent from the reconciliation snapshot.
 
 Policy v2 makes review risk-based: minor visual differences and unidentified
@@ -48,7 +52,8 @@ and Prometheus inputs. This does not write the dashboard through Grafana's API.
 Verification reads the authenticated Grafana API using the sidecar's existing
 credentials inside its pod; a matching ConfigMap alone is insufficient. A tab
 opened before a dashboard-layout update needs a browser reload to load the new
-panels. A completed seeded batch shows Complete even after worker reports age.
+panels. An empty reconciliation queue shows Caught up; the new-pair check age
+indicates whether discovery is still running.
 
 Piglet's shared ledger has separate `reconciliations` tables. The original caption
 jobs, captions and Immich descriptions are preserved. The original campaign and
@@ -83,7 +88,8 @@ Use `manage-reconciliation.py` with inventory-verified `--piglet root@…` and
 aggregates; `review` deliberately displays three private examples for quality checks.
 `install` backs up and updates existing runner code without copying credentials.
 `configure` sets the independent ledger limits; `seed --limit 10` creates the pilot
-and `seed --limit 0` selects all eligible pairs. Seeding does not submit requests.
+and `seed --limit 0` selects all eligible pairs. `discover` admits only new files
+with the same five-minute scan limit used by workers. Seeding does not submit requests.
 Git policy chooses which runners may execute. `start --mac-slots 20` starts the
 existing still-fawn service and a detached Mac worker; their local locks prevent
 duplicates. Still-fawn's timer resumes after reboot. The detached Mac worker lasts

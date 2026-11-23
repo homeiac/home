@@ -85,7 +85,7 @@ def main() -> None:
             print(panel['title'] + ': ' + ', '.join(
                 (row['metric'].get('kind', '') + ' ' + row['value'][1]).strip()
                 for row in result['data']['result']))
-    if measurements.get('Seeded batch complete') == ['100']:
+    if measurements.get('Available pairs processed') == ['100']:
         for title in ('Estimated time remaining', 'Estimated finish time'):
             if measurements.get(title) != ['0']:
                 raise RuntimeError('Completed batch must show Complete: ' + title)

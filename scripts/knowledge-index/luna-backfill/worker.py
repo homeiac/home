@@ -42,7 +42,8 @@ def host(**request):
     # independently concurrent while their short ledger calls are bounded.
     with RECONCILE_BRIDGE_SLOTS if request['op'].startswith('reconcile_') else BRIDGE_SLOTS:
         proc=subprocess.run(cmd,
-                            input=json.dumps(request),text=True,capture_output=True,timeout=240)
+                            input=json.dumps(request),text=True,capture_output=True,
+                            timeout=600 if request['op']=='reconcile_discover' else 240)
     if proc.returncode:
         raise RuntimeError('Piglet operation failed: '+request['op'])
     return json.loads(proc.stdout)
@@ -206,14 +207,23 @@ def reconcile_process(batch,item,_frames):
 def run_reconciliation():
     """Keep this runner busy subject to shared budget and global admission limits."""
     host(op='reconcile_recover');host(op='reconcile_publish')
+    next_discovery=0
     while True:
         policy=read_policy()
         if not policy or policy.get('mode')!='reconciliation':return
         began=time.monotonic()
+        if policy.get('reconciliation_follow_local',False) and began >= next_discovery:
+            discovery=host(op='reconcile_discover')
+            print('RECONCILIATION_DISCOVERY '+json.dumps(discovery),flush=True)
+            host(op='reconcile_publish')
+            next_discovery=time.monotonic()+300
         parallel=policy['parallel']
         grant=host(op='reconcile_reserve',runner=RUNNER,parallel=parallel,version=reconciliation.VERSION)
         if not grant['items']:
             print('RECONCILIATION_IDLE '+json.dumps(host(op='reconcile_status')),flush=True)
+            if policy.get('reconciliation_follow_local',False) and not grant.get('blocked',False):
+                time.sleep(30)
+                continue
             return
         results=[]
         try:
