@@ -1040,7 +1040,7 @@ data:
         {
           "id": 138,
           "type": "stat",
-          "title": "Summaries still to do",
+          "title": "Local queue \u00b7 files still to process",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1088,7 +1088,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The worker counts pending items during batch selection and updates the count after successful Parquet writes. If the worker is offline, this falls back to the five-minute index export."
+          "description": "Local worker queue, including file copies and files already captioned by Luna. This is not the number of deduplicated photos missing any caption. The worker updates after successful Parquet writes; fallback is the five-minute index export."
         },
         {
           "id": 139,
@@ -1280,6 +1280,336 @@ data:
           "description": "Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference."
         },
         {
+          "id": 193,
+          "type": "stat",
+          "title": "Local GPU \u00b7 deduped complete (est.)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 0,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "max by(kind) (knowledge_index_caption_completion{instance=~\"$instance\",model=\"local\",scope=\"deduplicated\",state=\"complete\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "orientation": "horizontal"
+          },
+          "description": "Photos and videos shown separately. A successful caption on any matching copy covers the group. Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file are copies (not verified by content hash). Separate year-folder files are retained. Current path and byte size must match the saved result. Updated every five minutes. Counts one retained representative per group."
+        },
+        {
+          "id": 194,
+          "type": "stat",
+          "title": "Local GPU \u00b7 files covered incl. copies",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 0,
+            "y": 38
+          },
+          "targets": [
+            {
+              "expr": "max by(kind) (knowledge_index_caption_completion{instance=~\"$instance\",model=\"local\",scope=\"including_copies\",state=\"complete\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "orientation": "horizontal"
+          },
+          "description": "Photos and videos shown separately. A successful caption on any matching copy covers the group. Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file are copies (not verified by content hash). Separate year-folder files are retained. Current path and byte size must match the saved result. Updated every five minutes. Counts every file represented by a completed group, even if only one copy was described. This is coverage, not model calls."
+        },
+        {
+          "id": 195,
+          "type": "stat",
+          "title": "Luna \u00b7 deduped complete (est.)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 8,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "max by(kind) (knowledge_index_caption_completion{instance=~\"$instance\",model=\"luna\",scope=\"deduplicated\",state=\"complete\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "orientation": "horizontal"
+          },
+          "description": "Photos and videos shown separately. A successful caption on any matching copy covers the group. Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file are copies (not verified by content hash). Separate year-folder files are retained. Current path and byte size must match the saved result. Updated every five minutes. Counts one retained representative per group."
+        },
+        {
+          "id": 196,
+          "type": "stat",
+          "title": "Luna \u00b7 files covered incl. copies",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 8,
+            "y": 38
+          },
+          "targets": [
+            {
+              "expr": "max by(kind) (knowledge_index_caption_completion{instance=~\"$instance\",model=\"luna\",scope=\"including_copies\",state=\"complete\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "orientation": "horizontal"
+          },
+          "description": "Photos and videos shown separately. A successful caption on any matching copy covers the group. Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file are copies (not verified by content hash). Separate year-folder files are retained. Current path and byte size must match the saved result. Updated every five minutes. Counts every file represented by a completed group, even if only one copy was described. This is coverage, not model calls."
+        },
+        {
+          "id": 197,
+          "type": "stat",
+          "title": "Either model \u00b7 deduped complete (est.)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 16,
+            "y": 33
+          },
+          "targets": [
+            {
+              "expr": "max by(kind) (knowledge_index_caption_completion{instance=~\"$instance\",model=\"either\",scope=\"deduplicated\",state=\"complete\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "orientation": "horizontal"
+          },
+          "description": "Photos and videos shown separately. A successful caption on any matching copy covers the group. Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file are copies (not verified by content hash). Separate year-folder files are retained. Current path and byte size must match the saved result. Updated every five minutes. Counts one retained representative per group."
+        },
+        {
+          "id": 198,
+          "type": "stat",
+          "title": "Either model \u00b7 files covered incl. copies",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 8,
+            "x": 16,
+            "y": 38
+          },
+          "targets": [
+            {
+              "expr": "max by(kind) (knowledge_index_caption_completion{instance=~\"$instance\",model=\"either\",scope=\"including_copies\",state=\"complete\"} and on(instance,job) (knowledge_index_exporter_success{instance=~\"$instance\"} == 1) and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds{instance=~\"$instance\"} < 900))",
+              "legendFormat": "{{kind}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting fresh data"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "orientation": "horizontal"
+          },
+          "description": "Photos and videos shown separately. A successful caption on any matching copy covers the group. Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file are copies (not verified by content hash). Separate year-folder files are retained. Current path and byte size must match the saved result. Updated every five minutes. Counts every file represented by a completed group, even if only one copy was described. This is coverage, not model calls."
+        },
+        {
           "id": 162,
           "type": "row",
           "title": "Where work is running",
@@ -1288,7 +1618,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 33
+            "y": 43
           },
           "panels": []
         },
@@ -1304,7 +1634,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 0,
-            "y": 34
+            "y": 44
           },
           "targets": [
             {
@@ -1354,7 +1684,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 6,
-            "y": 34
+            "y": 44
           },
           "targets": [
             {
@@ -1411,7 +1741,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 12,
-            "y": 34
+            "y": 44
           },
           "targets": [
             {
@@ -1521,7 +1851,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 18,
-            "y": 34
+            "y": 44
           },
           "targets": [
             {
@@ -1578,7 +1908,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 39
+            "y": 49
           },
           "targets": [
             {
@@ -1632,7 +1962,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 39
+            "y": 49
           },
           "targets": [
             {
@@ -1685,7 +2015,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 39
+            "y": 49
           },
           "targets": [
             {
@@ -1738,7 +2068,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 39
+            "y": 49
           },
           "targets": [
             {
@@ -1791,7 +2121,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 43
+            "y": 53
           },
           "targets": [
             {
@@ -1873,7 +2203,7 @@ data:
             "h": 7,
             "w": 14,
             "x": 10,
-            "y": 43
+            "y": 53
           },
           "targets": [
             {
@@ -1996,7 +2326,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 50
+            "y": 60
           },
           "targets": [
             {
@@ -2047,7 +2377,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 50
+            "y": 60
           },
           "targets": [
             {
@@ -2100,7 +2430,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 50
+            "y": 60
           },
           "targets": [
             {
@@ -2153,7 +2483,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 54
+            "y": 64
           },
           "targets": [
             {
@@ -2229,7 +2559,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 60
+            "y": 70
           },
           "targets": [
             {
@@ -2280,7 +2610,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 60
+            "y": 70
           },
           "targets": [
             {
@@ -2331,7 +2661,7 @@ data:
             "h": 6,
             "w": 14,
             "x": 0,
-            "y": 66
+            "y": 76
           },
           "targets": [
             {
@@ -2392,7 +2722,7 @@ data:
             "h": 6,
             "w": 10,
             "x": 14,
-            "y": 66
+            "y": 76
           },
           "targets": [
             {
@@ -2445,7 +2775,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 72
+            "y": 82
           },
           "targets": [
             {
@@ -2499,7 +2829,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 72
+            "y": 82
           },
           "targets": [
             {
@@ -2553,7 +2883,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 72
+            "y": 82
           },
           "targets": [
             {
@@ -2607,7 +2937,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 80
+            "y": 90
           },
           "targets": [
             {
@@ -2659,7 +2989,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 80
+            "y": 90
           },
           "targets": [
             {
@@ -2739,7 +3069,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 80
+            "y": 90
           },
           "targets": [
             {
@@ -2792,7 +3122,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 80
+            "y": 90
           },
           "targets": [
             {
@@ -2845,7 +3175,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 80
+            "y": 90
           },
           "targets": [
             {
@@ -2896,7 +3226,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 84
+            "y": 94
           },
           "panels": []
         },
@@ -2912,7 +3242,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 85
+            "y": 95
           },
           "targets": [
             {
@@ -2996,7 +3326,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 85
+            "y": 95
           },
           "targets": [
             {
@@ -3073,7 +3403,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 85
+            "y": 95
           },
           "targets": [
             {
@@ -3143,7 +3473,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 92
+            "y": 102
           },
           "panels": []
         },
@@ -3159,7 +3489,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 93
+            "y": 103
           },
           "targets": [
             {
@@ -3210,7 +3540,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 93
+            "y": 103
           },
           "targets": [
             {
@@ -3261,7 +3591,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 93
+            "y": 103
           },
           "targets": [
             {
@@ -3312,7 +3642,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 93
+            "y": 103
           },
           "targets": [
             {
@@ -3363,7 +3693,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 93
+            "y": 103
           },
           "targets": [
             {
@@ -3414,7 +3744,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 93
+            "y": 103
           },
           "targets": [
             {
@@ -3465,7 +3795,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 97
+            "y": 107
           },
           "targets": [
             {
@@ -3506,7 +3836,7 @@ data:
         {
           "id": 9,
           "type": "stat",
-          "title": "Photos described",
+          "title": "Local photo captions \u00b7 incl. copies",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -3515,7 +3845,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 97
+            "y": 107
           },
           "targets": [
             {
@@ -3550,7 +3880,8 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "description": "Successful local caption rows across enrichers, including separate album file copies. Not a deduplicated photo count; excludes Luna. See deduped completion above for current-file coverage."
         },
         {
           "id": 10,
@@ -3564,7 +3895,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 97
+            "y": 107
           },
           "targets": [
             {
@@ -3614,7 +3945,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 97
+            "y": 107
           },
           "targets": [
             {
@@ -3665,7 +3996,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 97
+            "y": 107
           },
           "targets": [
             {
@@ -3715,7 +4046,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 101
+            "y": 111
           },
           "targets": [
             {
@@ -3770,7 +4101,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 101
+            "y": 111
           },
           "targets": [
             {
@@ -3821,7 +4152,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 108
+            "y": 118
           },
           "panels": []
         },
@@ -3837,7 +4168,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 109
+            "y": 119
           },
           "targets": [
             {
@@ -3940,7 +4271,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 109
+            "y": 119
           },
           "targets": [
             {
@@ -3992,7 +4323,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 109
+            "y": 119
           },
           "targets": [
             {
@@ -4053,7 +4384,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 109
+            "y": 119
           },
           "targets": [
             {
@@ -4106,7 +4437,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 113
+            "y": 123
           },
           "targets": [
             {
@@ -4211,7 +4542,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 123
+            "y": 133
           },
           "targets": [
             {
@@ -4265,7 +4596,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 123
+            "y": 133
           },
           "targets": [
             {
@@ -4376,7 +4707,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 129
+            "y": 139
           },
           "targets": [
             {
@@ -4438,7 +4769,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 129
+            "y": 139
           },
           "targets": [
             {
@@ -4491,7 +4822,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 136
+            "y": 146
           },
           "targets": [
             {
@@ -4553,7 +4884,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 136
+            "y": 146
           },
           "targets": [
             {
@@ -4603,7 +4934,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 143
+            "y": 153
           },
           "panels": []
         },
@@ -4619,7 +4950,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 144
+            "y": 154
           },
           "targets": [
             {
@@ -4712,7 +5043,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 144
+            "y": 154
           },
           "targets": [
             {
@@ -4773,7 +5104,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 144
+            "y": 154
           },
           "targets": [
             {
@@ -4826,7 +5157,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 144
+            "y": 154
           },
           "targets": [
             {
@@ -4879,7 +5210,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 148
+            "y": 158
           },
           "targets": [
             {
@@ -4941,7 +5272,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 148
+            "y": 158
           },
           "targets": [
             {
@@ -5027,7 +5358,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 155
+            "y": 165
           },
           "targets": [
             {
@@ -5082,7 +5413,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 155
+            "y": 165
           },
           "targets": [
             {
@@ -5135,7 +5466,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 162
+            "y": 172
           },
           "targets": [
             {
@@ -5189,7 +5520,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 162
+            "y": 172
           },
           "targets": [
             {
@@ -5242,7 +5573,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 162
+            "y": 172
           },
           "targets": [
             {
@@ -5293,7 +5624,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 188
+            "y": 198
           },
           "panels": []
         },
@@ -5309,7 +5640,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 189
+            "y": 199
           },
           "targets": [
             {
@@ -5378,7 +5709,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 189
+            "y": 199
           },
           "targets": [
             {
@@ -5431,7 +5762,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 189
+            "y": 199
           },
           "targets": [
             {
@@ -5484,7 +5815,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 189
+            "y": 199
           },
           "targets": [
             {
@@ -5538,7 +5869,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 193
+            "y": 203
           },
           "targets": [
             {
@@ -5592,7 +5923,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 193
+            "y": 203
           },
           "targets": [
             {
@@ -5642,7 +5973,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 169
+            "y": 179
           },
           "panels": []
         },
@@ -5658,7 +5989,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 170
+            "y": 180
           },
           "targets": [
             {
@@ -5707,7 +6038,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 170
+            "y": 180
           },
           "targets": [
             {
@@ -5761,7 +6092,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 177
+            "y": 187
           },
           "targets": [
             {
@@ -5825,7 +6156,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 177
+            "y": 187
           },
           "targets": [
             {
@@ -5874,7 +6205,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 177
+            "y": 187
           },
           "targets": [
             {
@@ -5923,7 +6254,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 177
+            "y": 187
           },
           "targets": [
             {
@@ -5980,7 +6311,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 181
+            "y": 191
           },
           "targets": [
             {
@@ -6029,7 +6360,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 181
+            "y": 191
           },
           "targets": [
             {
@@ -6075,7 +6406,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 200
+            "y": 210
           },
           "panels": []
         },
@@ -6091,7 +6422,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 201
+            "y": 211
           },
           "targets": [
             {
@@ -6141,7 +6472,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 201
+            "y": 211
           },
           "targets": [
             {
@@ -6195,7 +6526,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 201
+            "y": 211
           },
           "targets": [
             {
@@ -6244,7 +6575,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 201
+            "y": 211
           },
           "targets": [
             {
@@ -6293,7 +6624,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 201
+            "y": 211
           },
           "targets": [
             {
@@ -6343,7 +6674,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 201
+            "y": 211
           },
           "targets": [
             {
@@ -6392,7 +6723,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 205
+            "y": 215
           },
           "targets": [
             {
@@ -6456,7 +6787,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 205
+            "y": 215
           },
           "targets": [
             {
@@ -6505,7 +6836,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 205
+            "y": 215
           },
           "targets": [
             {
@@ -6555,7 +6886,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 205
+            "y": 215
           },
           "targets": [
             {
@@ -6604,7 +6935,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 205
+            "y": 215
           },
           "targets": [
             {
@@ -6653,7 +6984,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 205
+            "y": 215
           },
           "targets": [
             {
@@ -6706,7 +7037,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 209
+            "y": 219
           },
           "targets": [
             {
@@ -6765,7 +7096,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 209
+            "y": 219
           },
           "targets": [
             {
@@ -6814,7 +7145,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 209
+            "y": 219
           },
           "targets": [
             {
@@ -6861,7 +7192,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 216
+            "y": 226
           },
           "panels": []
         },
@@ -6877,7 +7208,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 217
+            "y": 227
           },
           "targets": [
             {
@@ -6931,7 +7262,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 217
+            "y": 227
           },
           "targets": [
             {
@@ -6981,7 +7312,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 217
+            "y": 227
           },
           "targets": [
             {
@@ -7039,7 +7370,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 217
+            "y": 227
           },
           "targets": [
             {
@@ -7089,7 +7420,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 217
+            "y": 227
           },
           "targets": [
             {
@@ -7147,7 +7478,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 217
+            "y": 227
           },
           "targets": [
             {
@@ -7201,7 +7532,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 221
+            "y": 231
           },
           "targets": [
             {
@@ -7269,7 +7600,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 221
+            "y": 231
           },
           "targets": [
             {
@@ -7319,7 +7650,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 221
+            "y": 231
           },
           "targets": [
             {
@@ -7378,7 +7709,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 221
+            "y": 231
           },
           "targets": [
             {
@@ -7428,7 +7759,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 221
+            "y": 231
           },
           "targets": [
             {
@@ -7477,7 +7808,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 221
+            "y": 231
           },
           "targets": [
             {
@@ -7526,7 +7857,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7595,7 +7926,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7663,7 +7994,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7731,7 +8062,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7795,7 +8126,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7846,7 +8177,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7897,7 +8228,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 225
+            "y": 235
           },
           "targets": [
             {
@@ -7947,7 +8278,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 229
+            "y": 239
           },
           "targets": [
             {
@@ -7996,7 +8327,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 229
+            "y": 239
           },
           "targets": [
             {
@@ -8050,7 +8381,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 236
+            "y": 246
           },
           "targets": [
             {
@@ -8104,7 +8435,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 236
+            "y": 246
           },
           "targets": [
             {
@@ -8150,7 +8481,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 243
+            "y": 253
           },
           "panels": []
         },
@@ -8166,7 +8497,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 244
+            "y": 254
           },
           "targets": [
             {
@@ -8234,7 +8565,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 244
+            "y": 254
           },
           "targets": [
             {
@@ -8291,7 +8622,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 244
+            "y": 254
           },
           "targets": [
             {
@@ -8340,7 +8671,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 244
+            "y": 254
           },
           "targets": [
             {
@@ -8389,7 +8720,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 244
+            "y": 254
           },
           "targets": [
             {
@@ -8438,7 +8769,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 244
+            "y": 254
           },
           "targets": [
             {
@@ -8488,7 +8819,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 248
+            "y": 258
           },
           "panels": []
         },
@@ -8504,7 +8835,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 249
+            "y": 259
           },
           "targets": [
             {
@@ -8554,7 +8885,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 249
+            "y": 259
           },
           "targets": [
             {
@@ -8603,7 +8934,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 249
+            "y": 259
           },
           "targets": [
             {
@@ -8652,7 +8983,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 249
+            "y": 259
           },
           "targets": [
             {
@@ -8705,7 +9036,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 249
+            "y": 259
           },
           "targets": [
             {
@@ -8754,7 +9085,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 249
+            "y": 259
           },
           "targets": [
             {
@@ -8804,7 +9135,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 253
+            "y": 263
           },
           "targets": [
             {
@@ -8854,7 +9185,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 253
+            "y": 263
           },
           "targets": [
             {
@@ -8900,7 +9231,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 261
+            "y": 271
           },
           "panels": []
         },
@@ -8916,7 +9247,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 262
+            "y": 272
           },
           "targets": [
             {
@@ -8965,7 +9296,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 262
+            "y": 272
           },
           "targets": [
             {
@@ -9018,7 +9349,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 262
+            "y": 272
           },
           "targets": [
             {
@@ -9067,7 +9398,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 262
+            "y": 272
           },
           "targets": [
             {
@@ -9117,7 +9448,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 262
+            "y": 272
           },
           "targets": [
             {
@@ -9181,7 +9512,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 262
+            "y": 272
           },
           "targets": [
             {
@@ -9230,7 +9561,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 266
+            "y": 276
           },
           "targets": [
             {
@@ -9365,7 +9696,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 274
+            "y": 284
           },
           "targets": [
             {
@@ -9419,7 +9750,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 274
+            "y": 284
           },
           "targets": [
             {
@@ -9470,7 +9801,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 282
+            "y": 292
           },
           "panels": []
         },
@@ -9486,7 +9817,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 283
+            "y": 293
           },
           "targets": [
             {
@@ -9550,7 +9881,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 283
+            "y": 293
           },
           "targets": [
             {
@@ -9599,7 +9930,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 283
+            "y": 293
           },
           "targets": [
             {
@@ -9667,7 +9998,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 283
+            "y": 293
           },
           "targets": [
             {
@@ -9716,7 +10047,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 283
+            "y": 293
           },
           "targets": [
             {
@@ -9765,7 +10096,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 283
+            "y": 293
           },
           "targets": [
             {
@@ -9815,7 +10146,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 287
+            "y": 297
           },
           "targets": [
             {
@@ -9861,7 +10192,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 293
+            "y": 303
           },
           "panels": []
         },
@@ -9877,7 +10208,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 294
+            "y": 304
           },
           "targets": [
             {
@@ -9945,7 +10276,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 294
+            "y": 304
           },
           "targets": [
             {
@@ -9994,7 +10325,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 294
+            "y": 304
           },
           "targets": [
             {
@@ -10053,7 +10384,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 298
+            "y": 308
           },
           "targets": [
             {
@@ -10102,7 +10433,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 304
+            "y": 314
           },
           "targets": [
             {
@@ -10148,7 +10479,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 310
+            "y": 320
           },
           "panels": []
         },
@@ -10164,7 +10495,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 311
+            "y": 321
           },
           "targets": [
             {
@@ -10219,7 +10550,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 311
+            "y": 321
           },
           "targets": [
             {
@@ -10276,7 +10607,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 311
+            "y": 321
           },
           "targets": [
             {

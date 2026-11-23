@@ -65,7 +65,8 @@ def main() -> None:
     print('Flux source:', source['status']['artifact']['revision'])
     measurements = {}
     for panel in expected['panels']:
-        if panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT:
+        if (panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT
+                and not any('knowledge_index_caption_completion{' in t['expr'] for t in panel.get('targets', []))):
             continue
         for target in panel.get('targets', []):
             expr = target['expr'].replace('$instance', '.*').replace('$__rate_interval', '5m')
@@ -81,7 +82,9 @@ def main() -> None:
                 raise RuntimeError('Missing live data: ' + panel['title'])
             values = [row['value'][1] for row in result['data']['result']]
             measurements[panel['title']] = values
-            print(panel['title'] + ': ' + ', '.join(values))
+            print(panel['title'] + ': ' + ', '.join(
+                (row['metric'].get('kind', '') + ' ' + row['value'][1]).strip()
+                for row in result['data']['result']))
     if measurements.get('Seeded batch complete') == ['100']:
         for title in ('Estimated time remaining', 'Estimated finish time'):
             if measurements.get(title) != ['0']:

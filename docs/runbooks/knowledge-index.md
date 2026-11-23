@@ -140,6 +140,20 @@ host releases.
 
 ## Metrics, dashboard and alerts (as code)
 
+The **Work remaining & bottleneck** section separates local GPU, Luna and either-model
+completion. Each shows photos and videos counted once after excluding presumed
+album copies, and all file copies covered if one caption is reused across the group.
+The copy assumption is matching filename and byte size against a year-folder file;
+it is not content-hash verification. Multiple year-folder paths remain separate.
+Current-file results match path and byte size; repeated results and multiple local
+models do not multiply completion. The local worker queue is separate from this
+coverage: it can include copies and files already described by Luna.
+
+The exporter and `caption_completion.py` now travel in the caption-worker GitOps
+bundle. Exporter-only changes do not restart inference; the existing metrics timer
+loads them on its next five-minute run. Update the restricted allow-list with
+`caption-gitops/bootstrap.py --installer-only` before the first expanded bundle.
+
 `export-metrics.py` runs on the host every 5 minutes (systemd timer `knowledge-index-metrics`, installed by `ctl install`) and writes
 `/var/lib/prometheus/node-exporter/knowledge_index.prom`; the host's node-exporter (already scraped by Prometheus, job
 `proxmox-node-exporter`) serves it. `ctl metrics` runs it now and prints the key series. It exports index counts and bytes, the quota

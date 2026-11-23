@@ -174,7 +174,7 @@ def work_remaining_panels():
               "-3": {"text": "Worker status unknown", "color": "gray"},
               "0": {"text": "Queue clear", "color": "green"}}
     p = [row("Work remaining & bottleneck", 0),
-         stat("Summaries still to do", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="The worker counts pending items during batch selection and updates the count after successful Parquet writes. If the worker is offline, this falls back to the five-minute index export."),
+         stat("Local queue · files still to process", queue, 0, 1, w=6, unit="locale", legend="{{enricher}}", description="Local worker queue, including file copies and files already captioned by Luna. This is not the number of deduplicated photos missing any caption. The worker updates after successful Parquet writes; fallback is the five-minute index export."),
          stat("Summary finish estimate", eta, 6, 1, w=6, unit="s", legend="{{enricher}}", mappings=no_eta, description="Current backlog divided by the last ten minutes of successful Parquet writes from all active backends. Assumes the same photo/video mix and no new arrivals. Requires a fresh running-worker heartbeat."),
          stat("Summaries saved / minute", pace + ' * 60', 12, 1, w=5, decimals=1, legend="{{enricher}}", description="Successful rows saved to Parquet over the last ten minutes."),
          stat("Summary bottleneck · stage", slowest, 17, 1, w=7, unit="percent", decimals=0, legend="{{title}}", extra_opts={"textMode": "value_and_name"}, description="Largest share of measured operation time over 30 minutes. Concurrent operations each contribute time. Model requests include queueing, transport and inference.")]
@@ -258,7 +258,8 @@ def value_panels():
           stat("Index size", "knowledge_index_dataset_bytes" + INST, 16, 1, w=4, unit="bytes", decimals=1, description="Parquet files plus the DuckDB view file."),
           stat("Index vs library", "knowledge_index_dataset_bytes" + INST + ' / sum(knowledge_index_bytes{source="gphotos",instance=~"$instance"})', 20, 1, w=4, unit="percentunit", decimals=3, description="Index size as a share of the photo library it describes.")]
     p += [stat("Library size", 'sum(knowledge_index_bytes{source="gphotos",instance=~"$instance"})', 0, 5, w=4, unit="bytes", decimals=1),
-          stat("Photos described", 'sum(media_summaries_ok_items{kind="photo",instance=~"$instance"})', 4, 5, w=4),
+          stat("Local photo captions · incl. copies", 'sum(media_summaries_ok_items{kind="photo",instance=~"$instance"})', 4, 5, w=4,
+               description="Successful local caption rows across enrichers, including separate album file copies. Not a deduplicated photo count; excludes Luna. See deduped completion above for current-file coverage."),
           stat("Video minutes described", "sum(media_summaries_video_seconds" + INST + ") / 60", 8, 5, w=4, decimals=0),
           stat("Cloud-equivalent cost avoided", COST, 12, 5, w=8, unit="currencyUSD", decimals=2,
                description="ILLUSTRATIVE. No cloud service describes a Google Photos library like this. Priced as if a multimodal AI API charged per photo and per video minute; set the two price variables at the top to your own assumptions. Not a quote."),
@@ -426,7 +427,36 @@ def panels():
     all_panels = intro + locations + combined + shift(throughput + luna + [backends, cache_sim, phases, occupancy, active_policy] + priority_stages, 10) + shift(details, THROUGHPUT_HEIGHT + 39) + shift(p, 56 + THROUGHPUT_HEIGHT)
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
     all_panels += shift(immich_face_panels(), bottom)
-    return reconciliation_panels() + shift(all_panels, RECONCILIATION_HEIGHT)
+    reconciliation = reconciliation_panels()
+    # Allocate new IDs after all existing panels so bookmarked panels stay stable.
+    completion = caption_completion_panels()
+    shift([panel for panel in all_panels if panel['gridPos']['y'] >= 5], 10)
+    all_panels = all_panels[:len(intro)] + completion + all_panels[len(intro):]
+    return reconciliation + shift(all_panels, RECONCILIATION_HEIGHT)
+
+
+def caption_completion_panels():
+    """One caption can cover presumed copies; keep model and media scopes visible."""
+    fresh = (' and on(instance,job) (knowledge_index_exporter_success' + INST + ' == 1) '
+             'and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds' + INST + ' < 900)')
+    note = ("Photos and videos shown separately. A successful caption on any matching copy covers the group. "
+            "Dedup uses the existing assumption: album files with the same filename and byte size as a year-folder file "
+            "are copies (not verified by content hash). Separate year-folder files are retained. "
+            "Current path and byte size must match the saved result. Updated every five minutes. ")
+    panels = []
+    for x, model, label in ((0, 'local', 'Local GPU'), (8, 'luna', 'Luna'), (16, 'either', 'Either model')):
+        for y, scope, title in ((5, 'deduplicated', 'deduped complete (est.)'),
+                                (10, 'including_copies', 'files covered incl. copies')):
+            expr = ('max by(kind) (knowledge_index_caption_completion{instance=~"$instance",'
+                    f'model="{model}",scope="{scope}",state="complete"}}' + fresh + ')')
+            panel = stat(label + ' · ' + title, expr, x, y, w=8, h=5, unit='locale',
+                         legend='{{kind}}', extra_opts={'textMode': 'value_and_name', 'orientation': 'horizontal'},
+                         description=note + ('Counts one retained representative per group.' if scope == 'deduplicated'
+                         else 'Counts every file represented by a completed group, even if only one copy was described. This is coverage, not model calls.'))
+            panel['targets'][0].update(instant=True, range=False)
+            panel['fieldConfig']['defaults']['noValue'] = 'Awaiting fresh data'
+            panels.append(panel)
+    return panels
 
 
 def reconciliation_panels():

@@ -1,16 +1,205 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-b62e04714913
+  name: caption-worker-dc51c284ce09
   namespace: monitoring
 data:
-  bundle.json: '{"config.json": "{\n  \"enabled\": true,\n  \"index\": \"/local-3TB-backup/knowledge-index\",\n  \"library\":
-    \"/local-3TB-backup/gphotos/library\",\n  \"model\": \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\":
-    2,\n  \"batch_size\": 16,\n  \"mac_assist\": true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\"think\": false, \"options\":
-    {\"num_ctx\": 8192, \"num_predict\": 384, \"temperature\": 0.2}}\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\":
-    48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "knowledge-index-enrich.service":
-    "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index
-    /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
+  bundle.json: '{"caption_completion.py": "\"\"\"Caption coverage with the existing Takeout filename/size copy assumption.\n\nKeep
+    year-folder files and standalone album files. Map an album copy to the\nlexically first matching year-folder path. This
+    preserves the existing exclusion\ncount without merging separate year-folder files. A caption on any mapped copy\ncovers
+    its group; it does not imply that every copy was sent to a model.\n\"\"\"\nimport glob\nfrom pathlib import Path\n\n\ndef
+    completion_counts(con, index: str, luna_dir: str) -> list[tuple]:\n    \"\"\"Return kind, model, scope, total and complete
+    from current media versions.\"\"\"\n    local = str(Path(index) / ''summaries/*/*.parquet'')\n    luna = str(Path(luna_dir)
+    / ''*.parquet'')\n    empty = ''SELECT NULL::VARCHAR AS path, NULL::BIGINT AS size_bytes WHERE false''\n    local_sql
+    = (\"SELECT DISTINCT path,size_bytes FROM read_parquet(?,union_by_name=true) \"\n                 \"WHERE source=''gphotos''
+    AND status=''ok''\") if glob.glob(local) else empty\n    luna_sql = (\"SELECT DISTINCT source_path AS path,size_bytes
+    FROM read_parquet(?,union_by_name=true) \"\n                \"WHERE state=''ok''\") if glob.glob(luna) else empty\n    params
+    = ([local] if glob.glob(local) else []) + ([luna] if glob.glob(luna) else [])\n    return con.execute(\"\"\"\n        WITH
+    inventory AS (\n            SELECT DISTINCT path,size_bytes,name,\n                CASE WHEN lower(ext) IN (''mp4'',''mov'',''3gp'',''avi'',''mpg'',''m4v'')\n                     THEN
+    ''video'' ELSE ''photo'' END AS kind,\n                regexp_matches(path, ''/Photos from [0-9]{4}/'') AS annual\n            FROM
+    gphotos_files WHERE kind=''media''\n        ), annual AS (\n            SELECT name,size_bytes,min(path) AS representative\n            FROM
+    inventory WHERE annual GROUP BY name,size_bytes\n        ), local_saved AS (\"\"\" + local_sql + \"\"\"), luna_saved AS
+    (\"\"\" + luna_sql + \"\"\"),\n        mapped AS (\n            SELECT i.*,\n                CASE WHEN i.annual THEN i.path
+    ELSE coalesce(a.representative,i.path) END AS canonical,\n                l.path IS NOT NULL AS local_ok, c.path IS NOT
+    NULL AS luna_ok\n            FROM inventory i LEFT JOIN annual a USING(name,size_bytes)\n            LEFT JOIN local_saved
+    l ON l.path=i.path AND l.size_bytes=i.size_bytes\n            LEFT JOIN luna_saved c ON c.path=i.path AND c.size_bytes=i.size_bytes\n        ),
+    groups AS (\n            SELECT canonical,size_bytes,kind,count(*) AS copies,\n                bool_or(local_ok) AS local_ok,
+    bool_or(luna_ok) AS luna_ok\n            FROM mapped GROUP BY canonical,size_bytes,kind\n        ), coverage AS (\n            SELECT
+    g.*, m.model,\n                CASE m.model WHEN ''local'' THEN local_ok WHEN ''luna'' THEN luna_ok\n                     ELSE
+    local_ok OR luna_ok END AS complete\n            FROM groups g CROSS JOIN (VALUES (''local''),(''luna''),(''either''))
+    m(model)\n        ) SELECT kind,model,s.scope,\n            sum(CASE s.scope WHEN ''deduplicated'' THEN 1 ELSE copies
+    END)::BIGINT AS total,\n            sum(CASE WHEN complete THEN CASE s.scope WHEN ''deduplicated'' THEN 1 ELSE copies
+    END\n                     ELSE 0 END)::BIGINT AS complete\n        FROM coverage CROSS JOIN (VALUES (''deduplicated''),(''including_copies''))
+    s(scope)\n        GROUP BY kind,model,s.scope ORDER BY kind,model,s.scope\n    \"\"\", params).fetchall()\n", "config.json":
+    "{\n  \"enabled\": true,\n  \"index\": \"/local-3TB-backup/knowledge-index\",\n  \"library\": \"/local-3TB-backup/gphotos/library\",\n  \"model\":
+    \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\": 2,\n  \"batch_size\": 16,\n  \"mac_assist\":
+    true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\"think\": false, \"options\": {\"num_ctx\": 8192, \"num_predict\": 384,
+    \"temperature\": 0.2}}\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\": 48,\n  \"mac_routing\":
+    \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env python3\n\"\"\"Prometheus
+    textfile metrics for the knowledge index (issue #212). Runs on the Proxmox host, scraped via node-exporter.\n\nUsage:
+    export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index
+    dataset mount (default: from `zfs get mountpoint local-3TB-backup/knowledge-index`)\n  --photos   photos dataset mount            (default:
+    from `zfs get mountpoint local-3TB-backup/gphotos`)\n  --out      textfile (default /var/lib/prometheus/node-exporter/knowledge_index.prom;
+    written atomically, tmp + rename)\n  --enrichers  extra enricher ids to report queue size for (also KI_ENRICHERS env,
+    comma separated); enrichers that already have rows are always reported\n  --list-metrics  print the metric names this
+    exporter can emit and exit (used by the dashboard/alert consistency test)\n\nMetrics: ollama_* (loaded model, GPU share),
+    knowledge_index_* (files, bytes, sidecars, units, parquet, pending units, exporter health), gphotos_* (quota, ingest ledger),\nmedia_summaries_*
+    (rows by status, queue, last batch time), knowledge_index_{backfill,enrich}_active, smart_* (USB/SATA disks: pending\nsectors
+    etc., since a failing disk showed up on 2026-11-17). Missing tools (zfs, systemctl, smartctl) only omit their metrics.\n\"\"\"\nimport
+    argparse\nimport glob\nimport json\nimport os\nimport subprocess\nimport sys\nimport time\n\nimport duckdb\n\nsys.path.insert(0,
+    os.path.dirname(os.path.abspath(__file__)))\nfrom progress import BACKFILL_HELP  # noqa: E402\nfrom enrichers.pipeline_metrics
+    import PIPELINE_HELP  # noqa: E402\nfrom caption_completion import completion_counts  # noqa: E402\n\nOUT_DEFAULT = \"/var/lib/prometheus/node-exporter/knowledge_index.prom\"\nINDEX_DATASET
+    = \"local-3TB-backup/knowledge-index\"\nPHOTOS_DATASET = \"local-3TB-backup/gphotos\"\n\nHELP = {\n    \"knowledge_index_exporter_success\":
+    (\"gauge\", \"1 if the last export read the index without error\"),\n    \"knowledge_index_exporter_duration_seconds\":
+    (\"gauge\", \"seconds the last export took\"),\n    \"knowledge_index_last_run_timestamp_seconds\": (\"gauge\", \"unix
+    time of the last export\"),\n    \"knowledge_index_files\": (\"gauge\", \"library files in the index by source and kind
+    (media/sidecar/other)\"),\n    \"knowledge_index_bytes\": (\"gauge\", \"bytes of library files in the index by source
+    and kind\"),\n    \"knowledge_index_versions_files\": (\"gauge\", \"older replaced copies kept under .versions\"),\n    \"knowledge_index_versions_bytes\":
+    (\"gauge\", \"bytes of .versions copies\"),\n    \"knowledge_index_sidecars\": (\"gauge\", \"Takeout sidecar rows\"),\n    \"knowledge_index_sidecar_parse_errors\":
+    (\"gauge\", \"sidecars that could not be parsed\"),\n    \"knowledge_index_units\": (\"gauge\", \"distinct ingest/backfill
+    units in the index\"),\n    \"knowledge_index_parquet_files\": (\"gauge\", \"parquet files per table directory\"),\n    \"knowledge_index_dataset_bytes\":
+    (\"gauge\", \"bytes of index files (parquet + duckdb)\"),\n    \"knowledge_index_pending_units\": (\"gauge\", \"ingested
+    units whose indexing failed (index_pending)\"),\n    \"knowledge_index_backfill_active\": (\"gauge\", \"1 while the backfill
+    systemd unit runs\"),\n    \"knowledge_index_enrich_active\": (\"gauge\", \"1 while the summary enricher systemd unit
+    runs\"),\n    \"gphotos_media_without_sidecar\": (\"gauge\", \"media files with no usable Takeout sidecar\"),\n    \"gphotos_quota_files\":
+    (\"gauge\", \"files counting against Google quota by kind\"),\n    \"gphotos_quota_bytes\": (\"gauge\", \"bytes counting
+    against Google quota by kind\"),\n    \"gphotos_quota_media_files_by_year\": (\"gauge\", \"counted files (non-sidecar)
+    per Photos-from-YYYY folder\"),\n    \"gphotos_quota_media_bytes_by_year\": (\"gauge\", \"counted bytes (non-sidecar)
+    per Photos-from-YYYY folder\"),\n    \"gphotos_album_dup_files\": (\"gauge\", \"album copies skipped as duplicates\"),\n    \"gphotos_album_dup_bytes\":
+    (\"gauge\", \"bytes of skipped album duplicates\"),\n    \"gphotos_ingest_archives\": (\"gauge\", \"Takeout archives in
+    the ingest ledger\"),\n    \"gphotos_ingest_last_ok\": (\"gauge\", \"1 if the last ingest run finished ok\"),\n    \"gphotos_ingest_last_finished_timestamp_seconds\":
+    (\"gauge\", \"unix time the last ingest run finished\"),\n    \"knowledge_index_caption_coverage\": (\"gauge\", \"Current
+    distinct media versions by published local and Luna caption coverage\"),\n    \"knowledge_index_caption_completion\":
+    (\"gauge\", \"Caption coverage using presumed Takeout copies by filename and size; complete captions cover matching copies\"),\n    \"knowledge_index_caption_first_saved_last_ten_minutes\":
+    (\"gauge\", \"Current media versions whose earliest retained successful caption timestamp falls in the last ten minutes\"),\n    \"media_summaries_rows\":
+    (\"gauge\", \"summary rows by enricher and status (ok/error)\"),\n    \"media_summaries_queue\": (\"gauge\", \"media files
+    still to summarize per enricher\"),\n    \"ollama_up\": (\"gauge\", \"1 if the Ollama API answered\"),\n    \"ollama_models_pulled\":
+    (\"gauge\", \"models stored in Ollama (/api/tags)\"),\n    \"ollama_model_loaded\": (\"gauge\", \"1 for each model currently
+    loaded (/api/ps)\"),\n    \"ollama_model_size_bytes\": (\"gauge\", \"memory a loaded model uses in total\"),\n    \"ollama_model_vram_bytes\":
+    (\"gauge\", \"part of a loaded model that sits in GPU memory\"),\n    \"ollama_model_gpu_fraction\": (\"gauge\", \"share
+    of a loaded model in GPU memory (1 = fully on GPU; low = slow, runs on CPU)\"),\n    \"ollama_model_expires_timestamp_seconds\":
+    (\"gauge\", \"unix time Ollama will unload the model\"),\n    \"knowledge_index_query_seconds\": (\"gauge\", \"seconds
+    a representative question took against the index (quota = the Google-quota selection)\"),\n    \"media_summaries_ok_items\":
+    (\"gauge\", \"successfully summarized items by enricher and kind (photo/video)\"),\n    \"media_summaries_video_seconds\":
+    (\"gauge\", \"total duration of summarized videos by enricher\"),\n    \"media_summaries_last_batch_timestamp_seconds\":
+    (\"gauge\", \"unix time of the newest summary batch per enricher\"),\n    \"smart_pending_sectors\": (\"gauge\", \"SMART
+    Current_Pending_Sector per disk\"),\n    \"smart_offline_uncorrectable\": (\"gauge\", \"SMART Offline_Uncorrectable per
+    disk\"),\n    \"smart_reallocated_sectors\": (\"gauge\", \"SMART Reallocated_Sector_Ct per disk\"),\n    \"smart_power_cycles\":
+    (\"gauge\", \"SMART Power_Cycle_Count per disk\"),\n    \"smart_passed\": (\"gauge\", \"1 if the SMART overall health
+    assessment passed\"),\n}\n\nHELP.update({k: v for k, v in BACKFILL_HELP.items() if k.startswith(\"knowledge_index_backfill_process_\")})\nPROGRESS_HELP
+    = BACKFILL_HELP   # written live by adapters/gphotos.py --prom (progress.py); listed here so --list-metrics covers them\n\n\nclass
+    Out:\n    def __init__(self):\n        self.rows = {}\n\n    def add(self, name, value, **labels):\n        self.rows.setdefault(name,
+    []).append((labels, value))\n\n    def render(self):\n        lines = []\n        for name in sorted(self.rows):\n            typ,
+    hlp = HELP[name]\n            lines += [\"# HELP %s %s\" % (name, hlp), \"# TYPE %s %s\" % (name, typ)]\n            for
+    labels, v in self.rows[name]:\n                lab = \",\".join(''%s=\"%s\"'' % (k, str(x).replace(\"\\\\\", \"\\\\\\\\\").replace(''\"'',
+    ''\\\\\"'')) for k, x in sorted(labels.items()))\n                lines.append(\"%s%s %s\" % (name, \"{%s}\" % lab if
+    lab else \"\", repr(float(v)) if isinstance(v, float) else int(v)))\n        return \"\\n\".join(lines) + \"\\n\"\n\n\ndef
+    run(cmd, timeout=30):\n    try:\n        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout\n    except
+    (OSError, subprocess.SubprocessError):\n        return \"\"\n\n\ndef mountpoint(dataset):\n    out = run([\"zfs\", \"get\",
+    \"-H\", \"-o\", \"value\", \"mountpoint\", dataset]).strip()\n    return out if out.startswith(\"/\") else None\n\n\ndef
+    dir_bytes(path):\n    return sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(path) for f in fs if os.path.isfile(os.path.join(d,
+    f)))\n\n\ndef collect_coverage(o, con, index, luna_dir):\n    \"\"\"Use published datasets only. A path and current byte
+    size identify a library item.\"\"\"\n    local_files = os.path.join(index, \"summaries\", \"*\", \"*.parquet\")\n    luna_files
+    = os.path.join(luna_dir, \"*.parquet\")\n    if not glob.glob(luna_files):\n        return\n    rows = con.execute(\"\"\"\n        WITH
+    catalog AS (SELECT DISTINCT path, size_bytes FROM gphotos_files WHERE kind=''media''),\n        local_results AS (\n            SELECT
+    path, size_bytes, min(created_at) AS first_local\n            FROM read_parquet(?, union_by_name=true)\n            WHERE
+    source=''gphotos'' AND status=''ok'' GROUP BY path, size_bytes\n        ), cloud_results AS (\n            SELECT source_path
+    AS path, size_bytes, min(finished_at) AS first_cloud\n            FROM read_parquet(?, union_by_name=true)\n            WHERE
+    state=''ok'' GROUP BY source_path, size_bytes\n        ), assets AS (\n            SELECT CASE WHEN l.path IS NOT NULL
+    AND c.path IS NOT NULL THEN ''both''\n                        WHEN l.path IS NOT NULL THEN ''local_only''\n                        WHEN
+    c.path IS NOT NULL THEN ''luna_only'' ELSE ''neither'' END AS coverage,\n                   least(first_local, first_cloud)
+    AS first_caption\n            FROM catalog LEFT JOIN local_results l USING(path, size_bytes)\n            LEFT JOIN cloud_results
+    c USING(path, size_bytes)\n        ) SELECT coverage, count(*), count(*) FILTER (WHERE\n                 first_caption
+    BETWEEN timezone(''UTC'', current_timestamp) - INTERVAL ''10 minutes''\n                                   AND timezone(''UTC'',
+    current_timestamp))\n          FROM assets GROUP BY coverage\n    \"\"\", [local_files, luna_files]).fetchall()\n    counts
+    = {coverage: count for coverage, count, _ in rows}\n    for coverage in (\"local_only\", \"luna_only\", \"both\", \"neither\"):\n        o.add(\"knowledge_index_caption_coverage\",
+    counts.get(coverage, 0), coverage=coverage)\n    o.add(\"knowledge_index_caption_first_saved_last_ten_minutes\", sum(n
+    for _, _, n in rows))\n\n\ndef collect_index(o, index, enrichers):\n    db = os.path.join(index, \"knowledge.duckdb\")\n    con
+    = duckdb.connect(db, read_only=True)\n    q = lambda sql, *p: con.execute(sql, list(p)).fetchall()\n    for kind, n, b
+    in q(\"SELECT kind, count(*), coalesce(sum(size_bytes),0) FROM gphotos_files GROUP BY 1\"):\n        o.add(\"knowledge_index_files\",
+    n, source=\"gphotos\", kind=kind)\n        o.add(\"knowledge_index_bytes\", b, source=\"gphotos\", kind=kind)\n    n,
+    b = q(\"SELECT count(*), coalesce(sum(size_bytes),0) FROM gphotos_versions\")[0]\n    o.add(\"knowledge_index_versions_files\",
+    n); o.add(\"knowledge_index_versions_bytes\", b)\n    n, e = q(\"SELECT count(*), coalesce(sum(CASE WHEN parse_error IS
+    NOT NULL THEN 1 ELSE 0 END),0) FROM gphotos_sidecars\")[0]\n    o.add(\"knowledge_index_sidecars\", n); o.add(\"knowledge_index_sidecar_parse_errors\",
+    e)\n    o.add(\"knowledge_index_units\", q(\"SELECT count(DISTINCT unit) FROM files\")[0][0])\n    o.add(\"gphotos_media_without_sidecar\",
+    q(\"SELECT count(*) FROM gphotos_media WHERE kind = ''media'' AND upload_ts IS NULL\")[0][0])\n    for kind, n, b in q(\"SELECT
+    kind, count(*), coalesce(sum(size_bytes),0) FROM gphotos_quota GROUP BY 1\"):\n        o.add(\"gphotos_quota_files\",
+    n, kind=kind); o.add(\"gphotos_quota_bytes\", b, kind=kind)\n    # per \"Photos from YYYY\" folder, every non-sidecar
+    file (same definition as the owner''s per-year table / gphotos-quota-by-year.sh)\n    for y, n, b in q(\"SELECT regexp_extract(path,
+    ''Photos from ([0-9]{4})'', 1), count(*), sum(size_bytes) FROM gphotos_quota \"\n                     \"WHERE kind <>
+    ''sidecar'' AND regexp_matches(path, ''/Photos from [0-9]{4}/'') GROUP BY 1\"):\n        o.add(\"gphotos_quota_media_files_by_year\",
+    n, year=y); o.add(\"gphotos_quota_media_bytes_by_year\", b, year=y)\n    t = time.time()   # value metric: how long the
+    \"what counts against Google quota\" question takes now (it took ~38 min of reading sidecars before the index)\n    q(\"SELECT
+    count(*) FROM gphotos_quota\")\n    o.add(\"knowledge_index_query_seconds\", round(time.time() - t, 3), query=\"quota\")\n    n,
+    b = q(\"SELECT count(*), coalesce(sum(size_bytes),0) FROM gphotos_album_dup\")[0]\n    o.add(\"gphotos_album_dup_files\",
+    n); o.add(\"gphotos_album_dup_bytes\", b)\n    vids = \"(''mp4'',''mov'',''3gp'',''avi'',''mpg'',''m4v'')\"\n    for enr,
+    kind, n, secs in q(\"SELECT s.enricher, CASE WHEN f.ext IN %s THEN ''video'' ELSE ''photo'' END, count(*), coalesce(sum(s.duration_s),
+    0) \"\n                                \"FROM media_summaries s JOIN gphotos_files f ON f.path = s.path WHERE s.status
+    = ''ok'' GROUP BY 1, 2\" % vids):\n        o.add(\"media_summaries_ok_items\", n, enricher=enr, kind=kind)\n        if
+    kind == \"video\":\n            o.add(\"media_summaries_video_seconds\", secs, enricher=enr)\n    seen = set()\n    for
+    enr, status, n in q(\"SELECT enricher, status, count(*) FROM media_summaries GROUP BY ALL\"):\n        o.add(\"media_summaries_rows\",
+    n, enricher=enr, status=status); seen.add(enr)\n    for enr in sorted(seen | set(e for e in enrichers if e)):\n        o.add(\"media_summaries_queue\",
+    q(\"SELECT count(*) FROM gphotos_to_summarize(?)\", enr)[0][0], enricher=enr)\n        batches = glob.glob(os.path.join(index,
+    \"summaries\", enr, \"*.parquet\"))\n        if batches:\n            o.add(\"media_summaries_last_batch_timestamp_seconds\",
+    max(os.path.getmtime(b) for b in batches), enricher=enr)\n    luna_dir = os.environ.get(\"KI_LUNA_PARQUET\", os.path.join(os.path.dirname(index),
+    \"photo-enrichment\", \"luna-backfill\", \"luna_codex_captions\"))\n    collect_coverage(o, con, index, luna_dir)\n    for
+    kind, model, scope, total, complete in completion_counts(con, index, luna_dir):\n        for state, count in ((\"complete\",
+    complete), (\"remaining\", total - complete)):\n            o.add(\"knowledge_index_caption_completion\", count, kind=kind,
+    model=model, scope=scope, state=state)\n    con.close()\n\n\ndef collect_files(o, index, photos):\n    for table in sorted(os.listdir(index))
+    if os.path.isdir(index) else []:\n        p = os.path.join(index, table)\n        if os.path.isdir(p):\n            n
+    = len(glob.glob(os.path.join(p, \"**\", \"*.parquet\"), recursive=True))\n            o.add(\"knowledge_index_parquet_files\",
+    n, table=table)\n    o.add(\"knowledge_index_dataset_bytes\", dir_bytes(index))\n    if photos:\n        pend = os.path.join(photos,
+    \"_index_pending.tsv\")\n        o.add(\"knowledge_index_pending_units\", sum(1 for ln in open(pend) if ln.strip()) if
+    os.path.exists(pend) else 0)\n        ledger = os.path.join(photos, \"_ingested.tsv\")\n        o.add(\"gphotos_ingest_archives\",
+    sum(1 for ln in open(ledger) if ln.strip()) if os.path.exists(ledger) else 0)\n        last = os.path.join(photos, \"_last-run.json\")\n        if
+    os.path.exists(last):\n            try:\n                d = json.load(open(last))\n                o.add(\"gphotos_ingest_last_ok\",
+    1 if d.get(\"status\") == \"ok\" else 0)\n                o.add(\"gphotos_ingest_last_finished_timestamp_seconds\", time.mktime(time.strptime(d[\"finished\"][:19],
+    \"%Y-%m-%dT%H:%M:%S\")))\n            except (ValueError, KeyError, OSError):\n                pass\n\n\ndef collect_units(o):\n    for
+    unit, metric in ((\"knowledge-index-backfill\", \"knowledge_index_backfill_active\"), (\"knowledge-index-enrich\", \"knowledge_index_enrich_active\")):\n        state
+    = run([\"systemctl\", \"is-active\", unit]).strip()\n        if state:\n            o.add(metric, 1 if state == \"active\"
+    else 0)\n\n\ndef collect_backfill_process(o):\n    \"\"\"Process-level stats of the running backfill (works for any run,
+    instrumented or not): elapsed, bytes read from disk, CPU.\"\"\"\n    cg = run([\"systemctl\", \"show\", \"-p\", \"ControlGroup\",
+    \"--value\", \"knowledge-index-backfill\"]).strip()\n    procs = os.path.join(\"/sys/fs/cgroup\", cg.lstrip(\"/\"), \"cgroup.procs\")
+    if cg else \"\"\n    if not procs or not os.path.exists(procs):\n        return\n    tck = os.sysconf(\"SC_CLK_TCK\")\n    uptime
+    = float(open(\"/proc/uptime\").read().split()[0])\n    for pid in open(procs).read().split():\n        try:\n            if
+    b\"gphotos.py\" not in open(\"/proc/%s/cmdline\" % pid, \"rb\").read():\n                continue\n            st = open(\"/proc/%s/stat\"
+    % pid).read().rsplit(\")\", 1)[1].split()\n            io = dict(ln.split(\": \") for ln in open(\"/proc/%s/io\" % pid).read().splitlines())\n        except
+    OSError:\n            continue\n        o.add(\"knowledge_index_backfill_process_elapsed_seconds\", round(uptime - int(st[19])
+    / tck))\n        o.add(\"knowledge_index_backfill_process_read_bytes\", int(io[\"read_bytes\"]))\n        o.add(\"knowledge_index_backfill_process_cpu_seconds\",
+    round((int(st[11]) + int(st[12])) / tck, 1))\n        return\n\n\ndef collect_ollama(o, url):\n    \"\"\"Ollama has no
+    /metrics: read /api/ps (loaded models, GPU share) and /api/tags (pulled models).\"\"\"\n    import urllib.request\n    get
+    = lambda path: json.load(urllib.request.urlopen(url.rstrip(\"/\") + path, timeout=5))\n    try:\n        ps, tags = get(\"/api/ps\"),
+    get(\"/api/tags\")\n    except Exception:\n        o.add(\"ollama_up\", 0)\n        return\n    o.add(\"ollama_up\", 1)\n    o.add(\"ollama_models_pulled\",
+    len(tags.get(\"models\", [])))\n    for m in ps.get(\"models\", []):\n        name, size, vram = m.get(\"name\", \"?\"),
+    int(m.get(\"size\", 0)), int(m.get(\"size_vram\", 0))\n        o.add(\"ollama_model_loaded\", 1, model=name)\n        o.add(\"ollama_model_size_bytes\",
+    size, model=name)\n        o.add(\"ollama_model_vram_bytes\", vram, model=name)\n        o.add(\"ollama_model_gpu_fraction\",
+    round(vram / size, 4) if size else 0, model=name)\n        exp = m.get(\"expires_at\", \"\")\n        try:\n            o.add(\"ollama_model_expires_timestamp_seconds\",
+    time.mktime(time.strptime(exp[:19], \"%Y-%m-%dT%H:%M:%S\")) if exp else 0, model=name)\n        except ValueError:\n            pass\n\n\ndef
+    collect_smart(o):\n    scan = run([\"smartctl\", \"--scan\", \"-j\"])\n    try:\n        devices = json.loads(scan).get(\"devices\",
+    [])\n    except ValueError:\n        return\n    for dev in devices:\n        if dev.get(\"type\") == \"nvme\":      #
+    nvme-metrics.prom already covers NVMe\n            continue\n        d = json.loads(run([\"smartctl\", \"-A\", \"-H\",
+    \"-i\", \"-j\", \"-d\", dev[\"type\"], dev[\"name\"]]) or \"{}\")\n        lab = {\"device\": os.path.basename(dev[\"name\"]),
+    \"model\": d.get(\"model_name\", \"unknown\")}\n        if \"smart_status\" in d:\n            o.add(\"smart_passed\",
+    1 if d[\"smart_status\"].get(\"passed\") else 0, **lab)\n        want = {\"Current_Pending_Sector\": \"smart_pending_sectors\",
+    \"Offline_Uncorrectable\": \"smart_offline_uncorrectable\",\n                \"Reallocated_Sector_Ct\": \"smart_reallocated_sectors\",
+    \"Power_Cycle_Count\": \"smart_power_cycles\"}\n        for a in (d.get(\"ata_smart_attributes\") or {}).get(\"table\",
+    []):\n            if a[\"name\"] in want:\n                o.add(want[a[\"name\"]], a[\"raw\"][\"value\"], **lab)\n\n\ndef
+    main(argv):\n    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)\n    ap.add_argument(\"--index\");
+    ap.add_argument(\"--photos\"); ap.add_argument(\"--out\", default=OUT_DEFAULT)\n    ap.add_argument(\"--enrichers\", default=os.environ.get(\"KI_ENRICHERS\",
+    \"\"))\n    ap.add_argument(\"--ollama-url\", default=os.environ.get(\"KI_OLLAMA_URL\", \"\"), help=\"Ollama base URL
+    (env KI_OLLAMA_URL); empty = skip Ollama metrics\")\n    ap.add_argument(\"--list-metrics\", action=\"store_true\")\n    a
+    = ap.parse_args(argv)\n    if a.list_metrics:\n        print(\"\\n\".join(sorted(set(HELP) | set(PROGRESS_HELP) | set(PIPELINE_HELP))))\n        return
+    0\n    t0 = time.time()\n    index = a.index or mountpoint(INDEX_DATASET)\n    photos = a.photos or mountpoint(PHOTOS_DATASET)\n    o
+    = Out()\n    ok = 0\n    try:\n        if not index or not os.path.exists(os.path.join(index, \"knowledge.duckdb\")):\n            raise
+    RuntimeError(\"no knowledge.duckdb under %s\" % index)\n        collect_index(o, index, a.enrichers.split(\",\"))\n        ok
+    = 1\n    except Exception as exc:  # exporter must never fail the timer: report health instead\n        print(\"export
+    error: %s\" % exc, file=sys.stderr)\n    if index and os.path.isdir(index):\n        collect_files(o, index, photos)\n    collect_units(o)\n    collect_backfill_process(o)\n    if
+    a.ollama_url:\n        collect_ollama(o, a.ollama_url)\n    collect_smart(o)\n    o.add(\"knowledge_index_exporter_success\",
+    ok)\n    o.add(\"knowledge_index_exporter_duration_seconds\", round(time.time() - t0, 2))\n    o.add(\"knowledge_index_last_run_timestamp_seconds\",
+    int(time.time()))\n    tmp = a.out + \".tmp\"\n    with open(tmp, \"w\", encoding=\"utf-8\") as fh:\n        fh.write(o.render())\n    os.chmod(tmp,
+    0o644)\n    os.replace(tmp, a.out)\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main(sys.argv[1:]))\n",
+    "knowledge-index-enrich.service": "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target
+    zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
     /opt/knowledge-index/caption-gitops/run.py\nRestart=always\nRestartSec=60\nRestartPreventExitStatus=75\nTimeoutStopSec=45\nKillMode=control-group\nNice=10\nIOSchedulingClass=idle\n\n[Install]\nWantedBy=multi-user.target\n",
     "media_summary.py": "#!/usr/bin/env python3\n\"\"\"Photo/video summary enricher for the knowledge index (issue #212, OpenSpec
     change add-media-summaries-enricher).\n\nUsage:\n  media_summary.py run --index DIR --library DIR --endpoint URL --model
@@ -396,7 +585,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-b62e04714913
+  name: caption-worker-dc51c284ce09
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -451,7 +640,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-b62e04714913
+          name: caption-worker-dc51c284ce09
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -526,7 +715,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-b62e04714913
+              name: caption-worker-dc51c284ce09
           - name: credentials
             secret:
               secretName: caption-worker-deploy

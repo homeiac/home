@@ -25,6 +25,7 @@ import duckdb
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from progress import BACKFILL_HELP  # noqa: E402
 from enrichers.pipeline_metrics import PIPELINE_HELP  # noqa: E402
+from caption_completion import completion_counts  # noqa: E402
 
 OUT_DEFAULT = "/var/lib/prometheus/node-exporter/knowledge_index.prom"
 INDEX_DATASET = "local-3TB-backup/knowledge-index"
@@ -57,6 +58,7 @@ HELP = {
     "gphotos_ingest_last_ok": ("gauge", "1 if the last ingest run finished ok"),
     "gphotos_ingest_last_finished_timestamp_seconds": ("gauge", "unix time the last ingest run finished"),
     "knowledge_index_caption_coverage": ("gauge", "Current distinct media versions by published local and Luna caption coverage"),
+    "knowledge_index_caption_completion": ("gauge", "Caption coverage using presumed Takeout copies by filename and size; complete captions cover matching copies"),
     "knowledge_index_caption_first_saved_last_ten_minutes": ("gauge", "Current media versions whose earliest retained successful caption timestamp falls in the last ten minutes"),
     "media_summaries_rows": ("gauge", "summary rows by enricher and status (ok/error)"),
     "media_summaries_queue": ("gauge", "media files still to summarize per enricher"),
@@ -190,6 +192,9 @@ def collect_index(o, index, enrichers):
             o.add("media_summaries_last_batch_timestamp_seconds", max(os.path.getmtime(b) for b in batches), enricher=enr)
     luna_dir = os.environ.get("KI_LUNA_PARQUET", os.path.join(os.path.dirname(index), "photo-enrichment", "luna-backfill", "luna_codex_captions"))
     collect_coverage(o, con, index, luna_dir)
+    for kind, model, scope, total, complete in completion_counts(con, index, luna_dir):
+        for state, count in (("complete", complete), ("remaining", total - complete)):
+            o.add("knowledge_index_caption_completion", count, kind=kind, model=model, scope=scope, state=state)
     con.close()
 
 

@@ -19,6 +19,8 @@ def resources() -> list[dict]:
     bundle.update({name: (HERE / name).read_text()
                    for name in ('run.py', 'config.json', 'knowledge-index-enrich.service')})
     bundle['dispatch-policy.json'] = (HERE.parent / 'bonsai-dispatch-policy.json').read_text()
+    for name in ('export-metrics.py', 'caption_completion.py'):
+        bundle[name] = (HERE.parent / name).read_text()
     raw = json.dumps(bundle, sort_keys=True)
     revision = hashlib.sha256(raw.encode()).hexdigest()[:12]
     cm = 'caption-worker-' + revision

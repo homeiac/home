@@ -29,6 +29,8 @@ def bundle() -> dict:
     result.update({name: (HERE / name).read_text()
                    for name in ('run.py', 'config.json', 'knowledge-index-enrich.service')})
     result['dispatch-policy.json'] = (HERE.parent / 'bonsai-dispatch-policy.json').read_text()
+    for name in install.EXPORTER_FILES:
+        result[name] = (HERE.parent / name).read_text()
     return result
 
 
@@ -114,14 +116,16 @@ class GitOpsTests(unittest.TestCase):
                 self.assertEqual(media_summary.main(args), 0)
                 run.assert_called_once()
 
-    def exercise(self, *, failure=False, policy_only=False, disabled=False):
+    def exercise(self, *, failure=False, policy_only=False, exporter_only=False, disabled=False):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             paths = {name: root / name for name in install.FILES}
             payload = bundle()
             for name, target in paths.items():
                 target.write_text(payload[name])
-            if not policy_only:
+            if exporter_only:
+                paths['export-metrics.py'].write_text('# previous exporter\n')
+            elif not policy_only:
                 paths['run.py'].write_text('# previous version\n')
             else:
                 paths['dispatch-policy.json'].write_text('{}')
@@ -143,7 +147,7 @@ class GitOpsTests(unittest.TestCase):
                     self.assertEqual(paths['run.py'].read_text(), '# previous version\n')
                 else:
                     install.reconcile(payload)
-                    if policy_only:
+                    if policy_only or exporter_only:
                         self.assertNotIn(('systemctl', 'stop', install.UNIT), calls)
                     calls.clear()
                     result = install.reconcile(payload)
@@ -158,6 +162,15 @@ class GitOpsTests(unittest.TestCase):
     def test_policy_only_change_does_not_restart(self):
         calls = self.exercise(policy_only=True)
         self.assertNotIn(('systemctl', 'stop', install.UNIT), calls)
+
+    def test_exporter_only_change_does_not_restart_caption_worker(self):
+        self.exercise(exporter_only=True)
+
+    def test_previous_bundle_is_accepted_during_bootstrap(self):
+        payload = bundle()
+        for name in install.EXPORTER_FILES:
+            del payload[name]
+        install.validate(payload)
 
     def test_failed_rollout_restores_previous_code(self):
         self.exercise(failure=True)

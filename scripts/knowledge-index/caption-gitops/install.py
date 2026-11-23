@@ -26,7 +26,10 @@ FILES = {
     'config.json': ROOT / 'caption-gitops/config.json',
     'dispatch-policy.json': ROOT / 'caption-gitops/dispatch-policy.json',
     'knowledge-index-enrich.service': UNIT_PATH,
+    'export-metrics.py': ROOT / 'export-metrics.py',
+    'caption_completion.py': ROOT / 'caption_completion.py',
 }
+EXPORTER_FILES = {'export-metrics.py', 'caption_completion.py'}
 METRICS = Path('/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom')
 
 
@@ -37,7 +40,8 @@ def command(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 
 def validate(bundle: dict) -> dict:
     """Reject incomplete bundles, unexpected destinations and malformed settings."""
-    if set(bundle) != set(FILES) or any(not isinstance(v, str) for v in bundle.values()):
+    # Accept the previous bundle during the bootstrap-to-Flux transition.
+    if set(bundle) not in (set(FILES), set(FILES) - EXPORTER_FILES) or any(not isinstance(v, str) for v in bundle.values()):
         raise ValueError('Unexpected or missing worker files')
     for name, content in bundle.items():
         if name.endswith('.py'):
@@ -99,7 +103,7 @@ def reconcile(bundle: dict) -> dict:
     transient = Path('/run/systemd/transient') / UNIT
     changed = {name: content.encode() for name, content in bundle.items()
                if not FILES[name].exists() or FILES[name].read_bytes() != content.encode()}
-    restart = bool(set(changed) - {'dispatch-policy.json'} or overrides or transient.exists())
+    restart = bool(set(changed) - {'dispatch-policy.json'} - EXPORTER_FILES or overrides or transient.exists())
     was_active = command('systemctl', 'is-active', '--quiet', UNIT, check=False).returncode == 0
     was_enabled = command('systemctl', 'is-enabled', '--quiet', UNIT, check=False).returncode == 0
     originals = {path: path.read_bytes() if path.exists() else None for path in [*FILES.values(), *overrides]}
