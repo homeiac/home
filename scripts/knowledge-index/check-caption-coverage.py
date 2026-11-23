@@ -36,9 +36,23 @@ def main() -> None:
                 count(*) AS total,
                 count(*) FILTER (WHERE local_saved OR luna_saved) AS captioned,
                 count(*) FILTER (WHERE NOT local_saved AND NOT luna_saved) AS missing,
-                count(*) FILTER (WHERE local_saved AND luna_saved) AS both_models
+                count(*) FILTER (WHERE local_saved AND luna_saved) AS both_models,
+                count(*) FILTER (WHERE local_saved) AS local_total,
+                count(*) FILTER (WHERE luna_saved) AS luna_total,
+                count(*) FILTER (WHERE local_saved AND NOT luna_saved) AS local_only,
+                count(*) FILTER (WHERE luna_saved AND NOT local_saved) AS luna_only
                 FROM coverage WHERE ''' + where + ' GROUP BY video ORDER BY video').fetchall()
-            print(json.dumps({label: [dict(zip(['kind','total','captioned','missing','both_models'], row)) for row in rows]}))
+            print(json.dumps({label: [dict(zip(['kind','total','captioned','missing','both_models',
+                'local_total','luna_total','local_only','luna_only'], row)) for row in rows]}))
+        db.execute('''CREATE TEMP TABLE seeded AS SELECT path,size_bytes,state FROM read_parquet(
+            '/local-3TB-backup/photo-enrichment/summary-reconciliation/current_inputs.parquet')''')
+        paired=db.execute('''SELECT
+            count(*) FILTER (WHERE local_saved AND luna_saved),
+            count(*) FILTER (WHERE local_saved AND luna_saved AND s.path IS NOT NULL),
+            count(*) FILTER (WHERE local_saved AND luna_saved AND s.path IS NULL)
+            FROM coverage c LEFT JOIN seeded s USING(path,size_bytes) WHERE NOT album_copy''').fetchone()
+        print(json.dumps(dict(reconciliation_overlap=dict(zip(
+            ['both_models','already_seeded','not_yet_seeded'],paired)))))
 
 
 if __name__ == '__main__':

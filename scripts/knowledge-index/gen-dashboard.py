@@ -441,12 +441,12 @@ def reconciliation_panels():
     unblocked='(max(knowledge_index_reconciliation_blocked'+INST+') == 0)'
     no_unknown=f'({jobs("unknown")} == 0)'
     eta=(f'((({remaining}) / ({pace} > 0)) and on() ({remaining} > 0) and on() {unblocked} '
-         f'or ({remaining} == 0)) and on() {no_unknown} and on() {fresh}')
-    finish=f'((time() + ({eta} > 0)) * 1000) or (({eta}) == 0)'
+         f'and on() {fresh} or ({remaining} == 0)) and on() {no_unknown}')
+    finish=f'((time() + (({eta}) > 0)) * 1000) or (({eta}) == 0)'
     percent=f'100 * ({jobs("ok|skipped")}) / ({jobs("pending|reserved|sent|ok|skipped|unknown")} > 0)'
     p=[row('Summary reconciliation · Luna',0),
-       stat('Reconciled summaries',jobs('ok'),0,1,unit='locale',description='One successful current revision per file. Earlier revisions remain in history; reassessment can move a file back to pending.'),
-       stat('Still to reconcile',jobs('pending|reserved|sent'),4,1,unit='locale'),
+       stat('Reconciled summaries',jobs('ok'),0,1,unit='locale',description='Successful current revisions in the seeded batch, not whole-library caption coverage. Only files with both local and Luna captions at seeding were queued. New pairs require a later seed; earlier revisions remain in history.'),
+       stat('Remaining in seeded batch',jobs('pending|reserved|sent'),4,1,unit='locale',description='Pending and active items already in this reconciliation batch. New local/Luna pairs are not automatically added.'),
        stat('Critical reviews for you',risk('critical'),8,1,unit='locale',thresholds=RED_IF_POS,
             description='Only material contradictions about the main person or an important life, family or work event that cannot safely be omitted. Minor details and unknown background people never require review.'),
        stat('Minor differences handled',risk('low'),12,1,unit='locale',
@@ -471,8 +471,8 @@ def reconciliation_panels():
               description='Only current completed results. Aliases confirmed by you are treated as the same person. Earlier broad review flags are reassessed under the critical-only policy.')]
     shift(p[1:],4)
     estimates=[
-        stat('Queue complete',percent,0,1,w=6,unit='percent',decimals=1,
-             description='Current files successfully reconciled or deliberately skipped, divided by all current files. Skipped files count as processed, not successful summaries; their count remains visible below.'),
+        stat('Seeded batch complete',percent,0,1,w=6,unit='percent',decimals=1,
+             description='Successful or deliberately skipped files divided by files in this seeded reconciliation batch. This is not whole-library coverage. Later local/Luna pairs require a new seed. Skipped files count as processed, not successful summaries.'),
         stat('Current speed · combined',f'({pace}) * 60 and on() {fresh}',6,1,w=6,decimals=1,unit='suffix: summaries/min',
              description='Combined successful completions per minute across still-fawn and Mac, averaged over the last five minutes.'),
         stat('Estimated time remaining',eta,12,1,w=6,unit='s',decimals=0,

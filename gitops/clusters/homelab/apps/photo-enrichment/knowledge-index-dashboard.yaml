@@ -40,7 +40,7 @@ data:
         {
           "id": 188,
           "type": "stat",
-          "title": "Queue complete",
+          "title": "Seeded batch complete",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -89,7 +89,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Current files successfully reconciled or deliberately skipped, divided by all current files. Skipped files count as processed, not successful summaries; their count remains visible below."
+          "description": "Successful or deliberately skipped files divided by files in this seeded reconciliation batch. This is not whole-library coverage. Later local/Luna pairs require a new seed. Skipped files count as processed, not successful summaries."
         },
         {
           "id": 189,
@@ -161,7 +161,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180)",
+              "expr": "(((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0)",
               "legendFormat": "",
               "refId": "A",
               "instant": true,
@@ -226,7 +226,7 @@ data:
           },
           "targets": [
             {
-              "expr": "((time() + ((((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180) > 0)) * 1000) or (((((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180)) == 0)",
+              "expr": "((time() + (((((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0)) > 0)) * 1000) or (((((sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"}))) / (sum(max by(runner) (rate(knowledge_index_reconciliation_runner_finished_total{instance=~\"$instance\"}[5m]))) > 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) > 0) and on() (max(knowledge_index_reconciliation_blocked{instance=~\"$instance\"}) == 0) and on() (time() - max(knowledge_index_reconciliation_updated_timestamp_seconds{instance=~\"$instance\"}) < 180) or (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"pending|reserved|sent\"})) == 0)) and on() (sum(max by(state) (knowledge_index_reconciliation_jobs{instance=~\"$instance\",state=~\"unknown\"})) == 0)) == 0)",
               "legendFormat": "",
               "refId": "A",
               "instant": true,
@@ -379,12 +379,12 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "One successful current revision per file. Earlier revisions remain in history; reassessment can move a file back to pending."
+          "description": "Successful current revisions in the seeded batch, not whole-library caption coverage. Only files with both local and Luna captions at seeding were queued. New pairs require a later seed; earlier revisions remain in history."
         },
         {
           "id": 177,
           "type": "stat",
-          "title": "Still to reconcile",
+          "title": "Remaining in seeded batch",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -431,7 +431,8 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "description": "Pending and active items already in this reconciliation batch. New local/Luna pairs are not automatically added."
         },
         {
           "id": 178,

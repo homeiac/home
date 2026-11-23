@@ -7,9 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 
 HERE = Path(__file__).resolve().parent
 
@@ -51,8 +49,21 @@ def main() -> None:
     if actual != expected:
         raise RuntimeError('Live ConfigMap differs from the generated dashboard')
     print('Live dashboard ConfigMap matches Git exactly.')
+    served_spec = importlib.util.spec_from_file_location('grafana_state', HERE / 'grafana-dashboard-state.py')
+    served_module = importlib.util.module_from_spec(served_spec)
+    served_spec.loader.exec_module(served_module)
+    provisioning_deadline = time.monotonic() + (90 if args.reconcile else 0)
+    while True:
+        served = served_module.served_dashboard()['dashboard']
+        if served['panels'] == expected['panels']:
+            break
+        if time.monotonic() >= provisioning_deadline:
+            raise RuntimeError('Grafana is serving different panels despite the ConfigMap; check provisioning')
+        time.sleep(3)
+    print('Authenticated Grafana API serves the updated panels.')
     source = kubectl('-n', 'flux-system', 'get', 'gitrepository', 'photo-enrichment-preview', '-o', 'json')
     print('Flux source:', source['status']['artifact']['revision'])
+    measurements = {}
     for panel in expected['panels']:
         if panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT:
             continue
@@ -60,22 +71,21 @@ def main() -> None:
             expr = target['expr'].replace('$instance', '.*').replace('$__rate_interval', '5m')
             path = '/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?'
             result = kubectl('get', '--raw', path + urllib.parse.urlencode({'query': expr}))
-            if result['status'] != 'success' or not result['data']['result']:
+            if result['status'] != 'success':
+                raise RuntimeError('Prometheus query failed: ' + panel['title'])
+            if not result['data']['result'] and panel['title'] in (
+                    'Current speed · combined', 'Estimated time remaining', 'Estimated finish time'):
+                print(panel['title'] + ': no estimate (freshness, throughput or pause guard)')
+                continue
+            if not result['data']['result']:
                 raise RuntimeError('Missing live data: ' + panel['title'])
             values = [row['value'][1] for row in result['data']['result']]
+            measurements[panel['title']] = values
             print(panel['title'] + ': ' + ', '.join(values))
-    # Anonymous dashboard read when enabled; never fetch or print credentials.
-    url = 'https://grafana.app.home.panderosystems.com/api/dashboards/uid/knowledge-index'
-    try:
-        with urllib.request.urlopen(url, timeout=20) as response:
-            served = json.load(response)['dashboard']
-        if served['panels'] != expected['panels']:
-            raise RuntimeError('Grafana has not loaded the updated panels yet')
-        print('Grafana API serves the updated panels.')
-    except urllib.error.HTTPError as exc:
-        if exc.code not in (401, 403):
-            raise
-        print('Grafana API requires sign-in; Flux ConfigMap and live metrics verified.')
+    if measurements.get('Seeded batch complete') == ['100']:
+        for title in ('Estimated time remaining', 'Estimated finish time'):
+            if measurements.get(title) != ['0']:
+                raise RuntimeError('Completed batch must show Complete: ' + title)
 
 
 if __name__ == '__main__':

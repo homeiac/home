@@ -6,6 +6,14 @@ The `reconciliation` policy mode uses existing local and Luna captions plus save
 metadata. It does not upload images or video. Results are model-generated and
 unresolved contradictions are marked `needs_visual_review`.
 
+Coverage is not the same as reconciliation completion. The original Luna campaign
+was seeded from the local worker's then-uncaptioned queue, excluding album copies;
+it was not an independent second caption pass over the entire library. Local GPUs
+continue to add captions afterward. Reconciliation snapshots only the pairs available
+when explicitly seeded, so 100% means that seeded batch is finished. New pairs do
+not automatically join it. `../check-caption-coverage.sh` reports local-only,
+Luna-only, both, neither, and paired files absent from the reconciliation snapshot.
+
 Policy v2 makes review risk-based: minor visual differences and unidentified
 background people are omitted or generalized (`risk_level=low`, no review flag).
 Only a critical contradiction about a main person's identity or important life,
@@ -37,6 +45,10 @@ existing `photo-enrichment-preview` Flux source. After pushing, run
 `python3 scripts/knowledge-index/check-reconciliation-dashboard.py --reconcile`
 from the worktree to request Flux reconciliation and verify the live configuration
 and Prometheus inputs. This does not write the dashboard through Grafana's API.
+Verification reads the authenticated Grafana API using the sidecar's existing
+credentials inside its pod; a matching ConfigMap alone is insufficient. A tab
+opened before a dashboard-layout update needs a browser reload to load the new
+panels. A completed seeded batch shows Complete even after worker reports age.
 
 Piglet's shared ledger has separate `reconciliations` tables. The original caption
 jobs, captions and Immich descriptions are preserved. The original campaign and
