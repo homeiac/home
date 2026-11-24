@@ -205,7 +205,7 @@ metadata:
   namespace: monitoring
 spec:
   backoffLimit: 2
-  activeDeadlineSeconds: 240
+  activeDeadlineSeconds: 360
   template:
     metadata:
       labels:
@@ -280,7 +280,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 2
-      activeDeadlineSeconds: 240
+      activeDeadlineSeconds: 360
       template:
         metadata:
           labels:

@@ -39,6 +39,22 @@ def main() -> None:
             if time.monotonic() >= deadline:
                 raise RuntimeError('Flux has not applied this commit within three minutes')
             time.sleep(3)
+    # Flux applies Jobs asynchronously: a matching ConfigMap does not prove that
+    # the host has drained old work, installed the bundle and emitted new metrics.
+    audio_manifest=HERE.parents[1] / 'gitops/clusters/homelab/apps/photo-enrichment/audio-worker/resources.yaml'
+    if audio_manifest.exists():
+        import yaml
+        job=next(r['metadata']['name'] for r in yaml.safe_load_all(audio_manifest.read_text()) if r['kind']=='Job')
+        deadline=time.monotonic()+300
+        while True:
+            state=kubectl('-n','monitoring','get','job',job,'-o','json')['status']
+            if state.get('succeeded',0):break
+            if any(c.get('type')=='Failed' and c.get('status')=='True' for c in state.get('conditions',[])):
+                raise RuntimeError('Audio host installer Job failed: '+job)
+            if time.monotonic()>=deadline:raise RuntimeError('Audio installer has not completed: '+job)
+            time.sleep(3)
+        # Allow one exporter scrape before asserting that newly introduced fields exist.
+        time.sleep(20)
     spec = importlib.util.spec_from_file_location('dashboard', HERE / 'gen-dashboard.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

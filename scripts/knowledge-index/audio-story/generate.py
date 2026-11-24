@@ -11,6 +11,8 @@ raw=json.dumps(bundle,sort_keys=True);name='audio-worker-'+hashlib.sha256(raw.en
 resources=copy.deepcopy(m.resources())
 resources[0]['metadata']['name']=name;resources[0]['data']['bundle.json']=raw
 resources[1]['metadata']['name']=name
+resources[1]['spec']['activeDeadlineSeconds']=360
+resources[2]['spec']['jobTemplate']['spec']['activeDeadlineSeconds']=360
 resources[2]['metadata']['name']='audio-worker-reconcile'
 for pod in [resources[1]['spec']['template'],resources[2]['spec']['jobTemplate']['spec']['template']]:
  pod['metadata']['labels']['app']='audio-worker-installer'
