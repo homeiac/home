@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Build a fixed Whisper.cpp release on Mac and fetch verified multilingual weights."""
+import hashlib,json,os,subprocess,urllib.request
+from pathlib import Path
+ROOT=Path.home()/'Library/Application Support/knowledge-index-whisper'
+TAG='v1.9.6'
+
+def fetch(name):
+    with urllib.request.urlopen('https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/main?limit=1000',timeout=30) as r:
+        entries=json.load(r)
+    item=next(x for x in entries if x['path']==name)
+    digest=item['lfs']['oid'];path=ROOT/name
+    if not path.exists():
+        subprocess.run(['curl','-fLsS','--retry','2','-o',str(path)+'.partial','https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'+name],check=True)
+        Path(str(path)+'.partial').replace(path)
+    with path.open('rb') as f:
+        if hashlib.file_digest(f,'sha256').hexdigest()!=digest:raise ValueError('Model checksum mismatch')
+    print(json.dumps({'file':name,'sha256':digest}),flush=True)
+
+if __name__=='__main__':
+    os.umask(0o077);ROOT.mkdir(parents=True,exist_ok=True)
+    src=ROOT/TAG
+    if not src.exists():subprocess.run(['git','clone','--depth','1','--branch',TAG,'https://github.com/ggml-org/whisper.cpp.git',str(src)],check=True)
+    subprocess.run(['cmake','-S',str(src),'-B',str(src/'build'),'-DCMAKE_BUILD_TYPE=Release','-DGGML_METAL=ON','-DWHISPER_BUILD_TESTS=OFF'],check=True)
+    subprocess.run(['cmake','--build',str(src/'build'),'-j','4','--target','whisper-cli','whisper-server'],check=True)
+    for name in ['ggml-base-q5_1.bin','ggml-small-q5_1.bin']:fetch(name)
