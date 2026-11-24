@@ -156,6 +156,7 @@ have.update({"immich_jobs_asset_encode_video_success_total", "immich_jobs_asset_
 have.update({"immich_sync_available_summaries", "immich_sync_assets"})
 have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked against the live collector.
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
+have.update(runpy.run_path(here + "/audio-story/worker.py")["HELP"])
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
 external.update(re.findall(r"f'((?:knowledge_index_luna_)[a-z_]+)(?: |\{)", pathlib.Path(here + "/luna-backfill/host.py").read_text()))
 external.update(re.findall(r"# TYPE (knowledge_index_reconciliation_[a-z_]+) ", pathlib.Path(here + "/luna-backfill/reconciliation.py").read_text()))

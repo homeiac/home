@@ -1,0 +1,29 @@
+[Unit]
+Description=GitOps video speech and story backfill (reuses saved vision)
+Wants=network-online.target
+After=network-online.target zfs-mount.service
+RequiresMountsFor=/local-3TB-backup/knowledge-index /local-3TB-backup/gphotos
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/knowledge-index/venv/bin/python /opt/knowledge-index/audio-story/worker.py
+Restart=always
+RestartSec=30
+TimeoutStopSec=180
+KillMode=control-group
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=200%
+MemoryHigh=1G
+MemoryMax=2G
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/local-3TB-backup/photo-enrichment/audio-story /var/lib/prometheus/node-exporter
+
+[Install]
+WantedBy=multi-user.target

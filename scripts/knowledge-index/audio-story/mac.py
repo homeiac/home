@@ -51,7 +51,12 @@ def install():
         plist.with_suffix('.backup').write_bytes(plist.read_bytes())
         subprocess.run(['launchctl','bootout',f'{domain}/{LABEL}'],capture_output=True)
     doc=dict(Label=LABEL,ProgramArguments=[sys.executable,str(target)],RunAtLoad=True,KeepAlive=True,ThrottleInterval=30,WorkingDirectory=str(ROOT),StandardOutPath=str(ROOT/'server.log'),StandardErrorPath=str(ROOT/'server.log'),EnvironmentVariables={'CB_HOST':os.environ['CB_HOST']})
-    plist.write_bytes(plistlib.dumps(doc));subprocess.run(['launchctl','bootstrap',domain,str(plist)],check=True)
+    plist.write_bytes(plistlib.dumps(doc))
+    for attempt in range(10):
+        result=subprocess.run(['launchctl','bootstrap',domain,str(plist)],capture_output=True)
+        if result.returncode==0:break
+        time.sleep(2)
+    else:raise RuntimeError('Launch agent bootstrap failed')
 
 if __name__=='__main__':
     os.umask(0o077)

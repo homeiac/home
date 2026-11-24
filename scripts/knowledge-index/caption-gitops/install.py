@@ -33,9 +33,9 @@ EXPORTER_FILES = {'export-metrics.py', 'caption_completion.py'}
 METRICS = Path('/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom')
 
 
-def command(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+def command(*args: str, check: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
     """Execute fixed argument lists, never a shell supplied in the bundle."""
-    return subprocess.run(args, check=check, capture_output=True, text=True, timeout=60)
+    return subprocess.run(args, check=check, capture_output=True, text=True, timeout=timeout)
 
 
 def validate(bundle: dict) -> dict:
@@ -166,6 +166,80 @@ def reconcile(bundle: dict) -> dict:
     return state
 
 
+AUDIO_FILES = {
+    'audio-worker.py': ROOT / 'audio-story/worker.py',
+    'audio-config.json': ROOT / 'audio-story/config.json',
+    'knowledge-index-audio-story.service': Path('/etc/systemd/system/knowledge-index-audio-story.service'),
+}
+
+
+def reconcile_audio(bundle: dict) -> dict:
+    """A separate allow-list and unit: audio changes cannot restart the vision worker."""
+    if set(bundle) != set(AUDIO_FILES) or any(not isinstance(v, str) for v in bundle.values()):
+        raise ValueError('Unexpected audio worker files')
+    compile(bundle['audio-worker.py'], 'audio-worker.py', 'exec')
+    config = json.loads(bundle['audio-config.json'])
+    allowed = {'mac': 'http://127.0.0.1:19477',
+               'rtx': 'https://whisper.app.home.panderosystems.com',
+               'cpu': 'https://whisper-cpu.app.home.panderosystems.com',
+               'pve': 'https://whisper-pve.app.home.panderosystems.com'}
+    if (type(config['enabled']) is not bool or not config['backends']
+            or any(allowed.get(k) != v for k, v in config['backends'].items())
+            or config['model'] not in ('small-q5_1', 'base-q5_1')
+            or not 30 <= config['chunk_seconds'] <= 300
+            or not 1 <= config['attempts'] <= 3 or not 60 <= config['scan_seconds'] <= 3600
+            or config.get('beam', 1) not in (1, 3, 5)
+            or config['story_model'] != 'bonsai-27b-metal'):
+        raise ValueError('Invalid audio worker policy')
+    unit = 'knowledge-index-audio-story.service'
+    changed = {name: content.encode() for name, content in bundle.items()
+               if not AUDIO_FILES[name].exists() or AUDIO_FILES[name].read_bytes() != content.encode()}
+    previous = {path: path.read_bytes() if path.exists() else None for path in AUDIO_FILES.values()}
+    active = command('systemctl', 'is-active', '--quiet', unit, check=False).returncode == 0
+    enabled = command('systemctl', 'is-enabled', '--quiet', unit, check=False).returncode == 0
+    if changed:
+        backup = ROOT / 'backups' / ('audio-' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
+        for path, content in previous.items():
+            if content is not None:
+                target = backup / str(path).lstrip('/')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+    try:
+        if changed and active:
+            command('systemctl', 'stop', unit, timeout=200)
+        for name, content in changed.items():
+            replace(AUDIO_FILES[name], content)
+        Path('/local-3TB-backup/photo-enrichment/audio-story').mkdir(parents=True, exist_ok=True)
+        command('systemd-analyze', 'verify', str(AUDIO_FILES['knowledge-index-audio-story.service']))
+        command('systemctl', 'daemon-reload')
+        if config['enabled']:
+            command('systemctl', 'enable', '--now', unit)
+            heartbeat = Path('/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom')
+            started = time.time()
+            for _ in range(45):
+                if heartbeat.exists() and heartbeat.stat().st_mtime >= started - (30 if active and not changed else 0):
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError('Audio worker did not publish heartbeat')
+        else:
+            command('systemctl', 'disable', '--now', unit)
+    except Exception:
+        command('systemctl', 'stop', unit, check=False)
+        for path, content in previous.items():
+            if content is None:
+                path.unlink(missing_ok=True)
+            else:
+                replace(path, content)
+        command('systemctl', 'daemon-reload', check=False)
+        if not enabled:
+            command('systemctl', 'disable', unit, check=False)
+        if active:
+            command('systemctl', 'start', unit, check=False)
+        raise
+    return {'audio_enabled': config['enabled'], 'changed_files': sorted(changed)}
+
+
 def main() -> None:
     """Serialize installer Jobs and reject oversized input before decoding."""
     os.umask(0o077)
@@ -174,7 +248,9 @@ def main() -> None:
         raw = sys.stdin.buffer.read(900_001)
         if len(raw) > 900_000:
             raise ValueError('Worker bundle too large')
-        print(json.dumps(reconcile(json.loads(raw))))
+        bundle = json.loads(raw)
+        result = reconcile_audio(bundle) if set(bundle) == set(AUDIO_FILES) else reconcile(bundle)
+        print(json.dumps(result))
 
 
 if __name__ == '__main__':

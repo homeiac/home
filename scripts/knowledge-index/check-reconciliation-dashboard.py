@@ -65,7 +65,7 @@ def main() -> None:
     print('Flux source:', source['status']['artifact']['revision'])
     measurements = {}
     for panel in expected['panels']:
-        if (panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT + module.VIDEO_TUNING_HEIGHT
+        if (panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT + module.VIDEO_TUNING_HEIGHT + module.AUDIO_STORY_HEIGHT
                 and not any('knowledge_index_caption_completion{' in t['expr'] for t in panel.get('targets', []))):
             continue
         for target in panel.get('targets', []):
@@ -76,7 +76,7 @@ def main() -> None:
             if result['status'] != 'success':
                 raise RuntimeError('Prometheus query failed: ' + panel['title'])
             if not result['data']['result'] and panel['title'] in (
-                    'Current speed · combined', 'Estimated time remaining', 'Estimated finish time'):
+                    'Current speed · combined', 'Estimated time remaining', 'Estimated finish time', 'Audio queue ETA · ready videos', 'Audio checked per minute by worker'):
                 print(panel['title'] + ': no estimate (freshness, throughput or pause guard)')
                 continue
             if not result['data']['result']:

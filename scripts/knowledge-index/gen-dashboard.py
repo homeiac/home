@@ -75,6 +75,7 @@ SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
 RECONCILIATION_HEIGHT = 28
 VIDEO_TUNING_HEIGHT = 42
+AUDIO_STORY_HEIGHT = 31
 # Derived unit rate only; private account readings remain in the local usage DB.
 OBSERVED_RECONCILIATION_USD_PER_SUMMARY = 0.000869
 # Observed production transitions in UTC.
@@ -436,7 +437,10 @@ def panels():
     shift([panel for panel in all_panels if panel['gridPos']['y'] >= 5], 10)
     all_panels = all_panels[:len(intro)] + completion + all_panels[len(intro):]
     tuning = video_tuning_panels()
-    return reconciliation + shift(tuning, RECONCILIATION_HEIGHT) + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
+    audio = audio_story_panels()
+    return (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
+            + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
+            + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
 
 
 def video_tuning_panels():
@@ -527,6 +531,53 @@ def video_tuning_panels():
         panel['targets'][0].update(instant=True, range=False)
         panel['fieldConfig']['defaults']['noValue'] = 'Awaiting fresh data'
         p.append(panel)
+    return p
+
+
+def audio_story_panels():
+    """Speech makes the event understandable; retain visual and spoken provenance."""
+    evidence_path=Path(__file__).parent/'audio-story/results.json'
+    evidence=json.loads(evidence_path.read_text()) if evidence_path.exists() else {}
+    def jobs(stage,state):
+        return 'sum(knowledge_index_audio_jobs{instance=~"$instance",stage="'+stage+'",state=~"'+state+'"})'
+    done=jobs('audio','speech|no_speech|no_audio|uncertain_speech|skipped')
+    eligible='max(knowledge_index_audio_eligible'+INST+')'
+    remaining=jobs('audio','pending|inflight|error')
+    pace='sum(rate(knowledge_index_audio_finished_total'+INST+'[10m]))'
+    eta='(('+remaining+') / ('+pace+' > 0)) and on() (time() - max(knowledge_index_audio_updated_timestamp_seconds'+INST+') < 120)'
+    p=[row('Video stories · speech and context',0),
+       _panel('text','From silent frames to an event story',[],0,1,24,3,extra={'options':{'mode':'markdown','content':evidence.get('story','Whisper adds timestamped speech to saved visual captions. No repeat vision inference. Uncertain speech is withheld; original captions remain available.')}})]
+    for title,expr,x in [
+      ('Videos with usable speech',jobs('audio','speech'),0),
+      ('No speech detected',jobs('audio','no_speech'),4),
+      ('No audio track',jobs('audio','no_audio'),8),
+      ('Uncertain speech withheld',jobs('audio','uncertain_speech'),12),
+      ('Audio attempts exhausted',jobs('audio','skipped'),16),
+      ('Stories saved',jobs('story','ok'),20)]:
+        p.append(stat(title,expr,x,4,w=4,unit='locale',description='Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable.'))
+    for title,expr,x,unit in [
+      ('Videos ready for audio',eligible,0,'locale'),
+      ('Audio checks remaining',remaining,4,'locale'),
+      ('Audio pass complete · ready videos','100 * ('+done+') / ('+eligible+' > 0)',8,'percent'),
+      ('Waiting for visual captions','max(knowledge_index_audio_library_videos'+INST+') - '+eligible,12,'locale'),
+      ('Story merge remaining',jobs('story','pending|inflight|error'),16,'locale'),
+      ('Audio queue ETA · ready videos',eta,20,'s')]:
+        p.append(stat(title,expr,x,8,w=4,unit=unit,description='The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible.'))
+    p += [series('Audio checked per minute by worker',
+           [('sum(rate(knowledge_index_audio_finished_total{instance=~"$instance",backend="'+backend+'"}[10m])) * 60',label)
+            for backend,label in [('mac','Mac Metal'),('cpu','still-fawn CPU'),('rtx','RTX CUDA'),('pve','PVE CPU')]],0,12,12,8),
+          series('Stories saved and speech found',[(jobs('story','ok'),'Stories saved'),(jobs('audio','speech'),'Usable speech'),(jobs('audio','uncertain_speech'),'Speech withheld')],12,12,12,8)]
+    comparisons=[('vector('+str(r['realtime_multiple'])+')',r['backend']) for r in evidence.get('trials',[]) if r['beam']==1 and r['clips']==7]
+    if comparisons:
+        panel=_panel('bargauge','Whisper · matched audio processing speed',comparisons,0,20,12,6,unit='suffix: x realtime',decimals=2,
+          extra={'options':{'orientation':'horizontal','displayMode':'gradient','reduceOptions':{'calcs':['lastNotNull']}}},description=evidence.get('method',''))
+        for target in panel['targets']:target.update(instant=True,range=False)
+        p.append(panel)
+    p.append(_panel('text','Why this production split',[],12,20,12,6,extra={'options':{'mode':'markdown','content':evidence.get('decision','Mac Metal and spare CPU transcribe independently. RTX trials finish before its reserved GPU share returns to Immich search.')}}))
+    p += [stat('Audio worker report age','time() - max(knowledge_index_audio_updated_timestamp_seconds'+INST+')',0,26,w=6,unit='s'),
+          stat('New visual-caption scan age','time() - max(knowledge_index_audio_scan_timestamp_seconds'+INST+')',6,26,w=6,unit='s'),
+          stat('Story merge speed','sum(rate(knowledge_index_audio_stories_saved_total'+INST+'[10m])) * 60',12,26,w=6,unit='suffix: stories/min'),
+          stat('Audio failures · last 10m','sum(increase(knowledge_index_audio_errors_total'+INST+'[10m]))',18,26,w=6,unit='locale')]
     return p
 
 

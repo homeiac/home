@@ -15,3 +15,4 @@ resources:
   - bonsai.yaml
   - caption-worker
   - whisper.yaml
+  - audio-worker

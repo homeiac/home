@@ -2067,6 +2067,1014 @@ data:
           "description": "Current local RTX/Mac caption coverage, not Luna or reconciliation. One retained representative per presumed-copy group (filename and byte size, not content hash). Updated every five minutes; unresolved input failures remain in remaining."
         },
         {
+          "id": 219,
+          "type": "row",
+          "title": "Video stories \u00b7 speech and context",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 70
+          },
+          "panels": []
+        },
+        {
+          "id": 220,
+          "type": "text",
+          "title": "From silent frames to an event story",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 71
+          },
+          "targets": [],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "Whisper adds timestamped speech to saved visual captions. No repeat vision inference. Uncertain speech is withheld; original captions remain available."
+          }
+        },
+        {
+          "id": 221,
+          "type": "stat",
+          "title": "Videos with usable speech",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 74
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"speech\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable."
+        },
+        {
+          "id": 222,
+          "type": "stat",
+          "title": "No speech detected",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 74
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"no_speech\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable."
+        },
+        {
+          "id": 223,
+          "type": "stat",
+          "title": "No audio track",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 74
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"no_audio\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable."
+        },
+        {
+          "id": 224,
+          "type": "stat",
+          "title": "Uncertain speech withheld",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 74
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"uncertain_speech\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable."
+        },
+        {
+          "id": 225,
+          "type": "stat",
+          "title": "Audio attempts exhausted",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 74
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"skipped\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable."
+        },
+        {
+          "id": 226,
+          "type": "stat",
+          "title": "Stories saved",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 74
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"story\",state=~\"ok\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Deduped estimated groups with saved visual captions. Speech confidence is automatic, not verified accuracy. Stories retain the visual caption when speech is absent or unusable."
+        },
+        {
+          "id": 227,
+          "type": "stat",
+          "title": "Videos ready for audio",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 78
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_audio_eligible{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+        },
+        {
+          "id": 228,
+          "type": "stat",
+          "title": "Audio checks remaining",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 78
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"pending|inflight|error\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+        },
+        {
+          "id": 229,
+          "type": "stat",
+          "title": "Audio pass complete \u00b7 ready videos",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 78
+          },
+          "targets": [
+            {
+              "expr": "100 * (sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"speech|no_speech|no_audio|uncertain_speech|skipped\"})) / (max(knowledge_index_audio_eligible{instance=~\"$instance\"}) > 0)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+        },
+        {
+          "id": 230,
+          "type": "stat",
+          "title": "Waiting for visual captions",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 78
+          },
+          "targets": [
+            {
+              "expr": "max(knowledge_index_audio_library_videos{instance=~\"$instance\"}) - max(knowledge_index_audio_eligible{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+        },
+        {
+          "id": 231,
+          "type": "stat",
+          "title": "Story merge remaining",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 78
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"story\",state=~\"pending|inflight|error\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+        },
+        {
+          "id": 232,
+          "type": "stat",
+          "title": "Audio queue ETA \u00b7 ready videos",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 78
+          },
+          "targets": [
+            {
+              "expr": "((sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"pending|inflight|error\"})) / (sum(rate(knowledge_index_audio_finished_total{instance=~\"$instance\"}[10m])) > 0)) and on() (time() - max(knowledge_index_audio_updated_timestamp_seconds{instance=~\"$instance\"}) < 120)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+        },
+        {
+          "id": 233,
+          "type": "timeseries",
+          "title": "Audio checked per minute by worker",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 82
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(knowledge_index_audio_finished_total{instance=~\"$instance\",backend=\"mac\"}[10m])) * 60",
+              "legendFormat": "Mac Metal",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(knowledge_index_audio_finished_total{instance=~\"$instance\",backend=\"cpu\"}[10m])) * 60",
+              "legendFormat": "still-fawn CPU",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(knowledge_index_audio_finished_total{instance=~\"$instance\",backend=\"rtx\"}[10m])) * 60",
+              "legendFormat": "RTX CUDA",
+              "refId": "C"
+            },
+            {
+              "expr": "sum(rate(knowledge_index_audio_finished_total{instance=~\"$instance\",backend=\"pve\"}[10m])) * 60",
+              "legendFormat": "PVE CPU",
+              "refId": "D"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 234,
+          "type": "timeseries",
+          "title": "Stories saved and speech found",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 82
+          },
+          "targets": [
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"story\",state=~\"ok\"})",
+              "legendFormat": "Stories saved",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"speech\"})",
+              "legendFormat": "Usable speech",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(knowledge_index_audio_jobs{instance=~\"$instance\",stage=\"audio\",state=~\"uncertain_speech\"})",
+              "legendFormat": "Speech withheld",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 235,
+          "type": "text",
+          "title": "Why this production split",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 90
+          },
+          "targets": [],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "Mac Metal and spare CPU transcribe independently. RTX trials finish before its reserved GPU share returns to Immich search."
+          }
+        },
+        {
+          "id": 236,
+          "type": "stat",
+          "title": "Audio worker report age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 96
+          },
+          "targets": [
+            {
+              "expr": "time() - max(knowledge_index_audio_updated_timestamp_seconds{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 237,
+          "type": "stat",
+          "title": "New visual-caption scan age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 96
+          },
+          "targets": [
+            {
+              "expr": "time() - max(knowledge_index_audio_scan_timestamp_seconds{instance=~\"$instance\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 238,
+          "type": "stat",
+          "title": "Story merge speed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 96
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(knowledge_index_audio_stories_saved_total{instance=~\"$instance\"}[10m])) * 60",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: stories/min",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 239,
+          "type": "stat",
+          "title": "Audio failures \u00b7 last 10m",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 96
+          },
+          "targets": [
+            {
+              "expr": "sum(increase(knowledge_index_audio_errors_total{instance=~\"$instance\"}[10m]))",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
           "id": 137,
           "type": "row",
           "title": "Work remaining & bottleneck",
@@ -2075,7 +3083,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 70
+            "y": 101
           },
           "panels": []
         },
@@ -2091,7 +3099,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 71
+            "y": 102
           },
           "targets": [
             {
@@ -2144,7 +3152,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 71
+            "y": 102
           },
           "targets": [
             {
@@ -2224,7 +3232,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 12,
-            "y": 71
+            "y": 102
           },
           "targets": [
             {
@@ -2278,7 +3286,7 @@ data:
             "h": 4,
             "w": 7,
             "x": 17,
-            "y": 71
+            "y": 102
           },
           "targets": [
             {
@@ -2333,7 +3341,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 0,
-            "y": 75
+            "y": 106
           },
           "targets": [
             {
@@ -2388,7 +3396,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 0,
-            "y": 80
+            "y": 111
           },
           "targets": [
             {
@@ -2443,7 +3451,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 8,
-            "y": 75
+            "y": 106
           },
           "targets": [
             {
@@ -2498,7 +3506,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 8,
-            "y": 80
+            "y": 111
           },
           "targets": [
             {
@@ -2553,7 +3561,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 16,
-            "y": 75
+            "y": 106
           },
           "targets": [
             {
@@ -2608,7 +3616,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 16,
-            "y": 80
+            "y": 111
           },
           "targets": [
             {
@@ -2660,7 +3668,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 85
+            "y": 116
           },
           "panels": []
         },
@@ -2676,7 +3684,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 0,
-            "y": 86
+            "y": 117
           },
           "targets": [
             {
@@ -2726,7 +3734,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 6,
-            "y": 86
+            "y": 117
           },
           "targets": [
             {
@@ -2790,7 +3798,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 12,
-            "y": 86
+            "y": 117
           },
           "targets": [
             {
@@ -2900,7 +3908,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 18,
-            "y": 86
+            "y": 117
           },
           "targets": [
             {
@@ -2957,7 +3965,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 91
+            "y": 122
           },
           "targets": [
             {
@@ -3011,7 +4019,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 91
+            "y": 122
           },
           "targets": [
             {
@@ -3064,7 +4072,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 91
+            "y": 122
           },
           "targets": [
             {
@@ -3117,7 +4125,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 91
+            "y": 122
           },
           "targets": [
             {
@@ -3170,7 +4178,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 95
+            "y": 126
           },
           "targets": [
             {
@@ -3252,7 +4260,7 @@ data:
             "h": 7,
             "w": 14,
             "x": 10,
-            "y": 95
+            "y": 126
           },
           "targets": [
             {
@@ -3375,7 +4383,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 102
+            "y": 133
           },
           "targets": [
             {
@@ -3426,7 +4434,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 102
+            "y": 133
           },
           "targets": [
             {
@@ -3479,7 +4487,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 102
+            "y": 133
           },
           "targets": [
             {
@@ -3532,7 +4540,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 106
+            "y": 137
           },
           "targets": [
             {
@@ -3608,7 +4616,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 112
+            "y": 143
           },
           "targets": [
             {
@@ -3659,7 +4667,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 112
+            "y": 143
           },
           "targets": [
             {
@@ -3710,7 +4718,7 @@ data:
             "h": 6,
             "w": 14,
             "x": 0,
-            "y": 118
+            "y": 149
           },
           "targets": [
             {
@@ -3771,7 +4779,7 @@ data:
             "h": 6,
             "w": 10,
             "x": 14,
-            "y": 118
+            "y": 149
           },
           "targets": [
             {
@@ -3824,7 +4832,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 124
+            "y": 155
           },
           "targets": [
             {
@@ -3878,7 +4886,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 124
+            "y": 155
           },
           "targets": [
             {
@@ -3932,7 +4940,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 124
+            "y": 155
           },
           "targets": [
             {
@@ -3986,7 +4994,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 132
+            "y": 163
           },
           "targets": [
             {
@@ -4038,7 +5046,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 132
+            "y": 163
           },
           "targets": [
             {
@@ -4118,7 +5126,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 132
+            "y": 163
           },
           "targets": [
             {
@@ -4171,7 +5179,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 132
+            "y": 163
           },
           "targets": [
             {
@@ -4224,7 +5232,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 132
+            "y": 163
           },
           "targets": [
             {
@@ -4275,7 +5283,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 136
+            "y": 167
           },
           "panels": []
         },
@@ -4291,7 +5299,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 137
+            "y": 168
           },
           "targets": [
             {
@@ -4375,7 +5383,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 137
+            "y": 168
           },
           "targets": [
             {
@@ -4452,7 +5460,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 137
+            "y": 168
           },
           "targets": [
             {
@@ -4522,7 +5530,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 144
+            "y": 175
           },
           "panels": []
         },
@@ -4538,7 +5546,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 145
+            "y": 176
           },
           "targets": [
             {
@@ -4589,7 +5597,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 145
+            "y": 176
           },
           "targets": [
             {
@@ -4640,7 +5648,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 145
+            "y": 176
           },
           "targets": [
             {
@@ -4691,7 +5699,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 145
+            "y": 176
           },
           "targets": [
             {
@@ -4742,7 +5750,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 145
+            "y": 176
           },
           "targets": [
             {
@@ -4793,7 +5801,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 145
+            "y": 176
           },
           "targets": [
             {
@@ -4844,7 +5852,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 149
+            "y": 180
           },
           "targets": [
             {
@@ -4894,7 +5902,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 149
+            "y": 180
           },
           "targets": [
             {
@@ -4944,7 +5952,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 149
+            "y": 180
           },
           "targets": [
             {
@@ -4994,7 +6002,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 149
+            "y": 180
           },
           "targets": [
             {
@@ -5045,7 +6053,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 149
+            "y": 180
           },
           "targets": [
             {
@@ -5095,7 +6103,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 153
+            "y": 184
           },
           "targets": [
             {
@@ -5150,7 +6158,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 153
+            "y": 184
           },
           "targets": [
             {
@@ -5201,7 +6209,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 160
+            "y": 191
           },
           "panels": []
         },
@@ -5217,7 +6225,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 161
+            "y": 192
           },
           "targets": [
             {
@@ -5320,7 +6328,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 161
+            "y": 192
           },
           "targets": [
             {
@@ -5372,7 +6380,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 161
+            "y": 192
           },
           "targets": [
             {
@@ -5433,7 +6441,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 161
+            "y": 192
           },
           "targets": [
             {
@@ -5486,7 +6494,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 165
+            "y": 196
           },
           "targets": [
             {
@@ -5591,7 +6599,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 175
+            "y": 206
           },
           "targets": [
             {
@@ -5645,7 +6653,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 175
+            "y": 206
           },
           "targets": [
             {
@@ -5756,7 +6764,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 181
+            "y": 212
           },
           "targets": [
             {
@@ -5818,7 +6826,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 181
+            "y": 212
           },
           "targets": [
             {
@@ -5871,7 +6879,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 188
+            "y": 219
           },
           "targets": [
             {
@@ -5933,7 +6941,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 188
+            "y": 219
           },
           "targets": [
             {
@@ -5983,7 +6991,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 195
+            "y": 226
           },
           "panels": []
         },
@@ -5999,7 +7007,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 196
+            "y": 227
           },
           "targets": [
             {
@@ -6092,7 +7100,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 196
+            "y": 227
           },
           "targets": [
             {
@@ -6153,7 +7161,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 196
+            "y": 227
           },
           "targets": [
             {
@@ -6206,7 +7214,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 196
+            "y": 227
           },
           "targets": [
             {
@@ -6259,7 +7267,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 200
+            "y": 231
           },
           "targets": [
             {
@@ -6321,7 +7329,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 200
+            "y": 231
           },
           "targets": [
             {
@@ -6407,7 +7415,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 207
+            "y": 238
           },
           "targets": [
             {
@@ -6462,7 +7470,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 207
+            "y": 238
           },
           "targets": [
             {
@@ -6515,7 +7523,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 214
+            "y": 245
           },
           "targets": [
             {
@@ -6569,7 +7577,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 214
+            "y": 245
           },
           "targets": [
             {
@@ -6622,7 +7630,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 214
+            "y": 245
           },
           "targets": [
             {
@@ -6673,7 +7681,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 240
+            "y": 271
           },
           "panels": []
         },
@@ -6689,7 +7697,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 241
+            "y": 272
           },
           "targets": [
             {
@@ -6758,7 +7766,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 241
+            "y": 272
           },
           "targets": [
             {
@@ -6811,7 +7819,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 241
+            "y": 272
           },
           "targets": [
             {
@@ -6864,7 +7872,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 241
+            "y": 272
           },
           "targets": [
             {
@@ -6918,7 +7926,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 245
+            "y": 276
           },
           "targets": [
             {
@@ -6972,7 +7980,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 245
+            "y": 276
           },
           "targets": [
             {
@@ -7022,7 +8030,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 221
+            "y": 252
           },
           "panels": []
         },
@@ -7038,7 +8046,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 222
+            "y": 253
           },
           "targets": [
             {
@@ -7087,7 +8095,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 222
+            "y": 253
           },
           "targets": [
             {
@@ -7141,7 +8149,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 229
+            "y": 260
           },
           "targets": [
             {
@@ -7205,7 +8213,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 229
+            "y": 260
           },
           "targets": [
             {
@@ -7254,7 +8262,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 229
+            "y": 260
           },
           "targets": [
             {
@@ -7303,7 +8311,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 229
+            "y": 260
           },
           "targets": [
             {
@@ -7360,7 +8368,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 233
+            "y": 264
           },
           "targets": [
             {
@@ -7409,7 +8417,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 233
+            "y": 264
           },
           "targets": [
             {
@@ -7455,7 +8463,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 252
+            "y": 283
           },
           "panels": []
         },
@@ -7471,7 +8479,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 253
+            "y": 284
           },
           "targets": [
             {
@@ -7521,7 +8529,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 253
+            "y": 284
           },
           "targets": [
             {
@@ -7575,7 +8583,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 253
+            "y": 284
           },
           "targets": [
             {
@@ -7624,7 +8632,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 253
+            "y": 284
           },
           "targets": [
             {
@@ -7673,7 +8681,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 253
+            "y": 284
           },
           "targets": [
             {
@@ -7723,7 +8731,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 253
+            "y": 284
           },
           "targets": [
             {
@@ -7772,7 +8780,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 257
+            "y": 288
           },
           "targets": [
             {
@@ -7836,7 +8844,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 257
+            "y": 288
           },
           "targets": [
             {
@@ -7885,7 +8893,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 257
+            "y": 288
           },
           "targets": [
             {
@@ -7935,7 +8943,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 257
+            "y": 288
           },
           "targets": [
             {
@@ -7984,7 +8992,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 257
+            "y": 288
           },
           "targets": [
             {
@@ -8033,7 +9041,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 257
+            "y": 288
           },
           "targets": [
             {
@@ -8086,7 +9094,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 261
+            "y": 292
           },
           "targets": [
             {
@@ -8145,7 +9153,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 261
+            "y": 292
           },
           "targets": [
             {
@@ -8194,7 +9202,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 261
+            "y": 292
           },
           "targets": [
             {
@@ -8241,7 +9249,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 268
+            "y": 299
           },
           "panels": []
         },
@@ -8257,7 +9265,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 269
+            "y": 300
           },
           "targets": [
             {
@@ -8311,7 +9319,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 269
+            "y": 300
           },
           "targets": [
             {
@@ -8361,7 +9369,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 269
+            "y": 300
           },
           "targets": [
             {
@@ -8419,7 +9427,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 269
+            "y": 300
           },
           "targets": [
             {
@@ -8469,7 +9477,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 269
+            "y": 300
           },
           "targets": [
             {
@@ -8527,7 +9535,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 269
+            "y": 300
           },
           "targets": [
             {
@@ -8581,7 +9589,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 273
+            "y": 304
           },
           "targets": [
             {
@@ -8649,7 +9657,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 273
+            "y": 304
           },
           "targets": [
             {
@@ -8699,7 +9707,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 273
+            "y": 304
           },
           "targets": [
             {
@@ -8758,7 +9766,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 273
+            "y": 304
           },
           "targets": [
             {
@@ -8808,7 +9816,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 273
+            "y": 304
           },
           "targets": [
             {
@@ -8857,7 +9865,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 273
+            "y": 304
           },
           "targets": [
             {
@@ -8906,7 +9914,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -8975,7 +9983,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -9043,7 +10051,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -9111,7 +10119,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -9175,7 +10183,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -9226,7 +10234,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -9277,7 +10285,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 277
+            "y": 308
           },
           "targets": [
             {
@@ -9327,7 +10335,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 281
+            "y": 312
           },
           "targets": [
             {
@@ -9376,7 +10384,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 281
+            "y": 312
           },
           "targets": [
             {
@@ -9430,7 +10438,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 288
+            "y": 319
           },
           "targets": [
             {
@@ -9484,7 +10492,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 288
+            "y": 319
           },
           "targets": [
             {
@@ -9530,7 +10538,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 295
+            "y": 326
           },
           "panels": []
         },
@@ -9546,7 +10554,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 296
+            "y": 327
           },
           "targets": [
             {
@@ -9614,7 +10622,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 296
+            "y": 327
           },
           "targets": [
             {
@@ -9671,7 +10679,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 296
+            "y": 327
           },
           "targets": [
             {
@@ -9720,7 +10728,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 296
+            "y": 327
           },
           "targets": [
             {
@@ -9769,7 +10777,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 296
+            "y": 327
           },
           "targets": [
             {
@@ -9818,7 +10826,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 296
+            "y": 327
           },
           "targets": [
             {
@@ -9868,7 +10876,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 300
+            "y": 331
           },
           "panels": []
         },
@@ -9884,7 +10892,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 301
+            "y": 332
           },
           "targets": [
             {
@@ -9934,7 +10942,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 301
+            "y": 332
           },
           "targets": [
             {
@@ -9983,7 +10991,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 301
+            "y": 332
           },
           "targets": [
             {
@@ -10032,7 +11040,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 301
+            "y": 332
           },
           "targets": [
             {
@@ -10085,7 +11093,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 301
+            "y": 332
           },
           "targets": [
             {
@@ -10134,7 +11142,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 301
+            "y": 332
           },
           "targets": [
             {
@@ -10184,7 +11192,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 305
+            "y": 336
           },
           "targets": [
             {
@@ -10234,7 +11242,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 305
+            "y": 336
           },
           "targets": [
             {
@@ -10280,7 +11288,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 313
+            "y": 344
           },
           "panels": []
         },
@@ -10296,7 +11304,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 314
+            "y": 345
           },
           "targets": [
             {
@@ -10345,7 +11353,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 314
+            "y": 345
           },
           "targets": [
             {
@@ -10398,7 +11406,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 314
+            "y": 345
           },
           "targets": [
             {
@@ -10447,7 +11455,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 314
+            "y": 345
           },
           "targets": [
             {
@@ -10497,7 +11505,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 314
+            "y": 345
           },
           "targets": [
             {
@@ -10561,7 +11569,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 314
+            "y": 345
           },
           "targets": [
             {
@@ -10610,7 +11618,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 318
+            "y": 349
           },
           "targets": [
             {
@@ -10745,7 +11753,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 326
+            "y": 357
           },
           "targets": [
             {
@@ -10799,7 +11807,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 326
+            "y": 357
           },
           "targets": [
             {
@@ -10850,7 +11858,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 334
+            "y": 365
           },
           "panels": []
         },
@@ -10866,7 +11874,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 335
+            "y": 366
           },
           "targets": [
             {
@@ -10930,7 +11938,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 335
+            "y": 366
           },
           "targets": [
             {
@@ -10979,7 +11987,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 335
+            "y": 366
           },
           "targets": [
             {
@@ -11047,7 +12055,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 335
+            "y": 366
           },
           "targets": [
             {
@@ -11096,7 +12104,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 335
+            "y": 366
           },
           "targets": [
             {
@@ -11145,7 +12153,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 335
+            "y": 366
           },
           "targets": [
             {
@@ -11195,7 +12203,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 339
+            "y": 370
           },
           "targets": [
             {
@@ -11241,7 +12249,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 345
+            "y": 376
           },
           "panels": []
         },
@@ -11257,7 +12265,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 346
+            "y": 377
           },
           "targets": [
             {
@@ -11325,7 +12333,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 346
+            "y": 377
           },
           "targets": [
             {
@@ -11374,7 +12382,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 346
+            "y": 377
           },
           "targets": [
             {
@@ -11433,7 +12441,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 350
+            "y": 381
           },
           "targets": [
             {
@@ -11482,7 +12490,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 356
+            "y": 387
           },
           "targets": [
             {
@@ -11528,7 +12536,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 362
+            "y": 393
           },
           "panels": []
         },
@@ -11544,7 +12552,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 363
+            "y": 394
           },
           "targets": [
             {
@@ -11599,7 +12607,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 363
+            "y": 394
           },
           "targets": [
             {
@@ -11656,7 +12664,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 363
+            "y": 394
           },
           "targets": [
             {
