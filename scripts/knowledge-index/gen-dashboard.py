@@ -559,10 +559,10 @@ def audio_story_panels():
       ('Videos ready for audio',eligible,0,'locale'),
       ('Audio checks remaining',remaining,4,'locale'),
       ('Audio pass complete · ready videos','100 * ('+done+') / ('+eligible+' > 0)',8,'percent'),
-      ('Waiting for visual captions','max(knowledge_index_audio_library_videos'+INST+') - '+eligible,12,'locale'),
+      ('Awaiting any visual caption','max(knowledge_index_audio_library_videos'+INST+') - '+eligible,12,'locale'),
       ('Story merge remaining',jobs('story','pending|inflight|error'),16,'locale'),
       ('Audio queue ETA · ready videos',eta,20,'s')]:
-        p.append(stat(title,expr,x,8,w=4,unit=unit,description='The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible.'))
+        p.append(stat(title,expr,x,8,w=4,unit=unit,description='Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible.'))
     p += [series('Audio checked per minute by worker',
            [('sum(rate(knowledge_index_audio_finished_total{instance=~"$instance",backend="'+backend+'"}[10m])) * 60',label)
             for backend,label in [('mac','Mac Metal'),('cpu','still-fawn CPU'),('rtx','RTX CUDA'),('pve','PVE CPU')]],0,12,12,8),

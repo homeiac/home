@@ -1,0 +1,77 @@
+{
+  "story": "Use saved visual captions plus timestamped speech to recall the event. Keep original captions and full transcripts separately; uncertain or repetitive ASR is withheld. The backfill never sends images to a model.",
+  "decision": "Mac Metal does most transcription; spare still-fawn CPU adds independent capacity. The RTX was benchmarked with a reserved share, then returned to Immich so semantic search stays available. One audio request per backend and a separate text-only story merger. No-audio and unusable-speech videos retain their visual account.",
+  "method": "Six fixed private clips capped at their first 30 seconds plus a 10-second silence control: 151.93 source seconds. Whisper small Q5_1 multilingual, Silero VAD, two CPU threads, warm model servers (first-request warmup may remain), beam 1. One cell per clip/backend under live host contention; extraction excluded, HTTP transfer included. Beam 3 uses a matched 70-second subset only; compare its overlapping cells separately. No reference word-error-rate or full-video accuracy score.",
+  "trials": [
+    {
+      "backend": "cpu",
+      "beam": 1,
+      "clips": 7,
+      "wall_seconds": 147.42,
+      "source_seconds": 151.93,
+      "realtime_multiple": 1.03
+    },
+    {
+      "backend": "cpu",
+      "beam": 3,
+      "clips": 3,
+      "wall_seconds": 116.96,
+      "source_seconds": 70.0,
+      "realtime_multiple": 0.6
+    },
+    {
+      "backend": "mac",
+      "beam": 1,
+      "clips": 7,
+      "wall_seconds": 7.9,
+      "source_seconds": 151.93,
+      "realtime_multiple": 19.23
+    },
+    {
+      "backend": "mac",
+      "beam": 3,
+      "clips": 3,
+      "wall_seconds": 3.2,
+      "source_seconds": 70.0,
+      "realtime_multiple": 21.87
+    },
+    {
+      "backend": "rtx",
+      "beam": 1,
+      "clips": 7,
+      "wall_seconds": 26.73,
+      "source_seconds": 151.93,
+      "realtime_multiple": 5.68
+    },
+    {
+      "backend": "rtx",
+      "beam": 3,
+      "clips": 3,
+      "wall_seconds": 20.69,
+      "source_seconds": 70.0,
+      "realtime_multiple": 3.38
+    }
+  ],
+  "paired_decoding": [
+    {
+      "backend": "cpu",
+      "clips": 3,
+      "beam1_seconds": 72.18,
+      "beam3_seconds": 116.96
+    },
+    {
+      "backend": "mac",
+      "clips": 3,
+      "beam1_seconds": 3.24,
+      "beam3_seconds": 3.2
+    },
+    {
+      "backend": "rtx",
+      "clips": 3,
+      "beam1_seconds": 9.01,
+      "beam3_seconds": 20.69
+    }
+  ],
+  "story_prompt_pairs": 3,
+  "quality": "Reviewed paired text outputs against saved visual captions and automatic speech, not a human-labelled audio reference. Repetition, language confidence below 0.45 and low segment confidence are withheld. Source language is preserved; stories distinguish observations from spoken claims."
+}

@@ -10,5 +10,6 @@
     "mac": "http://127.0.0.1:19477",
     "cpu": "https://whisper-cpu.app.home.panderosystems.com"
   },
-  "beam": 1
+  "beam": 1,
+  "story_version": "audio-story-v2"
 }

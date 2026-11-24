@@ -53,7 +53,7 @@ class AudioTests(unittest.TestCase):
   from unittest.mock import MagicMock
   with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',transcript=?",[json.dumps([dict(start=0,end=1,text='Look at the monkey')])])
   row=worker.claim('story','mac',self.config,self.root)
-  response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps({'choices':[{'message':{'content':json.dumps({'story':'A group walks through a forest; someone mentions a monkey.'})}}]}).encode()
+  response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps({'choices':[{'message':{'content':json.dumps({'spoken_context':'Someone mentions a monkey.'})}}]}).encode()
   with patch.object(worker.Path,'read_text',return_value='test-only'),patch.object(worker.urllib.request,'urlopen',return_value=response) as call:
    worker.story_job(row,dict(self.config,story_model='bonsai-27b-metal'),self.root)
   body=json.loads(call.call_args.args[0].data)
@@ -73,5 +73,25 @@ class AudioTests(unittest.TestCase):
    d.execute("UPDATE jobs SET audio_state='speech',story_state='ok' WHERE active=1")
   worker.discover(self.config,self.root,index)
   with worker.connect(self.root) as d:self.assertEqual(d.execute("SELECT count(*) FROM jobs WHERE active=1 AND audio_state='speech'").fetchone()[0],1)
+
+ def test_luna_caption_is_used_without_local_and_local_supersedes_it(self):
+  import duckdb
+  index=self.root/'knowledge-index';index.mkdir()
+  luna=self.root/'photo-enrichment/luna-backfill/luna_codex_captions';luna.mkdir(parents=True)
+  with duckdb.connect(str(index/'knowledge.duckdb')) as d:
+   d.execute('CREATE TABLE gphotos_files(path VARCHAR,name VARCHAR,size_bytes BIGINT,kind VARCHAR,ext VARCHAR)')
+   d.execute("INSERT INTO gphotos_files VALUES ('Google Photos/Photos from 2020/b.mp4','b.mp4',4,'media','mp4')")
+   d.execute('CREATE TABLE media_summaries(source VARCHAR,path VARCHAR,size_bytes BIGINT,summary VARCHAR,duration_s DOUBLE,created_at TIMESTAMP,status VARCHAR)')
+   d.execute("COPY (SELECT 'Google Photos/Photos from 2020/b.mp4' source_path,4 size_bytes,'A forest walk' summary,now() finished_at,'ok' state) TO ? (FORMAT PARQUET)",[str(luna/'a.parquet')])
+  worker.discover(self.config,self.root,index)
+  with worker.connect(self.root) as d:
+   self.assertEqual(d.execute('SELECT visual_source FROM jobs WHERE active=1').fetchone()[0],'luna')
+   d.execute("UPDATE jobs SET audio_state='speech',story_state='ok' WHERE active=1")
+  with duckdb.connect(str(index/'knowledge.duckdb')) as d:
+   d.execute("INSERT INTO media_summaries VALUES ('gphotos','Google Photos/Photos from 2020/b.mp4',4,'A clearer forest walk',10,now(),'ok')")
+  worker.discover(self.config,self.root,index)
+  with worker.connect(self.root) as d:
+   r=d.execute('SELECT visual_source,audio_state,story_state FROM jobs WHERE active=1').fetchone()
+   self.assertEqual(tuple(r),('local','speech','pending'))
 
 if __name__=='__main__':unittest.main()

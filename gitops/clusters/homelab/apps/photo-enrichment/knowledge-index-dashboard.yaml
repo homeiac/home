@@ -2114,7 +2114,7 @@ data:
           },
           "options": {
             "mode": "markdown",
-            "content": "Whisper adds timestamped speech to saved visual captions. No repeat vision inference. Uncertain speech is withheld; original captions remain available."
+            "content": "Use saved visual captions plus timestamped speech to recall the event. Keep original captions and full transcripts separately; uncertain or repetitive ASR is withheld. The backfill never sends images to a model."
           }
         },
         {
@@ -2465,7 +2465,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+          "description": "Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
         },
         {
           "id": 228,
@@ -2515,7 +2515,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+          "description": "Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
         },
         {
           "id": 229,
@@ -2565,12 +2565,12 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+          "description": "Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
         },
         {
           "id": 230,
           "type": "stat",
-          "title": "Waiting for visual captions",
+          "title": "Awaiting any visual caption",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -2615,7 +2615,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+          "description": "Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
         },
         {
           "id": 231,
@@ -2665,7 +2665,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+          "description": "Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
         },
         {
           "id": 232,
@@ -2715,7 +2715,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The available queue grows as visual captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
+          "description": "Uses an existing local or Luna visual caption, preferring local when available. The queue grows as captions finish; discovery runs every five minutes. ETA uses successful audio checks over ten minutes and excludes videos still awaiting vision; skipped checks are separately visible."
         },
         {
           "id": 233,
@@ -2842,6 +2842,73 @@ data:
         },
         {
           "id": 235,
+          "type": "bargauge",
+          "title": "Whisper \u00b7 matched audio processing speed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 90
+          },
+          "targets": [
+            {
+              "expr": "vector(1.03)",
+              "legendFormat": "cpu",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(19.23)",
+              "legendFormat": "mac",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(5.68)",
+              "legendFormat": "rtx",
+              "refId": "C",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: x realtime",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "description": "Six fixed private clips capped at their first 30 seconds plus a 10-second silence control: 151.93 source seconds. Whisper small Q5_1 multilingual, Silero VAD, two CPU threads, warm model servers (first-request warmup may remain), beam 1. One cell per clip/backend under live host contention; extraction excluded, HTTP transfer included. Beam 3 uses a matched 70-second subset only; compare its overlapping cells separately. No reference word-error-rate or full-video accuracy score."
+        },
+        {
+          "id": 236,
           "type": "text",
           "title": "Why this production split",
           "datasource": {
@@ -2875,11 +2942,11 @@ data:
           },
           "options": {
             "mode": "markdown",
-            "content": "Mac Metal and spare CPU transcribe independently. RTX trials finish before its reserved GPU share returns to Immich search."
+            "content": "Mac Metal does most transcription; spare still-fawn CPU adds independent capacity. The RTX was benchmarked with a reserved share, then returned to Immich so semantic search stays available. One audio request per backend and a separate text-only story merger. No-audio and unusable-speech videos retain their visual account."
           }
         },
         {
-          "id": 236,
+          "id": 237,
           "type": "stat",
           "title": "Audio worker report age",
           "datasource": {
@@ -2928,7 +2995,7 @@ data:
           }
         },
         {
-          "id": 237,
+          "id": 238,
           "type": "stat",
           "title": "New visual-caption scan age",
           "datasource": {
@@ -2977,7 +3044,7 @@ data:
           }
         },
         {
-          "id": 238,
+          "id": 239,
           "type": "stat",
           "title": "Story merge speed",
           "datasource": {
@@ -3026,7 +3093,7 @@ data:
           }
         },
         {
-          "id": 239,
+          "id": 240,
           "type": "stat",
           "title": "Audio failures \u00b7 last 10m",
           "datasource": {
