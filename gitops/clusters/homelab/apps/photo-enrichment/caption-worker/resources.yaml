@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-dc51c284ce09
+  name: caption-worker-513aa7dce3e8
   namespace: monitoring
 data:
   bundle.json: '{"caption_completion.py": "\"\"\"Caption coverage with the existing Takeout filename/size copy assumption.\n\nKeep
@@ -31,13 +31,13 @@ data:
     END)::BIGINT AS total,\n            sum(CASE WHEN complete THEN CASE s.scope WHEN ''deduplicated'' THEN 1 ELSE copies
     END\n                     ELSE 0 END)::BIGINT AS complete\n        FROM coverage CROSS JOIN (VALUES (''deduplicated''),(''including_copies''))
     s(scope)\n        GROUP BY kind,model,s.scope ORDER BY kind,model,s.scope\n    \"\"\", params).fetchall()\n", "config.json":
-    "{\n  \"enabled\": true,\n  \"index\": \"/local-3TB-backup/knowledge-index\",\n  \"library\": \"/local-3TB-backup/gphotos/library\",\n  \"model\":
+    "{\n  \"enabled\": false,\n  \"index\": \"/local-3TB-backup/knowledge-index\",\n  \"library\": \"/local-3TB-backup/gphotos/library\",\n  \"model\":
     \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\": 2,\n  \"batch_size\": 16,\n  \"mac_assist\":
-    true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\"think\": false, \"options\": {\"num_ctx\": 8192, \"num_predict\": 384,
-    \"temperature\": 0.2}}\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\": 48,\n  \"mac_routing\":
-    \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env python3\n\"\"\"Prometheus
-    textfile metrics for the knowledge index (issue #212). Runs on the Proxmox host, scraped via node-exporter.\n\nUsage:
-    export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index
+    true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\n    \"think\": false,\n    \"options\": {\n      \"num_ctx\": 8192,\n      \"num_predict\":
+    384,\n      \"temperature\": 0.2\n    }\n  }\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\":
+    48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env
+    python3\n\"\"\"Prometheus textfile metrics for the knowledge index (issue #212). Runs on the Proxmox host, scraped via
+    node-exporter.\n\nUsage: export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index
     dataset mount (default: from `zfs get mountpoint local-3TB-backup/knowledge-index`)\n  --photos   photos dataset mount            (default:
     from `zfs get mountpoint local-3TB-backup/gphotos`)\n  --out      textfile (default /var/lib/prometheus/node-exporter/knowledge_index.prom;
     written atomically, tmp + rename)\n  --enrichers  extra enricher ids to report queue size for (also KI_ENRICHERS env,
@@ -585,7 +585,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-dc51c284ce09
+  name: caption-worker-513aa7dce3e8
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -640,7 +640,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-dc51c284ce09
+          name: caption-worker-513aa7dce3e8
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -715,7 +715,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-dc51c284ce09
+              name: caption-worker-513aa7dce3e8
           - name: credentials
             secret:
               secretName: caption-worker-deploy

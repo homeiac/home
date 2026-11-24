@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "index": "/local-3TB-backup/knowledge-index",
   "library": "/local-3TB-backup/gphotos/library",
   "model": "bonsai-27b",
@@ -9,5 +9,12 @@
   "batch_size": 16,
   "mac_assist": true,
   "min_free_mib": 3000,
-  "extra": {"think": false, "options": {"num_ctx": 8192, "num_predict": 384, "temperature": 0.2}}
+  "extra": {
+    "think": false,
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 384,
+      "temperature": 0.2
+    }
+  }
 }
