@@ -94,7 +94,7 @@ spec:
         runtimeClassName: nvidia
       controllers:
         main:
-          replicas: 0  # Temporary: release one accounted share for Whisper live trials.
+          replicas: 1
           strategy: Recreate
           containers:
             main:

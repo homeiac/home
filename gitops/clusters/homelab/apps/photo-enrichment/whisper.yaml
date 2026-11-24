@@ -4,7 +4,7 @@ metadata:
   name: photo-whisper
   namespace: immich-pilot
 spec:
-  replicas: 1
+  replicas: 0  # RTX benchmark complete; preserve existing Immich GPU share.
   strategy:
     type: Recreate
   selector:
