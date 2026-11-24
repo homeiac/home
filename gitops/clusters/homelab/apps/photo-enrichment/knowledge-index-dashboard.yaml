@@ -2399,8 +2399,15 @@ data:
             },
             {
               "expr": "max(media_pipeline_mac_request_limit{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and on(instance,enricher,job) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))",
-              "legendFormat": "Available request capacity",
+              "legendFormat": "Photo request capacity",
               "refId": "B",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "max(media_pipeline_mac_video_request_limit{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} and on(instance,enricher,job) (time() - media_pipeline_heartbeat_timestamp_seconds{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} < 60) and on(instance,enricher,job) (media_pipeline_running{instance=~\"$instance\",enricher=~\"$pipeline_enricher\"} == 1))",
+              "legendFormat": "Video request cap",
+              "refId": "C",
               "instant": true,
               "range": false
             }

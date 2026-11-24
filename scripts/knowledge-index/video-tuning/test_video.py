@@ -5,6 +5,8 @@ import sys
 import unittest
 from unittest.mock import patch
 import io
+import threading
+import time
 from PIL import Image
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'enrichers'))
@@ -70,5 +72,21 @@ class VideoTests(unittest.TestCase):
         self.assertIs(m.video_preview(raw,1024),raw)
         with Image.open(io.BytesIO(m.video_preview(raw,768))) as resized:
             self.assertEqual(resized.size,(768,432))
+
+    def test_mac_video_cap_preserves_photo_capacity_and_unique_dispatch(self):
+        lock=threading.Lock();active=dict(video=0,all=0);peak=dict(video=0,all=0)
+        def task(row):
+            video=row['ext']=='mov'
+            with lock:
+                active['all']+=1;active['video']+=video
+                for k in peak:peak[k]=max(peak[k],active[k])
+            time.sleep(.02)
+            with lock:active['all']-=1;active['video']-=video
+            return dict(status='ok')
+        rows=[dict(path=str(i),ext='mov' if i%2==0 else 'jpg') for i in range(16)]
+        results=list(m.split_batch(rows,0,4,task,task,mac_video_slots=1))
+        self.assertEqual(peak['video'],1)
+        self.assertEqual(peak['all'],4)
+        self.assertEqual(len({r['path'] for r,_ in results}),16)
 
 if __name__=='__main__':unittest.main()

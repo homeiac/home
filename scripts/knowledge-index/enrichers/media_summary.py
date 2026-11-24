@@ -337,7 +337,7 @@ def mac_route(args):
     return 0, None
 
 
-def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False):
+def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False, mac_video_slots=None):
     """Keep slots fed across queue reads. Retry interrupted Mac work on the RTX."""
     pending = deque(rows)
     retry = deque()
@@ -355,9 +355,14 @@ def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, 
                     refill = None
             candidates = retry if backend == "primary" and retry else pending
             if candidates:
-                if backend == "metal" and prefer_photos:
+                video_full = backend == 'metal' and mac_video_slots is not None and sum(
+                    b == 'metal' and r['ext'] in VIDEO_EXTS for b, r in active.values()) >= mac_video_slots
+                if backend == "metal" and (prefer_photos or video_full):
                     # Long visual prompts take substantially longer on the Mac.
-                    photo = next((i for i, row in enumerate(candidates) if row["ext"] not in VIDEO_EXTS), 0)
+                    photo = next((i for i, row in enumerate(candidates) if row["ext"] not in VIDEO_EXTS), None)
+                    if video_full and photo is None:
+                        return
+                    photo = photo if photo is not None else 0
                     row = candidates[photo]
                     del candidates[photo]
                 else:
@@ -384,6 +389,9 @@ def split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, 
             primary_active = sum(backend == "primary" for backend, _ in active.values())
             for _ in range(min(len(retry), primary_slots - primary_active)):
                 submit("primary")
+            # A later page may bring photos while the single video slot is busy.
+            for _ in range(mac_slots - sum(backend == 'metal' for backend, _ in active.values())):
+                submit('metal')
 
 
 def persist(batch, args, metrics, seen):
@@ -484,7 +492,8 @@ def run(a):
             dispatch_mode, dispatch_size, mac_routing = settings
             metrics.dispatch_policy(*settings, queue_order=queue_order)
             mac_slots, metal_args.model_headers = mac_route(a)
-            metrics.mac_capacity(mac_slots)
+            mac_video_limit = getattr(a, 'mac_video_parallel', None)
+            metrics.mac_capacity(mac_slots, min(mac_slots, mac_video_limit) if mac_video_limit else mac_slots)
             fetch_size = a.batch_size
             if mac_slots:
                 fetch_size = dispatch_size or max(a.batch_size, 4 * (a.parallel + mac_slots))
@@ -514,6 +523,7 @@ def run(a):
                 rows, a.parallel, mac_slots, primary, metal,
                 refill=refill if mac_slots and dispatch_mode == "continuous" else None,
                 prefer_photos=mac_routing == "photo-first",
+                mac_video_slots=mac_video_limit,
             ):
                 done += result["status"] == "ok"
                 errors += result["status"] != "ok"
@@ -560,6 +570,8 @@ def main(argv):
     ap.add_argument('--video-edge', type=int, choices=(768, 1024), default=1024)
     ap.add_argument('--video-prompt', choices=('baseline', 'story'), default='baseline')
     ap.add_argument('--video-tokens', type=int, choices=(192, 256, 384), default=384)
+    ap.add_argument('--mac-video-parallel', type=int, choices=(1, 2, 4), default=None,
+                    help='Cap Mac video requests while allowing the discovered photo capacity')
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
     ap.add_argument("--api", choices=["openai", "ollama"], default="openai", help="openai = /v1/chat/completions; ollama = native /api/chat (honors think:false)")

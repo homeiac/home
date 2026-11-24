@@ -86,7 +86,7 @@ for 768px/one request (+55.5%). At the selected input settings, one/two/four req
 measured 4.79/4.82/4.85 clips/minute. The observed p95 values (only six requests per
 cell) were 14.33/26.38/69.43 seconds. Select one offered request: additional concurrency
 gained under 2% while lengthening waits. The server still has four allocated contexts;
-only the offered production request count changes. Mac memory pressure remained normal.
+the production dispatcher caps videos at one request while retaining four-photo capacity. Mac memory pressure remained normal.
 
 Four-frame candidates were faster but omitted useful event detail. Literal
 frame-by-frame prompts were less useful for recall. The retained story prompt

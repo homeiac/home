@@ -69,7 +69,8 @@ def main() -> None:
                 and not any('knowledge_index_caption_completion{' in t['expr'] for t in panel.get('targets', []))):
             continue
         for target in panel.get('targets', []):
-            expr = target['expr'].replace('$instance', '.*').replace('$__rate_interval', '5m')
+            expr = (target['expr'].replace('$instance', '.*').replace('$pipeline_enricher', '.*')
+                    .replace('$__rate_interval', '5m'))
             path = '/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?'
             result = kubectl('get', '--raw', path + urllib.parse.urlencode({'query': expr}))
             if result['status'] != 'success':

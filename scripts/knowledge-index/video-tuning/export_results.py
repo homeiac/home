@@ -30,7 +30,7 @@ def main():
         row['label']=label;selected.append(row)
     gain=lambda before,after:round(100*(after['successful_per_minute']/before['successful_per_minute']-1),1)
     result=dict(status='selected',updated_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        selected=dict(frames=8,edge=768,prompt='video-story-v1',output_limit=256,rtx_requests=2,mac_requests=args.mac_parallel),
+        selected=dict(frames=8,edge=768,prompt='video-story-v1',output_limit=256,rtx_requests=2,mac_requests=args.mac_parallel,mac_video_requests=args.mac_parallel,mac_photo_capacity=4),
         story=('Keep the story: up to eight chronological frames and a prompt focused on the main activity and supported changes. '
                '768px previews reduce model input; 256 output tokens bound the caption. Four-frame variants lost event detail; '
                'literal frame-by-frame prompts were less useful for recall. Replaying clips inflated RTX gains, so its final comparison '

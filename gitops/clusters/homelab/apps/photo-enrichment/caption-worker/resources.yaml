@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-88a29d7e4611
+  name: caption-worker-99cb32646646
   namespace: monitoring
 data:
   bundle.json: '{"caption_completion.py": "\"\"\"Caption coverage with the existing Takeout filename/size copy assumption.\n\nKeep
@@ -35,16 +35,16 @@ data:
     \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\": 2,\n  \"batch_size\": 16,\n  \"mac_assist\":
     true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\n    \"think\": false,\n    \"options\": {\n      \"num_ctx\": 8192,\n      \"num_predict\":
     384,\n      \"temperature\": 0.2\n    }\n  },\n  \"frames\": 8,\n  \"video_edge\": 768,\n  \"video_prompt\": \"story\",\n  \"video_tokens\":
-    256\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\": 48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\":
-    \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env python3\n\"\"\"Prometheus textfile metrics for the knowledge
-    index (issue #212). Runs on the Proxmox host, scraped via node-exporter.\n\nUsage: export-metrics.py [--index DIR] [--photos
-    DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index dataset mount (default: from `zfs get
-    mountpoint local-3TB-backup/knowledge-index`)\n  --photos   photos dataset mount            (default: from `zfs get mountpoint
-    local-3TB-backup/gphotos`)\n  --out      textfile (default /var/lib/prometheus/node-exporter/knowledge_index.prom; written
-    atomically, tmp + rename)\n  --enrichers  extra enricher ids to report queue size for (also KI_ENRICHERS env, comma separated);
-    enrichers that already have rows are always reported\n  --list-metrics  print the metric names this exporter can emit
-    and exit (used by the dashboard/alert consistency test)\n\nMetrics: ollama_* (loaded model, GPU share), knowledge_index_*
-    (files, bytes, sidecars, units, parquet, pending units, exporter health), gphotos_* (quota, ingest ledger),\nmedia_summaries_*
+    256,\n  \"mac_video_parallel\": 1\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\": 48,\n  \"mac_routing\":
+    \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env python3\n\"\"\"Prometheus
+    textfile metrics for the knowledge index (issue #212). Runs on the Proxmox host, scraped via node-exporter.\n\nUsage:
+    export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index
+    dataset mount (default: from `zfs get mountpoint local-3TB-backup/knowledge-index`)\n  --photos   photos dataset mount            (default:
+    from `zfs get mountpoint local-3TB-backup/gphotos`)\n  --out      textfile (default /var/lib/prometheus/node-exporter/knowledge_index.prom;
+    written atomically, tmp + rename)\n  --enrichers  extra enricher ids to report queue size for (also KI_ENRICHERS env,
+    comma separated); enrichers that already have rows are always reported\n  --list-metrics  print the metric names this
+    exporter can emit and exit (used by the dashboard/alert consistency test)\n\nMetrics: ollama_* (loaded model, GPU share),
+    knowledge_index_* (files, bytes, sidecars, units, parquet, pending units, exporter health), gphotos_* (quota, ingest ledger),\nmedia_summaries_*
     (rows by status, queue, last batch time), knowledge_index_{backfill,enrich}_active, smart_* (USB/SATA disks: pending\nsectors
     etc., since a failing disk showed up on 2026-11-17). Missing tools (zfs, systemctl, smartctl) only omit their metrics.\n\"\"\"\nimport
     argparse\nimport glob\nimport json\nimport os\nimport subprocess\nimport sys\nimport time\n\nimport duckdb\n\nsys.path.insert(0,
@@ -349,15 +349,18 @@ data:
     model in models:\n            if model[\"id\"] == \"bonsai-27b-metal\":\n                for tag in model[\"tags\"]:\n                    match
     = re.fullmatch(r\"backfill-parallel=([1-9]|1[0-9]|20)\", tag)\n                    if match:\n                        return
     int(match[1]), headers\n    except (OSError, ValueError, KeyError, TypeError):\n        pass\n    return 0, None\n\n\ndef
-    split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False):\n    \"\"\"Keep slots
-    fed across queue reads. Retry interrupted Mac work on the RTX.\"\"\"\n    pending = deque(rows)\n    retry = deque()\n    disabled
+    split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False, mac_video_slots=None):\n    \"\"\"Keep
+    slots fed across queue reads. Retry interrupted Mac work on the RTX.\"\"\"\n    pending = deque(rows)\n    retry = deque()\n    disabled
     = False\n    with ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:\n        active = {}\n\n        def
     submit(backend):\n            nonlocal refill\n            if backend == \"metal\" and disabled:\n                return\n            if
     not pending and not retry and refill is not None and not disabled:\n                pending.extend(refill())\n                if
     not pending:\n                    refill = None\n            candidates = retry if backend == \"primary\" and retry else
-    pending\n            if candidates:\n                if backend == \"metal\" and prefer_photos:\n                    #
-    Long visual prompts take substantially longer on the Mac.\n                    photo = next((i for i, row in enumerate(candidates)
-    if row[\"ext\"] not in VIDEO_EXTS), 0)\n                    row = candidates[photo]\n                    del candidates[photo]\n                else:\n                    row
+    pending\n            if candidates:\n                video_full = backend == ''metal'' and mac_video_slots is not None
+    and sum(\n                    b == ''metal'' and r[''ext''] in VIDEO_EXTS for b, r in active.values()) >= mac_video_slots\n                if
+    backend == \"metal\" and (prefer_photos or video_full):\n                    # Long visual prompts take substantially
+    longer on the Mac.\n                    photo = next((i for i, row in enumerate(candidates) if row[\"ext\"] not in VIDEO_EXTS),
+    None)\n                    if video_full and photo is None:\n                        return\n                    photo
+    = photo if photo is not None else 0\n                    row = candidates[photo]\n                    del candidates[photo]\n                else:\n                    row
     = candidates.popleft()\n                task = metal if backend == \"metal\" else primary\n                active[pool.submit(task,
     row)] = (backend, row)\n\n        for backend, count in ((\"primary\", primary_slots), (\"metal\", mac_slots)):\n            for
     _ in range(count):\n                submit(backend)\n        while active:\n            completed, _ = wait(active, return_when=FIRST_COMPLETED)\n            for
@@ -366,28 +369,29 @@ data:
     = True\n                    retry.append(row)\n                    submit(backend)\n                else:\n                    submit(backend)\n                    yield
     row, result\n            # Primary slots may already have drained when a late Mac request fails.\n            primary_active
     = sum(backend == \"primary\" for backend, _ in active.values())\n            for _ in range(min(len(retry), primary_slots
-    - primary_active)):\n                submit(\"primary\")\n\n\ndef persist(batch, args, metrics, seen):\n    \"\"\"Only
-    the host writes Parquet and advances durable counters.\"\"\"\n    with metrics.measure(\"write\"):\n        write_batch([result
-    for _, result in batch], args.index, args.enricher)\n    for row, result in batch:\n        kind = \"video\" if row[\"ext\"]
-    in VIDEO_EXTS else \"photo\"\n        metrics.item(kind, result[\"status\"], persisted=True, backend=result.get(\"inference_backend\",
-    \"primary\"))\n        if kind == ''video'' and result[''status''] == ''ok'':\n            metrics.video_saved(result.get(''duration_s'')
-    or 0, result.get(''inference_backend'', ''primary''))\n        if result[\"status\"] == \"ok\":\n            seen.discard(row[\"path\"])\n\n\nclass
-    DispatchPolicy:\n    \"\"\"Poll the deployed Git policy and retain the last valid settings during outages.\"\"\"\n\n    def
-    __init__(self, args):\n        self.current = (getattr(args, \"dispatch_mode\", \"continuous\"),\n                        getattr(args,
-    \"dispatch_size\", 0),\n                        getattr(args, \"mac_routing\", \"photo-first\"))\n        self.url = os.environ.get(\"KI_GPU_DISPATCH_POLICY_URL\")
-    if not args.dry_run else None\n        self.ref = os.environ.get(\"KI_GPU_DISPATCH_GIT_REF\")\n        self.local_policy
-    = os.environ.get(\"KI_GPU_DISPATCH_POLICY_FILE\") if not args.dry_run else None\n        self.revision = None\n        self.queue_order
-    = \"newest\"\n        self.next_poll = 0\n\n    def poll(self):\n        now = time.monotonic()\n        if self.local_policy
-    and now >= self.next_poll:\n            self.next_poll = now + 30\n            try:\n                with open(self.local_policy,
-    encoding=\"utf-8\") as stream:\n                    policy = json.load(stream)\n                mode, size, routing, order
-    = (policy[k] for k in (\"mode\", \"page_size\", \"mac_routing\", \"queue_order\"))\n                if (mode not in (\"batch\",
-    \"continuous\") or type(size) is not int or not 0 <= size <= 512\n                        or routing not in (\"fifo\",
-    \"photo-first\") or order not in (\"newest\", \"photos-first\")):\n                    raise ValueError(\"Invalid applied
-    dispatch policy\")\n                self.current, self.queue_order = (mode, size, routing), order\n            except
-    (OSError, ValueError, KeyError, TypeError):\n                print(\"WARN: keeping the last valid applied dispatch policy\",
-    file=sys.stderr)\n        if not self.local_policy and self.url and self.ref and now >= self.next_poll:\n            self.next_poll
-    = now + 30\n            try:\n                result = subprocess.check_output(\n                    [\"git\", \"ls-remote\",
-    \"--exit-code\", \"https://github.com/homeiac/home.git\", self.ref],\n                    timeout=3, stderr=subprocess.DEVNULL,
+    - primary_active)):\n                submit(\"primary\")\n            # A later page may bring photos while the single
+    video slot is busy.\n            for _ in range(mac_slots - sum(backend == ''metal'' for backend, _ in active.values())):\n                submit(''metal'')\n\n\ndef
+    persist(batch, args, metrics, seen):\n    \"\"\"Only the host writes Parquet and advances durable counters.\"\"\"\n    with
+    metrics.measure(\"write\"):\n        write_batch([result for _, result in batch], args.index, args.enricher)\n    for
+    row, result in batch:\n        kind = \"video\" if row[\"ext\"] in VIDEO_EXTS else \"photo\"\n        metrics.item(kind,
+    result[\"status\"], persisted=True, backend=result.get(\"inference_backend\", \"primary\"))\n        if kind == ''video''
+    and result[''status''] == ''ok'':\n            metrics.video_saved(result.get(''duration_s'') or 0, result.get(''inference_backend'',
+    ''primary''))\n        if result[\"status\"] == \"ok\":\n            seen.discard(row[\"path\"])\n\n\nclass DispatchPolicy:\n    \"\"\"Poll
+    the deployed Git policy and retain the last valid settings during outages.\"\"\"\n\n    def __init__(self, args):\n        self.current
+    = (getattr(args, \"dispatch_mode\", \"continuous\"),\n                        getattr(args, \"dispatch_size\", 0),\n                        getattr(args,
+    \"mac_routing\", \"photo-first\"))\n        self.url = os.environ.get(\"KI_GPU_DISPATCH_POLICY_URL\") if not args.dry_run
+    else None\n        self.ref = os.environ.get(\"KI_GPU_DISPATCH_GIT_REF\")\n        self.local_policy = os.environ.get(\"KI_GPU_DISPATCH_POLICY_FILE\")
+    if not args.dry_run else None\n        self.revision = None\n        self.queue_order = \"newest\"\n        self.next_poll
+    = 0\n\n    def poll(self):\n        now = time.monotonic()\n        if self.local_policy and now >= self.next_poll:\n            self.next_poll
+    = now + 30\n            try:\n                with open(self.local_policy, encoding=\"utf-8\") as stream:\n                    policy
+    = json.load(stream)\n                mode, size, routing, order = (policy[k] for k in (\"mode\", \"page_size\", \"mac_routing\",
+    \"queue_order\"))\n                if (mode not in (\"batch\", \"continuous\") or type(size) is not int or not 0 <= size
+    <= 512\n                        or routing not in (\"fifo\", \"photo-first\") or order not in (\"newest\", \"photos-first\")):\n                    raise
+    ValueError(\"Invalid applied dispatch policy\")\n                self.current, self.queue_order = (mode, size, routing),
+    order\n            except (OSError, ValueError, KeyError, TypeError):\n                print(\"WARN: keeping the last
+    valid applied dispatch policy\", file=sys.stderr)\n        if not self.local_policy and self.url and self.ref and now
+    >= self.next_poll:\n            self.next_poll = now + 30\n            try:\n                result = subprocess.check_output(\n                    [\"git\",
+    \"ls-remote\", \"--exit-code\", \"https://github.com/homeiac/home.git\", self.ref],\n                    timeout=3, stderr=subprocess.DEVNULL,
     text=True,\n                )\n                revision, _ = result.strip().split(\"\\t\")\n                if not re.fullmatch(r\"[0-9a-f]{40}\",
     revision):\n                    raise ValueError(\"Invalid Git dispatch revision\")\n                if revision == self.revision:\n                    return
     self.current\n                with urllib.request.urlopen(self.url.format(revision=revision), timeout=2) as response:\n                    policy
@@ -410,7 +414,8 @@ data:
     = 180\n        metal = partial(summarize, library=a.library, a=metal_args, metrics=metrics, cache=cache)\n        while
     remaining > 0:\n            settings = policy.poll()\n            queue_order = policy.queue_order\n            dispatch_mode,
     dispatch_size, mac_routing = settings\n            metrics.dispatch_policy(*settings, queue_order=queue_order)\n            mac_slots,
-    metal_args.model_headers = mac_route(a)\n            metrics.mac_capacity(mac_slots)\n            fetch_size = a.batch_size\n            if
+    metal_args.model_headers = mac_route(a)\n            mac_video_limit = getattr(a, ''mac_video_parallel'', None)\n            metrics.mac_capacity(mac_slots,
+    min(mac_slots, mac_video_limit) if mac_video_limit else mac_slots)\n            fetch_size = a.batch_size\n            if
     mac_slots:\n                fetch_size = dispatch_size or max(a.batch_size, 4 * (a.parallel + mac_slots))\n            def
     fetch():\n                nonlocal remaining\n                if remaining <= 0:\n                    return []\n                with
     metrics.measure(\"queue\"):\n                    rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics,\n                                 photos_first=queue_order
@@ -420,7 +425,7 @@ data:
     Finish outstanding requests before activating a changed policy.\n                return [] if (policy.poll() != settings
     or policy.queue_order != queue_order\n                              or (errors and not done)) else fetch()\n\n            for
     row, result in split_batch(\n                rows, a.parallel, mac_slots, primary, metal,\n                refill=refill
-    if mac_slots and dispatch_mode == \"continuous\" else None,\n                prefer_photos=mac_routing == \"photo-first\",\n            ):\n                done
+    if mac_slots and dispatch_mode == \"continuous\" else None,\n                prefer_photos=mac_routing == \"photo-first\",\n                mac_video_slots=mac_video_limit,\n            ):\n                done
     += result[\"status\"] == \"ok\"\n                errors += result[\"status\"] != \"ok\"\n                if a.dry_run:\n                    print(\"%s\\t%s\\t%s\\t%s\"
     % (result[\"status\"], row[\"path\"], result[\"summary\"] or result[\"error\"], \",\".join(result[\"tags\"] or [])))\n                    continue\n                batch.append((row,
     result))\n                if len(batch) == a.batch_size:\n                    persist(batch, a, metrics, seen)\n                    batch.clear()\n            if
@@ -441,10 +446,11 @@ data:
     \"photo-first\"),\n                    default=os.environ.get(\"KI_MAC_ROUTING\", \"photo-first\"))\n    ap.add_argument(\"--frames\",
     type=int, default=8)\n    ap.add_argument(''--video-edge'', type=int, choices=(768, 1024), default=1024)\n    ap.add_argument(''--video-prompt'',
     choices=(''baseline'', ''story''), default=''baseline'')\n    ap.add_argument(''--video-tokens'', type=int, choices=(192,
-    256, 384), default=384)\n    ap.add_argument(\"--min-free-mib\", type=int, default=3000)\n    ap.add_argument(\"--smi-cmd\",
-    default=\"nvidia-smi\")\n    ap.add_argument(\"--api\", choices=[\"openai\", \"ollama\"], default=\"openai\", help=\"openai
-    = /v1/chat/completions; ollama = native /api/chat (honors think:false)\")\n    ap.add_argument(\"--num-ctx\", type=int,
-    default=8192, help=\"context length for --api ollama (8 frames x ~300 tokens + transcript)\")\n    ap.add_argument(\"--extra-json\",
+    256, 384), default=384)\n    ap.add_argument(''--mac-video-parallel'', type=int, choices=(1, 2, 4), default=None,\n                    help=''Cap
+    Mac video requests while allowing the discovered photo capacity'')\n    ap.add_argument(\"--min-free-mib\", type=int,
+    default=3000)\n    ap.add_argument(\"--smi-cmd\", default=\"nvidia-smi\")\n    ap.add_argument(\"--api\", choices=[\"openai\",
+    \"ollama\"], default=\"openai\", help=\"openai = /v1/chat/completions; ollama = native /api/chat (honors think:false)\")\n    ap.add_argument(\"--num-ctx\",
+    type=int, default=8192, help=\"context length for --api ollama (8 frames x ~300 tokens + transcript)\")\n    ap.add_argument(\"--extra-json\",
     default=\"{}\", help=''extra request fields merged into the chat body, e.g. \\''{\"think\": false}\\'' to stop reasoning
     models burning tokens'')\n    ap.add_argument(\"--dry-run\", action=\"store_true\")\n    ap.add_argument(\"--prom\", default=os.environ.get(\"KI_PIPELINE_PROM\"),\n                    help=\"live
     pipeline metrics textfile for node-exporter (or KI_PIPELINE_PROM); ignored by --dry-run\")\n    args = ap.parse_args(argv)\n    if
@@ -467,8 +473,9 @@ data:
     (\"prompt\", \"inference\"), (\"inference\", \"parse\"),\n         (\"parse\", \"decode\"), (\"parse\", \"write\"), (\"write\",
     \"queue\")]\nPIPELINE_HELP = {\n    \"media_pipeline_video_saved_seconds_total\": (\"counter\", \"Source video seconds
     covered by successful persisted captions, by backend including cache\"),\n    \"media_pipeline_video_saved_total\": (\"counter\",
-    \"Successful persisted video captions, by backend including cache\"),\n    \"media_pipeline_backend_in_flight\": (\"gauge\",
-    \"HTTP model requests currently awaiting a response, by backend\"),\n    \"media_pipeline_dispatch_policy_applied_timestamp_seconds\":
+    \"Successful persisted video captions, by backend including cache\"),\n    \"media_pipeline_mac_video_request_limit\":
+    (\"gauge\", \"Effective Mac video request cap, separate from advertised photo capacity\"),\n    \"media_pipeline_backend_in_flight\":
+    (\"gauge\", \"HTTP model requests currently awaiting a response, by backend\"),\n    \"media_pipeline_dispatch_policy_applied_timestamp_seconds\":
     (\"gauge\", \"When the active dispatch policy was applied\"),\n    \"media_pipeline_mac_request_limit\": (\"gauge\", \"Mac
     request capacity discovered at the latest batch selection\"),\n    \"media_pipeline_mac_candidate_bytes_total\": (\"counter\",
     \"Base64 JPEG bytes offered to Metal after caption cache misses\"),\n    \"media_pipeline_mac_cache_reusable_bytes_total\":
@@ -503,8 +510,8 @@ data:
     self.every = path, enricher, every\n        self.seconds = defaultdict(float)\n        self.operations = defaultdict(int)\n        self.items
     = defaultdict(int)\n        self.persisted = defaultdict(int)\n        self.mac_cache = {mib: MediaCacheProbe(mib * 1024**2)
     for mib in (64, 256, 1024)}\n        self.mac_bytes = 0\n        self.mac_seconds = defaultdict(float)\n        self.mac_counts
-    = defaultdict(int)\n        self.backend_active = {\"primary\": 0, \"metal\": 0}\n        self.mac_limit = 0\n        self.dispatch
-    = None\n        self.backend_saved = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0)\n        self.video_seconds
+    = defaultdict(int)\n        self.backend_active = {\"primary\": 0, \"metal\": 0}\n        self.mac_limit = 0\n        self.mac_video_limit
+    = 0\n        self.dispatch = None\n        self.backend_saved = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0)\n        self.video_seconds
     = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0.0)\n        self.video_counts = dict.fromkeys((\"primary\", \"metal\",
     \"cache\"), 0)\n        self.ollama_seconds = defaultdict(float)\n        self.ollama_observations = defaultdict(int)\n        self.tokens
     = defaultdict(int)\n        self.cache_hits = {\"photo\": 0, \"video\": 0}\n        for stage in TITLES:\n            for
@@ -534,8 +541,9 @@ data:
     += 1\n\n    def cache_hit(self, kind: str) -> None:\n        \"\"\"Count a caption reused from the local cache.\"\"\"\n        with
     self.lock:\n            self.cache_hits[kind] += 1\n\n    @contextmanager\n    def backend_request(self, backend):\n        with
     self.lock:\n            self.backend_active[backend] += 1\n        try:\n            yield\n        finally:\n            with
-    self.lock:\n                self.backend_active[backend] -= 1\n\n    def mac_capacity(self, offered):\n        with self.lock:\n            self.mac_limit
-    = offered\n\n    def dispatch_policy(self, mode, page_size, routing, *, queue_order=\"newest\"):\n        with self.lock:\n            settings
+    self.lock:\n                self.backend_active[backend] -= 1\n\n    def mac_capacity(self, offered, video=None):\n        with
+    self.lock:\n            self.mac_limit = offered\n            self.mac_video_limit = offered if video is None else video\n\n    def
+    dispatch_policy(self, mode, page_size, routing, *, queue_order=\"newest\"):\n        with self.lock:\n            settings
     = (mode, page_size, routing, queue_order)\n            if self.dispatch is None or settings != self.dispatch[0]:\n                self.dispatch
     = settings, time.time()\n\n    def mac_request(self, jpegs):\n        frames = [(hashlib.sha256(jpeg).digest(), len(jpeg))
     for jpeg in jpegs]\n        with self.lock:\n            self.mac_bytes += sum(4 * ((size + 2) // 3) for _, size in frames)\n            for
@@ -569,9 +577,10 @@ data:
     kind], stage=stage, kind=kind)\n            for name, values in ((\"media_pipeline_items_total\", self.items), (\"media_pipeline_persisted_items_total\",
     self.persisted)):\n                for (kind, status), value in sorted(values.items()):\n                    add(name,
     value, kind=kind, status=status)\n            for backend, count in self.backend_active.items():\n                add(\"media_pipeline_backend_in_flight\",
-    count, backend=backend)\n            add(\"media_pipeline_mac_request_limit\", self.mac_limit)\n            if self.dispatch
-    is not None:\n                (mode, page, routing, queue_order), applied = self.dispatch\n                add(\"media_pipeline_dispatch_policy_applied_timestamp_seconds\",
-    applied,\n                    mode=mode, page_size=page, mac_routing=routing, queue_order=queue_order)\n            add(\"media_pipeline_mac_candidate_bytes_total\",
+    count, backend=backend)\n            add(\"media_pipeline_mac_request_limit\", self.mac_limit)\n            add(\"media_pipeline_mac_video_request_limit\",
+    self.mac_video_limit)\n            if self.dispatch is not None:\n                (mode, page, routing, queue_order),
+    applied = self.dispatch\n                add(\"media_pipeline_dispatch_policy_applied_timestamp_seconds\", applied,\n                    mode=mode,
+    page_size=page, mac_routing=routing, queue_order=queue_order)\n            add(\"media_pipeline_mac_candidate_bytes_total\",
     self.mac_bytes)\n            for mib, cache in self.mac_cache.items():\n                add(\"media_pipeline_mac_cache_reusable_bytes_total\",
     cache.reusable, capacity_mib=mib)\n            for (phase, kind), seconds in self.mac_seconds.items():\n                add(\"media_pipeline_mac_phase_seconds_total\",
     seconds, phase=phase, kind=kind)\n                add(\"media_pipeline_mac_phase_observations_total\", self.mac_counts[phase,
@@ -600,8 +609,8 @@ data:
     = [str(root / ''venv/bin/python''), str(root / ''enrichers/media_summary.py''), ''run'']\n    for name in (''index'',
     ''library'', ''model'', ''enricher'', ''api'', ''parallel'', ''batch_size'', ''min_free_mib''):\n        args.extend([''--''
     + name.replace(''_'', ''-''), str(config[name])])\n    args.extend([''--endpoint'', endpoint, ''--extra-json'', json.dumps(config[''extra''])])\n    for
-    name in (''frames'', ''video_edge'', ''video_prompt'', ''video_tokens''):\n        if name in config:\n            args.extend([''--''
-    + name.replace(''_'', ''-''), str(config[name])])\n    if config[''mac_assist'']:\n        args.append(''--mac-assist'')\n    os.execv(args[0],
+    name in (''frames'', ''video_edge'', ''video_prompt'', ''video_tokens'', ''mac_video_parallel''):\n        if name in
+    config:\n            args.extend([''--'' + name.replace(''_'', ''-''), str(config[name])])\n    if config[''mac_assist'']:\n        args.append(''--mac-assist'')\n    os.execv(args[0],
     args)\n\n\nif __name__ == ''__main__'':\n    main()\n", "summary_cache.py": "\"\"\"Persistent reuse of successful captions
     for identical model inputs.\n\nPaths are deliberately excluded, but prompt context, image bytes, model and\ninference
     settings must match. No filename/size heuristic can cause a hit.\n\"\"\"\nimport hashlib\nimport json\nimport sqlite3\nfrom
@@ -624,7 +633,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-88a29d7e4611
+  name: caption-worker-99cb32646646
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -679,7 +688,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-88a29d7e4611
+          name: caption-worker-99cb32646646
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -754,7 +763,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-88a29d7e4611
+              name: caption-worker-99cb32646646
           - name: credentials
             secret:
               secretName: caption-worker-deploy

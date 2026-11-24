@@ -25,6 +25,7 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
 PIPELINE_HELP = {
     "media_pipeline_video_saved_seconds_total": ("counter", "Source video seconds covered by successful persisted captions, by backend including cache"),
     "media_pipeline_video_saved_total": ("counter", "Successful persisted video captions, by backend including cache"),
+    "media_pipeline_mac_video_request_limit": ("gauge", "Effective Mac video request cap, separate from advertised photo capacity"),
     "media_pipeline_backend_in_flight": ("gauge", "HTTP model requests currently awaiting a response, by backend"),
     "media_pipeline_dispatch_policy_applied_timestamp_seconds": ("gauge", "When the active dispatch policy was applied"),
     "media_pipeline_mac_request_limit": ("gauge", "Mac request capacity discovered at the latest batch selection"),
@@ -95,6 +96,7 @@ class PipelineMetrics:
         self.mac_counts = defaultdict(int)
         self.backend_active = {"primary": 0, "metal": 0}
         self.mac_limit = 0
+        self.mac_video_limit = 0
         self.dispatch = None
         self.backend_saved = dict.fromkeys(("primary", "metal", "cache"), 0)
         self.video_seconds = dict.fromkeys(("primary", "metal", "cache"), 0.0)
@@ -193,9 +195,10 @@ class PipelineMetrics:
             with self.lock:
                 self.backend_active[backend] -= 1
 
-    def mac_capacity(self, offered):
+    def mac_capacity(self, offered, video=None):
         with self.lock:
             self.mac_limit = offered
+            self.mac_video_limit = offered if video is None else video
 
     def dispatch_policy(self, mode, page_size, routing, *, queue_order="newest"):
         with self.lock:
@@ -272,6 +275,7 @@ class PipelineMetrics:
             for backend, count in self.backend_active.items():
                 add("media_pipeline_backend_in_flight", count, backend=backend)
             add("media_pipeline_mac_request_limit", self.mac_limit)
+            add("media_pipeline_mac_video_request_limit", self.mac_video_limit)
             if self.dispatch is not None:
                 (mode, page, routing, queue_order), applied = self.dispatch
                 add("media_pipeline_dispatch_policy_applied_timestamp_seconds", applied,
