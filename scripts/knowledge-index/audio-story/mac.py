@@ -29,7 +29,7 @@ def run():
             if current!=desired or (server and server.poll() is not None):
                 stop(tunnel);stop(server);stop(awake);server=tunnel=awake=None;current=desired
             if current and not server:
-                server=subprocess.Popen([str(ROOT/'v1.9.6/build/bin/whisper-server'),'-m',str(ROOT/('ggml-'+current+'.bin')),'--host','127.0.0.1','--port','19477','-l','auto','-t','2','-bs','1','-bo','1','-nc','-sns','--vad','-vm',str(ROOT/'ggml-silero-v6.2.0.bin')],cwd=ROOT)
+                server=subprocess.Popen([str(ROOT/'v1.9.6/build/bin/whisper-server'),'-m',str(ROOT/('ggml-'+current+'.bin')),'--host','127.0.0.1','--port','19477','-l','auto','-t','2','-bs','1','-bo','1','-sns','--vad','-vm',str(ROOT/'ggml-silero-v6.2.0.bin')],cwd=ROOT)
             if server and (not awake or awake.poll() is not None):awake=subprocess.Popen(['/usr/bin/caffeinate','-s','-w',str(server.pid)])
             if server and (not tunnel or tunnel.poll() is not None):
                 try:
