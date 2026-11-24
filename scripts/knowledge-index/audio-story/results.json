@@ -73,5 +73,41 @@
     }
   ],
   "story_prompt_pairs": 3,
-  "quality": "Three paired prompt checks against saved captions and automatic speech exposed misleading Tamil-to-English interpretations. Non-English and mixed-script spoken context now waits for a capable Codex translator, which is disabled pending explicit destination authorization. Low-confidence/repetitive ASR is withheld automatically. No human-labelled audio reference or accuracy score."
+  "quality": "Three paired prompt checks against saved captions and automatic speech exposed misleading Tamil-to-English interpretations. Non-English and mixed-script spoken context now waits for a capable Codex translator, which is disabled pending explicit destination authorization. Low-confidence/repetitive ASR is withheld automatically. No human-labelled audio reference or accuracy score.",
+  "live_validation": {
+    "checked_utc": "2026-11-24T23:51:27Z",
+    "ledger_rows": 6909,
+    "audio_states": {
+      "inflight": 2,
+      "no_audio": 2,
+      "no_speech": 114,
+      "pending": 6679,
+      "speech": 95,
+      "uncertain_speech": 17
+    },
+    "story_states": {
+      "inflight": 1,
+      "ok": 78,
+      "pending": 6830
+    },
+    "visual_sources": {
+      "local": 2378,
+      "luna": 4531
+    },
+    "audio_repeated_successes": 0,
+    "unpublished_updates": 23,
+    "stages": {
+      "audio": 228,
+      "story": 142
+    },
+    "snapshot_rows": 6909,
+    "snapshot_unique_items": 6909,
+    "snapshot_duplicates": 0,
+    "snapshot_age_seconds": 22.3
+  },
+  "translation_status": {
+    "enabled": false,
+    "submitted": 0,
+    "reason": "Explicit authorization of selected text and OpenAI destination pending; local transcription continues"
+  }
 }
