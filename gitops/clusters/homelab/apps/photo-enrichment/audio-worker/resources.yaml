@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-4f47fa9b01f0
+  name: audio-worker-51e9b8ffbf50
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
@@ -10,7 +10,7 @@ data:
     \"audio-story-v3\",\n  \"codex_translation\": {\n    \"enabled\": false,\n    \"endpoint\": \"http://127.0.0.1:19479\",\n    \"model\":
     \"gpt-6-luna\",\n    \"estimated_limit_usd\": 10\n  }\n}\n", "audio-worker.py": "#!/usr/bin/env python3\n\"\"\"Resumable,
     separate audio and text-only story enrichment. Never sends images.\"\"\"\nimport unicodedata,zlib,argparse,concurrent.futures,contextlib,datetime,fcntl,hashlib,json,logging,math,os,re,signal,sqlite3,subprocess,tempfile,threading,time,urllib.request,uuid\nfrom
-    pathlib import Path\n\nROOT=Path(''/local-3TB-backup/photo-enrichment/audio-story'')\nINDEX=Path(''/local-3TB-backup/knowledge-index'')\nLIBRARY=Path(''/local-3TB-backup/gphotos/library'')\nCONFIG=Path(''/opt/knowledge-index/audio-story/config.json'')\nPROM=Path(''/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom'')\nHASH_LOCKS={};GUARD=threading.Lock()\nTERMINAL=(''speech'',''no_speech'',''no_audio'',''uncertain_speech'',''skipped'')\n\ndef
+    pathlib import Path\n\nROOT=Path(''/local-3TB-backup/photo-enrichment/audio-story'')\nINDEX=Path(''/local-3TB-backup/knowledge-index'')\nLIBRARY=Path(''/local-3TB-backup/gphotos/library'')\nCONFIG=Path(''/opt/knowledge-index/audio-story/config.json'')\nPROM=Path(''/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom'')\nHASH_LOCKS={};GUARD=threading.Lock()\nHEALTH_CACHE={}\nTERMINAL=(''speech'',''no_speech'',''no_audio'',''uncertain_speech'',''skipped'')\n\ndef
     needs_codex(language,text):\n    \"\"\"Also catch mixed-script speech when Whisper labels the clip English.\"\"\"\n    return
     int((language or '''').lower()!=''english'' or any(ord(c)>0x024f and unicodedata.category(c).startswith(''L'') for c in
     (text or '''')))\n\n@contextlib.contextmanager\ndef connect(root=ROOT):\n    db=sqlite3.connect(root/''ledger.sqlite3'',timeout=30);db.row_factory=sqlite3.Row\n    db.create_function(''needs_codex'',2,needs_codex)\n    db.execute(''PRAGMA
@@ -179,10 +179,11 @@ data:
     db.execute(\"SELECT backend,sum(duration_s) FROM jobs WHERE audio_state IN (''speech'',''no_speech'',''no_audio'',''uncertain_speech'')
     GROUP BY backend\"):\n            lines.append(f''knowledge_index_audio_source_seconds_total{{backend=\"{backend}\"}}
     {seconds or 0}'')\n    prom.parent.mkdir(parents=True,exist_ok=True);temporary=prom.with_suffix(''.tmp'');temporary.write_text(''\\n''.join(lines)+''\\n'');temporary.chmod(0o644);temporary.replace(prom)\n\ndef
-    healthy(endpoint):\n    try:\n        with urllib.request.urlopen(endpoint+''/health'',timeout=2) as response:return response.status==200\n    except
-    OSError:return False\n\n\ndef run():\n    os.umask(0o077);ROOT.mkdir(parents=True,exist_ok=True)\n    lock=(ROOT/''worker.lock'').open(''a'');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)\n    initialize()\n    #
+    healthy(endpoint):\n    now=time.monotonic()\n    if endpoint in HEALTH_CACHE and now-HEALTH_CACHE[endpoint][0]<5:return
+    HEALTH_CACHE[endpoint][1]\n    try:\n        with urllib.request.urlopen(endpoint+''/health'',timeout=2) as response:ready=response.status==200\n    except
+    OSError:ready=False\n    HEALTH_CACHE[endpoint]=(now,ready)\n    return ready\n\n\ndef run():\n    os.umask(0o077);ROOT.mkdir(parents=True,exist_ok=True)\n    lock=(ROOT/''worker.lock'').open(''a'');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)\n    initialize()\n    #
     Recovery must happen only after obtaining the singleton fence.\n    logging.basicConfig(level=logging.INFO,format=''%(asctime)s
-    %(message)s'')\n    metrics(json.loads(CONFIG.read_text()))\n    refresh=0;last_export=0;futures={};stopping=threading.Event()\n    signal.signal(signal.SIGTERM,lambda
+    %(message)s'')\n    metrics(json.loads(CONFIG.read_text()))\n    refresh=0;last_export=0;last_metrics=0;futures={};stopping=threading.Event()\n    signal.signal(signal.SIGTERM,lambda
     *_:stopping.set())\n    with concurrent.futures.ThreadPoolExecutor(8) as pool:\n        while not stopping.is_set():\n            config=json.loads(CONFIG.read_text())\n            config[''local_story_ready'']=healthy(''http://127.0.0.1:19476'')\n            translation=config.get(''codex_translation'',{})\n            config[''codex_ready'']=(translation.get(''enabled'')
     is True and healthy(translation[''endpoint'']) and codex_budget_open(config))\n            if time.monotonic()>=refresh:\n                try:discover(config)\n                except
     Exception as exc:logging.warning(''Discovery deferred (%s)'',type(exc).__name__)\n                refresh=time.monotonic()+config[''scan_seconds'']\n            for
@@ -192,16 +193,17 @@ data:
     Exception as exc:logging.error(''Publication deferred (%s)'',type(exc).__name__)\n            if config[''enabled'']:\n                for
     backend in config[''backends'']:\n                    if backend not in futures and healthy(config[''backends''][backend]):\n                        row=claim(''audio'',backend,config)\n                        if
     row:futures[backend]=pool.submit(audio_job,row,backend,config)\n                if ''story'' not in futures:\n                    row=claim(''story'',''mac'',config)\n                    if
-    row:futures[''story'']=pool.submit(story_job,row,config)\n            metrics(config);stopping.wait(5)\n\nif __name__==''__main__'':run()\n",
-    "knowledge-index-audio-story.service": "[Unit]\nDescription=GitOps video speech and story backfill (reuses saved vision)\nWants=network-online.target\nAfter=network-online.target
-    zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironment=PYTHONUNBUFFERED=1\nExecStart=/opt/knowledge-index/venv/bin/python
+    row:futures[''story'']=pool.submit(story_job,row,config)\n            if time.monotonic()-last_metrics>=5:\n                metrics(config);last_metrics=time.monotonic()\n            stopping.wait(0.25)\n\nif
+    __name__==''__main__'':run()\n", "knowledge-index-audio-story.service": "[Unit]\nDescription=GitOps video speech and story
+    backfill (reuses saved vision)\nWants=network-online.target\nAfter=network-online.target zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index
+    /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironment=PYTHONUNBUFFERED=1\nExecStart=/opt/knowledge-index/venv/bin/python
     /opt/knowledge-index/audio-story/worker.py\nRestart=always\nRestartSec=30\nTimeoutStopSec=180\nKillMode=control-group\nNice=15\nIOSchedulingClass=idle\nCPUQuota=200%\nMemoryHigh=1G\nMemoryMax=2G\nUMask=0077\nNoNewPrivileges=true\nProtectSystem=strict\nProtectHome=true\nPrivateTmp=true\nReadWritePaths=/local-3TB-backup/photo-enrichment/audio-story
     /var/lib/prometheus/node-exporter\n\n[Install]\nWantedBy=multi-user.target\n"}'
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-4f47fa9b01f0
+  name: audio-worker-51e9b8ffbf50
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -256,7 +258,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-4f47fa9b01f0
+          name: audio-worker-51e9b8ffbf50
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -331,7 +333,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-4f47fa9b01f0
+              name: audio-worker-51e9b8ffbf50
           - name: credentials
             secret:
               secretName: caption-worker-deploy

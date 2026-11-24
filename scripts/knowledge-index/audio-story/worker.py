@@ -9,6 +9,7 @@ LIBRARY=Path('/local-3TB-backup/gphotos/library')
 CONFIG=Path('/opt/knowledge-index/audio-story/config.json')
 PROM=Path('/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom')
 HASH_LOCKS={};GUARD=threading.Lock()
+HEALTH_CACHE={}
 TERMINAL=('speech','no_speech','no_audio','uncertain_speech','skipped')
 
 def needs_codex(language,text):
@@ -335,9 +336,13 @@ def metrics(config,root=ROOT,prom=PROM):
     prom.parent.mkdir(parents=True,exist_ok=True);temporary=prom.with_suffix('.tmp');temporary.write_text('\n'.join(lines)+'\n');temporary.chmod(0o644);temporary.replace(prom)
 
 def healthy(endpoint):
+    now=time.monotonic()
+    if endpoint in HEALTH_CACHE and now-HEALTH_CACHE[endpoint][0]<5:return HEALTH_CACHE[endpoint][1]
     try:
-        with urllib.request.urlopen(endpoint+'/health',timeout=2) as response:return response.status==200
-    except OSError:return False
+        with urllib.request.urlopen(endpoint+'/health',timeout=2) as response:ready=response.status==200
+    except OSError:ready=False
+    HEALTH_CACHE[endpoint]=(now,ready)
+    return ready
 
 
 def run():
@@ -347,7 +352,7 @@ def run():
     # Recovery must happen only after obtaining the singleton fence.
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
     metrics(json.loads(CONFIG.read_text()))
-    refresh=0;last_export=0;futures={};stopping=threading.Event()
+    refresh=0;last_export=0;last_metrics=0;futures={};stopping=threading.Event()
     signal.signal(signal.SIGTERM,lambda *_:stopping.set())
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
         while not stopping.is_set():
@@ -373,6 +378,8 @@ def run():
                 if 'story' not in futures:
                     row=claim('story','mac',config)
                     if row:futures['story']=pool.submit(story_job,row,config)
-            metrics(config);stopping.wait(5)
+            if time.monotonic()-last_metrics>=5:
+                metrics(config);last_metrics=time.monotonic()
+            stopping.wait(0.25)
 
 if __name__=='__main__':run()
