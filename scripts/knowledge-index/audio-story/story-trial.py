@@ -19,7 +19,7 @@ with duckdb.connect(str(w.INDEX/'knowledge.duckdb'),read_only=True,config={'thre
   visual=d.execute("SELECT summary FROM media_summaries WHERE path=? AND size_bytes=? AND status='ok' ORDER BY created_at DESC LIMIT 1",[row['path'],row['size_bytes']]).fetchone()
   if not visual:continue
   for profile,prompt in [('simple','Combine the saved visual caption and automatic transcript into a short story. Return JSON with a story string. '+json.dumps({'visual':visual[0],'speech':segments},ensure_ascii=False)),('evidence',w.story_prompt(visual[0],segments))]:
-   body={'model':'bonsai-27b-metal','messages':[{'role':'user','content':prompt}],'temperature':.1,'max_tokens':384}
+   body={'model':'bonsai-27b-metal','messages':[{'role':'user','content':prompt}],'temperature':.1,'max_tokens':384,'chat_template_kwargs':{'enable_thinking':False},'response_format':{'type':'json_object'}}
    req=urllib.request.Request('http://127.0.0.1:19476/v1/chat/completions',json.dumps(body).encode(),{'Content-Type':'application/json','Authorization':'Bearer '+Path('/opt/knowledge-index/mac-bonsai.key').read_text().strip()})
    started=time.monotonic()
    with urllib.request.urlopen(req,timeout=300) as r:answer=json.load(r)['choices'][0]['message']['content']

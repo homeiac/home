@@ -175,7 +175,7 @@ def story_job(row,config,root=ROOT):
         segments=json.loads(row['transcript'] or '[]')
         if row['audio_state']!='speech':story=row['visual_summary']
         else:
-            body={'model':config['story_model'],'messages':[{'role':'user','content':story_prompt(row['visual_summary'],segments)}],'temperature':0.1,'max_tokens':384}
+            body={'model':config['story_model'],'messages':[{'role':'user','content':story_prompt(row['visual_summary'],segments)}],'temperature':0.1,'max_tokens':384,'chat_template_kwargs':{'enable_thinking':False},'response_format':{'type':'json_object'}}
             key=Path('/opt/knowledge-index/mac-bonsai.key').read_text().strip()
             req=urllib.request.Request('http://127.0.0.1:19476/v1/chat/completions',json.dumps(body).encode(),{'Content-Type':'application/json','Authorization':'Bearer '+key})
             with urllib.request.urlopen(req,timeout=300) as response:answer=json.load(response)['choices'][0]['message']['content']

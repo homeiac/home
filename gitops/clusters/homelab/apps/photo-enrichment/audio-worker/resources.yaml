@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-ee448d080efa
+  name: audio-worker-bd1da2e8d915
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
@@ -87,7 +87,7 @@ data:
     language meanings; write the story in English. ''\n      ''Ignore incidental background chatter and uncertain words. If
     sources conflict, retain supported visual facts and qualify or omit uncertain speech. ''\n      ''Return only JSON {\"story\":\"...\"}.
     Evidence:\\n''+json.dumps(evidence,ensure_ascii=False))\n\ndef story_job(row,config,root=ROOT):\n    started=time.monotonic()\n    try:\n        segments=json.loads(row[''transcript'']
-    or ''[]'')\n        if row[''audio_state'']!=''speech'':story=row[''visual_summary'']\n        else:\n            body={''model'':config[''story_model''],''messages'':[{''role'':''user'',''content'':story_prompt(row[''visual_summary''],segments)}],''temperature'':0.1,''max_tokens'':384}\n            key=Path(''/opt/knowledge-index/mac-bonsai.key'').read_text().strip()\n            req=urllib.request.Request(''http://127.0.0.1:19476/v1/chat/completions'',json.dumps(body).encode(),{''Content-Type'':''application/json'',''Authorization'':''Bearer
+    or ''[]'')\n        if row[''audio_state'']!=''speech'':story=row[''visual_summary'']\n        else:\n            body={''model'':config[''story_model''],''messages'':[{''role'':''user'',''content'':story_prompt(row[''visual_summary''],segments)}],''temperature'':0.1,''max_tokens'':384,''chat_template_kwargs'':{''enable_thinking'':False},''response_format'':{''type'':''json_object''}}\n            key=Path(''/opt/knowledge-index/mac-bonsai.key'').read_text().strip()\n            req=urllib.request.Request(''http://127.0.0.1:19476/v1/chat/completions'',json.dumps(body).encode(),{''Content-Type'':''application/json'',''Authorization'':''Bearer
     ''+key})\n            with urllib.request.urlopen(req,timeout=300) as response:answer=json.load(response)[''choices''][0][''message''][''content'']\n            answer=re.sub(r''^```(?:json)?\\s*|\\s*```$'','''',answer.strip());story=json.loads(answer)[''story''].strip()\n            if
     not 15<=len(story)<=8000:raise ValueError(''Invalid story'')\n        with connect(root) as db:\n            db.execute(\"UPDATE
     jobs SET story_state=''ok'',story=?,error=NULL,finished=?,updated=? WHERE id=?\",[story,time.time(),time.time(),row[''id'']])\n            db.execute(''INSERT
@@ -152,7 +152,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-ee448d080efa
+  name: audio-worker-bd1da2e8d915
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -207,7 +207,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-ee448d080efa
+          name: audio-worker-bd1da2e8d915
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -282,7 +282,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-ee448d080efa
+              name: audio-worker-bd1da2e8d915
           - name: credentials
             secret:
               secretName: caption-worker-deploy
