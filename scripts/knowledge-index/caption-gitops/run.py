@@ -17,6 +17,9 @@ def main() -> None:
     for name in ('index', 'library', 'model', 'enricher', 'api', 'parallel', 'batch_size', 'min_free_mib'):
         args.extend(['--' + name.replace('_', '-'), str(config[name])])
     args.extend(['--endpoint', endpoint, '--extra-json', json.dumps(config['extra'])])
+    for name in ('frames', 'video_edge', 'video_prompt', 'video_tokens'):
+        if name in config:
+            args.extend(['--' + name.replace('_', '-'), str(config[name])])
     if config['mac_assist']:
         args.append('--mac-assist')
     os.execv(args[0], args)

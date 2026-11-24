@@ -23,6 +23,8 @@ EDGES = [("queue", "decode"), ("decode", "transcribe"), ("transcribe", "prompt")
          ("decode", "prompt"), ("prompt", "inference"), ("inference", "parse"),
          ("parse", "decode"), ("parse", "write"), ("write", "queue")]
 PIPELINE_HELP = {
+    "media_pipeline_video_saved_seconds_total": ("counter", "Source video seconds covered by successful persisted captions, by backend including cache"),
+    "media_pipeline_video_saved_total": ("counter", "Successful persisted video captions, by backend including cache"),
     "media_pipeline_backend_in_flight": ("gauge", "HTTP model requests currently awaiting a response, by backend"),
     "media_pipeline_dispatch_policy_applied_timestamp_seconds": ("gauge", "When the active dispatch policy was applied"),
     "media_pipeline_mac_request_limit": ("gauge", "Mac request capacity discovered at the latest batch selection"),
@@ -95,6 +97,8 @@ class PipelineMetrics:
         self.mac_limit = 0
         self.dispatch = None
         self.backend_saved = dict.fromkeys(("primary", "metal", "cache"), 0)
+        self.video_seconds = dict.fromkeys(("primary", "metal", "cache"), 0.0)
+        self.video_counts = dict.fromkeys(("primary", "metal", "cache"), 0)
         self.ollama_seconds = defaultdict(float)
         self.ollama_observations = defaultdict(int)
         self.tokens = defaultdict(int)
@@ -167,6 +171,12 @@ class PipelineMetrics:
                 self.backend_saved[backend] += 1
             if persisted and status == "ok" and self.pending is not None:
                 self.pending = max(0, self.pending - 1)
+
+    def video_saved(self, duration: float, backend: str) -> None:
+        """Publish useful work alongside clips/minute; count only durable output."""
+        with self.lock:
+            self.video_seconds[backend] += max(0, duration)
+            self.video_counts[backend] += 1
 
     def cache_hit(self, kind: str) -> None:
         """Count a caption reused from the local cache."""
@@ -274,6 +284,8 @@ class PipelineMetrics:
                 add("media_pipeline_mac_phase_observations_total", self.mac_counts[phase, kind], phase=phase, kind=kind)
             for backend, count in self.backend_saved.items():
                 add("media_pipeline_backend_saved_total", count, backend=backend)
+                add("media_pipeline_video_saved_total", self.video_counts[backend], backend=backend)
+                add("media_pipeline_video_saved_seconds_total", self.video_seconds[backend], backend=backend)
             if self.pending is not None:
                 add("media_pipeline_queue", self.pending)
             for name, value in (("worker_stage", STAGES[stage_now]), ("stage_started_timestamp_seconds", stage_started),

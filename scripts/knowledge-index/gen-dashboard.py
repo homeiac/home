@@ -6,6 +6,7 @@ Output is deterministic; test-metrics.sh fails if the committed YAML differs fro
 Metrics come from export-metrics.py (node-exporter textfile on the Proxmox host); host/disk panels also use node_boot_time_seconds and nvme_* .
 """
 import json
+from pathlib import Path
 from immich_dashboard import add_graph
 
 DS = {"type": "prometheus", "uid": "prometheus"}
@@ -432,7 +433,61 @@ def panels():
     completion = caption_completion_panels()
     shift([panel for panel in all_panels if panel['gridPos']['y'] >= 5], 10)
     all_panels = all_panels[:len(intro)] + completion + all_panels[len(intro):]
-    return reconciliation + shift(all_panels, RECONCILIATION_HEIGHT)
+    tuning = video_tuning_panels()
+    return reconciliation + shift(tuning, RECONCILIATION_HEIGHT) + shift(all_panels, RECONCILIATION_HEIGHT + 30)
+
+
+def video_tuning_panels():
+    """Present the measured tradeoff and the resulting live video throughput."""
+    evidence = json.loads((Path(__file__).parent/'video-tuning/results.json').read_text())
+    p = [row('Video tuning · preserve the story', 0)]
+    narrative = evidence.get('story', 'Matched video trials are in progress.')
+    p.append(_panel('text', 'What changed and why', [], 0, 1, 24, 4,
+                    extra={'options': {'mode': 'markdown', 'content': narrative}}))
+    for backend, x, title in (('rtx', 0, 'RTX · matched video trials'), ('mac', 12, 'Mac · matched video trials')):
+        rows = [r for r in evidence.get('trials', []) if r['backend'] == backend and r.get('successful_per_minute') is not None]
+        exprs = [('vector('+str(r['successful_per_minute'])+')', r.get('label', r['profile'])) for r in rows]
+        if not exprs:
+            exprs = [('vector(0)', 'Trials in progress')]
+        panel = _panel('bargauge', title, exprs, x, 5, 12, 8, unit='suffix: clips/min', decimals=2,
+                       extra={'options': {'orientation': 'horizontal', 'displayMode': 'gradient',
+                                           'reduceOptions': {'calcs': ['lastNotNull']}}},
+                       description='Private matched sample; successful caption-cache-bypassed model requests divided by trial wall time. '
+                       'Each backend is tested separately. '+evidence.get('method', ''))
+        for target in panel['targets']:
+            target.update(instant=True, range=False)
+        p.append(panel)
+    scope = '{instance=~"$instance",enricher=~"$pipeline_enricher"}'
+    direct = '{instance=~"$instance",enricher=~"$pipeline_enricher",backend!="cache"}'
+    p += [stat('Live videos saved / minute', 'sum(rate(media_pipeline_video_saved_total'+scope+'[10m])) * 60',
+               0, 13, w=6, unit='suffix: clips/min', decimals=2,
+               description='Successful video rows saved to production Parquet in ten minutes, including caption-cache reuse.'),
+          stat('Source video minutes / minute', 'sum(rate(media_pipeline_video_saved_seconds_total'+scope+'[10m]))',
+               6, 13, w=6, decimals=2,
+               description='Minutes of source video covered per wall-clock minute. Counts the source duration, not seconds watched; summaries use sampled frames.'),
+          stat('Video attempts failing', '100 * sum(rate(media_pipeline_persisted_items_total'+
+               '{instance=~"$instance",kind="video",status="error"}[10m])) / sum(rate(media_pipeline_persisted_items_total'+
+               '{instance=~"$instance",kind="video"}[10m]))', 12, 13, w=6, unit='percent', decimals=1,
+               description='Persisted video errors divided by all persisted video attempts; includes decoder and model failures.'),
+          stat('Story review · paired checks', 'vector('+str(evidence.get('reviewed', 0))+')', 18, 13, w=6, unit='locale',
+               description=evidence.get('quality', 'Review pending.'))]
+    p += [series('Live video throughput by backend',
+                [('sum(rate(media_pipeline_video_saved_total'+scope[:-1]+',backend="'+backend+'"}[10m])) * 60', label)
+                 for backend, label in (('primary', 'RTX 3070'), ('metal', 'Mac GPU'), ('cache', 'Caption cache'))],
+                0, 17, 12, 8, decimals=2, description='Saved production videos per minute. Cache reuse is shown separately from GPU inference.'),
+          series('Video work covered · inference only',
+                [('sum(rate(media_pipeline_video_saved_seconds_total'+scope[:-1]+',backend="'+backend+'"}[10m]))', label)
+                 for backend, label in (('primary', 'RTX 3070'), ('metal', 'Mac GPU'))],
+                12, 17, 12, 8, decimals=2,
+                description='Source-video minutes covered per minute by RTX/Mac inference, excluding cache reuse. Longer or static clips can raise this without improving story quality.')]
+    for title, key, x, unit in (
+            ('RTX · matched trial gain', 'rtx_gain_percent', 0, 'percent'),
+            ('Mac · matched trial gain', 'mac_gain_percent', 6, 'percent'),
+            ('Model input tokens reduced', 'token_reduction_percent', 12, 'percent'),
+            ('Matched responses valid', 'valid_percent', 18, 'percent')):
+        p.append(stat(title, 'vector('+str(evidence.get(key, 0))+')', x, 25, w=6, unit=unit, decimals=1,
+                      description=evidence.get('method', 'Trials in progress.')))
+    return p
 
 
 def caption_completion_panels():

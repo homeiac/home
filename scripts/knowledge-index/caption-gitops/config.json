@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "index": "/local-3TB-backup/knowledge-index",
   "library": "/local-3TB-backup/gphotos/library",
   "model": "bonsai-27b",
@@ -16,5 +16,9 @@
       "num_predict": 384,
       "temperature": 0.2
     }
-  }
+  },
+  "frames": 8,
+  "video_edge": 768,
+  "video_prompt": "story",
+  "video_tokens": 256
 }

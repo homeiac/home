@@ -62,7 +62,7 @@ def _ffmpeg(args, timeout=120):
     return subprocess.run(["ffmpeg", "-v", "error", "-nostdin"] + args, capture_output=True, timeout=timeout)
 
 
-def jpeg_frame(path, t=None):
+def jpeg_frame(path, t=None, edge=1024):
     """One JPEG (long edge <= 1024) from an image or from second `t` of a video; raises RuntimeError when undecodable."""
     if t is None and os.path.splitext(path)[1].lower() in {'.heic', '.heif', '.hif'}:
         import io
@@ -72,16 +72,29 @@ def jpeg_frame(path, t=None):
         register_heif_opener()
         with Image.open(path) as source:
             image = ImageOps.exif_transpose(source)
-            image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            image.thumbnail((edge, edge), Image.Resampling.LANCZOS)
             result = io.BytesIO()
             image.convert('RGB').save(result, 'JPEG', quality=88)
             return result.getvalue()
-    scale = "scale='if(gt(iw,ih),min(1024,iw),-2)':'if(gt(iw,ih),-2,min(1024,ih))'"
+    scale = "scale='if(gt(iw,ih),min(%d,iw),-2)':'if(gt(iw,ih),-2,min(%d,ih))'" % (edge, edge)
     pre = ["-ss", "%.2f" % t] if t is not None else []
     r = _ffmpeg(pre + ["-i", path, "-vf", scale, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-"])
     if r.returncode != 0 or not r.stdout:
         raise RuntimeError("cannot decode %s: %s" % (os.path.basename(path), " ".join(r.stderr.decode(errors="replace").split())[:200]))
     return r.stdout
+
+
+def video_preview(raw, edge):
+    """Use the same JPEG resize as the matched trials, preserving 1024 previews."""
+    if edge == 1024:
+        return raw
+    import io
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as image:
+        image.thumbnail((edge, edge))
+        result = io.BytesIO()
+        image.save(result, format='JPEG', quality=88)
+        return result.getvalue()
 
 
 def video_duration(path):
@@ -126,6 +139,32 @@ def build_prompt(row, is_video, nframes, speech):
         p.append("Audio transcript: " + speech)
     p.append('Answer ONLY with JSON: {"summary": "<2-3 sentences>", "tags": ["<up to 8 short keywords>"]}')
     return "\n".join(p)
+
+
+def video_positions(duration, frames, *, end_weighted=False):
+    """Keep early/late evidence in four-frame mode; otherwise sample uniformly."""
+    if frames == 4 and end_weighted:
+        return [duration * fraction for fraction in (.0625, .3125, .6875, .9375)]
+    return [duration * (i + .5) / frames for i in range(frames)]
+
+
+def story_prompt(row, duration, positions, speech=''):
+    """Preserve a moment's observable story without invented connections."""
+    hints = {k: row.get(k) for k in ('album', 'people', 'description') if row.get(k)}
+    if row.get('taken_ts'):
+        hints['date'] = datetime.datetime.fromtimestamp(row['taken_ts'], datetime.timezone.utc).strftime('%Y-%m-%d')
+    context = json.dumps(hints, ensure_ascii=False)[:2000]
+    prompt = ('These chronological frames sample a ' + str(round(duration, 1)) + ' second video at seconds '
+              + ', '.join(str(round(t, 1)) for t in positions) + '. '
+              'Tell the small story of the clip: the main subject, setting, activity, and meaningful change '
+              'from beginning to end when the frames support one. If there is no clear change, describe the scene. '
+              'Keep distinctive visible details useful for remembering this moment. Do not invent actions between '
+              'frames, dialogue, names, relationships, emotions or events. Metadata is a hint, not visual proof. '
+              'Omit uncertain incidental details. Context: ' + context + '. ')
+    if speech:
+        prompt += 'Audio transcript (may contain errors): ' + speech[:2000] + '. '
+    return prompt + 'Return only JSON: {"summary":"2-3 concise sentences","tags":["up to 6 useful keywords"]}.'
+
 
 
 def parse_answer(text):
@@ -181,7 +220,8 @@ def summarize(row, library, a, metrics=None, cache=None):
             if kind == "video":
                 dur = video_duration(ap)
                 n = max(1, min(a.frames, int(dur) or 1))
-                jpegs = [jpeg_frame(ap, dur * (i + 0.5) / n) for i in range(n)]
+                positions = video_positions(dur, n, end_weighted=a.frames == 4)
+                jpegs = [video_preview(jpeg_frame(ap, t), getattr(a, 'video_edge', 1024)) for t in positions]
             else:
                 jpegs = [jpeg_frame(ap)]
         speech = ""
@@ -190,16 +230,26 @@ def summarize(row, library, a, metrics=None, cache=None):
                 speech = transcript(ap)
             base.update(frames_sampled=n, duration_s=dur)
         with metrics.measure("prompt", kind):
-            prompt = build_prompt(row, kind == "video", len(jpegs), speech)
+            story = kind == 'video' and getattr(a, 'video_prompt', 'baseline') == 'story'
+            prompt = story_prompt(row, dur, positions, speech) if story else build_prompt(row, kind == "video", len(jpegs), speech)
+            if story:
+                base['prompt_version'] = 'video-story-v1'
+        extra = dict(a.extra)
+        video_tokens = getattr(a, 'video_tokens', 384)
+        if kind == 'video':
+            if a.api == 'ollama':
+                extra['options'] = {**extra.get('options', {}), 'num_predict': video_tokens}
+            else:
+                extra['max_tokens'] = video_tokens
         cache_key = SummaryCache.key(prompt, jpegs, {
             "endpoint": a.endpoint, "enricher": a.enricher, "model": a.model,
-            "prompt_version": PROMPT_VERSION, "api": a.api, "num_ctx": a.num_ctx, "extra": a.extra,
+            "prompt_version": base['prompt_version'], "api": a.api, "num_ctx": a.num_ctx, "extra": extra,
         }) if cache is not None else None
         cached = cache.get(cache_key) if cache is not None else None
         if cached is None:
             base["_model_failure"] = True
             with metrics.measure("inference", kind):
-                answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=a.extra, api=a.api,
+                answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=extra, api=a.api,
                                    num_ctx=a.num_ctx, metrics=metrics, kind=kind, timeout=getattr(a, "request_timeout", 600),
                                    headers=getattr(a, "model_headers", None))
             with metrics.measure("parse", kind):
@@ -343,6 +393,8 @@ def persist(batch, args, metrics, seen):
     for row, result in batch:
         kind = "video" if row["ext"] in VIDEO_EXTS else "photo"
         metrics.item(kind, result["status"], persisted=True, backend=result.get("inference_backend", "primary"))
+        if kind == 'video' and result['status'] == 'ok':
+            metrics.video_saved(result.get('duration_s') or 0, result.get('inference_backend', 'primary'))
         if result["status"] == "ok":
             seen.discard(row["path"])
 
@@ -505,6 +557,9 @@ def main(argv):
     ap.add_argument("--mac-routing", choices=("fifo", "photo-first"),
                     default=os.environ.get("KI_MAC_ROUTING", "photo-first"))
     ap.add_argument("--frames", type=int, default=8)
+    ap.add_argument('--video-edge', type=int, choices=(768, 1024), default=1024)
+    ap.add_argument('--video-prompt', choices=('baseline', 'story'), default='baseline')
+    ap.add_argument('--video-tokens', type=int, choices=(192, 256, 384), default=384)
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
     ap.add_argument("--api", choices=["openai", "ollama"], default="openai", help="openai = /v1/chat/completions; ollama = native /api/chat (honors think:false)")
@@ -516,6 +571,8 @@ def main(argv):
     args = ap.parse_args(argv)
     if args.parallel < 1:
         ap.error("--parallel must be positive")
+    if not 1 <= args.frames <= 8:
+        ap.error('--frames must be between one and eight')
     if not 0 <= args.dispatch_size <= 512:
         ap.error("--dispatch-size must be between 0 and 512")
     args.extra = json.loads(args.extra_json)

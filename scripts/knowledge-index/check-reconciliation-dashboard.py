@@ -65,7 +65,7 @@ def main() -> None:
     print('Flux source:', source['status']['artifact']['revision'])
     measurements = {}
     for panel in expected['panels']:
-        if (panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT
+        if (panel['gridPos']['y'] >= module.RECONCILIATION_HEIGHT + 30
                 and not any('knowledge_index_caption_completion{' in t['expr'] for t in panel.get('targets', []))):
             continue
         for target in panel.get('targets', []):
