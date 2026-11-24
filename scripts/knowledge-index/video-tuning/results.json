@@ -1,6 +1,6 @@
 {
   "status": "selected",
-  "updated_utc": "2026-11-24T22:36:29.060452+00:00",
+  "updated_utc": "2026-11-24T23:07:03.236867+00:00",
   "selected": {
     "frames": 8,
     "edge": 768,
@@ -12,8 +12,8 @@
     "mac_photo_capacity": 4,
     "video_decode_threads": 2
   },
-  "story": "Keep up to eight sampled moments so the event still makes sense. Resize previews to 768px and describe the main activity and observed changes; cap output at 256 tokens. Four-frame variants lost event detail. Replays exaggerated RTX gains, so its comparison resets runtime caches before synthetic warmup. Matched bars time model requests; live 10-minute averages include decoding, queueing and writes. Bounded decoder threads cut extraction time with identical frame pixels.",
-  "method": "Six fixed clips, 5.8–376.9 seconds. Short-clip frame cap and JPEG resizing match production. RTX: two requests, model-runtime reset and synthetic warmup before each cell; load/warmup excluded. Mac: warm server with prompt caching disabled; old four-request configuration vs selected concurrency. Caption cache bypassed. Media decode is precomputed for model trials. Shared homelab hardware; not a controlled quality benchmark.",
+  "story": "Keep up to eight sampled moments so the event still makes sense. Resize previews to 768px and describe the main activity and observed changes; cap output at 256 tokens. Four-frame variants lost event detail. Replays exaggerated RTX gains, so its comparison resets runtime caches before synthetic warmup. Matched bars time model requests; live 10-minute averages include decoding, queueing and writes. Bounded decoder threads cut extraction time with identical frame pixels. The Mac was also sleeping after one idle minute on AC power; its model now keeps the system awake on AC while allowing display sleep.",
+  "method": "Six fixed clips, 5.8\u2013376.9 seconds. Short-clip frame cap and JPEG resizing match production. RTX: two requests, model-runtime reset and synthetic warmup before each cell; load/warmup excluded. Mac: warm server with prompt caching disabled; old four-request configuration vs selected concurrency. Caption cache bypassed. Media decode is precomputed for model trials. Shared homelab hardware; not a controlled quality benchmark.",
   "reviewed": 12,
   "quality": "Manual comparison against six eight-frame contact sheets. Accepted for main-activity/event recall with remaining minor inferred details; not a blind accuracy score. No speech transcription is installed. Reconciliation still handles text disagreements.",
   "trials": [
@@ -30,7 +30,7 @@
       "output_tokens": 105,
       "successful_per_minute": 5.96,
       "source_minutes_per_minute": 11.09,
-      "label": "Before · 1024px / 2 requests"
+      "label": "Before \u00b7 1024px / 2 requests"
     },
     {
       "profile": "story_final",
@@ -45,7 +45,7 @@
       "output_tokens": 97,
       "successful_per_minute": 8.73,
       "source_minutes_per_minute": 16.25,
-      "label": "After · 768px / 2 requests"
+      "label": "After \u00b7 768px / 2 requests"
     },
     {
       "profile": "current",
@@ -60,7 +60,7 @@
       "output_tokens": 108,
       "successful_per_minute": 3.08,
       "source_minutes_per_minute": 5.73,
-      "label": "Before · 1024px / 4 requests"
+      "label": "Before \u00b7 1024px / 4 requests"
     },
     {
       "profile": "story_final",
@@ -75,7 +75,7 @@
       "output_tokens": 89,
       "successful_per_minute": 4.79,
       "source_minutes_per_minute": 8.92,
-      "label": "After · 768px / 1 request(s)"
+      "label": "After \u00b7 768px / 1 request(s)"
     }
   ],
   "all_trials": [
@@ -519,7 +519,52 @@
   "token_reduction_percent": 38.6,
   "valid_percent": 100,
   "live_validation": {
-    "status": "pending"
+    "status": "verified",
+    "after_mac_sleep_fix": {
+      "since_utc": "2026-11-24T23:03:31+00:00",
+      "elapsed_seconds": 192,
+      "saved": 32,
+      "unique_saved": 32,
+      "duplicate_successes": 0,
+      "clips_per_minute": 10.01,
+      "source_minutes_per_minute": 6.07,
+      "error_categories": {},
+      "backends": [
+        {
+          "model": "bonsai-27b",
+          "status": "ok",
+          "rows": 30,
+          "source_minutes": 14.35,
+          "frames_min": 1,
+          "frames_max": 8,
+          "prompt_versions": [
+            "video-story-v1"
+          ]
+        },
+        {
+          "model": "bonsai-27b-metal",
+          "status": "ok",
+          "rows": 2,
+          "source_minutes": 5.06,
+          "frames_min": 8,
+          "frames_max": 8,
+          "prompt_versions": [
+            "video-story-v1"
+          ]
+        }
+      ]
+    },
+    "duplicate_audit": {
+      "duplicates_of_previously_completed_items": 0,
+      "duplicates_within_new_rows": 0,
+      "last_batch_saved_at": "2026-11-24T23:06:14.882092+00:00",
+      "new_errors": 10,
+      "new_files": 28,
+      "new_successful_rows": 438,
+      "new_unique_items": 438,
+      "since": "2026-11-24T22:05:48.090578+00:00"
+    },
+    "method": "Fresh production Parquet saves after the Mac sleep fix; includes decoding, scheduling, write batching and possible caption-cache reuse. Short operational window, not a matched speedup benchmark. Audit covers all new caption successes since its separate pre-tuning baseline; errors are retained and counted separately."
   },
   "decode": {
     "selected_threads": 2,
@@ -559,5 +604,11 @@
       }
     ],
     "method": "Six fixed clips, two passes with reversed clip/configuration order for default vs one thread, followed by a two-thread pass in both clip orders. Low-priority extraction under live host load. Each mode extracted 96 frames; 288 decoded RGB arrays matched the original previews exactly. Measures wall time for reading/decoding/scaling/JPEG output; includes host contention."
+  },
+  "mac_availability": {
+    "cause": "AC idle-sleep setting of one minute interrupted the Mac worker",
+    "observed_interruption_local": "2026-11-24 14:41\u201314:54 America/Los_Angeles",
+    "fix": "AC-only caffeinate assertion tied to model process; released on exit; display sleep preserved",
+    "verified": "launch agent running, model health OK, PreventSystemSleep assertion owned by caffeinate for model PID"
   }
 }

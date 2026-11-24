@@ -115,3 +115,29 @@ new successes against all pre-rollout successes. The final evidence file records
 observed window separately from matched model measurements. These rates include frame
 extraction, scheduling and Parquet batching and must not be presented as the model-only
 trial rate. `decode.py --state <private-dir> --report` exports aggregate decoder results.
+
+## Mac availability on AC power
+
+Production validation found the Mac configured to sleep after one idle minute,
+including on AC power. Its power log recorded an idle-sleep interruption from
+14:41 to 14:54 PST on November 24. The RTX continued processing during that gap;
+the interrupted combined window is not a two-GPU throughput benchmark.
+
+The Bonsai supervisor now owns a single `caffeinate -s -w <model-pid>` assertion.
+It prevents system sleep only on AC power while that model lives. It does not
+prevent display sleep or change battery sleep preferences. Disabling the worker,
+restarting its model or exiting the supervisor releases the assertion. Launchd
+continues to start the worker at user login after reboot (not before login).
+
+For an existing installation, run `python3 scripts/knowledge-index/mac-bonsai/update-supervisor.py`.
+It bridges the assertion during a graceful reload, waits up to two minutes for an
+idle request interval, backs up the installed source and signals the launch agent.
+If no idle interval appears, it leaves the installed source untouched. Verify with
+`pmset -g assertions` and the worker's supervisor log. Test the assertion lifecycle
+without running a model using `python3 scripts/knowledge-index/mac-bonsai/test_supervisor.py`.
+
+The first four tiles in **Video tuning · preserve the story** show local GPU videos
+complete, remaining, percent complete and total. They use deduped estimated groups,
+exclude Luna/reconciliation, and refresh from the coverage exporter every five minutes.
+Failures without a usable local caption remain in remaining. To read the same counts
+from the terminal, run `python3 scripts/knowledge-index/video-tuning/coverage.py`.

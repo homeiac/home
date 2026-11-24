@@ -1,4 +1,4 @@
-"""Publish a loopback-only Metal endpoint on Piglet while the Mac is awake."""
+"""Publish a loopback-only Metal endpoint; keep the model awake on AC power."""
 
 import json
 import logging
@@ -37,7 +37,7 @@ def stop(process):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     os.umask(0o077)
-    server = tunnel = None
+    server = tunnel = awake = None
     current = desired = (0, 0)
     refresh = 0
     try:
@@ -51,12 +51,16 @@ def main():
             if current != desired or (server is not None and server.poll() is not None):
                 stop(tunnel)
                 stop(server)
-                server = tunnel = None
+                stop(awake)
+                server = tunnel = awake = None
                 current = desired
             slots, offered = current
             if slots and server is None:
                 server = start(slots, PORT, subprocess.DEVNULL, ROOT / "server.key", offered)
                 logging.info("Started Metal with %d slots and up to %d requests", slots, offered)
+            if server is not None and (awake is None or awake.poll() is not None):
+                awake = keep_awake(server)
+                logging.info("Keeping the model awake on AC power; display sleep remains enabled")
             if server is not None and (tunnel is None or tunnel.poll() is not None):
                 try:
                     probe = urllib.request.Request(
@@ -92,6 +96,12 @@ def main():
     finally:
         stop(tunnel)
         stop(server)
+        stop(awake)
+
+
+def keep_awake(server):
+    """Release the AC-only assertion automatically when this model exits."""
+    return subprocess.Popen(["/usr/bin/caffeinate", "-s", "-w", str(server.pid)])
 
 
 def terminate(signum, frame):

@@ -74,7 +74,7 @@ def shift(items, dy):
 SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
 RECONCILIATION_HEIGHT = 28
-VIDEO_TUNING_HEIGHT = 37
+VIDEO_TUNING_HEIGHT = 42
 # Derived unit rate only; private account readings remain in the local usage DB.
 OBSERVED_RECONCILIATION_USD_PER_SUMMARY = 0.000869
 # Observed production transitions in UTC.
@@ -506,6 +506,27 @@ def video_tuning_panels():
         p.append(stat('Compared frame pixels preserved', 'vector('+str(decode['identical_percent'])+')',
                       16, 30, w=8, h=6, unit='percent', decimals=0,
                       description=decode.get('method', '')))
+    shift(p[1:], 5)
+    def video_count(state):
+        return ('max(knowledge_index_caption_completion{instance=~"$instance",kind="video",'
+                'model="local",scope="deduplicated",state="'+state+'"}'
+                ' and on(instance,job) (knowledge_index_exporter_success'+INST+' == 1)'
+                ' and on(instance,job) (time() - knowledge_index_last_run_timestamp_seconds'+INST+' < 900))')
+    done, remaining = video_count('complete'), video_count('remaining')
+    total = '('+done+' + '+remaining+')'
+    for title, expr, x, unit in (
+            ('Videos complete · local GPUs', done, 0, 'locale'),
+            ('Videos remaining · local GPUs', remaining, 6, 'locale'),
+            ('Video completion · local GPUs', '100 * '+done+' / ('+total+' > 0)', 12, 'percent'),
+            ('Videos in library · deduped est.', total, 18, 'locale')):
+        panel = stat(title, expr, x, 1, w=6, h=5, unit=unit,
+                     decimals=1 if unit == 'percent' else 0,
+                     description='Current local RTX/Mac caption coverage, not Luna or reconciliation. '
+                     'One retained representative per presumed-copy group (filename and byte size, not content hash). '
+                     'Updated every five minutes; unresolved input failures remain in remaining.')
+        panel['targets'][0].update(instant=True, range=False)
+        panel['fieldConfig']['defaults']['noValue'] = 'Awaiting fresh data'
+        p.append(panel)
     return p
 
 

@@ -27,6 +27,7 @@ if metrics.exists():
     print('Heartbeat file age seconds:', round(time.time() - metrics.stat().st_mtime, 1))
     for line in metrics.read_text().splitlines():
         if line.startswith(('media_pipeline_running{', 'media_pipeline_items_total{',
+                            'media_pipeline_video_saved_total{', 'media_pipeline_video_saved_seconds_total{',
                             'media_pipeline_heartbeat_timestamp_seconds{')):
             print(line)
 workers = []

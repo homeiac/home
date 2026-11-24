@@ -45,11 +45,28 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--since',required=True)
     p.add_argument('--host')
+    p.add_argument('--watch-seconds',type=int,default=0,help='Observe until the since-window reaches this duration')
+    p.add_argument('--interval',type=int,default=30)
+    p.add_argument('--output',type=Path)
     a=p.parse_args()
-    if a.host:
-        command='/opt/knowledge-index/venv/bin/python - --since '+shlex.quote(a.since)
-        subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',a.host,command],
-                       input=Path(__file__).read_bytes(),check=True)
-    else:print(json.dumps(collect(a.since)))
+    if not 1 <= a.interval <= 60 or not 0 <= a.watch_seconds <= 3600:
+        p.error('Use an interval of 1–60 seconds and a watch window of 0–3600 seconds')
+    deadline=time.monotonic()+a.watch_seconds+60
+    while True:
+        if a.host:
+            command='/opt/knowledge-index/venv/bin/python - --since '+shlex.quote(a.since)
+            raw=subprocess.check_output(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',a.host,command],
+                                        input=Path(__file__).read_bytes())
+            result=json.loads(raw)
+        else:
+            result=collect(a.since)
+        print(json.dumps(result),flush=True)
+        if a.output:
+            temporary=a.output.with_suffix('.tmp');temporary.write_text(json.dumps(result,indent=2)+'\n');temporary.replace(a.output)
+        if not a.watch_seconds or result['elapsed_seconds']>=a.watch_seconds:
+            return
+        if time.monotonic()>=deadline:
+            raise RuntimeError('The observation window did not reach its expected duration')
+        time.sleep(a.interval)
 
 if __name__=='__main__':main()
