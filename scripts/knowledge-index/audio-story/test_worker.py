@@ -108,4 +108,8 @@ class AudioTests(unittest.TestCase):
   self.assertIsNone(worker.claim('story','mac',self.config,self.root))
   self.assertIsNotNone(worker.claim('story','mac',dict(self.config,codex_ready=True),self.root))
 
+ def test_mixed_script_uses_capable_translator(self):
+  self.assertEqual(worker.needs_codex('english','hello café'),0)
+  self.assertEqual(worker.needs_codex('english','hello வணக்கம்'),1)
+
 if __name__=='__main__':unittest.main()

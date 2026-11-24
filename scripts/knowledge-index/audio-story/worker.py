@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Resumable, separate audio and text-only story enrichment. Never sends images."""
-import zlib,argparse,concurrent.futures,contextlib,datetime,fcntl,hashlib,json,logging,math,os,re,signal,sqlite3,subprocess,tempfile,threading,time,urllib.request,uuid
+import unicodedata,zlib,argparse,concurrent.futures,contextlib,datetime,fcntl,hashlib,json,logging,math,os,re,signal,sqlite3,subprocess,tempfile,threading,time,urllib.request,uuid
 from pathlib import Path
 
 ROOT=Path('/local-3TB-backup/photo-enrichment/audio-story')
@@ -11,9 +11,14 @@ PROM=Path('/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom')
 HASH_LOCKS={};GUARD=threading.Lock()
 TERMINAL=('speech','no_speech','no_audio','uncertain_speech','skipped')
 
+def needs_codex(language,text):
+    """Also catch mixed-script speech when Whisper labels the clip English."""
+    return int((language or '').lower()!='english' or any(ord(c)>0x024f and unicodedata.category(c).startswith('L') for c in (text or '')))
+
 @contextlib.contextmanager
 def connect(root=ROOT):
     db=sqlite3.connect(root/'ledger.sqlite3',timeout=30);db.row_factory=sqlite3.Row
+    db.create_function('needs_codex',2,needs_codex)
     db.execute('PRAGMA journal_mode=WAL');db.execute('PRAGMA busy_timeout=30000')
     try:
         with db:yield db
@@ -32,6 +37,7 @@ def initialize(root=ROOT):
           CREATE TABLE IF NOT EXISTS cache(hash TEXT PRIMARY KEY,result TEXT);
           CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
           CREATE TABLE IF NOT EXISTS attempts(job TEXT,stage TEXT,backend TEXT,seconds REAL,ok INTEGER,created REAL);
+          CREATE TABLE IF NOT EXISTS codex_requests(id TEXT PRIMARY KEY,job TEXT,state TEXT,cost INTEGER,result TEXT);
         ''')
         columns={r[1] for r in db.execute('PRAGMA table_info(jobs)')}
         missing={'published':'REAL DEFAULT 0','visual_source':"TEXT DEFAULT 'local'",'story_version':'TEXT'}.keys()-columns
@@ -41,6 +47,7 @@ def initialize(root=ROOT):
             for column in sorted(missing):
                 definition={'published':'REAL DEFAULT 0','visual_source':"TEXT DEFAULT 'local'",'story_version':'TEXT'}[column]
                 db.execute(f'ALTER TABLE jobs ADD COLUMN {column} {definition}')
+        db.execute("UPDATE codex_requests SET state='unknown' WHERE state='sent'")
         db.execute("UPDATE jobs SET audio_state='pending' WHERE audio_state='inflight'")
         db.execute("UPDATE jobs SET story_state='pending' WHERE story_state='inflight'")
 
@@ -86,7 +93,9 @@ def claim(stage,backend,config,root=ROOT):
     state=stage+'_state';attempts=stage+'_attempts'
     condition="audio_state IN ('speech','no_speech','no_audio','uncertain_speech') AND " if stage=='story' else ''
     if stage=='story' and not config.get('codex_ready',False):
-        condition+="(audio_state<>'speech' OR lower(coalesce(language,''))='english') AND "
+        condition+="(audio_state<>'speech' OR needs_codex(language,transcript)=0) AND "
+    if stage=='story' and not config.get('local_story_ready',True):
+        condition+="(audio_state<>'speech' OR needs_codex(language,transcript)=1) AND "
     with connect(root) as db:
         db.execute('BEGIN IMMEDIATE')
         row=db.execute(f"SELECT * FROM jobs WHERE active=1 AND version=? AND {condition}{state} IN ('pending','error') AND {attempts}<? AND retry_at<=? ORDER BY updated,id LIMIT 1",[config['version'],config['attempts'],time.time()]).fetchone()
@@ -180,11 +189,57 @@ def story_prompt(visual,segments):
       'Omit incidental chatter, uncertain wording and garbled literal translations. If no useful reliable context remains, '
       'use an empty string. Return only JSON {"spoken_context":"..."}. Evidence:\n'+json.dumps(evidence,ensure_ascii=False))
 
+class CodexUnknown(RuntimeError):
+    """An isolated external submission must not be silently repeated."""
+
+
+def codex_budget_open(config,root=ROOT):
+    cap=int(config.get('codex_translation',{}).get('estimated_limit_usd',0)*1_000_000)
+    with connect(root) as db:used=db.execute('SELECT coalesce(sum(cost),0) FROM codex_requests').fetchone()[0]
+    return used+25_000<=cap
+
+
+def codex_context(row,config,root=ROOT):
+    """Send selected text only, behind explicit policy and an idempotent cost hold."""
+    settings=config.get('codex_translation',{})
+    if settings.get('enabled') is not True:raise CodexUnknown('Translation disabled')
+    segments=json.loads(row['transcript'] or '[]')
+    selected=segments if len(segments)<=40 else [segments[round(i*(len(segments)-1)/39)] for i in range(40)]
+    evidence={'visual':row['visual_summary'][:6000],'speech':[dict(start=s['start'],end=s['end'],text=s['text'][:240]) for s in selected],'language':row['language']}
+    identity=json.dumps([row['id'],row['story_version'],evidence],sort_keys=True,ensure_ascii=False)
+    key=hashlib.sha256(identity.encode()).hexdigest()
+    with connect(root) as db:
+        db.execute('BEGIN IMMEDIATE')
+        old=db.execute('SELECT state,result FROM codex_requests WHERE id=?',[key]).fetchone()
+        if old:
+            if old['state']=='ok':return json.loads(old['result'])
+            raise CodexUnknown('Previous submission unresolved')
+        used=db.execute('SELECT coalesce(sum(cost),0) FROM codex_requests').fetchone()[0]
+        if used+25_000>int(settings['estimated_limit_usd']*1_000_000):raise CodexUnknown('Translation estimate cap')
+        db.execute("INSERT INTO codex_requests VALUES(?,?,'sent',25000,NULL)",[key,row['id']])
+    try:
+        req=urllib.request.Request(settings['endpoint']+'/translate',json.dumps({'id':key,'evidence':evidence}).encode(),{'Content-Type':'application/json'})
+        with urllib.request.urlopen(req,timeout=210) as response:answer=json.load(response)
+        usage=answer['usage'];i,c,o=usage['input_tokens'],usage.get('cached_input_tokens',0),usage['output_tokens']
+        if any(type(n) is not int for n in (i,c,o)) or not 0<=c<=i or o<0:raise ValueError('Invalid token counts')
+        cost=((i-c)*10+c+o*50+99)//100  # Existing Luna API-equivalent proxy, not account usage.
+        if answer['assessment'] not in ('useful','unclear','incidental') or not isinstance(answer['spoken_context'],str) or len(answer['spoken_context'])>1500:raise ValueError('Invalid translation')
+        with connect(root) as db:db.execute("UPDATE codex_requests SET state='ok',cost=?,result=? WHERE id=?",[cost,json.dumps(answer),key])
+        return answer
+    except Exception:
+        with connect(root) as db:db.execute("UPDATE codex_requests SET state='unknown' WHERE id=?",[key])
+        raise CodexUnknown('Translation result unavailable') from None
+
+
 def story_job(row,config,root=ROOT):
     started=time.monotonic()
     try:
         segments=json.loads(row['transcript'] or '[]')
         if row['audio_state']!='speech':story=row['visual_summary']
+        elif needs_codex(row['language'],row['transcript']):
+            answer=codex_context(row,config,root)
+            spoken=answer['spoken_context'].strip() if answer['assessment']=='useful' else ''
+            story=row['visual_summary']+(' In the audio: '+spoken if spoken else '')
         else:
             body={'model':config['story_model'],'messages':[{'role':'user','content':story_prompt(row['visual_summary'],segments)}],'temperature':0.1,'max_tokens':384,'chat_template_kwargs':{'enable_thinking':False},'response_format':{'type':'json_object'}}
             key=Path('/opt/knowledge-index/mac-bonsai.key').read_text().strip()
@@ -203,7 +258,7 @@ def fail(row,stage,backend,exc,started,config,root):
     # Do not persist exception text: libraries can embed private paths and response bodies.
     with connect(root) as db:
         attempts=db.execute(f'SELECT {stage}_attempts FROM jobs WHERE id=?',[row['id']]).fetchone()[0]
-        state='skipped' if attempts>=config['attempts'] else 'error'
+        state='skipped' if attempts>=config['attempts'] or isinstance(exc,CodexUnknown) else 'error'
         db.execute(f'UPDATE jobs SET {stage}_state=?,error=?,retry_at=?,updated=? WHERE id=?',[state,type(exc).__name__,time.time()+60*attempts,time.time(),row['id']])
         db.execute('INSERT INTO attempts VALUES(?,?,?,?,?,?)',[row['id'],stage,backend,time.monotonic()-started,0,time.time()])
     logging.warning('%s %s failed (%s); queue continues',stage,backend,type(exc).__name__)
@@ -247,6 +302,10 @@ HELP = {
  'knowledge_index_audio_processing_seconds_total': ('counter','Wall seconds spent on audio attempts'),
  'knowledge_index_audio_errors_total': ('counter','Failed audio attempts'),
  'knowledge_index_audio_source_seconds_total': ('counter','Source seconds covered by settled audio checks'),
+ 'knowledge_index_audio_translation_waiting': ('gauge','Non-English speech awaiting capable interpretation'),
+ 'knowledge_index_audio_codex_requests': ('gauge','Selected text translation submissions by state'),
+ 'knowledge_index_audio_codex_estimated_usd': ('gauge','API-equivalent translation cost plus unresolved reservations'),
+ 'knowledge_index_audio_translation_ready': ('gauge','Capable translation route enabled and healthy'),
  'knowledge_index_audio_stories_saved_total': ('counter','Successful audio-aware or visual-only story saves'),
 }
 
@@ -255,6 +314,11 @@ def metrics(config,root=ROOT,prom=PROM):
     lines.append(f'knowledge_index_audio_updated_timestamp_seconds {now}')
     with connect(root) as db:
         settings=dict(db.execute('SELECT key,value FROM settings'))
+        codex_states=dict(db.execute('SELECT state,count(*) FROM codex_requests GROUP BY state'))
+        for state in ('sent','ok','unknown'):lines.append(f'knowledge_index_audio_codex_requests{{state="{state}"}} {codex_states.get(state,0)}')
+        lines.append('knowledge_index_audio_codex_estimated_usd '+str(db.execute('SELECT coalesce(sum(cost),0)/1000000.0 FROM codex_requests').fetchone()[0]))
+        waiting=db.execute("SELECT count(*) FROM jobs WHERE active=1 AND audio_state='speech' AND needs_codex(language,transcript)=1 AND story_state IN ('pending','inflight','error')").fetchone()[0]
+        lines.extend([f'knowledge_index_audio_translation_waiting {waiting}',f'knowledge_index_audio_translation_ready {int(config.get("codex_ready",False))}'])
         for stage in ('audio','story'):
             counts=dict(db.execute(f'SELECT {stage}_state,count(*) FROM jobs WHERE active=1 AND version=? GROUP BY 1',[config['version']]))
             for state in ('pending','inflight','speech','no_speech','no_audio','uncertain_speech','error','skipped','ok'):
@@ -288,6 +352,9 @@ def run():
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
         while not stopping.is_set():
             config=json.loads(CONFIG.read_text())
+            config['local_story_ready']=healthy('http://127.0.0.1:19476')
+            translation=config.get('codex_translation',{})
+            config['codex_ready']=(translation.get('enabled') is True and healthy(translation['endpoint']) and codex_budget_open(config))
             if time.monotonic()>=refresh:
                 try:discover(config)
                 except Exception as exc:logging.warning('Discovery deferred (%s)',type(exc).__name__)
@@ -303,7 +370,7 @@ def run():
                     if backend not in futures and healthy(config['backends'][backend]):
                         row=claim('audio',backend,config)
                         if row:futures[backend]=pool.submit(audio_job,row,backend,config)
-                if 'story' not in futures and healthy('http://127.0.0.1:19476'):
+                if 'story' not in futures:
                     row=claim('story','mac',config)
                     if row:futures['story']=pool.submit(story_job,row,config)
             metrics(config);stopping.wait(5)

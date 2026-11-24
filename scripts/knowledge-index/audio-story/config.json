@@ -11,5 +11,11 @@
     "cpu": "https://whisper-cpu.app.home.panderosystems.com"
   },
   "beam": 1,
-  "story_version": "audio-story-v3"
+  "story_version": "audio-story-v3",
+  "codex_translation": {
+    "enabled": false,
+    "endpoint": "http://127.0.0.1:19479",
+    "model": "gpt-6-luna",
+    "estimated_limit_usd": 10
+  }
 }

@@ -75,7 +75,7 @@ SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
 RECONCILIATION_HEIGHT = 28
 VIDEO_TUNING_HEIGHT = 42
-AUDIO_STORY_HEIGHT = 31
+AUDIO_STORY_HEIGHT = 36
 # Derived unit rate only; private account readings remain in the local usage DB.
 OBSERVED_RECONCILIATION_USD_PER_SUMMARY = 0.000869
 # Observed production transitions in UTC.
@@ -578,6 +578,12 @@ def audio_story_panels():
           stat('New visual-caption scan age','time() - max(knowledge_index_audio_scan_timestamp_seconds'+INST+')',6,26,w=6,unit='s'),
           stat('Story merge speed','sum(rate(knowledge_index_audio_stories_saved_total'+INST+'[10m])) * 60',12,26,w=6,unit='suffix: stories/min'),
           stat('Audio failures · last 10m','sum(increase(knowledge_index_audio_errors_total'+INST+'[10m]))',18,26,w=6,unit='locale')]
+    p += [stat('Waiting for Codex translation','max(knowledge_index_audio_translation_waiting'+INST+')',0,30,w=4,unit='locale',description='Non-English speech is kept for a capable translator; it is not turned into guessed English dialogue. Raw timed speech and original visual captions are preserved.'),
+          stat('Codex translation route ready','max(knowledge_index_audio_translation_ready'+INST+')',4,30,w=4,mappings={'0':{'text':'Waiting / disabled','color':'orange'},'1':{'text':'Ready','color':'green'}},description='Translation requires an explicitly enabled and healthy text-only route. Local Whisper audio checks continue independently.')]
+    p += [stat('Codex translations saved','sum(knowledge_index_audio_codex_requests{instance=~"$instance",state="ok"})',8,30,w=4,unit='locale'),
+          stat('Codex unresolved requests','sum(knowledge_index_audio_codex_requests{instance=~"$instance",state=~"sent|unknown"})',12,30,w=4,unit='locale',description='Unresolved results retain their cost reservation and are not blindly resubmitted.'),
+          stat('Translation estimate + holds','max(knowledge_index_audio_codex_estimated_usd'+INST+')',16,30,w=4,unit='currencyUSD',decimals=3,description='Separate text-translation API-equivalent estimate, not actual account usage. Cap $10; unresolved calls retain $0.025.'),
+          stat('Translation estimate remaining','10 - max(knowledge_index_audio_codex_estimated_usd'+INST+')',20,30,w=4,unit='currencyUSD',decimals=2)]
     return p
 
 

@@ -191,6 +191,13 @@ def reconcile_audio(bundle: dict) -> dict:
             or config.get('beam', 1) not in (1, 3, 5)
             or config['story_model'] != 'bonsai-27b-metal'):
         raise ValueError('Invalid audio worker policy')
+    translation=config.get('codex_translation',{})
+    if translation and (type(translation.get('enabled')) is not bool
+            or translation.get('endpoint') != 'http://127.0.0.1:19479'
+            or translation.get('model') != 'gpt-6-luna'
+            or type(translation.get('estimated_limit_usd')) not in (int,float)
+            or not 0 < translation['estimated_limit_usd'] <= 10):
+        raise ValueError('Invalid bounded translation policy')
     unit = 'knowledge-index-audio-story.service'
     changed = {name: content.encode() for name, content in bundle.items()
                if not AUDIO_FILES[name].exists() or AUDIO_FILES[name].read_bytes() != content.encode()}
