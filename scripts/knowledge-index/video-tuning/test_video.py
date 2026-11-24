@@ -89,4 +89,13 @@ class VideoTests(unittest.TestCase):
         self.assertEqual(peak['all'],4)
         self.assertEqual(len({r['path'] for r,_ in results}),16)
 
+    def test_decoder_bound_applies_only_to_video_preview(self):
+        with patch.object(m,'_ffmpeg',return_value=SimpleNamespace(returncode=0,stdout=b'jpg')) as ff:
+            m.jpeg_frame('clip.mov',2,threads=1)
+            cmd=ff.call_args.args[0]
+            self.assertEqual(cmd[:6],['-threads','1','-filter_threads','1','-filter_complex_threads','1'])
+            self.assertLess(cmd.index('-threads'),cmd.index('-i'))
+            m.jpeg_frame('photo.jpg',threads=1)
+            self.assertNotIn('-threads',ff.call_args.args[0])
+
 if __name__=='__main__':unittest.main()

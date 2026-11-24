@@ -21,5 +21,6 @@
   "video_edge": 768,
   "video_prompt": "story",
   "video_tokens": 256,
-  "mac_video_parallel": 1
+  "mac_video_parallel": 1,
+  "video_decode_threads": 2
 }

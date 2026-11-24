@@ -3,11 +3,9 @@
 import argparse
 import datetime
 import json
-import os
 from pathlib import Path
 import shlex
 import subprocess
-import sys
 import time
 
 
@@ -29,9 +27,16 @@ def collect(since):
             FROM fresh GROUP BY model,status''').fetchall()
         total,unique,seconds=d.execute("""SELECT count(*),count(DISTINCT (source,path,size_bytes,enricher)),
             coalesce(sum(duration_s),0) FROM fresh WHERE status='ok'""").fetchone()
+        errors=d.execute("""SELECT CASE
+            WHEN error ILIKE '%cannot decode%' OR error ILIKE '%cannot read duration%' THEN 'input/decode'
+            WHEN error ILIKE '%HTTP Error%' THEN 'model HTTP'
+            WHEN error ILIKE '%timed out%' OR error ILIKE '%timeout%' THEN 'timeout'
+            WHEN error ILIKE '%JSON%' OR error ILIKE '%empty summary%' THEN 'model answer'
+            ELSE 'other' END,count(*) FROM fresh WHERE status<>'ok' GROUP BY 1""").fetchall()
     return dict(since_utc=start.isoformat(),elapsed_seconds=round(elapsed),saved=total,unique_saved=unique,
         duplicate_successes=total-unique,clips_per_minute=round(total*60/elapsed,2),
         source_minutes_per_minute=round(seconds/elapsed,2),
+        error_categories=dict(errors),
         backends=[dict(model=m,status=s,rows=n,source_minutes=round(sec/60,2),frames_min=lo,frames_max=hi,
                        prompt_versions=versions) for m,s,n,sec,lo,hi,versions in rows])
 

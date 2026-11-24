@@ -61,7 +61,8 @@ def validate(bundle: dict) -> dict:
     for name, choices, default in [('frames', (4, 8), 8), ('video_edge', (768, 1024), 1024),
                                    ('video_prompt', ('baseline', 'story'), 'baseline'),
                                    ('video_tokens', (192, 256, 384), 384),
-                                   ('mac_video_parallel', (1, 2, 4), 4)]:
+                                   ('mac_video_parallel', (1, 2, 4), 4),
+                                   ('video_decode_threads', (0, 1, 2), 0)]:
         if config.get(name, default) not in choices:
             raise ValueError('Invalid video setting: ' + name)
     policy = json.loads(bundle['dispatch-policy.json'])

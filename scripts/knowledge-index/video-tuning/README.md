@@ -95,3 +95,23 @@ recall with residual inferred details; it does not establish factual perfection.
 
 `results.json` contains aggregate cells only. Raw media, contact sheets, answers
 and trial identities remain in the private host SQLite evaluation directory.
+
+## Fresh-input validation and decoder follow-up
+
+The first production window exposed CPU/decode work excluded from the prepared-frame
+model trials. Compare FFmpeg defaults against one/two decoder threads with serialized
+preview filters and JPEG encoding. Across six clips in both clip orders, extraction
+averaged 4.69 s with defaults, 3.65 s with one decoder thread, and 3.04 s with two.
+Two threads reduce elapsed extraction time by 35.3%; they are over 5% faster than one,
+so select two. All 288 decoded RGB frame comparisons were identical to the original
+previews. The two-thread follow-up ran after the first two configurations under live
+host load, so it is an operational comparison rather than an isolated CPU benchmark.
+
+The cap applies to video extraction only. It keeps the same seek positions and frame
+count, then uses the measured JPEG-resize path. `live.py --host <host> --since <UTC>`
+reports fresh production saves, source duration covered, error categories and unique
+successful file versions without printing paths. The Parquet audit additionally checks
+new successes against all pre-rollout successes. The final evidence file records the
+observed window separately from matched model measurements. These rates include frame
+extraction, scheduling and Parquet batching and must not be presented as the model-only
+trial rate. `decode.py --state <private-dir> --report` exports aggregate decoder results.

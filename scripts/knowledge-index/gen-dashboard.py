@@ -74,6 +74,7 @@ def shift(items, dy):
 SUMMARY_SELECTION = 'instance=~"$instance",enricher=~"$pipeline_enricher"'
 THROUGHPUT_HEIGHT = 8
 RECONCILIATION_HEIGHT = 28
+VIDEO_TUNING_HEIGHT = 37
 # Derived unit rate only; private account readings remain in the local usage DB.
 OBSERVED_RECONCILIATION_USD_PER_SUMMARY = 0.000869
 # Observed production transitions in UTC.
@@ -435,7 +436,7 @@ def panels():
     shift([panel for panel in all_panels if panel['gridPos']['y'] >= 5], 10)
     all_panels = all_panels[:len(intro)] + completion + all_panels[len(intro):]
     tuning = video_tuning_panels()
-    return reconciliation + shift(tuning, RECONCILIATION_HEIGHT) + shift(all_panels, RECONCILIATION_HEIGHT + 30)
+    return reconciliation + shift(tuning, RECONCILIATION_HEIGHT) + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
 
 
 def video_tuning_panels():
@@ -445,6 +446,8 @@ def video_tuning_panels():
     narrative = evidence.get('story', 'Matched video trials are in progress.')
     p.append(_panel('text', 'What changed and why', [], 0, 1, 24, 4,
                     extra={'options': {'mode': 'markdown', 'content': narrative}}))
+    trial_max = int(max((r['successful_per_minute'] for r in evidence.get('trials', [])
+                         if r.get('successful_per_minute') is not None), default=1) * 1.1) + 1
     for backend, x, title in (('rtx', 0, 'RTX · matched video trials'), ('mac', 12, 'Mac · matched video trials')):
         rows = [r for r in evidence.get('trials', []) if r['backend'] == backend and r.get('successful_per_minute') is not None]
         exprs = [('vector('+str(r['successful_per_minute'])+')', r.get('label', r['profile'])) for r in rows]
@@ -457,10 +460,10 @@ def video_tuning_panels():
                        'Each backend is tested separately. '+evidence.get('method', ''))
         for target in panel['targets']:
             target.update(instant=True, range=False)
+        panel['fieldConfig']['defaults'].update(min=0, max=trial_max)
         p.append(panel)
     scope = '{instance=~"$instance",enricher=~"$pipeline_enricher"}'
-    direct = '{instance=~"$instance",enricher=~"$pipeline_enricher",backend!="cache"}'
-    p += [stat('Live videos saved / minute', 'sum(rate(media_pipeline_video_saved_total'+scope+'[10m])) * 60',
+    p += [stat('Live videos / min · 10m average', 'sum(rate(media_pipeline_video_saved_total'+scope+'[10m])) * 60',
                0, 13, w=6, unit='suffix: clips/min', decimals=2,
                description='Successful video rows saved to production Parquet in ten minutes, including caption-cache reuse.'),
           stat('Source video minutes / minute', 'sum(rate(media_pipeline_video_saved_seconds_total'+scope+'[10m]))',
@@ -485,9 +488,24 @@ def video_tuning_panels():
             ('RTX · matched trial gain', 'rtx_gain_percent', 0, 'percent'),
             ('Mac · matched trial gain', 'mac_gain_percent', 6, 'percent'),
             ('Model input tokens reduced', 'token_reduction_percent', 12, 'percent'),
-            ('Matched responses valid', 'valid_percent', 18, 'percent')):
+            ('Matched JSON responses valid', 'valid_percent', 18, 'percent')):
         p.append(stat(title, 'vector('+str(evidence.get(key, 0))+')', x, 25, w=6, unit=unit, decimals=1,
-                      description=evidence.get('method', 'Trials in progress.')))
+                      description=('JSON parsing and a nonempty summary; not factual accuracy. ' if key == 'valid_percent' else '')
+                      + evidence.get('method', 'Trials in progress.')))
+    decode = evidence.get('decode', {})
+    comparisons = [('vector('+str(r['mean_seconds'])+')', r['label']) for r in decode.get('trials', [])]
+    if comparisons:
+        panel = _panel('bargauge', 'Read / decode · same eight frames', comparisons, 0, 30, 16, 6, unit='s', decimals=2,
+                       extra={'options': {'orientation': 'horizontal', 'displayMode': 'gradient',
+                                          'reduceOptions': {'calcs': ['lastNotNull']}}},
+                       description=decode.get('method', ''))
+        for target in panel['targets']:
+            target.update(instant=True, range=False)
+        panel['fieldConfig']['defaults']['min'] = 0
+        p.append(panel)
+        p.append(stat('Compared frame pixels preserved', 'vector('+str(decode['identical_percent'])+')',
+                      16, 30, w=8, h=6, unit='percent', decimals=0,
+                      description=decode.get('method', '')))
     return p
 
 

@@ -1,6 +1,6 @@
 {
   "status": "selected",
-  "updated_utc": "2026-11-24T22:22:04.207939+00:00",
+  "updated_utc": "2026-11-24T22:36:29.060452+00:00",
   "selected": {
     "frames": 8,
     "edge": 768,
@@ -9,9 +9,10 @@
     "rtx_requests": 2,
     "mac_requests": 1,
     "mac_video_requests": 1,
-    "mac_photo_capacity": 4
+    "mac_photo_capacity": 4,
+    "video_decode_threads": 2
   },
-  "story": "Keep the story: up to eight chronological frames and a prompt focused on the main activity and supported changes. 768px previews reduce model input; 256 output tokens bound the caption. Four-frame variants lost event detail; literal frame-by-frame prompts were less useful for recall. Replaying clips inflated RTX gains, so its final comparison resets the model cache and warms on synthetic frames. Live charts below track fresh production work.",
+  "story": "Keep up to eight sampled moments so the event still makes sense. Resize previews to 768px and describe the main activity and observed changes; cap output at 256 tokens. Four-frame variants lost event detail. Replays exaggerated RTX gains, so its comparison resets runtime caches before synthetic warmup. Matched bars time model requests; live 10-minute averages include decoding, queueing and writes. Bounded decoder threads cut extraction time with identical frame pixels.",
   "method": "Six fixed clips, 5.8–376.9 seconds. Short-clip frame cap and JPEG resizing match production. RTX: two requests, model-runtime reset and synthetic warmup before each cell; load/warmup excluded. Mac: warm server with prompt caching disabled; old four-request configuration vs selected concurrency. Caption cache bypassed. Media decode is precomputed for model trials. Shared homelab hardware; not a controlled quality benchmark.",
   "reviewed": 12,
   "quality": "Manual comparison against six eight-frame contact sheets. Accepted for main-activity/event recall with remaining minor inferred details; not a blind accuracy score. No speech transcription is installed. Reconciliation still handles text disagreements.",
@@ -519,5 +520,44 @@
   "valid_percent": 100,
   "live_validation": {
     "status": "pending"
+  },
+  "decode": {
+    "selected_threads": 2,
+    "identical_percent": 100,
+    "frame_comparisons": 288,
+    "time_reduction_percent": 35.3,
+    "trials": [
+      {
+        "label": "1 decoder thread",
+        "mean_seconds": 3.648,
+        "mode": "bounded",
+        "cells": 12,
+        "frames": 96,
+        "pixel_changes": 0,
+        "errors": 0,
+        "seconds": 43.7783684770111
+      },
+      {
+        "label": "2 decoder threads",
+        "mean_seconds": 3.037,
+        "mode": "bounded2",
+        "cells": 12,
+        "frames": 96,
+        "pixel_changes": 0,
+        "errors": 0,
+        "seconds": 36.441414193977835
+      },
+      {
+        "label": "Default threads",
+        "mean_seconds": 4.694,
+        "mode": "default",
+        "cells": 12,
+        "frames": 96,
+        "pixel_changes": 0,
+        "errors": 0,
+        "seconds": 56.327919137926074
+      }
+    ],
+    "method": "Six fixed clips, two passes with reversed clip/configuration order for default vs one thread, followed by a two-thread pass in both clip orders. Low-priority extraction under live host load. Each mode extracted 96 frames; 288 decoded RGB arrays matched the original previews exactly. Measures wall time for reading/decoding/scaling/JPEG output; includes host contention."
   }
 }

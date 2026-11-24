@@ -17,7 +17,7 @@ def main() -> None:
     for name in ('index', 'library', 'model', 'enricher', 'api', 'parallel', 'batch_size', 'min_free_mib'):
         args.extend(['--' + name.replace('_', '-'), str(config[name])])
     args.extend(['--endpoint', endpoint, '--extra-json', json.dumps(config['extra'])])
-    for name in ('frames', 'video_edge', 'video_prompt', 'video_tokens', 'mac_video_parallel'):
+    for name in ('frames', 'video_edge', 'video_prompt', 'video_tokens', 'mac_video_parallel', 'video_decode_threads'):
         if name in config:
             args.extend(['--' + name.replace('_', '-'), str(config[name])])
     if config['mac_assist']:

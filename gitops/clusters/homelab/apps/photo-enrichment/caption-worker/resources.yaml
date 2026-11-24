@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-99cb32646646
+  name: caption-worker-73fb734422c1
   namespace: monitoring
 data:
   bundle.json: '{"caption_completion.py": "\"\"\"Caption coverage with the existing Takeout filename/size copy assumption.\n\nKeep
@@ -35,10 +35,10 @@ data:
     \"bonsai-27b\",\n  \"enricher\": \"gemma4-e2b-p1\",\n  \"api\": \"ollama\",\n  \"parallel\": 2,\n  \"batch_size\": 16,\n  \"mac_assist\":
     true,\n  \"min_free_mib\": 3000,\n  \"extra\": {\n    \"think\": false,\n    \"options\": {\n      \"num_ctx\": 8192,\n      \"num_predict\":
     384,\n      \"temperature\": 0.2\n    }\n  },\n  \"frames\": 8,\n  \"video_edge\": 768,\n  \"video_prompt\": \"story\",\n  \"video_tokens\":
-    256,\n  \"mac_video_parallel\": 1\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\": 48,\n  \"mac_routing\":
-    \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env python3\n\"\"\"Prometheus
-    textfile metrics for the knowledge index (issue #212). Runs on the Proxmox host, scraped via node-exporter.\n\nUsage:
-    export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index
+    256,\n  \"mac_video_parallel\": 1,\n  \"video_decode_threads\": 2\n}\n", "dispatch-policy.json": "{\n  \"mode\": \"continuous\",\n  \"page_size\":
+    48,\n  \"mac_routing\": \"photo-first\",\n  \"queue_order\": \"photos-first\"\n}\n", "export-metrics.py": "#!/usr/bin/env
+    python3\n\"\"\"Prometheus textfile metrics for the knowledge index (issue #212). Runs on the Proxmox host, scraped via
+    node-exporter.\n\nUsage: export-metrics.py [--index DIR] [--photos DIR] [--out FILE] [--enrichers a,b] [--list-metrics]\n  --index    knowledge-index
     dataset mount (default: from `zfs get mountpoint local-3TB-backup/knowledge-index`)\n  --photos   photos dataset mount            (default:
     from `zfs get mountpoint local-3TB-backup/gphotos`)\n  --out      textfile (default /var/lib/prometheus/node-exporter/knowledge_index.prom;
     written atomically, tmp + rename)\n  --enrichers  extra enricher ids to report queue size for (also KI_ENRICHERS env,
@@ -228,16 +228,18 @@ data:
     \"--query-gpu=memory.free\", \"--format=csv,noheader,nounits\"],\n                             capture_output=True, text=True,
     timeout=20, check=True).stdout\n        return min(int(x) for x in out.split())\n    except (OSError, subprocess.SubprocessError,
     ValueError):\n        return None\n\n\ndef _ffmpeg(args, timeout=120):\n    return subprocess.run([\"ffmpeg\", \"-v\",
-    \"error\", \"-nostdin\"] + args, capture_output=True, timeout=timeout)\n\n\ndef jpeg_frame(path, t=None, edge=1024):\n    \"\"\"One
+    \"error\", \"-nostdin\"] + args, capture_output=True, timeout=timeout)\n\n\ndef jpeg_frame(path, t=None, edge=1024, threads=0):\n    \"\"\"One
     JPEG (long edge <= 1024) from an image or from second `t` of a video; raises RuntimeError when undecodable.\"\"\"\n    if
     t is None and os.path.splitext(path)[1].lower() in {''.heic'', ''.heif'', ''.hif''}:\n        import io\n        from
     PIL import Image, ImageOps\n        from pillow_heif import register_heif_opener\n\n        register_heif_opener()\n        with
     Image.open(path) as source:\n            image = ImageOps.exif_transpose(source)\n            image.thumbnail((edge, edge),
     Image.Resampling.LANCZOS)\n            result = io.BytesIO()\n            image.convert(''RGB'').save(result, ''JPEG'',
     quality=88)\n            return result.getvalue()\n    scale = \"scale=''if(gt(iw,ih),min(%d,iw),-2)'':''if(gt(iw,ih),-2,min(%d,ih))''\"
-    % (edge, edge)\n    pre = [\"-ss\", \"%.2f\" % t] if t is not None else []\n    r = _ffmpeg(pre + [\"-i\", path, \"-vf\",
-    scale, \"-frames:v\", \"1\", \"-f\", \"image2pipe\", \"-vcodec\", \"mjpeg\", \"-\"])\n    if r.returncode != 0 or not
-    r.stdout:\n        raise RuntimeError(\"cannot decode %s: %s\" % (os.path.basename(path), \" \".join(r.stderr.decode(errors=\"replace\").split())[:200]))\n    return
+    % (edge, edge)\n    pre = [\"-ss\", \"%.2f\" % t] if t is not None else []\n    decode = [''-threads'', str(threads),
+    ''-filter_threads'', ''1'', ''-filter_complex_threads'', ''1''] if threads and t is not None else []\n    encode = [''-threads'',
+    ''1''] if decode else []\n    r = _ffmpeg(decode + pre + [\"-i\", path, \"-vf\", scale, \"-frames:v\", \"1\"] + encode
+    + [\"-f\", \"image2pipe\", \"-vcodec\", \"mjpeg\", \"-\"])\n    if r.returncode != 0 or not r.stdout:\n        raise RuntimeError(\"cannot
+    decode %s: %s\" % (os.path.basename(path), \" \".join(r.stderr.decode(errors=\"replace\").split())[:200]))\n    return
     r.stdout\n\n\ndef video_preview(raw, edge):\n    \"\"\"Use the same JPEG resize as the matched trials, preserving 1024
     previews.\"\"\"\n    if edge == 1024:\n        return raw\n    import io\n    from PIL import Image\n    with Image.open(io.BytesIO(raw))
     as image:\n        image.thumbnail((edge, edge))\n        result = io.BytesIO()\n        image.save(result, format=''JPEG'',
@@ -301,7 +303,8 @@ data:
     row[\"path\"])\n    metrics = metrics or PipelineMetrics(None, a.enricher)\n    kind = \"video\" if row[\"ext\"] in VIDEO_EXTS
     else \"photo\"\n    try:\n        with metrics.measure(\"decode\", kind):\n            if kind == \"video\":\n                dur
     = video_duration(ap)\n                n = max(1, min(a.frames, int(dur) or 1))\n                positions = video_positions(dur,
-    n, end_weighted=a.frames == 4)\n                jpegs = [video_preview(jpeg_frame(ap, t), getattr(a, ''video_edge'', 1024))
+    n, end_weighted=a.frames == 4)\n                decode_options = {''threads'': a.video_decode_threads} if getattr(a, ''video_decode_threads'',
+    0) else {}\n                jpegs = [video_preview(jpeg_frame(ap, t, **decode_options), getattr(a, ''video_edge'', 1024))
     for t in positions]\n            else:\n                jpegs = [jpeg_frame(ap)]\n        speech = \"\"\n        if kind
     == \"video\":\n            with metrics.measure(\"transcribe\", kind):\n                speech = transcript(ap)\n            base.update(frames_sampled=n,
     duration_s=dur)\n        with metrics.measure(\"prompt\", kind):\n            story = kind == ''video'' and getattr(a,
@@ -447,10 +450,12 @@ data:
     type=int, default=8)\n    ap.add_argument(''--video-edge'', type=int, choices=(768, 1024), default=1024)\n    ap.add_argument(''--video-prompt'',
     choices=(''baseline'', ''story''), default=''baseline'')\n    ap.add_argument(''--video-tokens'', type=int, choices=(192,
     256, 384), default=384)\n    ap.add_argument(''--mac-video-parallel'', type=int, choices=(1, 2, 4), default=None,\n                    help=''Cap
-    Mac video requests while allowing the discovered photo capacity'')\n    ap.add_argument(\"--min-free-mib\", type=int,
-    default=3000)\n    ap.add_argument(\"--smi-cmd\", default=\"nvidia-smi\")\n    ap.add_argument(\"--api\", choices=[\"openai\",
-    \"ollama\"], default=\"openai\", help=\"openai = /v1/chat/completions; ollama = native /api/chat (honors think:false)\")\n    ap.add_argument(\"--num-ctx\",
-    type=int, default=8192, help=\"context length for --api ollama (8 frames x ~300 tokens + transcript)\")\n    ap.add_argument(\"--extra-json\",
+    Mac video requests while allowing the discovered photo capacity'')\n    ap.add_argument(''--video-decode-threads'', type=int,
+    choices=(0, 1, 2), default=0,\n                    help=''Bound FFmpeg decoder threads and serialize preview filters/encoding;
+    zero keeps defaults'')\n    ap.add_argument(\"--min-free-mib\", type=int, default=3000)\n    ap.add_argument(\"--smi-cmd\",
+    default=\"nvidia-smi\")\n    ap.add_argument(\"--api\", choices=[\"openai\", \"ollama\"], default=\"openai\", help=\"openai
+    = /v1/chat/completions; ollama = native /api/chat (honors think:false)\")\n    ap.add_argument(\"--num-ctx\", type=int,
+    default=8192, help=\"context length for --api ollama (8 frames x ~300 tokens + transcript)\")\n    ap.add_argument(\"--extra-json\",
     default=\"{}\", help=''extra request fields merged into the chat body, e.g. \\''{\"think\": false}\\'' to stop reasoning
     models burning tokens'')\n    ap.add_argument(\"--dry-run\", action=\"store_true\")\n    ap.add_argument(\"--prom\", default=os.environ.get(\"KI_PIPELINE_PROM\"),\n                    help=\"live
     pipeline metrics textfile for node-exporter (or KI_PIPELINE_PROM); ignored by --dry-run\")\n    args = ap.parse_args(argv)\n    if
@@ -609,8 +614,8 @@ data:
     = [str(root / ''venv/bin/python''), str(root / ''enrichers/media_summary.py''), ''run'']\n    for name in (''index'',
     ''library'', ''model'', ''enricher'', ''api'', ''parallel'', ''batch_size'', ''min_free_mib''):\n        args.extend([''--''
     + name.replace(''_'', ''-''), str(config[name])])\n    args.extend([''--endpoint'', endpoint, ''--extra-json'', json.dumps(config[''extra''])])\n    for
-    name in (''frames'', ''video_edge'', ''video_prompt'', ''video_tokens'', ''mac_video_parallel''):\n        if name in
-    config:\n            args.extend([''--'' + name.replace(''_'', ''-''), str(config[name])])\n    if config[''mac_assist'']:\n        args.append(''--mac-assist'')\n    os.execv(args[0],
+    name in (''frames'', ''video_edge'', ''video_prompt'', ''video_tokens'', ''mac_video_parallel'', ''video_decode_threads''):\n        if
+    name in config:\n            args.extend([''--'' + name.replace(''_'', ''-''), str(config[name])])\n    if config[''mac_assist'']:\n        args.append(''--mac-assist'')\n    os.execv(args[0],
     args)\n\n\nif __name__ == ''__main__'':\n    main()\n", "summary_cache.py": "\"\"\"Persistent reuse of successful captions
     for identical model inputs.\n\nPaths are deliberately excluded, but prompt context, image bytes, model and\ninference
     settings must match. No filename/size heuristic can cause a hit.\n\"\"\"\nimport hashlib\nimport json\nimport sqlite3\nfrom
@@ -633,7 +638,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-99cb32646646
+  name: caption-worker-73fb734422c1
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -688,7 +693,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-99cb32646646
+          name: caption-worker-73fb734422c1
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -763,7 +768,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-99cb32646646
+              name: caption-worker-73fb734422c1
           - name: credentials
             secret:
               secretName: caption-worker-deploy

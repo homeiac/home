@@ -62,7 +62,7 @@ def _ffmpeg(args, timeout=120):
     return subprocess.run(["ffmpeg", "-v", "error", "-nostdin"] + args, capture_output=True, timeout=timeout)
 
 
-def jpeg_frame(path, t=None, edge=1024):
+def jpeg_frame(path, t=None, edge=1024, threads=0):
     """One JPEG (long edge <= 1024) from an image or from second `t` of a video; raises RuntimeError when undecodable."""
     if t is None and os.path.splitext(path)[1].lower() in {'.heic', '.heif', '.hif'}:
         import io
@@ -78,7 +78,9 @@ def jpeg_frame(path, t=None, edge=1024):
             return result.getvalue()
     scale = "scale='if(gt(iw,ih),min(%d,iw),-2)':'if(gt(iw,ih),-2,min(%d,ih))'" % (edge, edge)
     pre = ["-ss", "%.2f" % t] if t is not None else []
-    r = _ffmpeg(pre + ["-i", path, "-vf", scale, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-"])
+    decode = ['-threads', str(threads), '-filter_threads', '1', '-filter_complex_threads', '1'] if threads and t is not None else []
+    encode = ['-threads', '1'] if decode else []
+    r = _ffmpeg(decode + pre + ["-i", path, "-vf", scale, "-frames:v", "1"] + encode + ["-f", "image2pipe", "-vcodec", "mjpeg", "-"])
     if r.returncode != 0 or not r.stdout:
         raise RuntimeError("cannot decode %s: %s" % (os.path.basename(path), " ".join(r.stderr.decode(errors="replace").split())[:200]))
     return r.stdout
@@ -221,7 +223,8 @@ def summarize(row, library, a, metrics=None, cache=None):
                 dur = video_duration(ap)
                 n = max(1, min(a.frames, int(dur) or 1))
                 positions = video_positions(dur, n, end_weighted=a.frames == 4)
-                jpegs = [video_preview(jpeg_frame(ap, t), getattr(a, 'video_edge', 1024)) for t in positions]
+                decode_options = {'threads': a.video_decode_threads} if getattr(a, 'video_decode_threads', 0) else {}
+                jpegs = [video_preview(jpeg_frame(ap, t, **decode_options), getattr(a, 'video_edge', 1024)) for t in positions]
             else:
                 jpegs = [jpeg_frame(ap)]
         speech = ""
@@ -572,6 +575,8 @@ def main(argv):
     ap.add_argument('--video-tokens', type=int, choices=(192, 256, 384), default=384)
     ap.add_argument('--mac-video-parallel', type=int, choices=(1, 2, 4), default=None,
                     help='Cap Mac video requests while allowing the discovered photo capacity')
+    ap.add_argument('--video-decode-threads', type=int, choices=(0, 1, 2), default=0,
+                    help='Bound FFmpeg decoder threads and serialize preview filters/encoding; zero keeps defaults')
     ap.add_argument("--min-free-mib", type=int, default=3000)
     ap.add_argument("--smi-cmd", default="nvidia-smi")
     ap.add_argument("--api", choices=["openai", "ollama"], default="openai", help="openai = /v1/chat/completions; ollama = native /api/chat (honors think:false)")
