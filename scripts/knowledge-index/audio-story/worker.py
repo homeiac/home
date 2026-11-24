@@ -85,6 +85,8 @@ def discover(config,root=ROOT,index=INDEX):
 def claim(stage,backend,config,root=ROOT):
     state=stage+'_state';attempts=stage+'_attempts'
     condition="audio_state IN ('speech','no_speech','no_audio','uncertain_speech') AND " if stage=='story' else ''
+    if stage=='story' and not config.get('codex_ready',False):
+        condition+="(audio_state<>'speech' OR lower(coalesce(language,''))='english') AND "
     with connect(root) as db:
         db.execute('BEGIN IMMEDIATE')
         row=db.execute(f"SELECT * FROM jobs WHERE active=1 AND version=? AND {condition}{state} IN ('pending','error') AND {attempts}<? AND retry_at<=? ORDER BY updated,id LIMIT 1",[config['version'],config['attempts'],time.time()]).fetchone()

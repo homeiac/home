@@ -51,7 +51,7 @@ class AudioTests(unittest.TestCase):
   self.assertEqual(worker.parse_transcript({'segments':[{'text':'blah'*200,'start':0,'end':1}]}),[])
  def test_story_request_contains_text_only(self):
   from unittest.mock import MagicMock
-  with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',transcript=?",[json.dumps([dict(start=0,end=1,text='Look at the monkey')])])
+  with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',language='english',transcript=?",[json.dumps([dict(start=0,end=1,text='Look at the monkey')])])
   row=worker.claim('story','mac',self.config,self.root)
   response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps({'choices':[{'message':{'content':json.dumps({'spoken_context':'Someone mentions a monkey.'})}}]}).encode()
   with patch.object(worker.Path,'read_text',return_value='test-only'),patch.object(worker.urllib.request,'urlopen',return_value=response) as call:
@@ -102,5 +102,10 @@ class AudioTests(unittest.TestCase):
   p=self.root/'metrics.prom';self.assertEqual(stat.S_IMODE(p.stat().st_mode),0o644)
   self.assertNotIn('a.mp4',p.read_text())
   self.assertIn('knowledge_index_audio_jobs{stage="audio",state="pending"} 1',p.read_text())
+
+ def test_non_english_waits_for_authorized_translation_worker(self):
+  with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',language='tamil'")
+  self.assertIsNone(worker.claim('story','mac',self.config,self.root))
+  self.assertIsNotNone(worker.claim('story','mac',dict(self.config,codex_ready=True),self.root))
 
 if __name__=='__main__':unittest.main()

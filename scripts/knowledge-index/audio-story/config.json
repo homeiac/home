@@ -11,5 +11,5 @@
     "cpu": "https://whisper-cpu.app.home.panderosystems.com"
   },
   "beam": 1,
-  "story_version": "audio-story-v2"
+  "story_version": "audio-story-v3"
 }
