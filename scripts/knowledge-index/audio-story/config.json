@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "model": "small-q5_1",
+  "version": "whisper-small-v1",
+  "scan_seconds": 300,
+  "attempts": 3,
+  "chunk_seconds": 120,
+  "story_model": "bonsai-27b-metal",
+  "backends": {
+    "mac": "http://127.0.0.1:19477",
+    "rtx": "https://whisper.app.home.panderosystems.com",
+    "cpu": "https://whisper-cpu.app.home.panderosystems.com"
+  }
+}

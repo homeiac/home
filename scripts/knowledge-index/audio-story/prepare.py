@@ -11,7 +11,7 @@ def fetch(name):
     item=next(x for x in entries if x['path']==name)
     digest=item['lfs']['oid'];path=ROOT/name
     if not path.exists():
-        subprocess.run(['curl','-fLsS','--retry','2','-o',str(path)+'.partial','https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'+name],check=True)
+        subprocess.run(['curl','-fLsS','--retry','2','-o',str(path)+'.partial','https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/'+name],check=True)
         Path(str(path)+'.partial').replace(path)
     with path.open('rb') as f:
         if hashlib.file_digest(f,'sha256').hexdigest()!=digest:raise ValueError('Model checksum mismatch')
