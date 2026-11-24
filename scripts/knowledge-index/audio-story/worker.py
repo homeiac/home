@@ -207,17 +207,33 @@ def fail(row,stage,backend,exc,started,config,root):
     logging.warning('%s %s failed (%s); queue continues',stage,backend,type(exc).__name__)
 
 def publish(key,root):
+    """Publish one atomic current snapshot, avoiding thousands of tiny Parquet files."""
     import duckdb
-    with connect(root) as db:row=dict(db.execute('SELECT * FROM jobs WHERE id=?',[key]).fetchone())
+    columns={'id':'VARCHAR','path':'VARCHAR','size_bytes':'BIGINT','aliases':'VARCHAR','version':'VARCHAR',
+      'visual_summary':'VARCHAR','visual_source':'VARCHAR','transcript':'VARCHAR','language':'VARCHAR',
+      'audio_state':'VARCHAR','backend':'VARCHAR','duration_s':'DOUBLE','story':'VARCHAR','story_version':'VARCHAR',
+      'story_state':'VARCHAR','error':'VARCHAR','updated':'DOUBLE'}
+    with connect(root) as db:
+        rows=[dict(row) for row in db.execute('SELECT '+','.join(columns)+' FROM jobs WHERE active=1')]
+    if not rows:return
     directory=root/'parquet';directory.mkdir(exist_ok=True)
-    target=directory/(key+'.parquet');temporary=directory/(key+'.tmp')
-    # One atomic file per file version/configuration, updated after each stage.
-    with duckdb.connect(config={'threads':1}) as d:
-        d.execute('CREATE TABLE result AS SELECT ?::VARCHAR id,?::VARCHAR path,?::BIGINT size_bytes,?::VARCHAR aliases,?::VARCHAR AS "version",?::VARCHAR visual_summary,?::VARCHAR visual_source,?::VARCHAR transcript,?::VARCHAR AS "language",?::VARCHAR audio_state,?::VARCHAR backend,?::DOUBLE duration_s,?::VARCHAR story,?::VARCHAR story_version,?::VARCHAR story_state,?::VARCHAR AS "error",?::DOUBLE updated',
-          [row[k] for k in ('id','path','size_bytes','aliases','version','visual_summary','visual_source','transcript','language','audio_state','backend','duration_s','story','story_version','story_state','error','updated')])
-        d.execute('COPY result TO ? (FORMAT PARQUET)',[str(temporary)])
+    target=directory/'current.parquet';temporary=directory/'current.tmp'
+    schema='{'+','.join("'"+name+"':'"+kind+"'" for name,kind in columns.items())+'}'
+    with tempfile.NamedTemporaryFile(mode='w',dir=root,prefix='.export-',suffix='.jsonl') as source:
+        for row in rows:source.write(json.dumps(row,ensure_ascii=False)+'\n')
+        source.flush()
+        with duckdb.connect(config={'threads':1}) as d:
+            d.execute("CREATE TABLE result AS SELECT * FROM read_json(?,format='newline_delimited',columns="+schema+")",[source.name])
+            d.execute("COPY result TO ? (FORMAT PARQUET,COMPRESSION ZSTD)",[str(temporary)])
     temporary.replace(target)
-    with connect(root) as db:db.execute('UPDATE jobs SET published=? WHERE id=?',[row['updated'],key])
+    with connect(root) as db:
+        db.executemany('UPDATE jobs SET published=? WHERE id=?',[(r['updated'],r['id']) for r in rows])
+    # Preserve the first rollout's row files privately, outside the current dataset.
+    previous=[p for p in directory.glob('*.parquet') if p.name!='current.parquet']
+    if previous:
+        archive=root/'previous-row-exports';archive.mkdir(exist_ok=True)
+        for path in previous:path.replace(archive/path.name)
+
 
 HELP = {
  'knowledge_index_audio_updated_timestamp_seconds': ('gauge','Audio/story worker heartbeat'),
@@ -250,7 +266,7 @@ def metrics(config,root=ROOT,prom=PROM):
             lines += [f'knowledge_index_audio_finished_total{{backend="{backend}"}} {count}',f'knowledge_index_audio_processing_seconds_total{{backend="{backend}"}} {seconds}',f'knowledge_index_audio_errors_total{{backend="{backend}"}} {errors}']
         for backend,seconds in db.execute("SELECT backend,sum(duration_s) FROM jobs WHERE audio_state IN ('speech','no_speech','no_audio','uncertain_speech') GROUP BY backend"):
             lines.append(f'knowledge_index_audio_source_seconds_total{{backend="{backend}"}} {seconds or 0}')
-    prom.parent.mkdir(parents=True,exist_ok=True);temporary=prom.with_suffix('.tmp');temporary.write_text('\n'.join(lines)+'\n');temporary.replace(prom)
+    prom.parent.mkdir(parents=True,exist_ok=True);temporary=prom.with_suffix('.tmp');temporary.write_text('\n'.join(lines)+'\n');temporary.chmod(0o644);temporary.replace(prom)
 
 def healthy(endpoint):
     try:
@@ -265,7 +281,7 @@ def run():
     # Recovery must happen only after obtaining the singleton fence.
     logging.basicConfig(level=logging.INFO,format='%(asctime)s %(message)s')
     metrics(json.loads(CONFIG.read_text()))
-    refresh=0;futures={};stopping=threading.Event()
+    refresh=0;last_export=0;futures={};stopping=threading.Event()
     signal.signal(signal.SIGTERM,lambda *_:stopping.set())
     with concurrent.futures.ThreadPoolExecutor(8) as pool:
         while not stopping.is_set():
@@ -277,8 +293,8 @@ def run():
             for name,future in list(futures.items()):
                 if future.done():future.result();del futures[name]
             with connect() as db:outbox=[r[0] for r in db.execute('SELECT id FROM jobs WHERE updated>coalesce(published,0) LIMIT 32')]
-            for key in outbox:
-                try:publish(key,ROOT)
+            if outbox and time.monotonic()-last_export>=30:
+                try:publish(None,ROOT);last_export=time.monotonic()
                 except Exception as exc:logging.error('Publication deferred (%s)',type(exc).__name__)
             if config['enabled']:
                 for backend in config['backends']:

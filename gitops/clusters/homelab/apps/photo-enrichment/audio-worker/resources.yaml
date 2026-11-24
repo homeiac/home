@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-fe1bb97cc4b1
+  name: audio-worker-c17b7de7520f
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
@@ -107,15 +107,18 @@ data:
     {stage}_attempts FROM jobs WHERE id=?'',[row[''id'']]).fetchone()[0]\n        state=''skipped'' if attempts>=config[''attempts'']
     else ''error''\n        db.execute(f''UPDATE jobs SET {stage}_state=?,error=?,retry_at=?,updated=? WHERE id=?'',[state,type(exc).__name__,time.time()+60*attempts,time.time(),row[''id'']])\n        db.execute(''INSERT
     INTO attempts VALUES(?,?,?,?,?,?)'',[row[''id''],stage,backend,time.monotonic()-started,0,time.time()])\n    logging.warning(''%s
-    %s failed (%s); queue continues'',stage,backend,type(exc).__name__)\n\ndef publish(key,root):\n    import duckdb\n    with
-    connect(root) as db:row=dict(db.execute(''SELECT * FROM jobs WHERE id=?'',[key]).fetchone())\n    directory=root/''parquet'';directory.mkdir(exist_ok=True)\n    target=directory/(key+''.parquet'');temporary=directory/(key+''.tmp'')\n    #
-    One atomic file per file version/configuration, updated after each stage.\n    with duckdb.connect(config={''threads'':1})
-    as d:\n        d.execute(''CREATE TABLE result AS SELECT ?::VARCHAR id,?::VARCHAR path,?::BIGINT size_bytes,?::VARCHAR
-    aliases,?::VARCHAR AS \"version\",?::VARCHAR visual_summary,?::VARCHAR visual_source,?::VARCHAR transcript,?::VARCHAR
-    AS \"language\",?::VARCHAR audio_state,?::VARCHAR backend,?::DOUBLE duration_s,?::VARCHAR story,?::VARCHAR story_version,?::VARCHAR
-    story_state,?::VARCHAR AS \"error\",?::DOUBLE updated'',\n          [row[k] for k in (''id'',''path'',''size_bytes'',''aliases'',''version'',''visual_summary'',''visual_source'',''transcript'',''language'',''audio_state'',''backend'',''duration_s'',''story'',''story_version'',''story_state'',''error'',''updated'')])\n        d.execute(''COPY
-    result TO ? (FORMAT PARQUET)'',[str(temporary)])\n    temporary.replace(target)\n    with connect(root) as db:db.execute(''UPDATE
-    jobs SET published=? WHERE id=?'',[row[''updated''],key])\n\nHELP = {\n ''knowledge_index_audio_updated_timestamp_seconds'':
+    %s failed (%s); queue continues'',stage,backend,type(exc).__name__)\n\ndef publish(key,root):\n    \"\"\"Publish one atomic
+    current snapshot, avoiding thousands of tiny Parquet files.\"\"\"\n    import duckdb\n    columns={''id'':''VARCHAR'',''path'':''VARCHAR'',''size_bytes'':''BIGINT'',''aliases'':''VARCHAR'',''version'':''VARCHAR'',\n      ''visual_summary'':''VARCHAR'',''visual_source'':''VARCHAR'',''transcript'':''VARCHAR'',''language'':''VARCHAR'',\n      ''audio_state'':''VARCHAR'',''backend'':''VARCHAR'',''duration_s'':''DOUBLE'',''story'':''VARCHAR'',''story_version'':''VARCHAR'',\n      ''story_state'':''VARCHAR'',''error'':''VARCHAR'',''updated'':''DOUBLE''}\n    with
+    connect(root) as db:\n        rows=[dict(row) for row in db.execute(''SELECT ''+'',''.join(columns)+'' FROM jobs WHERE
+    active=1'')]\n    if not rows:return\n    directory=root/''parquet'';directory.mkdir(exist_ok=True)\n    target=directory/''current.parquet'';temporary=directory/''current.tmp''\n    schema=''{''+'',''.join(\"''\"+name+\"'':''\"+kind+\"''\"
+    for name,kind in columns.items())+''}''\n    with tempfile.NamedTemporaryFile(mode=''w'',dir=root,prefix=''.export-'',suffix=''.jsonl'')
+    as source:\n        for row in rows:source.write(json.dumps(row,ensure_ascii=False)+''\\n'')\n        source.flush()\n        with
+    duckdb.connect(config={''threads'':1}) as d:\n            d.execute(\"CREATE TABLE result AS SELECT * FROM read_json(?,format=''newline_delimited'',columns=\"+schema+\")\",[source.name])\n            d.execute(\"COPY
+    result TO ? (FORMAT PARQUET,COMPRESSION ZSTD)\",[str(temporary)])\n    temporary.replace(target)\n    with connect(root)
+    as db:\n        db.executemany(''UPDATE jobs SET published=? WHERE id=?'',[(r[''updated''],r[''id'']) for r in rows])\n    #
+    Preserve the first rollout''s row files privately, outside the current dataset.\n    previous=[p for p in directory.glob(''*.parquet'')
+    if p.name!=''current.parquet'']\n    if previous:\n        archive=root/''previous-row-exports'';archive.mkdir(exist_ok=True)\n        for
+    path in previous:path.replace(archive/path.name)\n\n\nHELP = {\n ''knowledge_index_audio_updated_timestamp_seconds'':
     (''gauge'',''Audio/story worker heartbeat''),\n ''knowledge_index_audio_jobs'': (''gauge'',''Current active file versions
     by stage and state''),\n ''knowledge_index_audio_eligible'': (''gauge'',''Video groups with an existing successful visual
     caption''),\n ''knowledge_index_audio_library_videos'': (''gauge'',''All presumed-copy video groups in the library''),\n
@@ -139,19 +142,19 @@ data:
     {seconds}'',f''knowledge_index_audio_errors_total{{backend=\"{backend}\"}} {errors}'']\n        for backend,seconds in
     db.execute(\"SELECT backend,sum(duration_s) FROM jobs WHERE audio_state IN (''speech'',''no_speech'',''no_audio'',''uncertain_speech'')
     GROUP BY backend\"):\n            lines.append(f''knowledge_index_audio_source_seconds_total{{backend=\"{backend}\"}}
-    {seconds or 0}'')\n    prom.parent.mkdir(parents=True,exist_ok=True);temporary=prom.with_suffix(''.tmp'');temporary.write_text(''\\n''.join(lines)+''\\n'');temporary.replace(prom)\n\ndef
+    {seconds or 0}'')\n    prom.parent.mkdir(parents=True,exist_ok=True);temporary=prom.with_suffix(''.tmp'');temporary.write_text(''\\n''.join(lines)+''\\n'');temporary.chmod(0o644);temporary.replace(prom)\n\ndef
     healthy(endpoint):\n    try:\n        with urllib.request.urlopen(endpoint+''/health'',timeout=2) as response:return response.status==200\n    except
     OSError:return False\n\n\ndef run():\n    os.umask(0o077);ROOT.mkdir(parents=True,exist_ok=True)\n    lock=(ROOT/''worker.lock'').open(''a'');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)\n    initialize()\n    #
     Recovery must happen only after obtaining the singleton fence.\n    logging.basicConfig(level=logging.INFO,format=''%(asctime)s
-    %(message)s'')\n    metrics(json.loads(CONFIG.read_text()))\n    refresh=0;futures={};stopping=threading.Event()\n    signal.signal(signal.SIGTERM,lambda
+    %(message)s'')\n    metrics(json.loads(CONFIG.read_text()))\n    refresh=0;last_export=0;futures={};stopping=threading.Event()\n    signal.signal(signal.SIGTERM,lambda
     *_:stopping.set())\n    with concurrent.futures.ThreadPoolExecutor(8) as pool:\n        while not stopping.is_set():\n            config=json.loads(CONFIG.read_text())\n            if
     time.monotonic()>=refresh:\n                try:discover(config)\n                except Exception as exc:logging.warning(''Discovery
     deferred (%s)'',type(exc).__name__)\n                refresh=time.monotonic()+config[''scan_seconds'']\n            for
     name,future in list(futures.items()):\n                if future.done():future.result();del futures[name]\n            with
-    connect() as db:outbox=[r[0] for r in db.execute(''SELECT id FROM jobs WHERE updated>coalesce(published,0) LIMIT 32'')]\n            for
-    key in outbox:\n                try:publish(key,ROOT)\n                except Exception as exc:logging.error(''Publication
-    deferred (%s)'',type(exc).__name__)\n            if config[''enabled'']:\n                for backend in config[''backends'']:\n                    if
-    backend not in futures and healthy(config[''backends''][backend]):\n                        row=claim(''audio'',backend,config)\n                        if
+    connect() as db:outbox=[r[0] for r in db.execute(''SELECT id FROM jobs WHERE updated>coalesce(published,0) LIMIT 32'')]\n            if
+    outbox and time.monotonic()-last_export>=30:\n                try:publish(None,ROOT);last_export=time.monotonic()\n                except
+    Exception as exc:logging.error(''Publication deferred (%s)'',type(exc).__name__)\n            if config[''enabled'']:\n                for
+    backend in config[''backends'']:\n                    if backend not in futures and healthy(config[''backends''][backend]):\n                        row=claim(''audio'',backend,config)\n                        if
     row:futures[backend]=pool.submit(audio_job,row,backend,config)\n                if ''story'' not in futures and healthy(''http://127.0.0.1:19476''):\n                    row=claim(''story'',''mac'',config)\n                    if
     row:futures[''story'']=pool.submit(story_job,row,config)\n            metrics(config);stopping.wait(5)\n\nif __name__==''__main__'':run()\n",
     "knowledge-index-audio-story.service": "[Unit]\nDescription=GitOps video speech and story backfill (reuses saved vision)\nWants=network-online.target\nAfter=network-online.target
@@ -162,7 +165,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-fe1bb97cc4b1
+  name: audio-worker-c17b7de7520f
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -217,7 +220,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-fe1bb97cc4b1
+          name: audio-worker-c17b7de7520f
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -292,7 +295,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-fe1bb97cc4b1
+              name: audio-worker-c17b7de7520f
           - name: credentials
             secret:
               secretName: caption-worker-deploy

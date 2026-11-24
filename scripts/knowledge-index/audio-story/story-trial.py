@@ -11,13 +11,18 @@ root=w.ROOT/'trials';db=sqlite3.connect(root/'trials.sqlite3')
 clips=sqlite3.connect('file:/local-3TB-backup/photo-enrichment/video-tuning-20261124/trials.sqlite3?mode=ro',uri=True)
 import duckdb
 out=[]
+inputs=[]
+for clip,raw in db.execute("SELECT clip,result FROM trials WHERE backend='mac' AND beam=1 AND clip<>'silence'").fetchall():
+ segments=w.parse_transcript(json.loads(raw))
+ if segments:
+  row=json.loads(clips.execute('SELECT row_json FROM clips WHERE id=?',[clip]).fetchone()[0]);inputs.append((clip,row,segments))
 with duckdb.connect(str(w.INDEX/'knowledge.duckdb'),read_only=True,config={'threads':2}) as d:
- for clip,raw in db.execute("SELECT clip,result FROM trials WHERE backend='mac' AND beam=1 AND clip<>'silence'").fetchall():
-  segments=w.parse_transcript(json.loads(raw))
-  if not segments:continue
-  row=json.loads(clips.execute('SELECT row_json FROM clips WHERE id=?',[clip]).fetchone()[0])
-  visual=d.execute("SELECT summary FROM media_summaries WHERE path=? AND size_bytes=? AND status='ok' ORDER BY created_at DESC LIMIT 1",[row['path'],row['size_bytes']]).fetchone()
-  if not visual:continue
+ visual_rows=d.execute("SELECT path,size_bytes,summary FROM media_summaries WHERE path=ANY(?) AND status='ok' QUALIFY row_number() OVER(PARTITION BY path,size_bytes ORDER BY created_at DESC)=1",[[r['path'] for _,r,_ in inputs]]).fetchall()
+ visuals={(p,size):text for p,size,text in visual_rows}
+ for clip,row,segments in inputs:
+  text=visuals.get((row['path'],row['size_bytes']))
+  if not text:continue
+  visual=(text,)
   for profile,prompt in [('simple','Combine the saved visual caption and automatic transcript into a short story. Return JSON with a story string. '+json.dumps({'visual':visual[0],'speech':segments},ensure_ascii=False)),('evidence',w.story_prompt(visual[0],segments))]:
    body={'model':'bonsai-27b-metal','messages':[{'role':'user','content':prompt}],'temperature':.1,'max_tokens':384,'chat_template_kwargs':{'enable_thinking':False},'response_format':{'type':'json_object'}}
    req=urllib.request.Request('http://127.0.0.1:19476/v1/chat/completions',json.dumps(body).encode(),{'Content-Type':'application/json','Authorization':'Bearer '+Path('/opt/knowledge-index/mac-bonsai.key').read_text().strip()})

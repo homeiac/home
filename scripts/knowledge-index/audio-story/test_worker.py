@@ -94,4 +94,13 @@ class AudioTests(unittest.TestCase):
    r=d.execute('SELECT visual_source,audio_state,story_state FROM jobs WHERE active=1').fetchone()
    self.assertEqual(tuple(r),('local','speech','pending'))
 
+ def test_metrics_are_readable_without_exposing_private_paths(self):
+  import os,stat
+  old=os.umask(0o077)
+  try:worker.metrics(dict(self.config,backends={'mac':'http://127.0.0.1:19477'}),self.root,self.root/'metrics.prom')
+  finally:os.umask(old)
+  p=self.root/'metrics.prom';self.assertEqual(stat.S_IMODE(p.stat().st_mode),0o644)
+  self.assertNotIn('a.mp4',p.read_text())
+  self.assertIn('knowledge_index_audio_jobs{stage="audio",state="pending"} 1',p.read_text())
+
 if __name__=='__main__':unittest.main()
