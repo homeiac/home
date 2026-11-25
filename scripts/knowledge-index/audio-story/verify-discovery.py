@@ -13,6 +13,7 @@ config=json.loads(w.CONFIG.read_text())
 with tempfile.TemporaryDirectory(dir=w.ROOT,prefix='.discovery-check-') as temporary:
  clone=Path(temporary)
  with sqlite3.connect('file:'+str(w.ROOT/'ledger.sqlite3')+'?mode=ro',uri=True) as source,sqlite3.connect(clone/'ledger.sqlite3') as target:source.backup(target)
+ with w.connect(clone) as d:production=dict(d.execute('SELECT id,visual_hash FROM jobs WHERE active=1'))
  w.discover(config,clone)
  with w.connect(clone) as d:
   before=dict(d.execute('SELECT id,visual_hash FROM jobs WHERE active=1'))
@@ -22,5 +23,5 @@ with tempfile.TemporaryDirectory(dir=w.ROOT,prefix='.discovery-check-') as tempo
   after=dict(d.execute('SELECT id,visual_hash FROM jobs WHERE active=1'))
   queued=d.execute("SELECT count(*) FROM jobs WHERE active=1 AND story_state<>'ok'").fetchone()[0]
  changes=sum(before.get(key)!=value for key,value in after.items())+len(set(before)-set(after))
- print(json.dumps({'checked_video_groups':len(after),'changed_inputs_on_repeat':changes,'stories_requeued_on_repeat':queued,'models_called':0,'production_ledger_modified':False}),flush=True)
+ print(json.dumps({'checked_video_groups':len(after),'changed_inputs_against_production':sum(production.get(k)!=v for k,v in before.items())+len(set(production)-set(before)),'changed_inputs_on_repeat':changes,'stories_requeued_on_repeat':queued,'models_called':0,'production_ledger_modified':False}),flush=True)
  if changes or queued:raise RuntimeError('Unchanged discovery was not stable')

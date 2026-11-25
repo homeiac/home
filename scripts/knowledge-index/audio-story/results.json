@@ -153,5 +153,50 @@
     "ready_visual_only_pending": 0,
     "snapshot_duplicates": 0,
     "method": "Bounded idempotent database batches reuse the saved visual caption for absent/unusable speech without a model call. Concurrent audio/caption processing and story revision updates continue; this is not a model-speed benchmark."
+  },
+  "caption_selection_stability": {
+    "ambiguous_groups_in_old_selection": 1052,
+    "verification": {
+      "checked_video_groups": 6909,
+      "changed_inputs_against_production": 0,
+      "changed_inputs_on_repeat": 0,
+      "stories_requeued_on_repeat": 0,
+      "models_called": 0,
+      "production_ledger_modified": false
+    },
+    "live_audit": {
+      "checked_utc": "2026-11-25T16:17:13Z",
+      "ledger_rows": 6909,
+      "audio_states": {
+        "no_audio": 93,
+        "no_speech": 4128,
+        "speech": 2059,
+        "uncertain_speech": 629
+      },
+      "story_states": {
+        "error": 1,
+        "inflight": 1,
+        "ok": 6582,
+        "pending": 321,
+        "skipped": 4
+      },
+      "visual_sources": {
+        "local": 6885,
+        "luna": 24
+      },
+      "audio_repeated_successes": 0,
+      "visual_only_settled": 38891,
+      "ready_visual_only_pending": 0,
+      "unpublished_updates": 6,
+      "stages": {
+        "audio": 6909,
+        "story": 66036
+      },
+      "snapshot_rows": 6909,
+      "snapshot_unique_items": 6909,
+      "snapshot_duplicates": 0,
+      "snapshot_age_seconds": 19.2
+    },
+    "note": "Deterministic selection may require one final story update when its chosen caption differs from the previous arbitrary winner. Identical repeat discovery does not requeue it. Audio is preserved."
   }
 }
