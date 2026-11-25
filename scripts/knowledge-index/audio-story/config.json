@@ -13,7 +13,7 @@
   "beam": 1,
   "story_version": "audio-story-v3",
   "codex_translation": {
-    "enabled": false,
+    "enabled": true,
     "endpoint": "http://127.0.0.1:19479",
     "model": "gpt-6-luna",
     "estimated_limit_usd": 10

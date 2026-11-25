@@ -4,7 +4,7 @@ Whisper transcribes full audio from videos that already have a successful local
 or Luna visual caption. A text-only Bonsai request extracts useful spoken context;
 the saved story retains the visual account and explicitly attributes speech.
 No images go to that request. Existing vision captions and original media stay
-unchanged. This worker does not spend cloud/API credits.
+unchanged. Whisper and clear-English interpretation stay local. Selected difficult translation text uses the existing Codex/ChatGPT login after explicit authorization.
 
 ## What runs where
 
@@ -107,30 +107,41 @@ queryable Parquet; this change does not claim native Immich summary indexing.
 existing sync pod's credential without copying it. Context search requires the
 Immich ML service even after all image embeddings have been generated.
 
-Non-English spoken context currently waits for a capable text translation route.
-Whisper continues saving the original timed transcript. The dashboard explicitly
-shows how many are waiting and whether the route is enabled/healthy. Context is
-not sent to an external service merely because transcription has completed.
+## Authorized Codex translation route
 
-## Prepared Codex translation route (disabled)
+Enabled on November 24, 2026 after explicit authorization to send selected
+transcripts and short saved visual descriptions to OpenAI using the existing
+Codex/ChatGPT login. Original audio, photos and videos stay local. Non-English and
+mixed-script speech uses this route; clear English stays with the local model.
 
-`codex_translate.py` is a text-only broker for the existing ChatGPT-authenticated
-Codex CLI on the Mac. It is prepared and tested offline, but is not installed or
-started while `codex_translation.enabled` is false. It sends only selected timed
-speech plus a short saved visual description to OpenAI; original media stays local.
-This external text destination requires explicit authorization. Existing runners
-in this environment are host services, not an observed Codex Kubernetes pod.
+`codex_translate.py` runs as a Mac launch agent with a loopback-only SSH reverse
+tunnel. It reuses the existing authenticated CLI, with tools, plugins and web search
+disabled. Git policy controls admission; one story slot bounds request concurrency.
+Exact evidence/revision fingerprints and durable ledgers prevent resubmission after
+ambiguous timeouts. Authentication and rate-limit failures disable the route.
+Unknown requests retain their reservation and are skipped individually while audio
+work continues. No new API key is created or copied.
 
-The adapter uses Luna with tools/plugins/web search disabled. It must return a
-short spoken-context interpretation or explicitly mark the text unclear/incidental.
-One story worker admits requests. Exact input/revision fingerprints and a durable
-broker ledger prevent resubmission after ambiguous timeouts. Authentication and
-rate-limit failures disable the route. Unknown requests retain their reservation
-and are skipped individually; other audio work continues.
+The separate translation estimate cap is $10, reserving $0.025 per unresolved
+request. Known token usage settles using the existing Luna API-equivalent rate.
+This is not actual account cost or an account usage reading. Earlier caption and
+reconciliation limits remain unchanged. The dashboard shows waiting, saved,
+unresolved and ready states plus the estimate and outstanding holds.
 
-The separate translation estimate cap is $10, with $0.025 reserved per unresolved
-request and known token usage settled using the existing Luna API-equivalent rate.
-This is not actual account cost or a raw account usage reading. The original
-caption/reconciliation campaign limits are unchanged. The disabled configuration
-cannot submit requests. Offline tests mock both network and model invocation:
-`python3 scripts/knowledge-index/audio-story/test_codex_translate.py`.
+The initial prompt was too cautious and rejected a clear English control. The
+revised prompt retains a stable core meaning despite minor ASR errors. The final
+pilot used three saved cases plus a synthetic clean Tamil control: it retained clear
+English monkey commentary, translated the Tamil hiking sentence accurately, and
+withheld both garbled Tamil transcripts. These are text-level checks, not a full
+human-labelled audio accuracy study. Raw review inputs and outputs remain private.
+
+```sh
+python3 scripts/knowledge-index/audio-story/test_codex_translate.py
+CB_HOST=root@<inventory-host> python3 scripts/knowledge-index/audio-story/codex_translate.py --install
+python3 scripts/knowledge-index/audio-story/verify-translations.py --host root@<inventory-host>
+```
+
+`verify-translations.py` fingerprints each prompt/case, reserves the shared cap
+before a pilot call, and reuses settled answers on reruns. Disabling the Git flag
+stops new admissions. Configuration-only host changes are reloaded without
+restarting Whisper, the audio coordinator or the existing vision worker.

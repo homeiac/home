@@ -166,6 +166,8 @@ def reconcile(bundle: dict) -> dict:
     return state
 
 
+AUDIO_STATE = Path('/local-3TB-backup/photo-enrichment/audio-story')
+AUDIO_METRICS = Path('/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom')
 AUDIO_FILES = {
     'audio-worker.py': ROOT / 'audio-story/worker.py',
     'audio-config.json': ROOT / 'audio-story/config.json',
@@ -201,6 +203,7 @@ def reconcile_audio(bundle: dict) -> dict:
     unit = 'knowledge-index-audio-story.service'
     changed = {name: content.encode() for name, content in bundle.items()
                if not AUDIO_FILES[name].exists() or AUDIO_FILES[name].read_bytes() != content.encode()}
+    restart = bool(set(changed) - {'audio-config.json'})
     previous = {path: path.read_bytes() if path.exists() else None for path in AUDIO_FILES.values()}
     active = command('systemctl', 'is-active', '--quiet', unit, check=False).returncode == 0
     enabled = command('systemctl', 'is-enabled', '--quiet', unit, check=False).returncode == 0
@@ -212,19 +215,19 @@ def reconcile_audio(bundle: dict) -> dict:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
     try:
-        if changed and active:
+        if restart and active:
             command('systemctl', 'stop', unit, timeout=200)
         for name, content in changed.items():
             replace(AUDIO_FILES[name], content)
-        Path('/local-3TB-backup/photo-enrichment/audio-story').mkdir(parents=True, exist_ok=True)
+        AUDIO_STATE.mkdir(parents=True, exist_ok=True)
         command('systemd-analyze', 'verify', str(AUDIO_FILES['knowledge-index-audio-story.service']))
         command('systemctl', 'daemon-reload')
         if config['enabled']:
             command('systemctl', 'enable', '--now', unit)
-            heartbeat = Path('/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom')
+            heartbeat = AUDIO_METRICS
             started = time.time()
             for _ in range(45):
-                if heartbeat.exists() and heartbeat.stat().st_mtime >= started - (30 if active and not changed else 0):
+                if heartbeat.exists() and heartbeat.stat().st_mtime >= started - (30 if active and not restart else 0):
                     break
                 time.sleep(1)
             else:

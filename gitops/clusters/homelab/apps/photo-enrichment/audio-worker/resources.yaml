@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-51e9b8ffbf50
+  name: audio-worker-8a53bc6e8cf8
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
     300,\n  \"attempts\": 3,\n  \"chunk_seconds\": 120,\n  \"story_model\": \"bonsai-27b-metal\",\n  \"backends\": {\n    \"mac\":
     \"http://127.0.0.1:19477\",\n    \"cpu\": \"https://whisper-cpu.app.home.panderosystems.com\"\n  },\n  \"beam\": 1,\n  \"story_version\":
-    \"audio-story-v3\",\n  \"codex_translation\": {\n    \"enabled\": false,\n    \"endpoint\": \"http://127.0.0.1:19479\",\n    \"model\":
+    \"audio-story-v3\",\n  \"codex_translation\": {\n    \"enabled\": true,\n    \"endpoint\": \"http://127.0.0.1:19479\",\n    \"model\":
     \"gpt-6-luna\",\n    \"estimated_limit_usd\": 10\n  }\n}\n", "audio-worker.py": "#!/usr/bin/env python3\n\"\"\"Resumable,
     separate audio and text-only story enrichment. Never sends images.\"\"\"\nimport unicodedata,zlib,argparse,concurrent.futures,contextlib,datetime,fcntl,hashlib,json,logging,math,os,re,signal,sqlite3,subprocess,tempfile,threading,time,urllib.request,uuid\nfrom
     pathlib import Path\n\nROOT=Path(''/local-3TB-backup/photo-enrichment/audio-story'')\nINDEX=Path(''/local-3TB-backup/knowledge-index'')\nLIBRARY=Path(''/local-3TB-backup/gphotos/library'')\nCONFIG=Path(''/opt/knowledge-index/audio-story/config.json'')\nPROM=Path(''/var/lib/prometheus/node-exporter/knowledge_index_audio_story.prom'')\nHASH_LOCKS={};GUARD=threading.Lock()\nHEALTH_CACHE={}\nTERMINAL=(''speech'',''no_speech'',''no_audio'',''uncertain_speech'',''skipped'')\n\ndef
@@ -203,7 +203,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-51e9b8ffbf50
+  name: audio-worker-8a53bc6e8cf8
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -258,7 +258,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-51e9b8ffbf50
+          name: audio-worker-8a53bc6e8cf8
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -333,7 +333,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-51e9b8ffbf50
+              name: audio-worker-8a53bc6e8cf8
           - name: credentials
             secret:
               secretName: caption-worker-deploy

@@ -1,6 +1,6 @@
 {
   "story": "Use saved visual captions plus timestamped speech to recall the event. Keep original captions and full transcripts separately; uncertain or repetitive ASR is withheld. The backfill never sends images to a model.",
-  "decision": "Mac Metal handles most speech recognition and still-fawn CPU adds spare capacity. RTX was benchmarked with an accounted share and returned to Immich search. Clear English uses a text-only local story path; difficult translation has a prepared, disabled Codex adapter with idempotent submissions and a separate $10 API-equivalent estimate cap. Original media stays local.",
+  "decision": "Mac Metal handles most speech recognition and still-fawn CPU adds spare capacity. RTX was benchmarked with an accounted share and returned to Immich search. Clear English uses a text-only local story path; difficult translation has a user-authorized Codex adapter with idempotent submissions and a separate $10 API-equivalent estimate cap. Original media stays local.",
   "method": "Six fixed private clips capped at their first 30 seconds plus a 10-second silence control: 151.93 source seconds. Whisper small Q5_1 multilingual, Silero VAD, two CPU threads, warm model servers (first-request warmup may remain), beam 1. One cell per clip/backend under live host contention; extraction excluded, HTTP transfer included. Beam 3 uses a matched 70-second subset only; compare its overlapping cells separately. No reference word-error-rate or full-video accuracy score.",
   "trials": [
     {
@@ -73,7 +73,7 @@
     }
   ],
   "story_prompt_pairs": 3,
-  "quality": "Three paired prompt checks against saved captions and automatic speech exposed misleading Tamil-to-English interpretations. Non-English and mixed-script spoken context now waits for a capable Codex translator, which is disabled pending explicit destination authorization. Low-confidence/repetitive ASR is withheld automatically. No human-labelled audio reference or accuracy score.",
+  "quality": "Three paired prompt checks against saved captions and automatic speech exposed misleading Tamil-to-English interpretations. Non-English and mixed-script spoken context now waits for a capable Codex translator, enabled after explicit destination authorization and four final text-level pilot checks. Low-confidence/repetitive ASR is withheld automatically. No human-labelled audio reference or accuracy score.",
   "live_validation": {
     "checked_utc": "2026-11-24T23:51:27Z",
     "ledger_rows": 6909,
@@ -106,8 +106,17 @@
     "snapshot_age_seconds": 22.3
   },
   "translation_status": {
-    "enabled": false,
-    "submitted": 0,
-    "reason": "Explicit authorization of selected text and OpenAI destination pending; local transcription continues"
+    "enabled": true,
+    "model": "gpt-6-luna",
+    "authorization": "Selected speech transcripts and short saved visual descriptions to OpenAI via existing Codex login; original media stays local"
+  },
+  "translation_review": {
+    "saved_cases": 3,
+    "synthetic_controls": 1,
+    "final_useful": 2,
+    "final_withheld": 2,
+    "calibration_requests": 3,
+    "final_pilot_requests": 4,
+    "observations": "Revised prompt retained clear English commentary and translated a clean Tamil hiking sentence; both garbled Tamil transcripts were withheld. First prompt was overcautious. Checks compare text meaning, not a human-labelled audio reference."
   }
 }
