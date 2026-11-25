@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-7542dcbc4100
+  name: audio-worker-488b5c355c5b
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
@@ -26,13 +26,14 @@ data:
     PRIMARY KEY,value TEXT);\n          CREATE TABLE IF NOT EXISTS attempts(job TEXT,stage TEXT,backend TEXT,seconds REAL,ok
     INTEGER,created REAL);\n          CREATE TABLE IF NOT EXISTS codex_requests(id TEXT PRIMARY KEY,job TEXT,state TEXT,cost
     INTEGER,result TEXT);\n        '''''')\n        columns={r[1] for r in db.execute(''PRAGMA table_info(jobs)'')}\n        missing={''published'':''REAL
-    DEFAULT 0'',''visual_source'':\"TEXT DEFAULT ''local''\",''story_version'':''TEXT''}.keys()-columns\n        if missing:\n            backup=sqlite3.connect(root/(''ledger-before-migration-''+str(int(time.time()))+''.sqlite3''))\n            db.backup(backup);backup.close()\n            for
+    DEFAULT 0'',''visual_source'':\"TEXT DEFAULT ''local''\",''story_version'':''TEXT'',''story_note'':''TEXT''}.keys()-columns\n        if
+    missing:\n            backup=sqlite3.connect(root/(''ledger-before-migration-''+str(int(time.time()))+''.sqlite3''))\n            db.backup(backup);backup.close()\n            for
     column in sorted(missing):\n                definition={''published'':''REAL DEFAULT 0'',''visual_source'':\"TEXT DEFAULT
-    ''local''\",''story_version'':''TEXT''}[column]\n                db.execute(f''ALTER TABLE jobs ADD COLUMN {column} {definition}'')\n        db.execute(\"UPDATE
-    codex_requests SET state=''unknown'' WHERE state=''sent''\")\n        db.execute(\"UPDATE jobs SET audio_state=''pending''
-    WHERE audio_state=''inflight''\")\n        db.execute(\"UPDATE jobs SET story_state=''pending'' WHERE story_state=''inflight''\")\n\ndef
-    discover(config,root=ROOT,index=INDEX):\n    \"\"\"Use coverage''s presumed-copy mapping and current file versions, not
-    row counts.\"\"\"\n    import duckdb\n    with duckdb.connect(str(index/''knowledge.duckdb''),read_only=True,config={''threads'':2})
+    ''local''\",''story_version'':''TEXT'',''story_note'':''TEXT''}[column]\n                db.execute(f''ALTER TABLE jobs
+    ADD COLUMN {column} {definition}'')\n        db.execute(\"UPDATE codex_requests SET state=''unknown'' WHERE state=''sent''\")\n        db.execute(\"UPDATE
+    jobs SET audio_state=''pending'' WHERE audio_state=''inflight''\")\n        db.execute(\"UPDATE jobs SET story_state=''pending''
+    WHERE story_state=''inflight''\")\n\ndef discover(config,root=ROOT,index=INDEX):\n    \"\"\"Use coverage''s presumed-copy
+    mapping and current file versions, not row counts.\"\"\"\n    import duckdb\n    with duckdb.connect(str(index/''knowledge.duckdb''),read_only=True,config={''threads'':2})
     as d:\n        # Read successful rows directly: media_summaries itself has an untied\n        # row_number winner when
     path/enricher timestamps match. Current-size\n        # inventory joins below reject stale versions before selection.\n        raw_local=next((index/''summaries'').glob(''*/*.parquet''),None)
     is not None\n        relation=''read_parquet(?,union_by_name=true)'' if raw_local else ''media_summaries''\n        params=[str(index/''summaries/*/*.parquet'')]
@@ -82,9 +83,9 @@ data:
     result\n    for s in raw.get(''segments'',[]):\n        text=s.get(''text'','''').strip()\n        if not text or s.get(''no_speech_prob'',0)>.6
     or s.get(''avg_logprob'',0)<-1:continue\n        encoded=text.encode(''utf-8'')\n        if len(encoded)>80 and len(encoded)/len(zlib.compress(encoded))>2.4:continue\n        start=float(s.get(''start'',0));end=float(s.get(''end'',start))\n        if
     not math.isfinite(start+end) or start<0 or end<start:continue\n        result.append({''start'':round(start+offset,3),''end'':round(end+offset,3),''text'':text})\n    return
-    result\n\ndef safe_source(row,library=LIBRARY):\n    source=(library/row[''path'']).resolve()\n    if not source.is_relative_to(library.resolve())
-    or source.stat().st_size!=row[''size_bytes'']:\n        raise ValueError(''Source path or size changed'')\n    return
-    source\n\ndef audio_job(row,backend,config,root=ROOT,library=LIBRARY):\n    started=time.monotonic();key=row[''id'']\n    try:\n        source=safe_source(row,library)\n        probe=json.loads(subprocess.check_output([''ffprobe'',''-v'',''error'',''-show_entries'',''stream=codec_type:format=duration'',''-of'',''json'',str(source)],timeout=60))\n        duration=float(probe.get(''format'',{}).get(''duration'')
+    reliable_story_segments(result)\n\ndef safe_source(row,library=LIBRARY):\n    source=(library/row[''path'']).resolve()\n    if
+    not source.is_relative_to(library.resolve()) or source.stat().st_size!=row[''size_bytes'']:\n        raise ValueError(''Source
+    path or size changed'')\n    return source\n\ndef audio_job(row,backend,config,root=ROOT,library=LIBRARY):\n    started=time.monotonic();key=row[''id'']\n    try:\n        source=safe_source(row,library)\n        probe=json.loads(subprocess.check_output([''ffprobe'',''-v'',''error'',''-show_entries'',''stream=codec_type:format=duration'',''-of'',''json'',str(source)],timeout=60))\n        duration=float(probe.get(''format'',{}).get(''duration'')
     or row[''duration_s''])\n        if not math.isfinite(duration) or duration<=0:raise ValueError(''Unknown video duration'')\n        segments=[];language=None;digest=None;state=''no_audio'';had_raw=False\n        if
     any(s.get(''codec_type'')==''audio'' for s in probe[''streams'']):\n            with tempfile.TemporaryDirectory(dir=root,prefix=''.audio-'')
     as temporary:\n                wav=Path(temporary)/''full.wav''\n                subprocess.run([''ffmpeg'',''-v'',''error'',''-threads'',''2'',''-i'',str(source),''-map'',''0:a:0'',''-vn'',''-ac'',''1'',''-ar'',''16000'',''-c:a'',''pcm_s16le'',''-y'',str(wav)],capture_output=True,check=True,timeout=900)\n                with
@@ -110,8 +111,23 @@ data:
     one concise English sentence, ''\n      ''explicitly as what someone mentions, asks, or discusses. Never claim the spoken
     subject is visibly filmed, ''\n      ''identify speakers, count voices, infer emotions, or invent relationships or actions.
     ''\n      ''Omit incidental chatter, uncertain wording and garbled literal translations. If no useful reliable context
-    remains, ''\n      ''use an empty string. Return only JSON {\"spoken_context\":\"...\"}. Evidence:\\n''+json.dumps(evidence,ensure_ascii=False))\n\nclass
-    CodexUnknown(RuntimeError):\n    \"\"\"An isolated external submission must not be silently repeated.\"\"\"\n\n\ndef codex_budget_open(config,root=ROOT):\n    cap=int(config.get(''codex_translation'',{}).get(''estimated_limit_usd'',0)*1_000_000)\n    with
+    remains, ''\n      ''use an empty string. Return only JSON {\"spoken_context\":\"...\"}. Evidence:\\n''+json.dumps(evidence,ensure_ascii=False))\n\ndef
+    reliable_story_segments(segments):\n    \"\"\"Withhold repetition loops without changing saved ASR evidence.\"\"\"\n    def
+    words(text):return re.findall(r\"\\w+\",text.casefold())\n    clean=[];loop_words=set()\n    for segment in segments:\n        tokens=words(segment[''text'']);loop=False\n        if
+    len(tokens)>=6:\n            for n in range(1,min(4,len(tokens)//2)+1):\n                counts={}\n                for
+    i in range(len(tokens)-n+1):\n                    key=tuple(tokens[i:i+n]);counts[key]=counts.get(key,0)+1\n                if
+    max(counts.values(),default=0)*n/len(tokens)>=.8:\n                    loop=True;break\n        if loop:loop_words.update(tokens)\n        else:clean.append(segment)\n    #
+    Short remnants composed entirely of the loop''s vocabulary aren''t new evidence.\n    if loop_words:clean=[s for s in
+    clean if not set(words(s[''text''])).issubset(loop_words)]\n    return clean\n\nclass StoryFormatError(ValueError):\n    \"\"\"A
+    deterministic malformed model response must not trigger identical retries.\"\"\"\n\ndef parse_story_response(choice):\n    \"\"\"Accept
+    valid JSON/fences; never repair or promote a truncated sentence.\"\"\"\n    if choice.get(''finish_reason'')==''length'':raise
+    StoryFormatError(''Output token limit'')\n    text=choice[''message''][''content'']\n    if not isinstance(text,str):raise
+    StoryFormatError(''Non-text response'')\n    text=re.sub(r''^```(?:json)?\\s*|\\s*```$'','''',text.strip())\n    try:answer=json.loads(text)\n    except
+    json.JSONDecodeError:raise StoryFormatError(''Malformed JSON'') from None\n    if not isinstance(answer,dict) or set(answer)!={''spoken_context''}
+    or not isinstance(answer[''spoken_context''],str):\n        raise StoryFormatError(''Invalid spoken context schema'')\n    spoken=answer[''spoken_context''].strip()\n    if
+    len(spoken)>1500:raise StoryFormatError(''Spoken context too long'')\n    if spoken and not reliable_story_segments([{''text'':spoken}]):raise
+    StoryFormatError(''Repetitive output'')\n    return spoken\n\nclass CodexUnknown(RuntimeError):\n    \"\"\"An isolated
+    external submission must not be silently repeated.\"\"\"\n\n\ndef codex_budget_open(config,root=ROOT):\n    cap=int(config.get(''codex_translation'',{}).get(''estimated_limit_usd'',0)*1_000_000)\n    with
     connect(root) as db:used=db.execute(''SELECT coalesce(sum(cost),0) FROM codex_requests'').fetchone()[0]\n    return used+25_000<=cap\n\n\ndef
     codex_context(row,config,root=ROOT):\n    \"\"\"Send selected text only, behind explicit policy and an idempotent cost
     hold.\"\"\"\n    settings=config.get(''codex_translation'',{})\n    if settings.get(''enabled'') is not True:raise CodexUnknown(''Translation
@@ -129,15 +145,17 @@ data:
     or not isinstance(answer[''spoken_context''],str) or len(answer[''spoken_context''])>1500:raise ValueError(''Invalid translation'')\n        with
     connect(root) as db:db.execute(\"UPDATE codex_requests SET state=''ok'',cost=?,result=? WHERE id=?\",[cost,json.dumps(answer),key])\n        return
     answer\n    except Exception:\n        with connect(root) as db:db.execute(\"UPDATE codex_requests SET state=''unknown''
-    WHERE id=?\",[key])\n        raise CodexUnknown(''Translation result unavailable'') from None\n\n\ndef story_job(row,config,root=ROOT):\n    started=time.monotonic()\n    try:\n        segments=json.loads(row[''transcript'']
-    or ''[]'')\n        if row[''audio_state'']!=''speech'':story=row[''visual_summary'']\n        elif needs_codex(row[''language''],row[''transcript'']):\n            answer=codex_context(row,config,root)\n            spoken=answer[''spoken_context''].strip()
-    if answer[''assessment'']==''useful'' else ''''\n            story=row[''visual_summary'']+('' In the audio: ''+spoken
-    if spoken else '''')\n        else:\n            body={''model'':config[''story_model''],''messages'':[{''role'':''user'',''content'':story_prompt(row[''visual_summary''],segments)}],''temperature'':0.1,''max_tokens'':384,''chat_template_kwargs'':{''enable_thinking'':False},''response_format'':{''type'':''json_object''}}\n            key=Path(''/opt/knowledge-index/mac-bonsai.key'').read_text().strip()\n            req=urllib.request.Request(''http://127.0.0.1:19476/v1/chat/completions'',json.dumps(body).encode(),{''Content-Type'':''application/json'',''Authorization'':''Bearer
-    ''+key})\n            with urllib.request.urlopen(req,timeout=300) as response:answer=json.load(response)[''choices''][0][''message''][''content'']\n            answer=re.sub(r''^```(?:json)?\\s*|\\s*```$'','''',answer.strip());spoken=json.loads(answer)[''spoken_context''].strip()\n            if
-    len(spoken)>1500:raise ValueError(''Invalid spoken context'')\n            story=row[''visual_summary'']+('' In the audio:
-    ''+spoken if spoken else '''')\n        with connect(root) as db:\n            changed=db.execute(\"UPDATE jobs SET story_state=''ok'',story=?,error=NULL,finished=?,updated=?
-    WHERE id=? AND visual_hash=? AND story_version IS ?\",[story,time.time(),time.time(),row[''id''],row[''visual_hash''],row[''story_version'']])\n            if
-    not changed.rowcount:return\n            db.execute(''INSERT INTO attempts VALUES(?,?,?,?,?,?)'',[row[''id''],''story'',''mac'',time.monotonic()-started,1,time.time()])\n    except
+    WHERE id=?\",[key])\n        raise CodexUnknown(''Translation result unavailable'') from None\n\n\ndef story_job(row,config,root=ROOT):\n    started=time.monotonic()\n    try:\n        raw_segments=json.loads(row[''transcript'']
+    or ''[]'')\n        segments=reliable_story_segments(raw_segments)\n        note=None;backend=''mac''\n        if row[''audio_state'']!=''speech'':story=row[''visual_summary'']\n        elif
+    raw_segments and not segments:\n            story=row[''visual_summary''];note=''repetitive_transcript_withheld'';backend=''visual_only_repetitive_asr''\n        else:\n            evidence=dict(row,transcript=json.dumps(segments,ensure_ascii=False))\n            fallback=needs_codex(row[''language''],evidence[''transcript''])
+    or row.get(''error'') in (''JSONDecodeError'',''StoryFormatError'')\n            if not fallback:\n                body={''model'':config[''story_model''],''messages'':[{''role'':''user'',''content'':story_prompt(row[''visual_summary''],segments)}],''temperature'':0.1,''max_tokens'':384,''chat_template_kwargs'':{''enable_thinking'':False},''response_format'':{''type'':''json_object''}}\n                key=Path(''/opt/knowledge-index/mac-bonsai.key'').read_text().strip()\n                req=urllib.request.Request(''http://127.0.0.1:19476/v1/chat/completions'',json.dumps(body).encode(),{''Content-Type'':''application/json'',''Authorization'':''Bearer
+    ''+key})\n                try:\n                    with urllib.request.urlopen(req,timeout=300) as response:answer=json.load(response)\n                    spoken=parse_story_response(answer[''choices''][0])\n                except
+    (json.JSONDecodeError,StoryFormatError,KeyError,TypeError,IndexError):fallback=True\n            if fallback:\n                answer=codex_context(evidence,config,root);backend=''codex''\n                spoken=answer[''spoken_context''].strip()
+    if answer[''assessment'']==''useful'' else ''''\n                note=''codex_''+answer[''assessment'']\n            story=row[''visual_summary'']+(''
+    In the audio: ''+spoken if spoken else '''')\n        with connect(root) as db:\n            changed=db.execute(\"UPDATE
+    jobs SET story_state=''ok'',story=?,story_note=?,error=NULL,finished=?,updated=? WHERE id=? AND visual_hash=? AND story_version
+    IS ?\",[story,note,time.time(),time.time(),row[''id''],row[''visual_hash''],row[''story_version'']])\n            if not
+    changed.rowcount:return\n            db.execute(''INSERT INTO attempts VALUES(?,?,?,?,?,?)'',[row[''id''],''story'',backend,time.monotonic()-started,1,time.time()])\n    except
     Exception as exc:fail(row,''story'',''mac'',exc,started,config,root)\n\ndef fail(row,stage,backend,exc,started,config,root):\n    #
     Do not persist exception text: libraries can embed private paths and response bodies.\n    with connect(root) as db:\n        attempts=db.execute(f''SELECT
     {stage}_attempts FROM jobs WHERE id=?'',[row[''id'']]).fetchone()[0]\n        state=''skipped'' if attempts>=config[''attempts'']
@@ -145,7 +163,7 @@ data:
     WHERE id=?'',[state,type(exc).__name__,time.time()+60*attempts,time.time(),row[''id'']])\n        db.execute(''INSERT
     INTO attempts VALUES(?,?,?,?,?,?)'',[row[''id''],stage,backend,time.monotonic()-started,0,time.time()])\n    logging.warning(''%s
     %s failed (%s); queue continues'',stage,backend,type(exc).__name__)\n\ndef publish(key,root):\n    \"\"\"Publish one atomic
-    current snapshot, avoiding thousands of tiny Parquet files.\"\"\"\n    import duckdb\n    columns={''id'':''VARCHAR'',''path'':''VARCHAR'',''size_bytes'':''BIGINT'',''aliases'':''VARCHAR'',''version'':''VARCHAR'',\n      ''visual_summary'':''VARCHAR'',''visual_source'':''VARCHAR'',''transcript'':''VARCHAR'',''language'':''VARCHAR'',\n      ''audio_state'':''VARCHAR'',''backend'':''VARCHAR'',''duration_s'':''DOUBLE'',''story'':''VARCHAR'',''story_version'':''VARCHAR'',\n      ''story_state'':''VARCHAR'',''error'':''VARCHAR'',''updated'':''DOUBLE''}\n    with
+    current snapshot, avoiding thousands of tiny Parquet files.\"\"\"\n    import duckdb\n    columns={''id'':''VARCHAR'',''path'':''VARCHAR'',''size_bytes'':''BIGINT'',''aliases'':''VARCHAR'',''version'':''VARCHAR'',\n      ''visual_summary'':''VARCHAR'',''visual_source'':''VARCHAR'',''transcript'':''VARCHAR'',''language'':''VARCHAR'',\n      ''audio_state'':''VARCHAR'',''backend'':''VARCHAR'',''duration_s'':''DOUBLE'',''story'':''VARCHAR'',''story_version'':''VARCHAR'',\n      ''story_state'':''VARCHAR'',''story_note'':''VARCHAR'',''error'':''VARCHAR'',''updated'':''DOUBLE''}\n    with
     connect(root) as db:\n        rows=[dict(row) for row in db.execute(''SELECT ''+'',''.join(columns)+'' FROM jobs WHERE
     active=1'')]\n    if not rows:return\n    directory=root/''parquet'';directory.mkdir(exist_ok=True)\n    target=directory/''current.parquet'';temporary=directory/''current.tmp''\n    schema=''{''+'',''.join(\"''\"+name+\"'':''\"+kind+\"''\"
     for name,kind in columns.items())+''}''\n    with tempfile.NamedTemporaryFile(mode=''w'',dir=root,prefix=''.export-'',suffix=''.jsonl'')
@@ -212,7 +230,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-7542dcbc4100
+  name: audio-worker-488b5c355c5b
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -267,7 +285,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-7542dcbc4100
+          name: audio-worker-488b5c355c5b
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -342,7 +360,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-7542dcbc4100
+              name: audio-worker-488b5c355c5b
           - name: credentials
             secret:
               secretName: caption-worker-deploy

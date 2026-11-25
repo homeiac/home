@@ -160,3 +160,28 @@ real captions still refresh the story while preserving audio.
 
 `verify-discovery.py --host <inventory-host>` checks two scans against a private
 ledger clone. It calls no model and never changes the production queue.
+
+### Repetitive ASR and malformed story responses
+
+A private review of all seven remaining failures found repetition-dominated ASR,
+including duplicate timestamps. One reproduced local response copied a repeated
+phrase until `finish_reason=length`, leaving an unterminated JSON string. The
+other historical response bodies were not retained, so their exact output failure
+is unproven. The existing byte-compression heuristic missed short repetitive
+segments; retrying identical deterministic prompts did not address the cause.
+
+A token-phrase repetition guard now filters both fresh ASR and saved story inputs.
+Distinct useful segments survive. If nothing reliable remains, the visual story is
+saved with `story_note=repetitive_transcript_withheld`; saved transcripts/chunks
+are preserved. This does not claim silence or invent spoken context.
+
+Local replies require complete, typed JSON and reject token-limit truncation or
+repetitive output. Valid fenced JSON is accepted. Malformed/truncated local output
+with usable input goes directly to the existing schema-constrained Luna route,
+under its existing authorization, cache, budget and unresolved-request safeguards.
+Previously recorded format errors bypass another identical Bonsai request.
+
+After deploying the new worker, inspect with `recover-format-errors.py --host
+<inventory-host>` and use `--requeue` to back up the ledger and release only settled
+format failures. Audio, successful stories and active work are untouched. The
+recovery operation is idempotent once items are pending or complete.

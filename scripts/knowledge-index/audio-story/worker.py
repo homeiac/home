@@ -41,12 +41,12 @@ def initialize(root=ROOT):
           CREATE TABLE IF NOT EXISTS codex_requests(id TEXT PRIMARY KEY,job TEXT,state TEXT,cost INTEGER,result TEXT);
         ''')
         columns={r[1] for r in db.execute('PRAGMA table_info(jobs)')}
-        missing={'published':'REAL DEFAULT 0','visual_source':"TEXT DEFAULT 'local'",'story_version':'TEXT'}.keys()-columns
+        missing={'published':'REAL DEFAULT 0','visual_source':"TEXT DEFAULT 'local'",'story_version':'TEXT','story_note':'TEXT'}.keys()-columns
         if missing:
             backup=sqlite3.connect(root/('ledger-before-migration-'+str(int(time.time()))+'.sqlite3'))
             db.backup(backup);backup.close()
             for column in sorted(missing):
-                definition={'published':'REAL DEFAULT 0','visual_source':"TEXT DEFAULT 'local'",'story_version':'TEXT'}[column]
+                definition={'published':'REAL DEFAULT 0','visual_source':"TEXT DEFAULT 'local'",'story_version':'TEXT','story_note':'TEXT'}[column]
                 db.execute(f'ALTER TABLE jobs ADD COLUMN {column} {definition}')
         db.execute("UPDATE codex_requests SET state='unknown' WHERE state='sent'")
         db.execute("UPDATE jobs SET audio_state='pending' WHERE audio_state='inflight'")
@@ -148,7 +148,7 @@ def parse_transcript(raw,offset=0):
         start=float(s.get('start',0));end=float(s.get('end',start))
         if not math.isfinite(start+end) or start<0 or end<start:continue
         result.append({'start':round(start+offset,3),'end':round(end+offset,3),'text':text})
-    return result
+    return reliable_story_segments(result)
 
 def safe_source(row,library=LIBRARY):
     source=(library/row['path']).resolve()
@@ -211,6 +211,43 @@ def story_prompt(visual,segments):
       'Omit incidental chatter, uncertain wording and garbled literal translations. If no useful reliable context remains, '
       'use an empty string. Return only JSON {"spoken_context":"..."}. Evidence:\n'+json.dumps(evidence,ensure_ascii=False))
 
+def reliable_story_segments(segments):
+    """Withhold repetition loops without changing saved ASR evidence."""
+    def words(text):return re.findall(r"\w+",text.casefold())
+    clean=[];loop_words=set()
+    for segment in segments:
+        tokens=words(segment['text']);loop=False
+        if len(tokens)>=6:
+            for n in range(1,min(4,len(tokens)//2)+1):
+                counts={}
+                for i in range(len(tokens)-n+1):
+                    key=tuple(tokens[i:i+n]);counts[key]=counts.get(key,0)+1
+                if max(counts.values(),default=0)*n/len(tokens)>=.8:
+                    loop=True;break
+        if loop:loop_words.update(tokens)
+        else:clean.append(segment)
+    # Short remnants composed entirely of the loop's vocabulary aren't new evidence.
+    if loop_words:clean=[s for s in clean if not set(words(s['text'])).issubset(loop_words)]
+    return clean
+
+class StoryFormatError(ValueError):
+    """A deterministic malformed model response must not trigger identical retries."""
+
+def parse_story_response(choice):
+    """Accept valid JSON/fences; never repair or promote a truncated sentence."""
+    if choice.get('finish_reason')=='length':raise StoryFormatError('Output token limit')
+    text=choice['message']['content']
+    if not isinstance(text,str):raise StoryFormatError('Non-text response')
+    text=re.sub(r'^```(?:json)?\s*|\s*```$','',text.strip())
+    try:answer=json.loads(text)
+    except json.JSONDecodeError:raise StoryFormatError('Malformed JSON') from None
+    if not isinstance(answer,dict) or set(answer)!={'spoken_context'} or not isinstance(answer['spoken_context'],str):
+        raise StoryFormatError('Invalid spoken context schema')
+    spoken=answer['spoken_context'].strip()
+    if len(spoken)>1500:raise StoryFormatError('Spoken context too long')
+    if spoken and not reliable_story_segments([{'text':spoken}]):raise StoryFormatError('Repetitive output')
+    return spoken
+
 class CodexUnknown(RuntimeError):
     """An isolated external submission must not be silently repeated."""
 
@@ -256,24 +293,32 @@ def codex_context(row,config,root=ROOT):
 def story_job(row,config,root=ROOT):
     started=time.monotonic()
     try:
-        segments=json.loads(row['transcript'] or '[]')
+        raw_segments=json.loads(row['transcript'] or '[]')
+        segments=reliable_story_segments(raw_segments)
+        note=None;backend='mac'
         if row['audio_state']!='speech':story=row['visual_summary']
-        elif needs_codex(row['language'],row['transcript']):
-            answer=codex_context(row,config,root)
-            spoken=answer['spoken_context'].strip() if answer['assessment']=='useful' else ''
-            story=row['visual_summary']+(' In the audio: '+spoken if spoken else '')
+        elif raw_segments and not segments:
+            story=row['visual_summary'];note='repetitive_transcript_withheld';backend='visual_only_repetitive_asr'
         else:
-            body={'model':config['story_model'],'messages':[{'role':'user','content':story_prompt(row['visual_summary'],segments)}],'temperature':0.1,'max_tokens':384,'chat_template_kwargs':{'enable_thinking':False},'response_format':{'type':'json_object'}}
-            key=Path('/opt/knowledge-index/mac-bonsai.key').read_text().strip()
-            req=urllib.request.Request('http://127.0.0.1:19476/v1/chat/completions',json.dumps(body).encode(),{'Content-Type':'application/json','Authorization':'Bearer '+key})
-            with urllib.request.urlopen(req,timeout=300) as response:answer=json.load(response)['choices'][0]['message']['content']
-            answer=re.sub(r'^```(?:json)?\s*|\s*```$','',answer.strip());spoken=json.loads(answer)['spoken_context'].strip()
-            if len(spoken)>1500:raise ValueError('Invalid spoken context')
+            evidence=dict(row,transcript=json.dumps(segments,ensure_ascii=False))
+            fallback=needs_codex(row['language'],evidence['transcript']) or row.get('error') in ('JSONDecodeError','StoryFormatError')
+            if not fallback:
+                body={'model':config['story_model'],'messages':[{'role':'user','content':story_prompt(row['visual_summary'],segments)}],'temperature':0.1,'max_tokens':384,'chat_template_kwargs':{'enable_thinking':False},'response_format':{'type':'json_object'}}
+                key=Path('/opt/knowledge-index/mac-bonsai.key').read_text().strip()
+                req=urllib.request.Request('http://127.0.0.1:19476/v1/chat/completions',json.dumps(body).encode(),{'Content-Type':'application/json','Authorization':'Bearer '+key})
+                try:
+                    with urllib.request.urlopen(req,timeout=300) as response:answer=json.load(response)
+                    spoken=parse_story_response(answer['choices'][0])
+                except (json.JSONDecodeError,StoryFormatError,KeyError,TypeError,IndexError):fallback=True
+            if fallback:
+                answer=codex_context(evidence,config,root);backend='codex'
+                spoken=answer['spoken_context'].strip() if answer['assessment']=='useful' else ''
+                note='codex_'+answer['assessment']
             story=row['visual_summary']+(' In the audio: '+spoken if spoken else '')
         with connect(root) as db:
-            changed=db.execute("UPDATE jobs SET story_state='ok',story=?,error=NULL,finished=?,updated=? WHERE id=? AND visual_hash=? AND story_version IS ?",[story,time.time(),time.time(),row['id'],row['visual_hash'],row['story_version']])
+            changed=db.execute("UPDATE jobs SET story_state='ok',story=?,story_note=?,error=NULL,finished=?,updated=? WHERE id=? AND visual_hash=? AND story_version IS ?",[story,note,time.time(),time.time(),row['id'],row['visual_hash'],row['story_version']])
             if not changed.rowcount:return
-            db.execute('INSERT INTO attempts VALUES(?,?,?,?,?,?)',[row['id'],'story','mac',time.monotonic()-started,1,time.time()])
+            db.execute('INSERT INTO attempts VALUES(?,?,?,?,?,?)',[row['id'],'story',backend,time.monotonic()-started,1,time.time()])
     except Exception as exc:fail(row,'story','mac',exc,started,config,root)
 
 def fail(row,stage,backend,exc,started,config,root):
@@ -291,7 +336,7 @@ def publish(key,root):
     columns={'id':'VARCHAR','path':'VARCHAR','size_bytes':'BIGINT','aliases':'VARCHAR','version':'VARCHAR',
       'visual_summary':'VARCHAR','visual_source':'VARCHAR','transcript':'VARCHAR','language':'VARCHAR',
       'audio_state':'VARCHAR','backend':'VARCHAR','duration_s':'DOUBLE','story':'VARCHAR','story_version':'VARCHAR',
-      'story_state':'VARCHAR','error':'VARCHAR','updated':'DOUBLE'}
+      'story_state':'VARCHAR','story_note':'VARCHAR','error':'VARCHAR','updated':'DOUBLE'}
     with connect(root) as db:
         rows=[dict(row) for row in db.execute('SELECT '+','.join(columns)+' FROM jobs WHERE active=1')]
     if not rows:return

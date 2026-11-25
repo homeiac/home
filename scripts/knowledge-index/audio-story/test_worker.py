@@ -59,6 +59,46 @@ class AudioTests(unittest.TestCase):
   body=json.loads(call.call_args.args[0].data)
   self.assertIsInstance(body['messages'][0]['content'],str)
   self.assertNotIn('images',body)
+ def test_repetition_guard_preserves_distinct_useful_speech(self):
+  loops=[{'text':'No, '*25},{'text':'need a '*15},{'text':'palm of a palm of a'}]
+  self.assertEqual(worker.reliable_story_segments(loops+[{'text':'Need a need a palm of a'}]),[])
+  useful={'text':'Someone says we have reached the waterfall.'}
+  self.assertEqual(worker.reliable_story_segments(loops+[useful]),[useful])
+ def test_fresh_asr_filters_short_loops_before_compression_threshold(self):
+  self.assertEqual(worker.parse_transcript({'segments':[{'start':0,'end':1,'text':'no '*20}]}),[])
+  self.assertEqual(worker.parse_transcript({'segments':[{'start':0,'end':1,'text':'A person mentions the waterfall.'}]}),[{'start':0.0,'end':1.0,'text':'A person mentions the waterfall.'}])
+ def test_story_parser_rejects_truncation_schema_and_loops(self):
+  for content,reason in [('{}','stop'),('{"spoken_context":4}','stop'),('{"spoken_context":"unfinished','length'),(json.dumps({'spoken_context':'go '*40}),'stop')]:
+   with self.subTest(content=content),self.assertRaises(worker.StoryFormatError):
+    worker.parse_story_response({'finish_reason':reason,'message':{'content':content}})
+  self.assertEqual(worker.parse_story_response({'message':{'content':'```json\n{"spoken_context":"Someone mentions a waterfall."}\n```'}}),'Someone mentions a waterfall.')
+ def test_repetitive_speech_settles_without_models_and_keeps_raw_evidence(self):
+  transcript=json.dumps([dict(start=0,end=1,text='no '*30)])
+  with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',language='english',transcript=?",[transcript])
+  row=worker.claim('story','mac',self.config,self.root)
+  with patch.object(worker.urllib.request,'urlopen',side_effect=AssertionError('Unexpected model call')),patch.object(worker,'codex_context',side_effect=AssertionError('Unexpected Codex call')):
+   worker.story_job(row,self.config,self.root)
+  with worker.connect(self.root) as d:
+   r=d.execute('SELECT * FROM jobs').fetchone()
+   self.assertEqual((r['story_state'],r['story_note'],r['transcript'],r['audio_state']),('ok','repetitive_transcript_withheld',transcript,'speech'))
+   self.assertEqual(r['story'],r['visual_summary'])
+ def test_truncated_local_output_uses_codex_once(self):
+  from unittest.mock import MagicMock
+  with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',language='english',transcript=?",[json.dumps([dict(start=0,end=1,text='We reached the waterfall at last.')])])
+  row=worker.claim('story','mac',self.config,self.root)
+  response=MagicMock();response.__enter__.return_value.read.return_value=json.dumps({'choices':[{'finish_reason':'length','message':{'content':'{"spoken_context":"unfinished'}}]}).encode()
+  with patch.object(worker.Path,'read_text',return_value='test-only'),patch.object(worker.urllib.request,'urlopen',return_value=response) as local,patch.object(worker,'codex_context',return_value={'assessment':'useful','spoken_context':'Someone says they reached the waterfall.'}) as codex:
+   worker.story_job(row,dict(self.config,story_model='bonsai-27b-metal'),self.root)
+  self.assertEqual(local.call_count,1);self.assertEqual(codex.call_count,1)
+  with worker.connect(self.root) as d:
+   r=d.execute('SELECT * FROM jobs').fetchone();self.assertEqual(r['story_state'],'ok');self.assertEqual(r['story_note'],'codex_useful')
+ def test_prior_format_failure_bypasses_identical_local_request(self):
+  with worker.connect(self.root) as d:d.execute("UPDATE jobs SET audio_state='speech',language='english',error='JSONDecodeError',transcript=?",[json.dumps([dict(start=0,end=1,text='We reached the waterfall at last.')])])
+  row=worker.claim('story','mac',self.config,self.root)
+  with patch.object(worker.urllib.request,'urlopen',side_effect=AssertionError('Unexpected repeat local call')),patch.object(worker,'codex_context',return_value={'assessment':'unclear','spoken_context':''}) as codex:
+   worker.story_job(row,self.config,self.root)
+  self.assertEqual(codex.call_count,1)
+  with worker.connect(self.root) as d:self.assertEqual(d.execute('SELECT story_state,story_note FROM jobs').fetchone()[:],('ok','codex_unclear'))
  def test_discovery_maps_copies_and_preserves_completed_audio(self):
   import duckdb
   index=self.root/'index';index.mkdir()
