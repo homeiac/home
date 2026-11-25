@@ -108,7 +108,32 @@
   "translation_status": {
     "enabled": true,
     "model": "gpt-6-luna",
-    "authorization": "Selected speech transcripts and short saved visual descriptions to OpenAI via existing Codex login; original media stays local"
+    "authorization": "Selected speech transcripts and short saved visual descriptions to OpenAI via existing Codex login; original media stays local",
+    "verification": {
+      "checked_utc": "2026-11-25T02:24:12Z",
+      "states": {
+        "ok": 63,
+        "sent": 1
+      },
+      "pilot_requests": 7,
+      "production_requests": 57,
+      "production_completed": 56,
+      "production_assessments": {
+        "useful": 22,
+        "unclear": 31,
+        "incidental": 3
+      },
+      "assessments": {
+        "useful": 24,
+        "unclear": 36,
+        "incidental": 3
+      },
+      "estimated_and_held_usd": 0.096458,
+      "waiting": 200,
+      "story_failures": {
+        "JSONDecodeError": 1
+      }
+    }
   },
   "translation_review": {
     "saved_cases": 3,

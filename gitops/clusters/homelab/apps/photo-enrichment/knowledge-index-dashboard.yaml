@@ -3259,7 +3259,7 @@ data:
         {
           "id": 243,
           "type": "stat",
-          "title": "Codex translations saved",
+          "title": "Codex text checks complete",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -3303,12 +3303,13 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "description": "Successful text assessments, including pilot checks. Unclear/incidental speech may be withheld. Production story completion is shown separately under Stories saved."
         },
         {
           "id": 244,
           "type": "stat",
-          "title": "Codex unresolved requests",
+          "title": "Codex active / unknown",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

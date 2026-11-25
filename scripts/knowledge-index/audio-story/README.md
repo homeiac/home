@@ -125,13 +125,14 @@ work continues. No new API key is created or copied.
 The separate translation estimate cap is $10, reserving $0.025 per unresolved
 request. Known token usage settles using the existing Luna API-equivalent rate.
 This is not actual account cost or an account usage reading. Earlier caption and
-reconciliation limits remain unchanged. The dashboard shows waiting, saved,
-unresolved and ready states plus the estimate and outstanding holds.
+reconciliation limits remain unchanged. The dashboard shows waiting, completed text checks, active/unknown requests and
+readiness plus the estimate and holds. Text-check counts include pilot assessments
+and withheld responses; production story completion is shown separately.
 
 The initial prompt was too cautious and rejected a clear English control. The
 revised prompt retains a stable core meaning despite minor ASR errors. The final
 pilot used three saved cases plus a synthetic clean Tamil control: it retained clear
-English monkey commentary, translated the Tamil hiking sentence accurately, and
+English commentary, translated the Tamil hiking sentence accurately, and
 withheld both garbled Tamil transcripts. These are text-level checks, not a full
 human-labelled audio accuracy study. Raw review inputs and outputs remain private.
 
