@@ -4,7 +4,7 @@
 
 A map can show where a trip happened. A richer memory layer can help follow a child's interests across years, connect family gatherings in different homes, or trace a work journey across places and dates. **A platform for assembling those stories is the main value of this project.**
 
-Immich remains the gallery for browsing photos, people and places. The added layer makes descriptions, confirmed names, dates, saved metadata and useful video speech available together in queryable datasets. A story can follow a person, activity or topic across the library rather than stop at one GPS-marked trip. The evidence remains attached to the source files, and uncertain speech can be left out instead of becoming an invented memory.
+Immich remains the gallery for browsing photos, people and places. The added layer makes **local descriptions**, confirmed names, dates, saved metadata and useful video speech available together in queryable datasets. A story can follow a person, activity or topic across the library rather than stop at one GPS-marked trip. The evidence remains attached to the source files, and uncertain speech can be left out instead of becoming an invented memory.
 
 The initial indexing and enrichment work is now complete within the agreed scope: **85,889 photo groups have local descriptions, and 6,909 video groups have a saved story.** That supplies the material for cross-library narrative analysis. A dedicated automatic journey writer, knowledge graph and MCP interface have not been built; these are possible ways to use the completed data layer next.
 
@@ -23,8 +23,9 @@ The final read-only audit at **10:31 a.m. Pacific on November 25** found 118,987
 
 | Stage | Final result |
 |---|---:|
-| Photos with a description from at least one model | **85,889 / 85,890 groups — 99.999%** |
-| Videos with a visual description | **6,909 / 6,914 groups — 99.93%** |
+| Photos described locally by RTX/Mac | **85,889 / 85,890 groups — 99.999%** |
+| Videos described locally by RTX/Mac | **6,885 / 6,914 groups — 99.58%** |
+| Videos with a visual description, including 24 cloud fallbacks | **6,909 / 6,914 groups — 99.93%** |
 | Audio checked and story saved for captioned videos | **6,909 / 6,909 — 100%** |
 | Current text reconciliations | **77,463 complete; 220 deliberately skipped; none queued** |
 | Critical conflicts among completed reconciliations | **0** |
@@ -32,9 +33,9 @@ The final read-only audit at **10:31 a.m. Pacific on November 25** found 118,987
 
 The six source exceptions are one malformed PNG and five videos with missing or zero-filled content. They were diagnosed rather than given invented captions. Their originals remain unchanged, and leaving them out was accepted.
 
-Luna's original campaign published 71,643 photo and 6,064 video descriptions. It was seeded from the *then-uncaptioned* local queue, not as a second pass over everything. Consequently, **14,247 photo groups have a local description without a Luna description**. Reconciliation combines available pairs; an empty reconciliation queue means caught up with those pairs. It does not mean every image was checked by two models.
+The local pipeline aims for **one successful visual description per item**. It saves that result and skips it on later scans. Failed requests may retry; a video story may add useful speech without repeating vision. A later explicit model/prompt upgrade would be a separate operation, not a routine second local pass.
 
-For ordinary search and recall, we accepted the local descriptions as the useful baseline. There is no scored accuracy audit of those 14K photos. A selective second opinion on weak descriptions or photos important to a particular story is more purposeful than requiring two captions everywhere. Zero critical reconciliation conflicts is not proof that the entire library is accurate.
+For ordinary search and recall, we accepted local captions as the useful baseline. Their quality was assessed informally, not through a scored whole-library audit. Optional cloud comparisons and reconciliation are additional evidence; they are not requirements for calling the local archive useful.
 
 ## The end architecture
 
@@ -50,7 +51,7 @@ Piglet owns caption inputs and durable outputs. Local capacity comes from RTX/Ol
 
 Applications stay behind private Traefik access. Kubernetes resources use Git/Flux; host workers use versioned installers and systemd. Some components still use the feature branch's Flux preview: implemented architecture does not mean every rollout change has merged to main.
 
-## Before and after: count saved descriptions
+## The local GPUs: count descriptions actually saved
 
 “Ingest” hides three jobs: transferring/extracting originals, indexing metadata, and enriching media. The strongest throughput evidence here concerns **caption enrichment saved to Parquet**, not internet download speed.
 
@@ -59,15 +60,9 @@ Applications stay behind private Traefik access. Kubernetes resources use Git/Fl
 | Add Mac capacity to RTX | 16.0 saves/min | 22.3 saves/min | **39% higher observed throughput**, ten-minute production windows; 223 distinct saved items verified after |
 | Batch barriers → continuous refill | 21.4 saves/min | 28.0 saves/min | The windows contained 38 vs. 1 videos; do not attribute the whole increase to scheduling |
 | Sustain photos-first local work | — | 31.4 photos/min | 943 distinct photos, zero videos, 30 minutes; excludes Luna and cache hits |
-| Luna request slots 4 → 8 → 20 | ~31 → ~53 | ~66 saves/min | Different production media mixes; preparation became the next bottleneck |
-| Luna: 20 requests, four preparation slots; batch 24 → 48 | 62.6 saves/min | 69.3 saves/min | About 11% higher in sequential production trials, not identical-input benchmarking |
 | Mac benchmark: concurrent requests 4 → 20 | 9.62 saves/min; p95 48 s | 9.65 saves/min; p95 124 s | Throughput essentially flat; retain four slots |
 
-The local photos-first rate estimates a photo backlog only while both GPUs remain available. Videos cost differently. We ran two models on some of the same photos. Two descriptions of one photo still count as one photo done. To measure library progress, count **files getting their first description**.
-
-![Actual Grafana backend throughput, separating all captions from first captions on distinct items.](assets/local-photo-pipeline/grafana-throughput.jpg)
-
-*Actual dashboard capture; fixed window November 21 11:00–November 22 02:00 UTC. The combined-output and first-caption lines answer different questions. Screenshot dollar figures are configured estimates, not an invoice or independently measured savings.*
+The main throughput measure is **local photos/videos described per minute**, with RTX and Mac contributions shown separately. Count descriptions successfully saved to Parquet. Retries and optional cloud output do not inflate local completion. The 31.4 photos/min measurement estimates photo work only while both GPUs remain available; videos have a different cost.
 
 ### How speed improved
 
@@ -77,41 +72,7 @@ The local photos-first rate estimates a photo backlog only while both GPUs remai
 
 **Reuse existing computation.** Immich supplies saved location and face context. Face matching reuses embeddings. Repeated Parquet scans became one streaming query with bounded batches. Optional place lookups no longer hold up the cloud queue.
 
-**Separate preparation from model concurrency.** At 20 Luna requests, frame preparation plus its wait exceeded median model-request duration. Increasing preparation workers from four to six reduced throughput from 62.6 to 55.9 saves/min in the 24-job trials. Returning to four preparation slots with a 48-job batch produced 69.3/min. More workers was a hypothesis to measure.
-
 **Stop when a knob stops helping.** Matched photo-only local trials with 24- and 48-item pages both saved 32/min. The Mac's 20-request experiment mostly added latency. Both results prevented tuning from becoming a search for ever-larger settings.
-
-## Time and cost: where the benefit came from
-
-At the 70,000-photo milestone, Luna took **21h 46m elapsed**. The RTX 3070 and Mac together would take **37h 09m at the measured 31.4 photos/min**: a projection, not an observed run of the same inputs. That is approximately **15h 24m, or 41%, less elapsed time** for the Luna campaign interval. It includes other work and interruptions; the local projection assumes both GPUs remain available.
-
-Existing consumer hardware still provided useful captions at a practical rate. Our quality assessment was informal, not a blind comparison. The cloud route supplied more concurrent capacity, while local processing kept ordinary work on hardware already owned.
-
-| Cost measure | Amount | Meaning |
-|---|---:|---|
-| Full original Luna caption campaign, including pilot allowance | **~$43.33** | API-equivalent accounting for 77,707 captions; not an invoice or precisely the cost of 70K photos |
-| Observed reconciliation unit rate | **$0.869 per 1,000 successful reconciliations** | Derived from a private usage interval; a forecasting rate, not a universal tariff |
-| Selected audio-text interpretation, including pilot checks | **~$0.50** | Token-based API-equivalent accounting; separate from the observed reconciliation rate |
-| Local processing | **No per-request API fee** | Combined electricity and hardware cost was not measured |
-
-The tangible cost-saving mechanism was **reuse**: add speech to completed videos without paying for vision again, cache settled text requests, and stop recomputing unchanged stories. We did not measure a dollar amount saved by those avoided calls. Raw account readings stay in a private local database; the article and dashboard retain only the derived rate.
-
-## Videos needed a story, not a pile of frames
-
-We retained up to eight sampled moments, reduced preview size from 1,024 to 768 pixels, and asked for the main activity and visible changes in at most 256 output tokens. Four-frame variants lost useful event detail. The Mac used one video request rather than four competing requests; decoder threads were bounded too.
-
-| Same six clips, model-request trials | Before | Selected settings |
-|---|---:|---:|
-| RTX, two concurrent requests | 5.96 videos/min | **8.73 videos/min — 46% higher** |
-| Mac, four requests → one | 3.08 videos/min | **4.79 videos/min — 56% higher** |
-
-These trials exclude decoding and warmup and use shared hardware. They do not predict full-library wall time or establish caption accuracy. In the selected trials the Mac had slightly lower mean request latency, but the RTX completed more clips per minute using two slots. “Which GPU is faster?” needs a workload and a metric.
-
-Pictures alone missed what people were talking about. We therefore added **Whisper speech recognition as a backfill**, reusing finished visual captions. On six short clips plus a silence control (151.93 seconds total), the Mac processed speech in 7.90 seconds, the RTX in 26.73 seconds, and a small CPU worker in 147.42 seconds. These warm-service, beam-one samples exclude media extraction. The production choice used the Mac plus spare CPU capacity, leaving the RTX available for Immich.
-
-All 6,909 captioned videos were checked: 2,059 had accepted speech, 4,128 had no speech detected, 93 had no audio stream, and 629 had uncertain speech. Those are pipeline classifications, not a human-labelled audit. All received a saved story, which may simply preserve the visual caption when speech adds nothing reliable. Seven repetitive transcripts within the speech-classified group were explicitly withheld during story assembly.
-
-For difficult transcripts, the prompt asks for useful meaning attributed to speech, not claims about what is visible. A small text-level check retained clear commentary, translated a clean Tamil control, and withheld garbled text. It is not a full transcription or translation accuracy score. The final route recorded 509 production assessments: 224 useful, 261 unclear and 24 incidental; seven pilot/calibration requests are separate.
 
 ## Change one setting. Check if it helped.
 
@@ -135,15 +96,57 @@ CB_HOST=root@<storage-host> python3 scripts/knowledge-index/measure-bonsai-dispa
 
 At the sustained photos-first measurement, model requests accounted for about 96% of recorded stage time; queue reads and writes together were under 1%. That supported stopping queue-page tuning. The Luna trials also checked the local worker: it saved 112 and 128 photos in equal four-minute windows before and during the larger-batch trial. This was a useful guardrail, not proof of zero interference under every workload.
 
-Historical before/after cards are recorded trials. Separately labeled current-rate lines describe the present run. See the [dispatch measurement procedure](../../scripts/knowledge-index/bonsai-dispatch.md) and [Luna operating policy and trials](../../scripts/knowledge-index/luna-backfill/README.md).
+Historical before/after cards are recorded trials. For ongoing work, follow local saves per minute, split by RTX and Mac, plus remaining local coverage. See the [dispatch measurement procedure](../../scripts/knowledge-index/bonsai-dispatch.md) and [Luna operating policy and trials](../../scripts/knowledge-index/luna-backfill/README.md).
 
-## PostgreSQL and DuckDB each have a job
+## Videos needed a story, not a pile of frames
+
+We retained up to eight sampled moments, reduced preview size from 1,024 to 768 pixels, and asked for the main activity and visible changes in at most 256 output tokens. Four-frame variants lost useful event detail. The Mac used one video request rather than four competing requests; decoder threads were bounded too.
+
+| Same six clips, model-request trials | Before | Selected settings |
+|---|---:|---:|
+| RTX, two concurrent requests | 5.96 videos/min | **8.73 videos/min — 46% higher** |
+| Mac, four requests → one | 3.08 videos/min | **4.79 videos/min — 56% higher** |
+
+These trials exclude decoding and warmup and use shared hardware. They do not predict full-library wall time or establish caption accuracy. In the selected trials the Mac had slightly lower mean request latency, but the RTX completed more clips per minute using two slots. “Which GPU is faster?” needs a workload and a metric.
+
+Pictures alone missed what people were talking about. We therefore added **Whisper speech recognition as a backfill**, reusing finished visual captions. On six short clips plus a silence control (151.93 seconds total), the Mac processed speech in 7.90 seconds, the RTX in 26.73 seconds, and a small CPU worker in 147.42 seconds. These warm-service, beam-one samples exclude media extraction. The production choice used the Mac plus spare CPU capacity, leaving the RTX available for Immich.
+
+All 6,909 captioned videos were checked: 2,059 had accepted speech, 4,128 had no speech detected, 93 had no audio stream, and 629 had uncertain speech. Those are pipeline classifications, not a human-labelled audit. All received a saved story, which may simply preserve the visual caption when speech adds nothing reliable. Seven repetitive transcripts within the speech-classified group were explicitly withheld during story assembly.
+
+For difficult transcripts, the prompt asks for useful meaning attributed to speech, not claims about what is visible. A small text-level check retained clear commentary, translated a clean Tamil control, and withheld garbled text. It is not a full transcription or translation accuracy score. The final route recorded 509 production assessments: 224 useful, 261 unclear and 24 incidental; seven pilot/calibration requests are separate.
+
+## Local value, with optional cloud help
+
+The RTX 3070 and Mac together sustained **31.4 photos/min** in the bounded photo-only trial. At that rate, describing 70,000 photos would take **37h 09m**, assuming both GPUs remain available. That is a projection, not an observed run of those same inputs. Existing consumer hardware made local descriptions practical without a per-request API fee; combined electricity and hardware cost was not measured.
+
+Luna supplied extra capacity. Its 70,000-photo milestone took **21h 46m elapsed**, approximately **15h 24m, or 41%, less** than the local projection. That interval includes other work and interruptions, so this is not a controlled race or a quality comparison.
+
+Luna's original campaign published 71,643 photo and 6,064 video descriptions. It was seeded from the *then-uncaptioned* local queue, not as a second pass over everything. Consequently, **14,247 photo groups have a local description without a Luna description**. Reconciliation combines available pairs; an empty reconciliation queue means caught up with those pairs. It does not mean every image was checked by two models.
+
+For ordinary search and recall, we accepted the local descriptions as the useful baseline. There is no scored accuracy audit of those 14K photos. A selective second opinion on weak descriptions or photos important to a particular story is more purposeful than requiring two captions everywhere. Zero critical reconciliation conflicts is not proof that the entire library is accurate.
+
+The original Luna queue was created once; it does not define local completion. We do not need to buy a cloud opinion on every photo before using the local archive. For cloud-worker tuning, 4/8/20 concurrent requests produced about 31/53/66 saves/min in different media mixes. At 20 requests, increasing the batch from 24 to 48 with four preparation slots produced 62.6 to 69.3/min in sequential trials. Those are secondary cloud measurements, kept separate from the local results above.
+
+| Cost measure | Amount | Meaning |
+|---|---:|---|
+| Local processing | **No per-request API fee** | Combined electricity and hardware cost was not measured |
+| Full original Luna caption campaign, including pilot allowance | **~$43.33** | API-equivalent accounting for 77,707 captions; not an invoice or precisely the cost of 70K photos |
+| Observed reconciliation unit rate | **$0.869 per 1,000 successful reconciliations** | Derived from a private usage interval; a forecasting rate, not a universal tariff |
+| Selected audio-text interpretation, including pilot checks | **~$0.50** | Token-based API-equivalent accounting; separate from the observed reconciliation rate |
+
+The tangible cost-saving mechanism was **reuse**: add speech to completed videos without vision work again, cache settled text requests, and stop recomputing unchanged stories. We did not measure a dollar amount saved by those avoided calls. Raw account readings stay in a private local database; the article and dashboard retain only the derived rate.
+
+## Saved local descriptions become journey evidence
 
 PostgreSQL handles changing records and concurrent application activity: reserve work, save a review, reject a candidate. Parquet provides portable outputs. DuckDB queries them for inventory and analysis without turning every historical fact into a transactional row.
 
 `knowledge.duckdb` contains derived views. Rebuilding that catalog is different from re-extracting originals, recreating embeddings or rerunning captions. Normal ingest indexes the new archive's delivered paths; full backfill is an initial-load/recovery operation. Snapshot refreshes are deliberate work. Scanning all embeddings for each result page was an implementation problem, not a necessary DuckDB cost.
 
 The face-matching fix opened one query and streamed 256-row batches. A bounded profile reduced later batch reads from approximately 0.96–1.16 seconds to 8–10 milliseconds, following roughly 0.86 seconds of setup. This measures the **read phase**, not a hundredfold improvement in total face matching. Likewise, the dashboard's quota-query comparison uses a configured 2,280-second sidecar-scan baseline; it is not a universal database benchmark.
+
+With those pieces queryable together, a journey question can gather photos of a person, activity or topic across years and places, then return descriptions and source files to examine. A child's changing interests, family gatherings in different homes, or a work journey are possible uses. These examples describe what the platform can support, not journeys already generated by the project.
+
+The local description is the default building block. Confirmed names, dates and reliable speech add context; optional cloud opinions remain separate. A future narrative interface can assemble and check this evidence while letting the owner choose what to share.
 
 ## Build the final system, step by step
 

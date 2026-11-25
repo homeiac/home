@@ -129,77 +129,119 @@ nav{display:none}
 <div class="value"><b>Family</b><span>Connect moments across generations.</span></div>
 <div class="value"><b>Work</b><span>Recall a journey across roles and places.</span></div>
 </div>
-<div class="stat" style="margin-top:35px"><strong>85,889 photos · 6,909 video stories</strong><div class="unit" style="color:#b7cbc1">Saved evidence for the next question, without describing the library again.</div></div>
+<div class="stat" style="margin-top:35px"><strong>85,889 photos · 6,909 video stories</strong><div class="unit" style="color:#b7cbc1">85,889 photos described locally. Saved speech adds context to video stories.</div></div>
 </div>
-<div class="source">Immich is the gallery. The added platform makes captions, saved metadata and useful speech queryable together. Journey writing and private MCP access are future applications.</div>
+<div class="source">Immich is the gallery. Local descriptions, saved metadata and useful speech form the memory platform. Journey writing and private MCP access are future applications.</div>
 </section>
 <section class="slide" data-title="Final architecture" aria-label="Slide 2: Final architecture">
 <div class="eyebrow">01 / How it works</div>
-<h2>Keep the evidence. Make it reusable.</h2>
+<h2>Keep the originals. Describe them locally.</h2>
 <div class="body">
 <img class="architecture" src="assets/local-photo-pipeline/architecture.svg" alt="Cloud sources feed validated host ingest, ZFS originals and an independent copy. Immich and PostgreSQL supply context to local or optional cloud caption workers. Parquet and DuckDB support analysis. Git and Grafana form a feedback loop.">
 </div>
 <div class="source">Photos path shown; Drive/OneDrive use the existing copy job. USB covers the quota subset, not all photos. Optional Luna sends media/context to a cloud service. Visual captions + Whisper speech feed saved stories; private originals remain the evidence. Resources still use the Flux preview branch.</div>
 </section>
-<section class="slide" data-title="Measured gains" aria-label="Slide 3: Measured gains">
-<div class="eyebrow">02 / Before and after</div>
-<h2>More photos described per minute.</h2>
+<section class="slide" data-title="Local descriptions at a practical speed" aria-label="Slide 3: Local descriptions at a practical speed">
+<div class="eyebrow">02 / Make the local backlog practical</div>
+<h2>Two home GPUs made steady progress.</h2>
 <div class="body">
 <div class="row">
-<div>
-<div class="tag">Local computers · 10-minute samples</div>
-<div class="compare">
-<span>RTX alone</span>
-<div class="bar before" style="--w:53%">
+<div><div class="tag">Local descriptions saved per minute</div>
+<div class="compare"><span>RTX alone</span><div class="bar before" style="--w:53.3%"></div><b>16.0</b></div>
+<div class="compare"><span>RTX + Mac</span><div class="bar" style="--w:74.3%"></div><b>22.3</b></div>
+<div class="stat"><strong>39% higher throughput</strong><div class="unit">223 local descriptions saved in the later ten-minute window</div></div>
 </div>
-<b>16.0</b>
+<div><div class="tag">A separate photo-only measurement</div>
+<div class="big">31.4</div><div class="unit">photos described per minute · RTX + Mac</div>
+<div class="stat"><strong>943 photos in 30 minutes</strong></div>
+<p class="note">Both GPUs working on photos, with no cloud processing or cache hits in this sample.</p></div>
 </div>
-<div class="compare">
-<span>RTX + Mac</span>
-<div class="bar" style="--w:74%">
+<p class="note">A completed local description is saved and skipped on the next scan. A failed request can retry. We are measuring persisted work, not just GPU activity.</p>
 </div>
-<b>22.3</b>
-</div>
-<p class="note">39% faster in these samples: 223 files described in 10 minutes.<br>The samples used different files.</p>
-</div>
-<div>
-<div class="tag">Cloud worker · same request and preparation limits</div>
-<div class="compare">
-<span>Batch 24</span>
-<div class="bar before" style="--w:78%">
-</div>
-<b>62.6</b>
-</div>
-<div class="compare">
-<span>Batch 48</span>
-<div class="bar" style="--w:87%">
-</div>
-<b>69.3</b>
-</div>
-<p class="note">About 11% faster in these samples.<br>The samples used different files.</p>
-</div>
-</div>
-<div class="stat" style="margin-top:35px">
-<strong>31.4 photos/min</strong>
-<p class="note">943 photos described in 30 minutes using the RTX and Mac. No videos or cloud processing in this sample.</p>
-</div>
-</div>
-<div class="source">These rates count saved descriptions, not downloaded files. <a href="assets/local-photo-pipeline/evidence.md">Trial scope and provenance</a>.</div>
+<div class="source">The ten-minute windows used different files; 39% is an observed increase. The 30-minute result is a separate photos-first trial, not another step in a controlled experiment. <a href="assets/local-photo-pipeline/evidence.md">Measurement scope</a>.</div>
 </section>
-<section class="slide" data-title="Grafana evidence" aria-label="Slide 4: Grafana evidence">
-<div class="eyebrow">03 / Real dashboard evidence</div>
-<h2>Count newly described photos.</h2>
+<section class="slide" data-title="Start the next job" aria-label="Slide 4: Start the next job">
+<div class="eyebrow">03 / Remove the waiting between jobs</div>
+<h2>The GPUs were waiting for the queue.</h2>
 <div class="body">
-<div class="focus-shot">
-<img src="assets/local-photo-pipeline/grafana-throughput.jpg" alt="Cropped view of the actual Grafana throughput panel: RTX, Mac, Luna, combined captions and first captions on distinct items.">
+<svg class="timeline" viewBox="0 0 1100 330" role="img" aria-label="Conceptual scheduling diagram: a batch barrier leaves slots waiting for one long request; continuous refill starts new work on each free slot.">
+<defs>
+<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse">
+<path d="M0 8L8 0" stroke="#bf592c" opacity=".3"/>
+</pattern>
+<clipPath id="lane">
+<rect x="250" y="205" width="760" height="95"/>
+</clipPath>
+</defs>
+<g font-size="21" fill="#143c39">
+<text x="10" y="60">Wait for the batch</text>
+<text x="10" y="230">Start the next job</text>
+<text x="250" y="20" font-size="15">time →</text>
+</g>
+<g fill="#2f8e7f">
+<rect x="250" y="40" width="210" height="35" rx="5"/>
+<rect x="250" y="85" width="410" height="35" rx="5"/>
+<rect x="250" y="130" width="630" height="35" rx="5"/>
+</g>
+<g fill="url(#hatch)">
+<rect x="460" y="40" width="420" height="35"/>
+<rect x="660" y="85" width="220" height="35"/>
+</g>
+<path d="M890 30V175" stroke="#bf592c" stroke-width="3" stroke-dasharray="5 5"/>
+<text x="910" y="105" fill="#bf592c" font-size="16">wait for all</text>
+<g fill="#2f8e7f">
+<rect x="250" y="205" width="210" height="35" rx="5"/>
+<rect x="475" y="205" width="210" height="35" rx="5"/>
+<rect x="700" y="205" width="210" height="35" rx="5"/>
+<rect x="250" y="250" width="410" height="35" rx="5"/>
+<rect x="675" y="250" width="335" height="35" rx="5"/>
+</g>
+<g clip-path="url(#lane)">
+<circle class="packet" cx="260" cy="222" r="6" fill="#d9ef92"/>
+</g>
+</svg>
+<div class="legend">
+<span>
+<i class="swatch">
+</i>Working</span>
+<span>
+<i class="swatch waiting">
+</i>Waiting for other jobs</span>
 </div>
-<p class="note">We ran two models on some of the same photos. Two descriptions of one photo still count as one photo done.<br><strong>Blue: files getting their first description. Red: all descriptions saved.</strong></p>
+<p class="note">Refill a free slot as soon as a request finishes. Local output rose from 21.4 to 28.0 descriptions/min in these samples; fewer slow videos also contributed.</p>
 </div>
-<div class="source">Actual capture · November 21 11:00–November 22 02:00 UTC. Dollar figures are estimated accounting values, not invoices. <a href="assets/local-photo-pipeline/grafana-throughput.jpg">Open full-size image</a>.</div>
+<div class="source">Diagram illustrates the mechanism; bar lengths are not measured task durations. <a href="../../scripts/knowledge-index/bonsai-dispatch.md">Dispatch policy</a>.</div>
 </section>
-<section class="slide" data-title="Video stories and speech" aria-label="Slide 5: Video stories and speech">
-<div class="eyebrow">04 / Preserve the event, then add what was said</div>
-<h2>Better video stories. No repeat vision pass.</h2>
+<section class="slide" data-title="Live tuning loop" aria-label="Slide 5: Live tuning loop">
+<div class="eyebrow">04 / Keep the tuning honest</div>
+<h2>Measure progress. Tune one setting.</h2>
+<div class="body">
+<div class="flow">
+<div class="node">
+<b>1</b>Save one change<br>in Git</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>2</b>Check when<br>it took effect</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>3</b>Watch for 2 min;<br>measure for 10</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>4</b>Count saved files;<br>compare photos/videos</div>
+<span class="arrow">→</span>
+<div class="node">
+<b>5</b>Keep it or<br>undo it</div>
+</div>
+<div class="focus-shot policy">
+<img src="assets/local-photo-pipeline/grafana-live-tuning.jpg" alt="Cropped actual Grafana panels showing GPU slots and the applied policy timestamp.">
+</div>
+<p class="note">Watch RTX and Mac separately. Verify saved local descriptions, latency and the applied settings. The worker finishes in-flight requests before changing policy; failed fetches retain the last valid settings.</p>
+</div>
+<div class="source">Actual Grafana panel crop; November 21 11:00–November 22 02:00 UTC. <a href="assets/local-photo-pipeline/grafana-live-tuning.jpg">Open full-size image</a>.</div>
+</section>
+<section class="slide" data-title="Video stories and speech" aria-label="Slide 6: Video stories and speech">
+<div class="eyebrow">05 / Photos were useful; videos needed more</div>
+<h2>A video needs the event and the conversation.</h2>
 <div class="body">
 <div class="flow">
 <div class="node"><b>8 moments</b>768px previews<br>Keep the event sequence</div><span class="arrow">→</span>
@@ -221,66 +263,32 @@ nav{display:none}
 </div>
 <div class="source">Video: same six clips, model requests only; decoding/warmup excluded, shared hardware. Audio: six short clips + silence control, warm beam-one services; extraction excluded. These are bounded trials, not whole-library runtime or accuracy scores. <a href="assets/local-photo-pipeline/evidence.md#final-video-and-audio-results">Evidence</a>.</div>
 </section>
-<section class="slide" data-title="Live tuning loop" aria-label="Slide 6: Live tuning loop">
-<div class="eyebrow">05 / Change settings while work continues</div>
-<h2>Change one setting. Check if it helped.</h2>
-<div class="body">
-<div class="flow">
-<div class="node">
-<b>1</b>Save one change<br>in Git</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>2</b>Check when<br>it took effect</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>3</b>Watch for 2 min;<br>measure for 10</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>4</b>Count saved files;<br>compare photos/videos</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>5</b>Keep it or<br>undo it</div>
-</div>
-<div class="focus-shot policy">
-<img src="assets/local-photo-pipeline/grafana-live-tuning.jpg" alt="Cropped actual Grafana panels showing GPU slots and the applied policy timestamp.">
-</div>
-<p class="note">The worker checks for settings every 30 seconds or later, when ready for more work. It finishes current requests first. If it cannot fetch the change, it keeps the old settings.</p>
-</div>
-<div class="source">Actual Grafana panel crop; November 21 11:00–November 22 02:00 UTC. <a href="assets/local-photo-pipeline/grafana-live-tuning.jpg">Open full-size image</a>.</div>
-</section>
-<section class="slide" data-title="70,000 photos: Luna vs both GPUs" aria-label="Slide 7: 70,000 photos: Luna vs both GPUs">
-<div class="eyebrow">06 / Total time · 70,000 photos</div>
-<h2>Consumer GPUs are competitive. Cloud scales further.</h2>
+<section class="slide" data-title="Optional cloud assistance" aria-label="Slide 7: Optional cloud assistance">
+<div class="eyebrow">06 / Local is the baseline; cloud is optional help</div>
+<h2>Cloud helped. Local captions remain the foundation.</h2>
 <div class="body">
 <div class="row">
-<div>
-<div class="tag">Time to save 70,000 photo captions</div>
-<div class="compare"><span>Luna · actual</span><div class="bar" style="--w:58.56%"></div><b>21h 46m</b></div>
-<div class="compare"><span>RTX + Mac<br><small>projected</small></span><div class="bar before" style="--w:100%"></div><b>37h 09m</b></div>
-<p class="note">Luna reached 70,000 photos on Nov 22 at 6:54 a.m. Pacific.<br>The local estimate uses both GPUs' measured 31.4 photos/min.</p>
-<div class="stat"><strong>41% less elapsed time</strong><div class="unit">Luna: 15h 24m shorter than the RTX + Mac projection</div></div>
+<div><div class="tag">Local · existing RTX 3070 + Mac</div>
+<div class="big">85,889</div><div class="unit">photo groups described locally · 99.999% coverage</div>
+<div class="stat"><strong>No per-request API fee</strong><div class="unit">Electricity and hardware cost were not measured.</div></div>
+<p class="note">One successful local description per item is the target. A separate cloud opinion is optional; local coverage does not wait for it.</p></div>
+<div><div class="tag">Optional comparison · time for 70,000 photos</div>
+<div class="compare"><span>RTX + Mac<br><small>projected</small></span><div class="bar" style="--w:100%"></div><b>37h 09m</b></div>
+<div class="compare"><span>Luna<br><small>actual interval</small></span><div class="bar before" style="--w:58.56%"></div><b>21h 46m</b></div>
+<p class="note">Luna's interval was 15h 24m shorter: 41% less elapsed time than the local projection.</p>
+<div class="stat"><strong>~$43.33</strong><div class="unit">Full Luna caption campaign · 77,707 outputs<br>API-equivalent estimate, not an invoice</div></div></div>
 </div>
-<div>
-<div class="tag">Cost context · the full Luna campaign</div>
-<div class="big">~$43.33</div><div class="unit">API-equivalent usage · not an invoice</div>
-<div class="stat"><strong>77,707 captions</strong><div class="unit">71,643 photos + 6,064 videos</div></div>
-<p class="note">Text reconciliation: <strong>$0.869 / 1,000</strong> observed.<br>Audio-text checks: <strong>~$0.50</strong> token-based estimate.</p>
+<p class="note">Cloud also handled selected text reconciliation and difficult speech. Observed reconciliation rate: $0.869/1,000; audio-text checks: ~$0.50 API-equivalent estimate.</p>
 </div>
-</div>
-<div class="flow">
-<div class="node"><b>Local: quality and value</b>Useful captions on existing RTX 3070 + Mac hardware.<br>No API fee; electricity and hardware cost unmeasured.</div>
-<div class="node"><b>Cloud: more work in parallel</b>20 concurrent requests helped clear the backlog sooner.<br>The measured advantage is capacity and elapsed time.</div>
-</div>
-</div>
-<div class="source">41.4% = 1 − Luna elapsed / local projected time. Luna includes videos, retries and interruptions; the local estimate assumes both GPUs stay available. Different workloads, not a controlled race. Quality was assessed informally. ~$43.33 and ~$0.50 are separate API-equivalent estimates, not invoices. The observed reconciliation unit rate is a different measure; raw account readings stay private. <a href="assets/local-photo-pipeline/evidence.md#frontier-model-versus-local-gpu">Calculations and evidence</a>.</div>
+<div class="source">Local projection uses 31.4 photos/min with both GPUs available. Luna's interval includes other work and interruptions; this is not a controlled race or a blind quality comparison. No numerical local-cost saving is claimed. <a href="assets/local-photo-pipeline/evidence.md#frontier-model-versus-local-gpu">Time/cost evidence</a>.</div>
 </section>
 <section class="slide" data-title="Queryable memories" aria-label="Slide 8: Queryable memories">
 <div class="eyebrow">07 / The platform beyond the gallery</div>
-<h2>Connect a life across years and places.</h2>
+<h2>Now follow a person or interest across years.</h2>
 <div class="body">
 <div class="three">
 <div class="value"><b>PostgreSQL</b><span>Current names, human decisions and work state.</span></div>
-<div class="value"><b>Parquet</b><span>Separate captions, speech and metadata with provenance.</span></div>
+<div class="value"><b>Parquet</b><span>Local captions, speech and metadata with provenance.</span></div>
 <div class="value"><b>DuckDB</b><span>Join and analyse saved evidence across the library.</span></div>
 </div>
 <div class="flow" style="margin-top:40px">
@@ -295,7 +303,7 @@ nav{display:none}
 </section>
 <section class="slide" data-title="Build sequence" aria-label="Slide 9: Build sequence">
 <div class="eyebrow">08 / Set it up</div>
-<h2>Build once. Reuse for the next story.</h2>
+<h2>The same pipeline can keep growing.</h2>
 <div class="body">
 <div class="flow">
 <div class="node">
@@ -326,7 +334,7 @@ nav{display:none}
 <span class="arrow">→</span>
 <div class="node">
 <b>06</b>Add captions + speech<br>
-<span class="small">Keep metadata and model outputs separate</span>
+<span class="small">Save local descriptions; keep speech separately</span>
 </div>
 <span class="arrow">→</span>
 <div class="node">
@@ -334,19 +342,19 @@ nav{display:none}
 <span class="small">Follow people and topics; measure changes</span>
 </div>
 </div>
-<p class="note">Only delete cloud files after checking your backups. Keep a copy outside your home. Immich can finish indexing while descriptions are still being generated.</p>
+<p class="note">Import new files, preserve completed work, and describe only what is missing locally. Verify backups before deleting cloud originals; keep an off-site copy.</p>
 </div>
 <div class="source">
 <a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md#build-the-final-system-step-by-step">Article: commands, manifests and runbooks for every step</a>.</div>
 </section>
 <section class="slide dark" data-title="Final results and lessons" aria-label="Slide 10: Final results and lessons">
 <div class="eyebrow">09 / The platform is ready</div>
-<h2>Ready for the next life story.</h2>
+<h2>The local archive is ready for life stories.</h2>
 <div class="body">
 <div class="three" style="margin-bottom:30px">
-<div class="value"><b>85,889 / 85,890</b><span>Photo groups described<br>99.999% coverage</span></div>
-<div class="value"><b>6,909 / 6,914</b><span>Video groups described<br>All 6,909 have saved stories</span></div>
-<div class="value"><b>77,463</b><span>Text reconciliations complete<br>220 skipped · 0 critical conflicts</span></div>
+<div class="value"><b>85,889 / 85,890</b><span>Photo groups described locally<br>99.999% coverage</span></div>
+<div class="value"><b>6,885 / 6,914</b><span>Video groups described locally<br>24 more use saved cloud captions</span></div>
+<div class="value"><b>6,909</b><span>Video stories saved<br>Audio checked; useful speech retained</span></div>
 </div>
 <div class="gridnotes">
 <div class="problem" style="color:var(--ink)"><h3>Finished work kept coming back</h3><p class="cause">Different captions tied at the same timestamp.</p><p>Choose one deterministically. Repeat scans now requeue zero unchanged stories.</p></div>
@@ -354,7 +362,7 @@ nav{display:none}
 </div>
 <p class="sub" style="margin-top:25px">Keep the memory. Reuse the work. Make uncertainty visible.</p>
 </div>
-<div class="source">Final audit: Nov 25, 10:31 a.m. Pacific. Groups use filename/size copy matching, not content hashes. Six damaged files accepted as exceptions. 14,247 photos have local-only captions; a second Luna pass is optional. No pending story work or duplicate story rows; seven repetitive transcripts explicitly withheld. <a href="assets/local-photo-pipeline/evidence.md#final-results-november-25">Final evidence</a>.</div>
+<div class="source">Final audit: Nov 25, 10:31 a.m. Pacific. Groups use filename/size copy matching, not content hashes. Six damaged sources accepted as exceptions. Optional paired reconciliation: 77,463 complete, 220 skipped, 0 critical conflicts. No pending story work or duplicate story rows; seven repetitive transcripts explicitly withheld. <a href="assets/local-photo-pipeline/evidence.md#final-results-november-25">Final evidence</a>.</div>
 </section>
 <nav aria-label="Slide navigation">
 <button id="prev" aria-label="Previous slide">←</button>

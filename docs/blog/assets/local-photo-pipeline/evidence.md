@@ -21,8 +21,8 @@ The tandem chat was supplied by the user (chat ID `01a1f090-1a01-7030-97a1-f59af
 
 All included pictures are native browser screenshots, not reconstructed charts. The source was the private [Knowledge Index dashboard](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&from=1795258800000&to=1795312800000&timezone=utc), with the fixed range **2026-11-21 11:00:00–2026-11-22 02:00:00 UTC**, all hosts and all pipeline enrichers. The actual dashboard timestamps and legends are retained.
 
-- `grafana-throughput.jpg`: backend caption-save rates and the separate first-caption/distinct-item series. Included in article and slide 4.
-- `grafana-live-tuning.jpg`: GPU request-slot occupancy, applied policy and photo/video/query-write stage timings. Included in article and slide 6.
+- `grafana-throughput.jpg`: historical multi-model throughput capture. Retained as source material, but omitted from the finalized article/deck because it combines local and cloud measures.
+- `grafana-live-tuning.jpg`: GPU request-slot occupancy, applied policy and photo/video/query-write stage timings. Included in the article and finalized slide 5.
 - `grafana-overview.jpg`: supporting overview capture of historical before/after cards and run state.
 
 Snapshot observations included 28.6 local saves/min, 96.9 combined captions/min and 36,446 distinct captioned items. They are endpoint readings, not the same measurement as the earlier trials. The dashboard also showed zero native Immich outstanding jobs but 12,556 pending synchronization assets and 475 conflicts. “Immich native indexing done” does not imply all custom metadata or captions are finished.
@@ -280,3 +280,26 @@ installer; the service was active with zero restarts in its new lifecycle.
 Authenticated Grafana provisioning checks passed. Final aggregate recovery proof
 is in `audio-story/results.json`; no private transcript, identity or photograph
 is included in these editorial assets.
+
+
+## Final editorial focus: local descriptions
+
+The finalized ten-slide sequence follows local descriptions: the memory-platform
+outcome, preserved originals and local workers, RTX/Mac throughput, idle-slot
+recovery, live tuning, video speech, optional cloud assistance, cross-year analysis,
+ongoing operation and final local coverage. The same local-first definition is
+used in the article. One successful local visual description per item is the normal
+target; successful items are skipped. Video speech/story enrichment reuses that
+visual result. An explicit future model/prompt upgrade would be separate work.
+
+The published article and deck no longer show the historical mixed-model
+throughput screenshot or its ambiguous completion terminology. The headline
+throughput measure is local descriptions successfully saved per minute, with RTX
+and Mac contributions identified. Native comparison bars use recorded local
+trials; the real Grafana policy/occupancy capture remains, clearly dated.
+
+Final coverage labels distinguish **85,889 local photo descriptions**, **6,885 local
+video descriptions** and **6,909 saved video stories**; the last count includes 24
+videos whose visual caption comes from Luna. Optional cloud comparisons are kept
+on their own slide/section. No additional benchmark or pipeline change is implied
+by this editorial revision.
