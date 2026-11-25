@@ -198,5 +198,24 @@
       "snapshot_age_seconds": 19.2
     },
     "note": "Deterministic selection may require one final story update when its chosen caption differs from the previous arbitrary winner. Identical repeat discovery does not requeue it. Audio is preserved."
+  },
+  "story_format_recovery": {
+    "checked_utc": "2026-11-25T18:20:49Z",
+    "reviewed_failures": 7,
+    "repetition_dominated_transcripts": 7,
+    "reproduced_local_failure": "Repetition until token limit; unfinished JSON string. Historical bodies for the other six were not retained.",
+    "stories_ok": 6909,
+    "stories_error": 0,
+    "stories_skipped": 0,
+    "speech_withheld_reason": "repetitive_transcript_withheld",
+    "speech_withheld_count": 7,
+    "unpublished_updates": 0,
+    "snapshot_duplicates": 0,
+    "audio_repeated_successes": 0,
+    "worker_tests": 23,
+    "codex_adapter_tests": 5,
+    "installer_tests": 3,
+    "production_recovery_model_calls": 0,
+    "fallback": "Malformed or truncated local output with usable speech uses the existing idempotent, budgeted Luna route instead of identical Bonsai retries."
   }
 }
