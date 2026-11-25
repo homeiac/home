@@ -4,7 +4,7 @@
 
 A map can show where a trip happened. A richer memory layer can help follow a child's interests across years, connect family gatherings in different homes, or trace a work journey across places and dates. **A platform for assembling those stories is the main value of this project.**
 
-Immich remains the gallery for browsing photos, people and places. The added layer makes **local descriptions**, confirmed names, dates, saved metadata and useful video speech available together in queryable datasets. A story can follow a person, activity or topic across the library rather than stop at one GPS-marked trip. The evidence remains attached to the source files, and uncertain speech can be left out instead of becoming an invented memory.
+Immich is the gallery and a source of saved people/place context; a separate API sync preserves catalogue enrichment back into Immich custom metadata. The added layer makes **local descriptions**, confirmed names, dates, saved metadata and useful video speech available together in queryable datasets. A story can follow a person, activity or topic across the library rather than stop at one GPS-marked trip. The evidence remains attached to the source files, and uncertain speech can be left out instead of becoming an invented memory.
 
 The initial indexing and enrichment work is now complete within the agreed scope: **85,889 photo groups have local descriptions, and 6,909 video groups have a saved story.** That supplies the material for cross-library narrative analysis. A dedicated automatic journey writer, knowledge graph and MCP interface have not been built; these are possible ways to use the completed data layer next.
 
@@ -50,6 +50,23 @@ PostgreSQL owns the photo application's jobs, leases, human labels and rejection
 Piglet owns caption inputs and durable outputs. Local capacity comes from RTX/Ollama plus an optional Mac/Metal worker. An optional Luna submitter on always-on still-fawn uses a shared reservation/accounting ledger and publishes into its own Parquet dataset. **This optional route sends images or video frames and context to a cloud service.** Local archival and captioning remain usable without it. Separate model outputs make comparisons explicit. Video audio is a separate resumable stage: Whisper on the Mac and spare CPU capacity produces timestamped speech; the story worker reuses the saved visual description. Difficult text interpretation and malformed/truncated local responses with usable evidence can use the authorized Luna/Codex route. That route sends selected transcripts and short saved descriptions, not fresh media.
 
 Applications stay behind private Traefik access. Kubernetes resources use Git/Flux; host workers use versioned installers and systemd. Some components still use the feature branch's Flux preview: implemented architecture does not mean every rollout change has merged to main.
+
+## Immich integration: a familiar gallery and reusable context
+
+Immich is the everyday front door to the preserved archive. It reads originals through an external library, supplies dates and GPS/place browsing, and performs its own thumbnail, face, OCR and search processing. The integration reuses that work instead of treating Immich and the memory platform as disconnected systems.
+
+| Direction | What moves | What it means |
+|---|---|---|
+| Originals → Immich | Read-only external-library files | The gallery uses the preserved archive; the pipeline does not rewrite originals |
+| Immich → platform | Saved city/state/country, visible named people and face boxes | A private snapshot refreshes every 30 minutes; path/size matching skips ambiguous files |
+| Platform → Immich | Existing catalogue captions, model provenance, tags, location/group context and prior face labels | A resumable API worker preserves these in the owned custom metadata record `home.knowledge-index.v1` |
+| Platform → journey analysis | Local captions joined with people/date/place context and useful speech | A reusable evidence layer for questions across years, beyond browsing one trip |
+
+The photo review application can import names from spatially matched Immich faces, displaying them as **From Immich**. It fills unnamed detections only, requires a clear mutual face-box match, and preserves existing names, cleared labels and rejections. Imported suggestions remain distinct from human-confirmed examples. The place/name snapshot also supplies caption context for the optional Luna route and place search/group suggestions in the photo application. See [context reuse and face matching](../../scripts/knowledge-index/photo_enrichment/README.md#reuse-names-and-places-from-immich).
+
+The return path has an explicit boundary: **preserved custom metadata is not a native Immich description, tag, album or face assignment**. Native caption/GPS/date promotion is gated and native face transfer is disabled. The sync detects edits to its previously written record as conflicts instead of silently replacing them. It uses the Immich API, not direct writes to Immich's database. This protects both originals and human decisions. See the [integration runbook](../runbooks/immich-knowledge-index-reconciliation.md).
+
+This also explains the earlier search confusion. Immich's native Description filter does not automatically search separately stored AI captions or our custom metadata record. The platform's DuckDB-backed queries operate on the saved enrichment datasets. Local caption completion, Immich's native job completion and custom-metadata synchronization are separate states; the final caption totals do not claim that every latest story is already searchable inside Immich.
 
 ## The local GPUs: count descriptions actually saved
 

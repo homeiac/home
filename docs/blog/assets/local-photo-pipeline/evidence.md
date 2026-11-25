@@ -22,7 +22,7 @@ The tandem chat was supplied by the user (chat ID `01a1f090-1a01-7030-97a1-f59af
 All included pictures are native browser screenshots, not reconstructed charts. The source was the private [Knowledge Index dashboard](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&from=1795258800000&to=1795312800000&timezone=utc), with the fixed range **2026-11-21 11:00:00–2026-11-22 02:00:00 UTC**, all hosts and all pipeline enrichers. The actual dashboard timestamps and legends are retained.
 
 - `grafana-throughput.jpg`: historical multi-model throughput capture. Retained as source material, but omitted from the finalized article/deck because it combines local and cloud measures.
-- `grafana-live-tuning.jpg`: GPU request-slot occupancy, applied policy and photo/video/query-write stage timings. Included in the article and finalized slide 5.
+- `grafana-live-tuning.jpg`: GPU request-slot occupancy, applied policy and photo/video/query-write stage timings. Included in the article and finalized slide 6.
 - `grafana-overview.jpg`: supporting overview capture of historical before/after cards and run state.
 
 Snapshot observations included 28.6 local saves/min, 96.9 combined captions/min and 36,446 distinct captioned items. They are endpoint readings, not the same measurement as the earlier trials. The dashboard also showed zero native Immich outstanding jobs but 12,556 pending synchronization assets and 475 conflicts. “Immich native indexing done” does not imply all custom metadata or captions are finished.
@@ -303,3 +303,23 @@ video descriptions** and **6,909 saved video stories**; the last count includes 
 videos whose visual caption comes from Luna. Optional cloud comparisons are kept
 on their own slide/section. No additional benchmark or pipeline change is implied
 by this editorial revision.
+
+
+## Immich integration in the final narrative
+
+The finalized deck includes a dedicated Immich slide immediately after architecture,
+keeping ten slides by leaving the detailed setup sequence in the article. Claims
+are grounded in `photo_enrichment/README.md` (context snapshot and mutual face-box
+matching), `luna-backfill/export-immich-context.py`, and the
+[Immich reconciliation runbook](../../../runbooks/immich-knowledge-index-reconciliation.md)
+plus `immich_sync/core.mjs` and `worker.mjs`.
+
+Originals feed a read-only Immich external library. Immich exports saved places,
+visible named people and face boxes into the private platform. The return worker
+preserves existing catalogue enrichment through the API under
+`home.knowledge-index.v1`; it does not promote those records into native captions,
+tags, albums or face assignments. Native caption/GPS/date writes remain gated, and
+native face transfer remains disabled. No claim is made that all latest caption,
+reconciled text or audio-story rows are already synced or natively searchable in
+Immich. This is documentation of implemented integration paths, not a new live
+synchronization audit or a change in write policy.

@@ -131,7 +131,7 @@ nav{display:none}
 </div>
 <div class="stat" style="margin-top:35px"><strong>85,889 photos · 6,909 video stories</strong><div class="unit" style="color:#b7cbc1">85,889 photos described locally. Saved speech adds context to video stories.</div></div>
 </div>
-<div class="source">Immich is the gallery. Local descriptions, saved metadata and useful speech form the memory platform. Journey writing and private MCP access are future applications.</div>
+<div class="source">Immich supplies the gallery and saved context. Local descriptions and useful speech extend that into the memory platform. Journey writing and private MCP access are future applications.</div>
 </section>
 <section class="slide" data-title="Final architecture" aria-label="Slide 2: Final architecture">
 <div class="eyebrow">01 / How it works</div>
@@ -141,8 +141,25 @@ nav{display:none}
 </div>
 <div class="source">Photos path shown; Drive/OneDrive use the existing copy job. USB covers the quota subset, not all photos. Optional Luna sends media/context to a cloud service. Visual captions + Whisper speech feed saved stories; private originals remain the evidence. Resources still use the Flux preview branch.</div>
 </section>
-<section class="slide" data-title="Local descriptions at a practical speed" aria-label="Slide 3: Local descriptions at a practical speed">
-<div class="eyebrow">02 / Make the local backlog practical</div>
+<section class="slide" data-title="Immich integration" aria-label="Slide 3: Immich integration">
+<div class="eyebrow">02 / Keep the gallery; reuse its context</div>
+<h2>Immich connects the archive to everyday use.</h2>
+<div class="body">
+<div class="flow">
+<div class="node"><b>Originals</b>Read-only external library<br>Preserve files and sidecars</div><span class="arrow">→</span>
+<div class="node"><b>Immich</b>Browse people and places<br>Dates, GPS, faces and OCR</div><span class="arrow">→</span>
+<div class="node"><b>Memory platform</b>Reuse saved context<br>Query captions across years</div>
+</div>
+<div class="row" style="margin-top:28px">
+<div class="value"><b>Immich → platform</b><span>Export saved places and visible named people. Match the file and face carefully; preserve human decisions.</span></div>
+<div class="value"><b>Platform → Immich</b><span>Preserve catalogue captions, tags and context through the API in a separate custom metadata record.</span></div>
+</div>
+<p class="note" style="margin-top:28px">Immich remains the familiar gallery. The added query layer connects descriptions, people, dates and speech for future life, family and work journeys.</p>
+</div>
+<div class="source">Custom metadata is not native Description search. Native caption/GPS/date writes are gated; native face transfer is disabled. Current caption coverage does not certify every sync is complete. <a href="../../scripts/knowledge-index/photo_enrichment/README.md#reuse-names-and-places-from-immich">Context reuse</a> · <a href="../runbooks/immich-knowledge-index-reconciliation.md">Preservation boundary</a>.</div>
+</section>
+<section class="slide" data-title="Local descriptions at a practical speed" aria-label="Slide 4: Local descriptions at a practical speed">
+<div class="eyebrow">03 / Make the local backlog practical</div>
 <h2>Two home GPUs made steady progress.</h2>
 <div class="body">
 <div class="row">
@@ -160,8 +177,8 @@ nav{display:none}
 </div>
 <div class="source">The ten-minute windows used different files; 39% is an observed increase. The 30-minute result is a separate photos-first trial, not another step in a controlled experiment. <a href="assets/local-photo-pipeline/evidence.md">Measurement scope</a>.</div>
 </section>
-<section class="slide" data-title="Start the next job" aria-label="Slide 4: Start the next job">
-<div class="eyebrow">03 / Remove the waiting between jobs</div>
+<section class="slide" data-title="Start the next job" aria-label="Slide 5: Start the next job">
+<div class="eyebrow">04 / Remove the waiting between jobs</div>
 <h2>The GPUs were waiting for the queue.</h2>
 <div class="body">
 <svg class="timeline" viewBox="0 0 1100 330" role="img" aria-label="Conceptual scheduling diagram: a batch barrier leaves slots waiting for one long request; continuous refill starts new work on each free slot.">
@@ -212,8 +229,8 @@ nav{display:none}
 </div>
 <div class="source">Diagram illustrates the mechanism; bar lengths are not measured task durations. <a href="../../scripts/knowledge-index/bonsai-dispatch.md">Dispatch policy</a>.</div>
 </section>
-<section class="slide" data-title="Live tuning loop" aria-label="Slide 5: Live tuning loop">
-<div class="eyebrow">04 / Keep the tuning honest</div>
+<section class="slide" data-title="Live tuning loop" aria-label="Slide 6: Live tuning loop">
+<div class="eyebrow">05 / Keep the tuning honest</div>
 <h2>Measure progress. Tune one setting.</h2>
 <div class="body">
 <div class="flow">
@@ -239,8 +256,8 @@ nav{display:none}
 </div>
 <div class="source">Actual Grafana panel crop; November 21 11:00–November 22 02:00 UTC. <a href="assets/local-photo-pipeline/grafana-live-tuning.jpg">Open full-size image</a>.</div>
 </section>
-<section class="slide" data-title="Video stories and speech" aria-label="Slide 6: Video stories and speech">
-<div class="eyebrow">05 / Photos were useful; videos needed more</div>
+<section class="slide" data-title="Video stories and speech" aria-label="Slide 7: Video stories and speech">
+<div class="eyebrow">06 / Photos were useful; videos needed more</div>
 <h2>A video needs the event and the conversation.</h2>
 <div class="body">
 <div class="flow">
@@ -263,8 +280,8 @@ nav{display:none}
 </div>
 <div class="source">Video: same six clips, model requests only; decoding/warmup excluded, shared hardware. Audio: six short clips + silence control, warm beam-one services; extraction excluded. These are bounded trials, not whole-library runtime or accuracy scores. <a href="assets/local-photo-pipeline/evidence.md#final-video-and-audio-results">Evidence</a>.</div>
 </section>
-<section class="slide" data-title="Optional cloud assistance" aria-label="Slide 7: Optional cloud assistance">
-<div class="eyebrow">06 / Local is the baseline; cloud is optional help</div>
+<section class="slide" data-title="Optional cloud assistance" aria-label="Slide 8: Optional cloud assistance">
+<div class="eyebrow">07 / Local is the baseline; cloud is optional help</div>
 <h2>Cloud helped. Local captions remain the foundation.</h2>
 <div class="body">
 <div class="row">
@@ -282,8 +299,8 @@ nav{display:none}
 </div>
 <div class="source">Local projection uses 31.4 photos/min with both GPUs available. Luna's interval includes other work and interruptions; this is not a controlled race or a blind quality comparison. No numerical local-cost saving is claimed. <a href="assets/local-photo-pipeline/evidence.md#frontier-model-versus-local-gpu">Time/cost evidence</a>.</div>
 </section>
-<section class="slide" data-title="Queryable memories" aria-label="Slide 8: Queryable memories">
-<div class="eyebrow">07 / The platform beyond the gallery</div>
+<section class="slide" data-title="Queryable memories" aria-label="Slide 9: Queryable memories">
+<div class="eyebrow">08 / The platform beyond the gallery</div>
 <h2>Now follow a person or interest across years.</h2>
 <div class="body">
 <div class="three">
@@ -300,52 +317,6 @@ nav{display:none}
 <p class="sub">An example question the data can support—not an answer generated for this deck.</p>
 </div>
 <div class="source">Delivered: the private, queryable evidence layer. Next applications: guided story writing and a private MCP interface with chosen sharing boundaries. No automatic journey writer or graph database is claimed.</div>
-</section>
-<section class="slide" data-title="Build sequence" aria-label="Slide 9: Build sequence">
-<div class="eyebrow">08 / Set it up</div>
-<h2>The same pipeline can keep growing.</h2>
-<div class="body">
-<div class="flow">
-<div class="node">
-<b>01</b>Check sizes<br>
-<span class="small">Enough room on both disks</span>
-</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>02</b>Import originals<br>
-<span class="small">Check archives; record completed imports</span>
-</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>03</b>Verify copies<br>
-<span class="small">Compare files and test a restore</span>
-</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>04</b>Build the file list<br>
-<span class="small">Save metadata; check quota estimates</span>
-</div>
-</div>
-<div class="flow">
-<div class="node">
-<b>05</b>Connect Immich<br>
-<span class="small">Keep originals read-only</span>
-</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>06</b>Add captions + speech<br>
-<span class="small">Save local descriptions; keep speech separately</span>
-</div>
-<span class="arrow">→</span>
-<div class="node">
-<b>07</b>Query and improve<br>
-<span class="small">Follow people and topics; measure changes</span>
-</div>
-</div>
-<p class="note">Import new files, preserve completed work, and describe only what is missing locally. Verify backups before deleting cloud originals; keep an off-site copy.</p>
-</div>
-<div class="source">
-<a href="2026-11-15-taking-my-files-back-from-google-and-onedrive.md#build-the-final-system-step-by-step">Article: commands, manifests and runbooks for every step</a>.</div>
 </section>
 <section class="slide dark" data-title="Final results and lessons" aria-label="Slide 10: Final results and lessons">
 <div class="eyebrow">09 / The platform is ready</div>
