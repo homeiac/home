@@ -13,6 +13,8 @@ with sqlite3.connect('file:'+str(root/'ledger.sqlite3')+'?mode=ro',uri=True) as 
     'story_states':dict(d.execute('SELECT story_state,count(*) FROM jobs WHERE active=1 GROUP BY 1')),
     'visual_sources':dict(d.execute('SELECT visual_source,count(*) FROM jobs WHERE active=1 GROUP BY 1')),
     'audio_repeated_successes':d.execute("SELECT count(*) FROM (SELECT job FROM attempts WHERE stage='audio' AND ok=1 GROUP BY job HAVING count(*)>1)").fetchone()[0],
+    'visual_only_settled':d.execute("SELECT count(*) FROM attempts WHERE stage='story' AND backend='visual_only' AND ok=1").fetchone()[0],
+    'ready_visual_only_pending':d.execute("SELECT count(*) FROM jobs WHERE active=1 AND story_state='pending' AND audio_state IN ('no_audio','no_speech','uncertain_speech')").fetchone()[0],
     'unpublished_updates':d.execute('SELECT count(*) FROM jobs WHERE active=1 AND updated>coalesce(published,0)').fetchone()[0],
     'stages':dict(d.execute('SELECT stage,count(*) FROM attempts GROUP BY stage'))}
  snapshot=root/'parquet/current.parquet'

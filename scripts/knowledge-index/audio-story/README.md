@@ -45,7 +45,9 @@ backends; each has one in-flight request. A bad item receives at most three atte
 with backoff, then is skipped while the queue continues. Unhealthy endpoints do not
 consume new claims. No-audio, no-speech and uncertain-speech outcomes are distinct.
 Low-confidence language, low-confidence segments and repetitive ASR artifacts are
-withheld automatically. The original visual account remains usable. There is no
+withheld automatically. The original visual account remains usable. No-audio, no-speech and uncertain-speech
+stories complete in bounded database batches without waiting behind model calls.
+In-flight model work is left alone, and repeated batches cannot duplicate completions. There is no
 speaker identification and no human review queue for incidental audio differences.
 
 Discovery runs every five minutes, including Luna-only captions. Local captions

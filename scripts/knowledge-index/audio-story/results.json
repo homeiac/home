@@ -143,5 +143,15 @@
     "calibration_requests": 3,
     "final_pilot_requests": 4,
     "observations": "Revised prompt retained clear English commentary and translated a clean Tamil hiking sentence; both garbled Tamil transcripts were withheld. First prompt was overcautious. Checks compare text meaning, not a human-labelled audio reference."
+  },
+  "visual_only_queue_fix": {
+    "before_utc": "2026-11-25T03:01:46Z",
+    "after_utc": "2026-11-25T03:03:22Z",
+    "stories_before": 3529,
+    "stories_after": 5652,
+    "visual_only_settlements": 2160,
+    "ready_visual_only_pending": 0,
+    "snapshot_duplicates": 0,
+    "method": "Bounded idempotent database batches reuse the saved visual caption for absent/unusable speech without a model call. Concurrent audio/caption processing and story revision updates continue; this is not a model-speed benchmark."
   }
 }
