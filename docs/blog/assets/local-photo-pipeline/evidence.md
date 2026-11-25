@@ -1,6 +1,6 @@
 # Evidence for the local photo pipeline article and slides
 
-Prepared November 21, 2026 (Pacific); screenshots captured November 22 UTC. This is an editorial evidence register, not a new benchmark run. Architecture was checked against repository revision `1989dc7` and the tandem implementation chat. No private photographs, face names, GPS coordinates, credentials or raw session logs are included.
+Prepared November 21, 2026 (Pacific); final results appended November 25. Historical screenshots captured November 22 UTC. This is an editorial evidence register, not a new benchmark run. Architecture was checked against repository revision `1989dc7` and the tandem implementation chat. No private photographs, face names, GPS coordinates, credentials or raw session logs are included.
 
 ## Measurement scope
 
@@ -169,3 +169,114 @@ exactly the same SHA-256, so it was not substituted. No blank, partial or fabric
 caption was counted as a success. The user accepted leaving these files out.
 Private filenames and diagnostic manifests remain on Piglet; the repository stores
 only the read-only diagnosis, coverage and verification scripts.
+
+<a id="final-results-november-25"></a>
+
+## Final results — November 25
+
+Read-only live checks at **2026-11-25 18:30:59–18:31:00 UTC** (10:31 a.m.
+Pacific) supersede the historical run-state screenshots for current completion.
+The local catalogue contains 118,987 media paths and 119,670 sidecar paths.
+The caption exporter reported success; its file was about two minutes old.
+
+| Final measure | Result | Scope |
+|---|---:|---|
+| Local or either-model photo coverage | 85,889 / 85,890 | Presumed-copy groups, not content hashes |
+| Either-model video coverage | 6,909 / 6,914 | Same grouping; six total damaged source exceptions described above |
+| Local video coverage | 6,885 | Remaining captioned videos can use Luna's saved visual description |
+| Luna photo/video coverage | 71,643 / 6,064 | Original campaign; not an independent whole-library second pass |
+| Photos with local but no Luna coverage | 14,247 | Optional second opinion, not missing usable local captions |
+| Current reconciliations | 77,463 ok; 220 skipped | No pending/reserved/sent current revisions |
+| Critical completed-reconciliation conflicts | 0 | Does not validate local-only photos or prove historical accuracy |
+| Eligible video stories | 6,909 ok | Zero error/skipped/pending/inflight; zero unpublished updates |
+| Current video-story snapshot | 6,909 rows / 6,909 unique identities | No duplicate rows; no repeated successful audio jobs |
+
+Reproduce caption coverage with `scripts/knowledge-index/check-caption-completion.sh`;
+Luna/reconciliation status uses the read-only ledger queries in
+`luna-backfill/check-status.sh` and `reconciliation.status`. The final audio audit
+uses `scripts/knowledge-index/audio-story/audit.py`. Diagnostics and raw source
+identities stay private. Metrics report coverage by both grouped items and file
+paths; a caption on a mapped copy covers its group.
+
+The one-time `seed()` in `luna-backfill/host.py` selects the then-uncaptioned local
+queue and records a seeded generation. Reconciliation discovery follows new
+available pairs, not all missing Luna captions. This explains why being caught up
+with reconciliation does not imply a full second model pass. The user accepted
+local captions as the useful baseline and the six damaged-source exceptions;
+there is no scored accuracy evaluation of the 14,247 local-only photo groups.
+
+The platform claim is a **private queryable evidence layer** for life, family and
+work journey analysis across years and places: saved descriptions, dates/people/
+location context, speech, separate source outputs and human decisions. Immich
+remains the gallery. A dedicated automatic journey writer, graph database and MCP
+interface are not delivered by this PR. Example journey questions in the slides
+are illustrative, not demonstrated answers or claims about all native Immich
+capabilities. Sharing policy for a future interface remains a design choice.
+
+## Final video and audio results
+
+[Video tuning results](../../../../scripts/knowledge-index/video-tuning/results.json)
+record the fixed six-clip comparison. Request concurrency stayed at two for RTX;
+Mac changed from four to one. Selected previews use up to eight frames, 768px,
+a concise activity/change prompt and a 256-token output limit. Four-frame variants
+lost event detail. RTX runtime caches were reset per cell with synthetic warmup;
+the Mac server was warm with prompt caching disabled. Decoding/warmup are excluded
+from model trials. Shared homelab load and the small sample limit inference.
+
+| Backend | Before saves/min | After saves/min | Derived increase |
+|---|---:|---:|---:|
+| RTX | 5.96 | 8.73 | 46.48% (slide: 46%) |
+| Mac | 3.08 | 4.79 | 55.52% (slide: 56%) |
+
+[Audio/story results](../../../../scripts/knowledge-index/audio-story/results.json)
+record 151.93 seconds over six short clips plus a silence control, Whisper small
+Q5_1 multilingual with VAD, beam one, warm services, HTTP transfer included and
+extraction excluded. Wall times were Mac **7.90 s**, RTX **26.73 s**, CPU **147.42 s**.
+These are not whole-library completion times or human-labelled accuracy scores.
+The production choice uses Mac and spare CPU capacity, returning RTX capacity to
+Immich. No claim is made that the Mac is universally faster than RTX.
+
+Final audio states: **2,059 speech, 4,128 no speech detected, 93 no audio stream,
+629 uncertain speech**, summing to 6,909. Seven speech-classified transcripts were
+withheld during story assembly because they were dominated by repetition; raw
+transcripts, audio classifications and visual captions were preserved. All stories
+settled, but not all contain speech-derived text.
+
+The authorized Codex text route had **509 completed production assessments**:
+224 useful, 261 unclear and 24 incidental, plus seven pilot/calibration checks.
+No unknown or waiting requests remained. Total token-based API-equivalent
+accounting was **$0.501818** including pilots, rounded to ~$0.50. This is separate
+from the original caption campaign's ~$43.33 estimate and from reconciliation's
+observed **$0.000869 per successful item**. These measures must not be summed as an
+actual bill or used to claim measured cash savings. No raw account readings or
+observation amounts are recorded here.
+
+The value of avoided work is architectural: speech backfill reuses vision;
+settled exact text requests are cached; no-audio/unusable speech settles without
+inference; deterministic discovery avoids unnecessary story revisions. We did not
+measure a dollar total for avoided calls or combined local electricity/hardware.
+
+## Final recovery lessons
+
+- **Caption ties:** 1,052 video groups were ambiguous under the old winning
+  timestamp selection. Raw successful rows plus complete deterministic ordering
+  remove that ambiguity. Two discovery scans on a private copy of all 6,909 live
+  groups produced zero input changes and zero requeues on repeat, without model
+  calls or production queue writes. A real newer caption still refreshes its story
+  without retranscription. See commit `c73edd3` and `verify-discovery.py`.
+- **Repetitive ASR:** all seven remaining failed inputs were privately reviewed.
+  One reproduction showed `finish_reason=length`, a repeated phrase, and an
+  unterminated JSON string. Historical model response bodies for the other six
+  were unavailable; the exact same output failure is not asserted for each.
+  Short repetitive segments passed the old compression-only filter. New guards
+  filter repetition in fresh/saved ASR, preserve distinct useful speech, validate
+  typed complete JSON, and route usable local failures to the existing budgeted,
+  idempotent Luna path. All seven recovered without further inference, each with
+  `story_note=repetitive_transcript_withheld`. See commits `06d2689` and `fa0a167`.
+
+The worker fix passed 23 worker tests, five Codex-adapter tests and three scoped
+installer tests. It was deployed through the existing Flux Job/ConfigMap host
+installer; the service was active with zero restarts in its new lifecycle.
+Authenticated Grafana provisioning checks passed. Final aggregate recovery proof
+is in `audio-story/results.json`; no private transcript, identity or photograph
+is included in these editorial assets.

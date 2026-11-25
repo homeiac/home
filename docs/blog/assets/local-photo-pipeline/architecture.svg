@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 450" role="img" aria-labelledby="title desc">
-<title id="title">The final photo pipeline</title>
+<title id="title">The private photo memory platform</title>
 <desc id="desc">Photos Takeout is validated and ingested on the host into ZFS originals. The independent USB policy covers a quota subset. Originals feed the inventory, read-only Immich and caption workers. PostgreSQL owns live decisions. Local and optional cloud captions and PostgreSQL snapshots publish Parquet for DuckDB. Git and Grafana form a feedback loop.</desc>
 <defs>
 <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
@@ -41,7 +41,7 @@
 <text x="26" y="213">Inventory Parquet</text>
 <text x="286" y="213">Immich</text>
 <text x="551" y="213">PostgreSQL</text>
-<text x="936" y="213">Caption workers</text>
+<text x="936" y="213">Vision + audio stories</text>
 <text x="26" y="358">DuckDB</text>
 <text x="551" y="358">Published Parquet</text>
 </g>
@@ -53,9 +53,9 @@
 <text x="26" y="239">One output per unit</text>
 <text x="286" y="239">Places · faces · OCR</text>
 <text x="551" y="239">Jobs · human edits</text>
-<text x="936" y="239">RTX + Mac · optional Luna*</text>
-<text x="26" y="384">Views + analytical reads</text>
-<text x="551" y="384">Snapshots + captions</text>
+<text x="936" y="239">Saved vision + Whisper + Luna*</text>
+<text x="26" y="384">Query across years</text>
+<text x="551" y="384">Facts · captions · speech</text>
 <text x="785" y="205">context</text>
 <text x="794" y="300">* Cloud route sends media + context.</text>
 </g>

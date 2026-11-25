@@ -1,17 +1,40 @@
-# Back up your photos. Find them faster.
+# A private photo platform for life, family and work stories
 
-*Updated November 21, 2026. [Animated ten-slide presentation](local-photo-pipeline-slides.html) · [Measurements and screenshot provenance](assets/local-photo-pipeline/evidence.md).*
+*Final results checked November 25, 2026, 10:31 a.m. Pacific. [Animated ten-slide presentation](local-photo-pipeline-slides.html) · [Measurements and screenshot provenance](assets/local-photo-pipeline/evidence.md).*
 
-Keep local copies of your photos, check them before deleting anything from Google, and make the library easier to search. Find photos by person, place or description. Along the way, test which database and processing choices actually save time.
+A map can show where a trip happened. A richer memory layer can help follow a child's interests across years, connect family gatherings in different homes, or trace a work journey across places and dates. **A platform for assembling those stories is the main value of this project.**
 
-The result is a preserved archive, an Immich library, a queryable inventory, and resumable photo/video captioning. Local RTX and Mac workers sustained **31.4 photos per minute over a measured 30-minute window**. An optional cloud caption worker reached **69.3 saves per minute** in a separate tuning trial. These measure different workloads and routes, not interchangeable benchmark scores.
+Immich remains the gallery for browsing photos, people and places. The added layer makes descriptions, confirmed names, dates, saved metadata and useful video speech available together in queryable datasets. A story can follow a person, activity or topic across the library rather than stop at one GPS-marked trip. The evidence remains attached to the source files, and uncertain speech can be left out instead of becoming an invented memory.
 
-| Value | What the system delivers | What remains a separate responsibility |
+The initial indexing and enrichment work is now complete within the agreed scope: **85,889 photo groups have local descriptions, and 6,909 video groups have a saved story.** That supplies the material for cross-library narrative analysis. A dedicated automatic journey writer, knowledge graph and MCP interface have not been built; these are possible ways to use the completed data layer next.
+
+Google's storage warning provided a practical reason to preserve and inventory the archive. Local backups and faster search are useful outcomes too. But the lasting benefit is being able to ask what happened across a period of life, then use saved evidence to build and check the answer.
+
+| Value | Delivered result | Boundary |
 |---|---|---|
-| Reduce cloud-storage pressure | An inventory of likely quota-consuming files and a path to verify local copies before reclaiming space | Copying files does not free Google quota; this report does not establish how much cloud storage was actually deleted |
-| Keep local backups | Originals and sidecars, version preservation, ZFS and an independent USB copy workflow | Verify both copies and restoration; two disks in one home do not provide an off-site copy |
-| Make images useful | Immich dates/GPS, thumbnails, search, faces and OCR; captions using saved context | Suggested names and generated descriptions still need appropriate confidence and review policies |
-| Evaluate data pipelines and DuckDB | Durable progress counters, stage timings, portable outputs and Git-controlled live tuning | A busy GPU or a successful request is not necessarily completed, persisted work |
+| Reduce cloud-storage pressure | A local archive and inventory to check before reclaiming Google space | No measured decrease in Google quota is claimed |
+| Keep local backups | Preserved originals/sidecars, versions and a separate USB copy workflow | Current USB policy covers a subset of Photos; it does not prove two complete copies or an off-site backup |
+| Tell life, family and work stories | Queryable descriptions, people/date metadata and reliable video speech across years and places | Story synthesis must cite and check evidence; a dedicated automatic journey interface remains future work |
+| Learn what improves the pipeline | Measured saved-output rates, portable Parquet and a Git-controlled tuning loop | GPU noise, model requests and completed files are different measurements |
+
+## The finish line: useful coverage, with exceptions visible
+
+The final read-only audit at **10:31 a.m. Pacific on November 25** found 118,987 media file paths in the catalogue. Album-folder copies inflate path counts. The coverage calculation maps copies using filename and size; it is **not content-hash deduplication**, and distinct year-folder entries are retained.
+
+| Stage | Final result |
+|---|---:|
+| Photos with a description from at least one model | **85,889 / 85,890 groups — 99.999%** |
+| Videos with a visual description | **6,909 / 6,914 groups — 99.93%** |
+| Audio checked and story saved for captioned videos | **6,909 / 6,909 — 100%** |
+| Current text reconciliations | **77,463 complete; 220 deliberately skipped; none queued** |
+| Critical conflicts among completed reconciliations | **0** |
+| Duplicate rows in the final video-story snapshot / repeated successful audio jobs | **0 / 0** |
+
+The six source exceptions are one malformed PNG and five videos with missing or zero-filled content. They were diagnosed rather than given invented captions. Their originals remain unchanged, and leaving them out was accepted.
+
+Luna's original campaign published 71,643 photo and 6,064 video descriptions. It was seeded from the *then-uncaptioned* local queue, not as a second pass over everything. Consequently, **14,247 photo groups have a local description without a Luna description**. Reconciliation combines available pairs; an empty reconciliation queue means caught up with those pairs. It does not mean every image was checked by two models.
+
+For ordinary search and recall, we accepted the local descriptions as the useful baseline. There is no scored accuracy audit of those 14K photos. A selective second opinion on weak descriptions or photos important to a particular story is more purposeful than requiring two captions everywhere. Zero critical reconciliation conflicts is not proof that the entire library is accurate.
 
 ## The end architecture
 
@@ -23,7 +46,7 @@ Immich reads the originals through a read-only external mount. Its saved metadat
 
 PostgreSQL owns the photo application's jobs, leases, human labels and rejections. Published Parquet snapshots support DuckDB browsing and analysis. Recent PostgreSQL edits overlay those snapshots immediately: a refresh must never resurrect a rejected name.
 
-Piglet owns caption inputs and durable outputs. Local capacity comes from RTX/Ollama plus an optional Mac/Metal worker. An optional Luna submitter on always-on still-fawn uses a shared reservation/accounting ledger and publishes into its own Parquet dataset. **This optional route sends images or video frames and context to a cloud service.** Local archival and captioning remain usable without it. Separate model outputs make comparisons explicit.
+Piglet owns caption inputs and durable outputs. Local capacity comes from RTX/Ollama plus an optional Mac/Metal worker. An optional Luna submitter on always-on still-fawn uses a shared reservation/accounting ledger and publishes into its own Parquet dataset. **This optional route sends images or video frames and context to a cloud service.** Local archival and captioning remain usable without it. Separate model outputs make comparisons explicit. Video audio is a separate resumable stage: Whisper on the Mac and spare CPU capacity produces timestamped speech; the story worker reuses the saved visual description. Difficult text interpretation and malformed/truncated local responses with usable evidence can use the authorized Luna/Codex route. That route sends selected transcripts and short saved descriptions, not fresh media.
 
 Applications stay behind private Traefik access. Kubernetes resources use Git/Flux; host workers use versioned installers and systemd. Some components still use the feature branch's Flux preview: implemented architecture does not mean every rollout change has merged to main.
 
@@ -57,6 +80,38 @@ The local photos-first rate estimates a photo backlog only while both GPUs remai
 **Separate preparation from model concurrency.** At 20 Luna requests, frame preparation plus its wait exceeded median model-request duration. Increasing preparation workers from four to six reduced throughput from 62.6 to 55.9 saves/min in the 24-job trials. Returning to four preparation slots with a 48-job batch produced 69.3/min. More workers was a hypothesis to measure.
 
 **Stop when a knob stops helping.** Matched photo-only local trials with 24- and 48-item pages both saved 32/min. The Mac's 20-request experiment mostly added latency. Both results prevented tuning from becoming a search for ever-larger settings.
+
+## Time and cost: where the benefit came from
+
+At the 70,000-photo milestone, Luna took **21h 46m elapsed**. The RTX 3070 and Mac together would take **37h 09m at the measured 31.4 photos/min**: a projection, not an observed run of the same inputs. That is approximately **15h 24m, or 41%, less elapsed time** for the Luna campaign interval. It includes other work and interruptions; the local projection assumes both GPUs remain available.
+
+Existing consumer hardware still provided useful captions at a practical rate. Our quality assessment was informal, not a blind comparison. The cloud route supplied more concurrent capacity, while local processing kept ordinary work on hardware already owned.
+
+| Cost measure | Amount | Meaning |
+|---|---:|---|
+| Full original Luna caption campaign, including pilot allowance | **~$43.33** | API-equivalent accounting for 77,707 captions; not an invoice or precisely the cost of 70K photos |
+| Observed reconciliation unit rate | **$0.869 per 1,000 successful reconciliations** | Derived from a private usage interval; a forecasting rate, not a universal tariff |
+| Selected audio-text interpretation, including pilot checks | **~$0.50** | Token-based API-equivalent accounting; separate from the observed reconciliation rate |
+| Local processing | **No per-request API fee** | Combined electricity and hardware cost was not measured |
+
+The tangible cost-saving mechanism was **reuse**: add speech to completed videos without paying for vision again, cache settled text requests, and stop recomputing unchanged stories. We did not measure a dollar amount saved by those avoided calls. Raw account readings stay in a private local database; the article and dashboard retain only the derived rate.
+
+## Videos needed a story, not a pile of frames
+
+We retained up to eight sampled moments, reduced preview size from 1,024 to 768 pixels, and asked for the main activity and visible changes in at most 256 output tokens. Four-frame variants lost useful event detail. The Mac used one video request rather than four competing requests; decoder threads were bounded too.
+
+| Same six clips, model-request trials | Before | Selected settings |
+|---|---:|---:|
+| RTX, two concurrent requests | 5.96 videos/min | **8.73 videos/min — 46% higher** |
+| Mac, four requests → one | 3.08 videos/min | **4.79 videos/min — 56% higher** |
+
+These trials exclude decoding and warmup and use shared hardware. They do not predict full-library wall time or establish caption accuracy. In the selected trials the Mac had slightly lower mean request latency, but the RTX completed more clips per minute using two slots. “Which GPU is faster?” needs a workload and a metric.
+
+Pictures alone missed what people were talking about. We therefore added **Whisper speech recognition as a backfill**, reusing finished visual captions. On six short clips plus a silence control (151.93 seconds total), the Mac processed speech in 7.90 seconds, the RTX in 26.73 seconds, and a small CPU worker in 147.42 seconds. These warm-service, beam-one samples exclude media extraction. The production choice used the Mac plus spare CPU capacity, leaving the RTX available for Immich.
+
+All 6,909 captioned videos were checked: 2,059 had accepted speech, 4,128 had no speech detected, 93 had no audio stream, and 629 had uncertain speech. Those are pipeline classifications, not a human-labelled audit. All received a saved story, which may simply preserve the visual caption when speech adds nothing reliable. Seven repetitive transcripts within the speech-classified group were explicitly withheld during story assembly.
+
+For difficult transcripts, the prompt asks for useful meaning attributed to speech, not claims about what is visible. A small text-level check retained clear commentary, translated a clean Tamil control, and withheld garbled text. It is not a full transcription or translation accuracy score. The final route recorded 509 production assessments: 224 useful, 261 unclear and 24 incidental; seven pilot/calibration requests are separate.
 
 ## Change one setting. Check if it helped.
 
@@ -140,7 +195,7 @@ The initial backfill covers existing files. Subsequent ingestion invokes the per
 
 Use the [versioned Immich manifests](../../gitops/clusters/homelab/apps/photo-enrichment/immich-pilot/) through Flux, a read-only external mount, persistent database storage and private Traefik access. Process metadata/thumbnails before downstream face, search and OCR work. Back up Immich's database too. Follow the [external-library guide](https://docs.immich.app/guides/external-library/) and [GPU OCR runbook](../runbooks/immich-ocr-gpu.md).
 
-Native Immich indexing can finish while captioning or custom-metadata reconciliation remains pending. At the captured endpoint, native queues were zero, while synchronization still had pending assets and conflicts. These have separate completion criteria.
+Native Immich indexing finished independently of captioning. The historical Grafana capture below predates the final enrichment audit and showed pending custom synchronization. Native indexing, custom metadata synchronization and caption enrichment have separate completion criteria; completion here does not certify every custom field was synchronized into Immich. Native Description search also does not automatically search our separately stored AI captions.
 
 ### 6. Add live review state and resumable captioning
 
@@ -156,29 +211,35 @@ scripts/knowledge-index/knowledge-index-ctl.sh enrich start
 scripts/knowledge-index/knowledge-index-ctl.sh enrich status
 ```
 
-Add the [Mac worker](../../scripts/knowledge-index/mac-bonsai/README.md) when available. For cloud assistance, follow the [Luna setup/cutover procedure](../../scripts/knowledge-index/luna-backfill/README.md): interactive sign-in, one active submitter, shared reservations and an estimated-cost budget. Reuse saved Immich context. Keep model/version identities separate for intentional comparisons; retries should not duplicate successful outputs.
+Add the [Mac worker](../../scripts/knowledge-index/mac-bonsai/README.md) when available. For cloud assistance, follow the [Luna setup/cutover procedure](../../scripts/knowledge-index/luna-backfill/README.md): interactive sign-in, shared reservations and an estimated-cost budget. The original caption campaign and later text-reconciliation runners have distinct admission policies. Reuse saved Immich context. Keep model/version identities separate for intentional comparisons; retries should not duplicate successful outputs. The [audio/story worker](../../scripts/knowledge-index/audio-story/README.md) adds resumable Whisper and text-only story assembly to already-captioned videos; deploy its host bundle through the same GitOps Job/ConfigMap mechanism.
 
 ### 7. Instrument and tune with evidence
 
 Deploy dashboards and alerts through Flux. Check freshness, errors, utilization and saturation at workload and host layers. Record a baseline, change one policy, verify its applied time, and compare persisted results and media mix. Keep a useful setting or restore the prior Git policy. `scripts/knowledge-index/check-promql.sh` validates expressions against Prometheus. The [Immich observability guide](../runbooks/immich-observability.md) covers native-processing signals.
 
-## Interesting, weird problems
+## Lessons that changed the design
 
-| Symptom | Actual cause | Useful lesson |
+The hardest problems were often about deciding what work was still needed. A faster model does not help if the queue keeps manufacturing the same work.
+
+| What happened | Root cause | What we changed |
 |---|---|---|
-| Copying an archive disturbed Kubernetes | Bulk writes through the VM/storage path could stall control-plane I/O | Ingest on the host; inspect guest and host I/O together |
-| Correct-size archive would not decompress | File length did not prove valid content | Validate archive integrity; range repair verifies returned byte ranges |
-| Throughput rose and fell every five minutes | Row totals were sampled every five minutes; a trend over that staircase manufactured waves | Measure durable saves directly and label the rate window |
-| Twenty Mac requests barely beat four | Additional requests waited behind the same capacity; p95 grew 48 → 124 seconds | Measure latency as well as throughput |
-| Cloud work stopped when the laptop slept | Submission/accounting depended on an intermittently awake client; missing usage retained a budget hold | Use an always-on submitter and explicit shared accounting state |
-| “Not this person” still displayed the same name | A saved rejection and cached analytical view had different freshness | Overlay live PostgreSQL decisions and invalidate stale matches |
+| “Complete” meant different things on different panels | File paths, presumed copies, model outputs and reconciled pairs used different denominators | Show photo/video coverage by model, files versus groups, and eligible-story completion separately |
+| Completed stories kept returning to the queue | 1,052 video groups had conflicting captions tied at the winning timestamp; an older view could select a different winner | Read raw saved rows and apply a full deterministic order; repeat scans of all 6,909 groups produced zero requeues |
+| Seven stories repeatedly failed JSON parsing | All seven saved transcripts were dominated by repetition. One reproduced output repeated until the token limit, leaving an unfinished JSON string; the other historical response bodies were not retained | Filter repetition before inference, preserve raw evidence, record speech withheld, and send malformed/truncated local output with usable input to Luna instead of identical retries |
+| Both GPU panels went blank after a host reboot | The coordinator was a temporary systemd unit that disappeared on reboot | Install a permanent service through Git + Flux Job/ConfigMap; repair drift without restarting unchanged work |
+| The throughput graph kept rising and falling | Totals sampled every five minutes produced a staircase and misleading derived rates | Count durable saves directly; show freshness and rate windows |
+| Twenty Mac requests barely beat four for photos | Requests queued behind the same capacity; p95 grew from 48 to 124 seconds | Keep the smaller useful concurrency; tune videos separately |
+| “Not this person” still showed the rejected suggestion | The saved decision and analytical cache had different freshness | Overlay current PostgreSQL decisions and invalidate stale matches |
+| Bulk archive copying disturbed Kubernetes | The import and control plane shared a storage path | Ingest on the storage host and inspect guest and host I/O together |
 
-The durable result is preserved data, useful enrichment, and a feedback loop that can tell whether the next change actually helps. The [evidence notes](assets/local-photo-pipeline/evidence.md) distinguish measurements, architectural facts and outstanding work.
+The final seven were resolved without another vision or speech-recognition pass and without additional model calls. Their stories retain the saved visual description and `repetitive_transcript_withheld` provenance. Saved transcripts were not rewritten. The failure was a bounded generation loop, not an unbounded process: the missing protections were input-quality checks, output validation and a recovery path that changed strategy.
 
-### November 22: why both local worker panels went blank
+The permanent-worker rollout was checked with 30 unique caption saves across a controlled service restart, with no repeated earlier successes. The final story audit found zero duplicate snapshot rows and no repeated successful audio jobs. Those are bounded validations of specific outputs, not a claim that every historical dataset is free of duplicate revisions.
 
-Piglet rebooted at **8:15:59 p.m. Pacific on November 21**. The local caption worker had been started as a temporary systemd service. It disappeared on reboot and did not start again. Its last heartbeat was at 8:13:49 p.m. Both the RTX and Mac panels use this worker's reports, so both showed “No recent report.” That does not establish a GPU failure. Luna had a separate, current heartbeat.
+## What “done” means here
 
-The fix is a permanent service that starts at boot. Git holds its code and settings; Flux sends them to the host through a Job and ConfigMap. A scheduled Job checks every five minutes and repairs drift without restarting an unchanged worker. The existing completed-work identity is preserved, and a process lock prevents a second writer.
+The initial library is indexed and described to the accepted coverage level. Captioned videos have audio-aware or explicitly visual-only stories. Current reconciliation pairs are settled, critical conflicts are zero, and workers remain available for new inputs. Six damaged sources and 220 skipped text reconciliations are visible exceptions, not hidden pending work.
 
-The worker resumed at **8:49 a.m. Pacific on November 22**. It saved 15 new captions, then saved another 15 after a controlled service restart. All 30 were unique, with no repeats of earlier successful summaries. Two error rows remained retryable. The scheduled Job also completed without restarting the worker. The service is enabled for boot; the host itself was not rebooted for this test. The cause of the original host reboot has not been established.
+We stopped because the archive is useful, not because every optional model pass had been purchased. The completed memory layer can support life, family and work journey analysis across years and places, with selected originals used to verify important claims. A dedicated journey interface, knowledge graph or MCP server is a separate next step.
+
+The result is more than a way to find a trip on a map: a private, queryable memory layer for building stories across a life. It can be enriched without starting over and maintained through measured changes. The [evidence register](assets/local-photo-pipeline/evidence.md) separates final results, historical trials and remaining boundaries.
