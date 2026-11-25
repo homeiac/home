@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-8a53bc6e8cf8
+  name: audio-worker-b157b46936a7
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
@@ -63,7 +63,13 @@ data:
     * FROM jobs WHERE active=1 AND version=? AND {condition}{state} IN (''pending'',''error'') AND {attempts}<? AND retry_at<=?
     ORDER BY updated,id LIMIT 1\",[config[''version''],config[''attempts''],time.time()]).fetchone()\n        if row:db.execute(f\"UPDATE
     jobs SET {state}=''inflight'',{attempts}={attempts}+1 WHERE id=?\",[row[''id'']])\n        return dict(row) if row else
-    None\n\ndef multipart(fields,wav=None):\n    boundary=uuid.uuid4().hex;parts=[]\n    for name,value in fields.items():\n        parts.append(f''--{boundary}\\r\\nContent-Disposition:
+    None\n\ndef complete_visual_only(config,root=ROOT,limit=256):\n    \"\"\"Settle no-model stories in bounded batches, independently
+    of model requests.\"\"\"\n    now=time.time()\n    with connect(root) as db:\n        db.execute(''BEGIN IMMEDIATE'')\n        rows=db.execute(\"\"\"UPDATE
+    jobs SET story_state=''ok'',story=visual_summary,\n            error=NULL,retry_at=0,finished=?,updated=? WHERE id IN
+    (\n              SELECT id FROM jobs WHERE active=1 AND version=? AND story_state=''pending''\n              AND audio_state
+    IN (''no_audio'',''no_speech'',''uncertain_speech'')\n              ORDER BY updated,id LIMIT ?) RETURNING id\"\"\",[now,now,config[''version''],limit]).fetchall()\n        db.executemany(''INSERT
+    INTO attempts VALUES(?,?,?,?,?,?)'',\n            [(r[''id''],''story'',''visual_only'',0,1,now) for r in rows])\n    return
+    len(rows)\n\n\ndef multipart(fields,wav=None):\n    boundary=uuid.uuid4().hex;parts=[]\n    for name,value in fields.items():\n        parts.append(f''--{boundary}\\r\\nContent-Disposition:
     form-data; name=\"{name}\"\\r\\n\\r\\n{value}\\r\\n''.encode())\n    if wav is not None:parts.extend([f''--{boundary}\\r\\nContent-Disposition:
     form-data; name=\"file\"; filename=\"audio.wav\"\\r\\nContent-Type: audio/wav\\r\\n\\r\\n''.encode(),wav,b''\\r\\n''])\n    parts.append(f''--{boundary}--\\r\\n''.encode());return
     b''''.join(parts),''multipart/form-data; boundary=''+boundary\n\ndef transcribe(endpoint,wav,beam=1,vad=True):\n    body,ctype=multipart({''response_format'':''verbose_json'',''language'':''auto'',''temperature'':''0'',''temperature_inc'':''0'',''beam_size'':str(beam),''best_of'':''1'',''no_context'':''true'',''vad'':''true''
@@ -190,7 +196,7 @@ data:
     name,future in list(futures.items()):\n                if future.done():future.result();del futures[name]\n            with
     connect() as db:outbox=[r[0] for r in db.execute(''SELECT id FROM jobs WHERE updated>coalesce(published,0) LIMIT 32'')]\n            if
     outbox and time.monotonic()-last_export>=30:\n                try:publish(None,ROOT);last_export=time.monotonic()\n                except
-    Exception as exc:logging.error(''Publication deferred (%s)'',type(exc).__name__)\n            if config[''enabled'']:\n                for
+    Exception as exc:logging.error(''Publication deferred (%s)'',type(exc).__name__)\n            if config[''enabled'']:\n                complete_visual_only(config)\n                for
     backend in config[''backends'']:\n                    if backend not in futures and healthy(config[''backends''][backend]):\n                        row=claim(''audio'',backend,config)\n                        if
     row:futures[backend]=pool.submit(audio_job,row,backend,config)\n                if ''story'' not in futures:\n                    row=claim(''story'',''mac'',config)\n                    if
     row:futures[''story'']=pool.submit(story_job,row,config)\n            if time.monotonic()-last_metrics>=5:\n                metrics(config);last_metrics=time.monotonic()\n            stopping.wait(0.25)\n\nif
@@ -203,7 +209,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-8a53bc6e8cf8
+  name: audio-worker-b157b46936a7
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -258,7 +264,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-8a53bc6e8cf8
+          name: audio-worker-b157b46936a7
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -333,7 +339,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-8a53bc6e8cf8
+              name: audio-worker-b157b46936a7
           - name: credentials
             secret:
               secretName: caption-worker-deploy

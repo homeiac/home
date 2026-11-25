@@ -103,6 +103,21 @@ def claim(stage,backend,config,root=ROOT):
         if row:db.execute(f"UPDATE jobs SET {state}='inflight',{attempts}={attempts}+1 WHERE id=?",[row['id']])
         return dict(row) if row else None
 
+def complete_visual_only(config,root=ROOT,limit=256):
+    """Settle no-model stories in bounded batches, independently of model requests."""
+    now=time.time()
+    with connect(root) as db:
+        db.execute('BEGIN IMMEDIATE')
+        rows=db.execute("""UPDATE jobs SET story_state='ok',story=visual_summary,
+            error=NULL,retry_at=0,finished=?,updated=? WHERE id IN (
+              SELECT id FROM jobs WHERE active=1 AND version=? AND story_state='pending'
+              AND audio_state IN ('no_audio','no_speech','uncertain_speech')
+              ORDER BY updated,id LIMIT ?) RETURNING id""",[now,now,config['version'],limit]).fetchall()
+        db.executemany('INSERT INTO attempts VALUES(?,?,?,?,?,?)',
+            [(r['id'],'story','visual_only',0,1,now) for r in rows])
+    return len(rows)
+
+
 def multipart(fields,wav=None):
     boundary=uuid.uuid4().hex;parts=[]
     for name,value in fields.items():
@@ -371,6 +386,7 @@ def run():
                 try:publish(None,ROOT);last_export=time.monotonic()
                 except Exception as exc:logging.error('Publication deferred (%s)',type(exc).__name__)
             if config['enabled']:
+                complete_visual_only(config)
                 for backend in config['backends']:
                     if backend not in futures and healthy(config['backends'][backend]):
                         row=claim('audio',backend,config)

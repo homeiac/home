@@ -112,4 +112,20 @@ class AudioTests(unittest.TestCase):
   self.assertEqual(worker.needs_codex('english','hello café'),0)
   self.assertEqual(worker.needs_codex('english','hello வணக்கம்'),1)
 
+ def test_visual_only_batch_bypasses_models_and_is_idempotent(self):
+  with worker.connect(self.root) as d:
+   d.execute("UPDATE jobs SET audio_state='no_speech'")
+   for key,audio,story in [('b','speech','pending'),('c','no_audio','inflight'),('d','no_audio','pending'),('e','uncertain_speech','pending')]:
+    d.execute('INSERT INTO jobs(id,path,size_bytes,version,visual_summary,audio_state,story_state,updated) VALUES(?,?,?,?,?,?,?,?)',[key,key+'.mp4',4,'v1','Visual '+key,audio,story,0])
+  with patch.object(worker.urllib.request,'urlopen',side_effect=AssertionError('Unexpected model call')):
+   with concurrent.futures.ThreadPoolExecutor(2) as pool:counts=list(pool.map(lambda _:worker.complete_visual_only(self.config,self.root,2),range(2)))
+   self.assertEqual(sum(counts),3)
+   self.assertEqual(worker.complete_visual_only(self.config,self.root),0)
+  with worker.connect(self.root) as d:
+   self.assertEqual(d.execute("SELECT count(*) FROM jobs WHERE story_state='ok' AND story=visual_summary").fetchone()[0],3)
+   self.assertEqual(d.execute("SELECT count(*) FROM attempts WHERE backend='visual_only'").fetchone()[0],3)
+   self.assertEqual(d.execute("SELECT story_state FROM jobs WHERE id='b'").fetchone()[0],'pending')
+   self.assertEqual(d.execute("SELECT story_state FROM jobs WHERE id='c'").fetchone()[0],'inflight')
+   self.assertEqual(d.execute('SELECT count(*) FROM codex_requests').fetchone()[0],0)
+
 if __name__=='__main__':unittest.main()
