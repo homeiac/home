@@ -148,3 +148,15 @@ python3 scripts/knowledge-index/audio-story/verify-translations.py --host root@<
 before a pilot call, and reuses settled answers on reruns. Disabling the Git flag
 stops new admissions. Configuration-only host changes are reloaded without
 restarting Whisper, the audio coordinator or the existing vision worker.
+
+### Stable source-caption selection
+
+Discovery selects successful current-size captions from raw Parquet, avoiding the
+legacy summary view's ambiguous timestamp ties. Local captions are preferred;
+within a model class the newest timestamp wins, then the canonical copy, source
+path and caption text break ties deterministically. Null timestamps rank oldest.
+Tied copies no longer alternate and requeue finished stories on each scan. Newer
+real captions still refresh the story while preserving audio.
+
+`verify-discovery.py --host <inventory-host>` checks two scans against a private
+ledger clone. It calls no model and never changes the production queue.

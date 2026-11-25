@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: audio-worker-b157b46936a7
+  name: audio-worker-7542dcbc4100
   namespace: monitoring
 data:
   bundle.json: '{"audio-config.json": "{\n  \"enabled\": true,\n  \"model\": \"small-q5_1\",\n  \"version\": \"whisper-small-v1\",\n  \"scan_seconds\":
@@ -33,18 +33,21 @@ data:
     WHERE audio_state=''inflight''\")\n        db.execute(\"UPDATE jobs SET story_state=''pending'' WHERE story_state=''inflight''\")\n\ndef
     discover(config,root=ROOT,index=INDEX):\n    \"\"\"Use coverage''s presumed-copy mapping and current file versions, not
     row counts.\"\"\"\n    import duckdb\n    with duckdb.connect(str(index/''knowledge.duckdb''),read_only=True,config={''threads'':2})
-    as d:\n        local_sql=\"SELECT path,size_bytes,summary,duration_s,created_at,2 priority FROM media_summaries WHERE
-    source=''gphotos'' AND status=''ok'' AND length(trim(summary))>0\"\n        luna=index.parent/''photo-enrichment/luna-backfill/luna_codex_captions''\n        if
-    list(luna.glob(''*.parquet'')):\n            d.execute(\"CREATE TEMP TABLE audio_visual_saved AS \"+local_sql+\" UNION
-    ALL SELECT source_path AS path,size_bytes,summary,NULL::DOUBLE duration_s,finished_at AS created_at,1 priority FROM read_parquet(?,union_by_name=true)
-    WHERE state=''ok'' AND length(trim(summary))>0\",[str(luna/''*.parquet'')])\n        else:d.execute(''CREATE TEMP TABLE
-    audio_visual_saved AS ''+local_sql)\n        rows=d.execute(''''''WITH inventory AS (\n            SELECT DISTINCT path,name,size_bytes,regexp_matches(path,''/Photos
-    from [0-9]{4}/'') annual\n            FROM gphotos_files WHERE kind=''media'' AND lower(ext) IN (''mp4'',''mov'',''3gp'',''avi'',''mpg'',''m4v'')\n          ),
-    annual AS (SELECT name,size_bytes,min(path) representative FROM inventory WHERE annual GROUP BY name,size_bytes),\n          mapped
-    AS (SELECT i.*,CASE WHEN i.annual THEN i.path ELSE coalesce(a.representative,i.path) END canonical\n            FROM inventory
-    i LEFT JOIN annual a USING(name,size_bytes)),\n          saved AS (SELECT * FROM audio_visual_saved),\n          joined
-    AS (SELECT m.*,s.summary,s.duration_s,s.created_at,s.priority FROM mapped m LEFT JOIN saved s USING(path,size_bytes))\n          SELECT
-    canonical,size_bytes,list(DISTINCT path),arg_max(summary,struct_pack(priority:=priority,saved:=created_at)),max(duration_s),\n            CASE
+    as d:\n        # Read successful rows directly: media_summaries itself has an untied\n        # row_number winner when
+    path/enricher timestamps match. Current-size\n        # inventory joins below reject stale versions before selection.\n        raw_local=next((index/''summaries'').glob(''*/*.parquet''),None)
+    is not None\n        relation=''read_parquet(?,union_by_name=true)'' if raw_local else ''media_summaries''\n        params=[str(index/''summaries/*/*.parquet'')]
+    if raw_local else []\n        local_sql=\"SELECT path,size_bytes,summary,duration_s,created_at,2 priority FROM \"+relation+\"
+    WHERE source=''gphotos'' AND status=''ok'' AND length(trim(summary))>0\"\n        luna=index.parent/''photo-enrichment/luna-backfill/luna_codex_captions''\n        if
+    next(luna.glob(''*.parquet''),None) is not None:\n            d.execute(\"CREATE TEMP TABLE audio_visual_saved AS \"+local_sql+\"
+    UNION ALL SELECT source_path AS path,size_bytes,summary,NULL::DOUBLE duration_s,finished_at AS created_at,1 priority FROM
+    read_parquet(?,union_by_name=true) WHERE state=''ok'' AND length(trim(summary))>0\",params+[str(luna/''*.parquet'')])\n        else:d.execute(''CREATE
+    TEMP TABLE audio_visual_saved AS ''+local_sql,params)\n        rows=d.execute(''''''WITH inventory AS (\n            SELECT
+    DISTINCT path,name,size_bytes,regexp_matches(path,''/Photos from [0-9]{4}/'') annual\n            FROM gphotos_files WHERE
+    kind=''media'' AND lower(ext) IN (''mp4'',''mov'',''3gp'',''avi'',''mpg'',''m4v'')\n          ), annual AS (SELECT name,size_bytes,min(path)
+    representative FROM inventory WHERE annual GROUP BY name,size_bytes),\n          mapped AS (SELECT i.*,CASE WHEN i.annual
+    THEN i.path ELSE coalesce(a.representative,i.path) END canonical\n            FROM inventory i LEFT JOIN annual a USING(name,size_bytes)),\n          saved
+    AS (SELECT * FROM audio_visual_saved),\n          joined AS (SELECT m.*,s.summary,s.duration_s,s.created_at,s.priority
+    FROM mapped m LEFT JOIN saved s USING(path,size_bytes))\n          SELECT canonical,size_bytes,list(DISTINCT path),arg_max(summary,struct_pack(priority:=priority,saved:=coalesce(created_at,''-infinity''::TIMESTAMP),canonical_copy:=(path=canonical),source_path:=path,caption_text:=summary)),max(duration_s),\n            CASE
     WHEN max(CASE WHEN summary IS NOT NULL THEN priority ELSE 0 END)=2 THEN ''local'' ELSE ''luna'' END\n          FROM joined
     GROUP BY canonical,size_bytes'''''').fetchall()\n    now=time.time()\n    with connect(root) as db:\n        db.execute(''UPDATE
     jobs SET active=0'')\n        for path,size,aliases,visual,duration,origin in rows:\n            if not visual:continue\n            key=hashlib.sha256(json.dumps([path,size,config[''version'']]).encode()).hexdigest()\n            digest=hashlib.sha256(visual.encode()).hexdigest()\n            old=db.execute(''SELECT
@@ -209,7 +212,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: audio-worker-b157b46936a7
+  name: audio-worker-7542dcbc4100
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -264,7 +267,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: audio-worker-b157b46936a7
+          name: audio-worker-7542dcbc4100
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -339,7 +342,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: audio-worker-b157b46936a7
+              name: audio-worker-7542dcbc4100
           - name: credentials
             secret:
               secretName: caption-worker-deploy

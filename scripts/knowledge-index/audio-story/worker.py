@@ -56,11 +56,17 @@ def discover(config,root=ROOT,index=INDEX):
     """Use coverage's presumed-copy mapping and current file versions, not row counts."""
     import duckdb
     with duckdb.connect(str(index/'knowledge.duckdb'),read_only=True,config={'threads':2}) as d:
-        local_sql="SELECT path,size_bytes,summary,duration_s,created_at,2 priority FROM media_summaries WHERE source='gphotos' AND status='ok' AND length(trim(summary))>0"
+        # Read successful rows directly: media_summaries itself has an untied
+        # row_number winner when path/enricher timestamps match. Current-size
+        # inventory joins below reject stale versions before selection.
+        raw_local=next((index/'summaries').glob('*/*.parquet'),None) is not None
+        relation='read_parquet(?,union_by_name=true)' if raw_local else 'media_summaries'
+        params=[str(index/'summaries/*/*.parquet')] if raw_local else []
+        local_sql="SELECT path,size_bytes,summary,duration_s,created_at,2 priority FROM "+relation+" WHERE source='gphotos' AND status='ok' AND length(trim(summary))>0"
         luna=index.parent/'photo-enrichment/luna-backfill/luna_codex_captions'
-        if list(luna.glob('*.parquet')):
-            d.execute("CREATE TEMP TABLE audio_visual_saved AS "+local_sql+" UNION ALL SELECT source_path AS path,size_bytes,summary,NULL::DOUBLE duration_s,finished_at AS created_at,1 priority FROM read_parquet(?,union_by_name=true) WHERE state='ok' AND length(trim(summary))>0",[str(luna/'*.parquet')])
-        else:d.execute('CREATE TEMP TABLE audio_visual_saved AS '+local_sql)
+        if next(luna.glob('*.parquet'),None) is not None:
+            d.execute("CREATE TEMP TABLE audio_visual_saved AS "+local_sql+" UNION ALL SELECT source_path AS path,size_bytes,summary,NULL::DOUBLE duration_s,finished_at AS created_at,1 priority FROM read_parquet(?,union_by_name=true) WHERE state='ok' AND length(trim(summary))>0",params+[str(luna/'*.parquet')])
+        else:d.execute('CREATE TEMP TABLE audio_visual_saved AS '+local_sql,params)
         rows=d.execute('''WITH inventory AS (
             SELECT DISTINCT path,name,size_bytes,regexp_matches(path,'/Photos from [0-9]{4}/') annual
             FROM gphotos_files WHERE kind='media' AND lower(ext) IN ('mp4','mov','3gp','avi','mpg','m4v')
@@ -69,7 +75,7 @@ def discover(config,root=ROOT,index=INDEX):
             FROM inventory i LEFT JOIN annual a USING(name,size_bytes)),
           saved AS (SELECT * FROM audio_visual_saved),
           joined AS (SELECT m.*,s.summary,s.duration_s,s.created_at,s.priority FROM mapped m LEFT JOIN saved s USING(path,size_bytes))
-          SELECT canonical,size_bytes,list(DISTINCT path),arg_max(summary,struct_pack(priority:=priority,saved:=created_at)),max(duration_s),
+          SELECT canonical,size_bytes,list(DISTINCT path),arg_max(summary,struct_pack(priority:=priority,saved:=coalesce(created_at,'-infinity'::TIMESTAMP),canonical_copy:=(path=canonical),source_path:=path,caption_text:=summary)),max(duration_s),
             CASE WHEN max(CASE WHEN summary IS NOT NULL THEN priority ELSE 0 END)=2 THEN 'local' ELSE 'luna' END
           FROM joined GROUP BY canonical,size_bytes''').fetchall()
     now=time.time()
