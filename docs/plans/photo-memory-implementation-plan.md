@@ -17,10 +17,13 @@ Track the stories and their status in [epic #228](https://github.com/homeiac/hom
 |---|---|---|---|
 | 1 · November 25 | The checker passes synthetic tests. The November 25 audit found current names in only a subset of completed captions. Live journey acceptance is outstanding. | Start S1. Freeze the reference baseline and collect the first identity and accounting observations. Exit with an inspectable report and one evidence-based next task. | Worker changes, bulk enrichment, new app installs and downstream journey design. |
 | 2 · November 25 | Seven synthetic checker tests pass. No live reference bundle is attached to S1. | Freeze a private, year-stratified set from existing human annotations, including group and negative controls. Read back the same assets and run canonical and alias lookups through the current app. Record identity and accounting results and a reproducible private report. | Product fixes, identity edits, new inference and rollout. |
+| 3 · November 25 | S1 measured 40 live reference photos. Both canonical identity lookups returned faces and the group control matched. The equivalent alias returned zero. All 40 detail records opened and year/source counts matched. Of 33 target positives, 32 lacked a current contextual caption and one awaits semantic review. | S1 measurement complete. Start S2 with one failing behavior: make a confirmed alias work in the named-face filter. Recheck equivalent lookup results and preserve unrelated people and unconfirmed suggestions. | Caption generation, general text search, album writes and broader rollout. |
+
+The private S1 reference run recorded two failed gates and six blocked gates. Identity failed `alias_query_matches`; the new-confirmation and false-attribution checks still need observations. Accounting failed `asset_dispositions` and `unresolved_required_assets`. Readback and source counts cover all 40 cases. The run measured the existing app API. Browser/album delivery, semantic accuracy and journey completion remain open. See [measurement story #229](https://github.com/homeiac/home/issues/229).
 
 ## Rough sequence
 
-The stories below are ordered by the first useful album. Only S1 is ready to start. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
+The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
 
 ### S1. Measure the growing-up reference set and record the first gap ([#229](https://github.com/homeiac/home/issues/229))
 
