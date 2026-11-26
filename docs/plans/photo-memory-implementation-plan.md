@@ -51,6 +51,8 @@ Revision 16. Start the broader life-stage run with the existing exact-mapped sub
 
 Revision 17. Extend album descriptions to cover each confirmed person in a group photo. Give vision an anonymous numbered region for each resolved face and map names back after inference. Use the owner’s descriptions where available. Verify that different actions stay attached to the right people and that an unclear or overlapping target produces no confident action. Validate on a small private group-photo set while the existing life-stage work continues.
 
+Revision 18. Keep the age and action passes independent. The numbered group-photo test and the single-face retry both attached incorrect actions to some subjects. Benchmark a separate action reviewer on this failure set. Require a second matching action attribution or direct review before publishing a named role. Preserve the owner-reviewed captions and report the release check on the private review page.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
