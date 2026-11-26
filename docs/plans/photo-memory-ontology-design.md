@@ -32,6 +32,8 @@ flowchart LR
 
 **Exit check.** Independently intersect the two subjects’ reviewed face assignments, check exact ordered membership, then exercise names, verbs and original links in the generated album. Replay with reversed subject order and verify identical membership and zero new vision calls. Confirm source-stage counts in Grafana. Measure selection and rendering against these frozen inputs. Broader library discovery, age estimates for a second person and relationship-based eligibility remain separate slices.
 
+A reviewed correction supersedes the earlier action in both the sentence and the queryable scene. A person visible on a video-call screen can have a face link and a visible action such as smiling. Record the depiction on that face occurrence. A physical same-photo query excludes it for that subject while remaining eligible for other people physically present. Verify replay, the rendered sentence and absence of the rejected action from the current revision.
+
 ### Initial catalogue
 
 These are proposed local codes for the pilot. OpenLABEL supplies scene structures and a driving-scenario tag set. Use SKOS labels and mappings for our registry. [ASAM OpenLABEL](https://www.asam.net/standards/detail/openlabel/) · [W3C SKOS](https://www.w3.org/TR/skos-reference/) Codes remain stable when wording or taxonomy structure changes.

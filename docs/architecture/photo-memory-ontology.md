@@ -31,6 +31,8 @@ flowchart TD
 
 **Where the reader sees it.** Both private HTML views render the same stored facts and link to the Immich original. Names in those files reflect the last publication. Refreshing the source snapshot and republishing resolves new names. Live name propagation, new native Immich description writes and full-library rollout each need separate evidence. [Publisher](../../scripts/knowledge-index/memory-acceptance/review_openlabel.py) · [Browser check](../../scripts/knowledge-index/memory-acceptance/check_openlabel_review.mjs)
 
+**Depicted people.** A video call can be part of a family story. Attach the screen context to the face on the display. The caption can describe what that person visibly does on screen. A query for people physically together uses the face context to distinguish the people in the room from the remote participant.
+
 ## What the platform should answer
 
 | Request | What the system must establish |
