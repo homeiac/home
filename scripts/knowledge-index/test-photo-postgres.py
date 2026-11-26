@@ -291,6 +291,29 @@ class PipelineTests(unittest.TestCase):
         return [dict(id=face_id,revision=str(self.store.face(face_id)['updated_at']),person=name)
             for face_id,name in [('review-a','Synthetic G'),('review-b','Synthetic Asha')]]
 
+    def test_named_filter_expands_confirmed_aliases_before_pagination(self):
+        from contextlib import closing
+        import sqlite3
+        self.add_review_faces()
+        self.store.label_face('review-a', 'A')
+        self.store.label_face('review-b', 'Alex')
+        ledger = self.state / 'luna-backfill' / 'luna-ledger.sqlite3'
+        ledger.parent.mkdir()
+        self.assertEqual(self.store.face_library('Alex Example', 'named')['total'], 0)
+        with closing(sqlite3.connect(ledger)) as db, db:
+            db.execute('CREATE TABLE reconciliation_aliases(alias TEXT PRIMARY KEY, canonical_name TEXT)')
+            db.executemany('INSERT INTO reconciliation_aliases VALUES (?,?)',
+                           [(label, 'Alex Example') for label in ('A', 'Alex', 'Alex Example')])
+        for backend in ('postgres', 'duckdb'):
+            if backend == 'duckdb':
+                export_snapshot(self.state)
+            for label in ('A', 'Alex', 'Alex Example'):
+                pages = [self.store.face_library(label, 'named', offset, 1) for offset in (0, 1)]
+                self.assertEqual([page['total'] for page in pages], [2, 2])
+                self.assertEqual([page['faces'][0]['id'] for page in pages], ['review-a', 'review-b'])
+            self.assertEqual(self.store.face_library('Synthetic person', 'named')['total'], 1)
+            self.assertEqual(self.store.face_library('Al', 'named')['total'], 0)
+
     def test_mixed_confirmation_preserves_each_name_and_audits(self):
         faces=self.add_review_faces()
         before=len(self.store.rows('SELECT * FROM annotation_history'))

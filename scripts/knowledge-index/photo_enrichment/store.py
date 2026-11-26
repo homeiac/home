@@ -3,6 +3,8 @@ import datetime as dt
 import io
 import json
 import math
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 import threading
 import uuid
@@ -137,6 +139,21 @@ class Store:
             finally:
                 self.db.execute("DETACH source_catalog")
 
+    def face_person_filter(self, person: str, status: str) -> tuple[str, list[str]]:
+        """Match stored labels for an explicitly confirmed alias in named-face browsing."""
+        labels = [person]
+        ledger = self.state / "luna-backfill" / "luna-ledger.sqlite3"
+        if status == "named" and ledger.is_file():
+            with closing(sqlite3.connect(ledger.as_uri() + "?mode=ro", uri=True)) as db:
+                if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='reconciliation_aliases'").fetchone():
+                    rows = db.execute("""SELECT alias FROM reconciliation_aliases
+                        WHERE canonical_name=(SELECT canonical_name FROM reconciliation_aliases WHERE alias=?)
+                        ORDER BY alias""", (person,)).fetchall()
+                    if rows:
+                        labels = [row[0] for row in rows]
+        placeholders = ",".join("?" for _ in labels)
+        return f" AND f.person IN ({placeholders})", labels
+
     def face_library(self, person: str = "", status: str = "unreviewed", offset: int = 0, limit: int = 48) -> dict:
         """Paginate current face crops with named collections and review counts."""
         if status not in ("all", "unreviewed", "named") or not 0 <= offset or not 1 <= limit <= 100:
@@ -149,8 +166,8 @@ class Store:
         if status == "unreviewed": filters += " AND f.person IS NULL"
         if status == "named": filters += " AND f.person IS NOT NULL"
         if person:
-            filters += " AND f.person=?"
-            params.append(person)
+            clause, params = self.face_person_filter(person, status)
+            filters += clause
         people = self.rows("SELECT person,count(*) AS faces " + base + " AND person IS NOT NULL GROUP BY person ORDER BY lower(person)")
         total = self.rows("SELECT count(*) n " + base + filters, params)[0]["n"]
         counts = self.rows("SELECT count(*) AS total, count(*) FILTER(WHERE f.person IS NULL) AS unreviewed " + base)[0]
