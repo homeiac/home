@@ -74,6 +74,8 @@ Revision 27. Ollama already allows two parallel RTX requests, while the life-sta
 
 Revision 28. Compare two, three and four RTX requests with the same marked photos and saved-output validation. Keep the Mac processing while draining RTX work at a checkpoint for the benchmark. Verify Ollama's actual slot capacity, GPU residency, valid responses and stage agreement, then select the fastest passing setting and publish the results in Grafana.
 
+Revision 29. Cold vision initialization exceeded the original trial timeout even after restoring two slots. Preserve the failed cold-start attempts as separate evidence. Warm one four-capacity runner fully and compare two, three and four active requests against that same loaded instance before selecting production concurrency.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
