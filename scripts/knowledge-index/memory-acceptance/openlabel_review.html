@@ -4,16 +4,18 @@
 <meta name="referrer" content="no-referrer"><title>Album · Face and action review</title>
 <style>
 *{box-sizing:border-box}body{margin:2rem auto;max-width:76rem;padding:0 1rem;color:#183128;background:#f8f7f2;font:17px/1.5 system-ui}
-h1,h2{font-family:Georgia,serif}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:1.25rem;align-items:start}
+h1,h2{font-family:Georgia,serif}main,#collage-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:1.25rem;align-items:start}
 article{background:white;padding:1rem;border:1px solid #ced8d0;border-radius:.7rem}figure{margin:0;position:relative}img{display:block;width:100%;height:auto}
 .box{position:absolute;pointer-events:none;border:3px solid #ffea38;box-shadow:0 0 0 2px black}
 .box.held_person,.box.recipient{border-color:#58deff}button{font:inherit;color:#145744;border:0;background:#eef5ef;text-decoration:underline;cursor:pointer;border-radius:.2rem}
 button:focus-visible,a:focus-visible{outline:3px solid #705500}button[aria-pressed=true]{background:#174f41;color:white}output{display:block;min-height:1.5em}
 .date-conflict{background:#fff1cf;border-left:4px solid #9a5a05;padding:.6rem .8rem;margin:.5rem 0}
+.mention{margin:0 .22em}.mention button{font-size:.88em;margin:0 .1em}.mention small{color:#5d503d}
 a{color:#175441}h2{margin:.6rem 0}
 </style>
 <h1>Face and action review</h1><p>Select a name to see what that person is doing. Select an action to highlight its participants.</p>
-<main></main><script id="scenes" type="application/json">PILOT_JSON</script>
+<a id="catalogue-link" href="#collage-catalogue" hidden>Browse the collage catalogue</a>
+<main></main><section id="collage-catalogue" hidden><h2>Collage catalogue</h2><div id="collage-items"></div></section><script id="scenes" type="application/json">PILOT_JSON</script>
 <script>
 function element(tag, parent, text) {
   const el = document.createElement(tag);
@@ -22,7 +24,12 @@ function element(tag, parent, text) {
   return el;
 }
 for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
-  const article = element('article', document.querySelector('main'));
+  const collage = item.media_type === 'Collage';
+  if (collage) {
+    document.querySelector('#collage-catalogue').hidden = false;
+    document.querySelector('#catalogue-link').hidden = false;
+  }
+  const article = element('article', document.querySelector(collage ? '#collage-items' : 'main'));
   article.id = item.asset;
   const figure = element('figure', article);
   const photo = element('img', figure);
@@ -41,6 +48,8 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
     element('div', note, timing + '. The visual review indicates ' +
       facts.visual_stage.replaceAll('_', ' ') + ' age. The capture year is unknown.');
   }
+  if (item.date_status === 'composite') element('small', article, 'Composite image · component photos may have different capture dates.');
+  if (item.date_status === 'unresolved') element('small', article, 'Age and capture date could not be checked reliably.');
   element('h3', article, item.scene ? 'Scene description' : 'What each person is doing');
   if (item.scene) {
     element('p', article, item.scene);
@@ -69,6 +78,7 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
   }
   for (const claim of item.claims) {
     const p = element('p', article);
+    p.dataset.subject = claim.subject;
     for (const span of claim.spans) {
       if ('text' in span) { p.append(span.text); continue; }
       const face = item.faces[span.face];
@@ -77,13 +87,125 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
       b.setAttribute('aria-pressed','false');
       if (face) {
         b.dataset.face = span.face;
+        b.dataset.immichFaceId = face.face_namespace === 'immich' ? face.face_id : '';
         b.title = face.face_namespace + ' face ID · ' + face.face_id;
         b.onclick = () => select(b, {person:span.face}, descriptions.get(span.face)?.join(" ") || face.name);
       } else {
         b.dataset.action = span.id;
+        b.dataset.savedVerb = span.verb;
         const labels = Object.entries(span.roles).map(([role,id]) =>
           ({actor:'Actor', held_person:'Held person', recipient:'Recipient'}[role] || role) + ' · ' + item.faces[id].name);
-        b.onclick = () => select(b, span.roles, [span.verb, span.code, ...labels].join(' / '));
+        const roles = {...span.roles};
+        for (const [i, ref] of (span.participants || []).entries()) {
+          if (Object.values(roles).includes(ref.face)) continue;
+          roles[ref.role + '-' + i] = ref.face;
+          labels.push(ref.role + ' · ' + item.faces[ref.face].name);
+        }
+        b.onclick = () => select(b, roles, [span.verb, span.code, ...labels].join(' / '));
+      }
+    }
+  }
+  // Locate every phrase before inserting buttons so offsets refer to the saved captions.
+  for (const p of article.querySelectorAll('p')) {
+    const sentence = p.textContent;
+    p.dataset.savedCaption = sentence;
+    let offset = 0;
+    const nodes = Array.from(p.childNodes, node => {
+      const start = offset;
+      offset += node.textContent.length;
+      return {node, start, end:offset};
+    });
+    const mentions = item.mentions.filter(m => sentence.includes(m.words))
+      .sort((a,b) => sentence.indexOf(b.words) - sentence.indexOf(a.words));
+    for (const mention of mentions) {
+      const end = sentence.indexOf(mention.words) + mention.words.length;
+      const start = end - mention.words.length;
+      const covered = nodes.filter(n => n.start < end && n.end > start);
+      let anchor = covered.at(-1)?.node;
+      if (!anchor) throw Error('Missing caption anchor');
+      // Keep a verb button intact when its text also refers to a participant.
+
+      const links = document.createElement('span');
+      links.className = 'mention';
+      links.dataset.words = mention.words;
+      for (const id of mention.faces) {
+        const f = item.faces[id];
+        const label = f.name === 'Unnamed person' ? 'Face ' + f.face_id.slice(0,8) : f.name;
+        const b = element('button', links, label);
+        b.type = 'button';
+        b.dataset.immichFaceId = f.face_id;
+        b.title = 'Immich face ID · ' + f.face_id;
+        b.setAttribute('aria-pressed','false');
+        b.onclick = () => select(b, {person:id}, label + ' · Immich face ' + f.face_id);
+      }
+      const individual = mention.faces.length === 1 && !mention.reason;
+      // Split at the saved offsets, even when the noun starts inside a verb button.
+      // Keep a clickable verb whenever shortening it still leaves action words.
+      if (individual && covered.every(({node,start:l,end:r}) =>
+          node.nodeType === Node.TEXT_NODE || l < start || r > end)) {
+        let tail = '';
+        for (const {node,start:l} of covered) {
+          const text = node.textContent;
+          tail += text.slice(Math.max(0,end-l));
+          node.textContent = text.slice(0,Math.max(0,start-l));
+        }
+        const first = covered[0].node;
+        if (first.nodeType === Node.ELEMENT_NODE && !first.textContent && tail) {
+          first.textContent = tail;
+          first.before(links);
+        } else {
+          first.after(links);
+          if (tail) links.after(document.createTextNode(tail));
+        }
+        links.dataset.replaced = 'true';
+        if (/[’']s$/.test(mention.words)) links.append('’s');
+      } else {
+        if (anchor.nodeType === Node.TEXT_NODE) {
+          const last = covered.at(-1);
+          if (end-last.start < anchor.length) anchor.splitText(end-last.start);
+        }
+        anchor.after(links);
+      }
+      if (mention.reason) element('small', links, mention.reason);
+    }
+  }
+  descriptions.clear();
+  for (const p of article.querySelectorAll('p[data-subject]')) {
+    const copy = p.cloneNode(true);
+    copy.querySelectorAll('.mention:not([data-replaced])').forEach(el=>el.remove());
+    descriptions.set(p.dataset.subject, [...(descriptions.get(p.dataset.subject) || []),copy.textContent]);
+  }
+  if (collage) {
+    element('h3', article, item.panels ? 'Collage · ' + item.panels.length + ' photos' : 'Collage · layout pending');
+    for (const panel of item.panels || []) {
+      const details = element('details', article);
+      details.className = 'component';
+      const pts = panel.polygon;
+      const xs = pts.filter((_,i)=>i%2===0), ys = pts.filter((_,i)=>i%2===1);
+      const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs)-x, h = Math.max(...ys)-y;
+      element('summary', details, 'Photo ' + panel.number + ' · ' + panel.faces.length + ' face links');
+      const crop = element('div', details);
+      crop.style.cssText = 'width:100%;position:relative;overflow:hidden;aspect-ratio:'+w+'/'+h;
+      crop.style.clipPath = 'polygon('+xs.map((v,i)=>(v-x)/w*100+'% '+(ys[i]-y)/h*100+'%').join(',')+')';
+      const piece = element('img',crop);
+      piece.src=item.image;
+      piece.alt='Component photo '+panel.number;
+      Object.assign(piece.style,{position:'absolute',width:item.width/w*100+'%',height:item.height/h*100+'%',
+                                 left:-x/w*100+'%',top:-y/h*100+'%'});
+      for (const id of panel.faces) {
+        const f = item.faces[id];
+        const b = element('button',details,f.name === 'Unnamed person' ? 'Face '+f.face_id.slice(0,8) : f.name);
+        b.type='button'; b.dataset.immichFaceId=f.face_id; b.title='Immich face ID · '+f.face_id;
+        b.onclick=()=>select(b,{person:id},'Photo '+panel.number+' · Immich face '+f.face_id);
+      }
+      if (!panel.actions.length) element('div', details, 'No verified human action.');
+      for (const action of panel.actions) {
+        const line=element('div', details);
+        if (!action.actors.length) { line.textContent=action.text; continue; }
+        const b=element('button',line,action.text);
+        b.type='button'; b.dataset.componentAction=action.code;
+        b.onclick=()=>select(b,Object.fromEntries(action.actors.map((id,i)=>['actor-'+i,id])),
+                             'Photo '+panel.number+' · '+action.text);
       }
     }
   }

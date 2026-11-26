@@ -6,11 +6,14 @@ from datetime import date
 from pathlib import Path
 
 
-def select_highlights(rows: list[dict]) -> list[dict]:
+def select_highlights(rows: list[dict], media_types: dict | None = None) -> list[dict]:
     """Choose one mapped original per quarter, independently of input order."""
     quarters = {}
     seen = set()
     for row in rows:
+        kind = (media_types or {}).get(row["id"], {}).get("type", row.get("media_type"))
+        if kind == "Collage":
+            continue
         if row.get("reason") or not row.get("date") or not (row["local"] or row["native"]):
             continue
         asset = row["id"]
@@ -29,5 +32,11 @@ def select_highlights(rows: list[dict]) -> list[dict]:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inventory", type=Path, help="Private JSON candidate inventory")
+    parser.add_argument("--media-types", type=Path, help="Private per-asset media classification")
     args = parser.parse_args()
-    print(json.dumps([r["id"] for r in select_highlights(json.loads(args.inventory.read_text()))]))
+    classification = args.media_types or args.inventory.parent / "album-life-stage-pilot/composite-types.json"
+    media_types = json.loads(classification.read_text()) if classification.is_file() else None
+    if args.media_types and media_types is None:
+        parser.error("Media classification file is missing")
+    selected = select_highlights(json.loads(args.inventory.read_text()), media_types)
+    print(json.dumps([row["id"] for row in selected]))

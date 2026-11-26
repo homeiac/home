@@ -126,32 +126,38 @@ def marked_actions(asset: str, face: str, parts: list, review: dict, bind: Calla
     return actions, relations
 
 
+def bind_face(asset: str, objects: dict, regions: dict, width: int, height: int, ref: dict) -> str:
+    namespace, face = ref["namespace"], ref["face_id"]
+    region = regions[namespace, face]
+    if region["person_id"] != ref.get("person_id"):
+        raise ValueError("Face assignment changed since action review")
+    left, top, right, bottom = region["box"]
+    if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
+        raise ValueError("Invalid oriented face region")
+    uid = stable_id(asset, namespace, face)
+    if uid in objects and not ref.get("description"):
+        return uid
+    objects[uid] = {
+        "type": "person", "name": uid,
+        "object_data": {
+            "bbox": [{"name": "face", "val": [(left+right)*width/2, (top+bottom)*height/2,
+                                             (right-left)*width, (bottom-top)*height]}],
+            "text": [text_value("face_namespace", namespace), text_value("face_id", face),
+                     text_value("person_id", ref["person_id"] or "")],
+        },
+    }
+    if ref.get("description"):
+        objects[uid]["object_data"]["text"].append(text_value("description", ref["description"]))
+    return uid
+
+
 def build_scene(asset: str, actions: list, regions: dict, width: int, height: int,
                 marked: dict | None = None) -> dict:
     """Keep reviewed sentence fragments, source IDs and directional roles together."""
     objects, observations, relations = {}, {}, {}
 
     def bind(ref: dict) -> str:
-        namespace, face = ref["namespace"], ref["face_id"]
-        region = regions[namespace, face]
-        if region["person_id"] != ref.get("person_id"):
-            raise ValueError("Face assignment changed since action review")
-        left, top, right, bottom = region["box"]
-        if not (0 <= left < right <= 1 and 0 <= top < bottom <= 1):
-            raise ValueError("Invalid oriented face region")
-        uid = stable_id(asset, namespace, face)
-        objects[uid] = {
-            "type": "person", "name": uid,
-            "object_data": {
-                "bbox": [{"name": "face", "val": [(left+right)*width/2, (top+bottom)*height/2,
-                                                 (right-left)*width, (bottom-top)*height]}],
-                "text": [text_value("face_namespace", namespace), text_value("face_id", face),
-                         text_value("person_id", ref["person_id"] or "")],
-            },
-        }
-        if ref.get("description"):
-            objects[uid]["object_data"]["text"].append(text_value("description", ref["description"]))
-        return uid
+        return bind_face(asset, objects, regions, width, height, ref)
 
     if marked and "scene" in marked:
         if actions or not marked.get("reason") or not marked["scene"]:
@@ -231,23 +237,40 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
 
 def card(scene: dict, names: dict) -> dict:
     """Derive display words and click targets from the stored OpenLABEL document."""
-    data = scene["openlabel"]
+    from collage_catalogue import project
+    data, panels = project(scene["openlabel"])
     details = {"width": data["metadata"]["image_width"], "height": data["metadata"]["image_height"]}
+    if panels:
+        details["panels"] = panels
     for context in data.get("contexts", {}).values():
         if context["type"] == "capture_date_conflict":
             details["date_conflict"] = fields(context["context_data"])
-    if "0" in data.get("contexts", {}) and not data.get("actions"):
-        context = fields(data["contexts"]["0"]["context_data"])
-        return {"faces": {}, "claims": [], "scene": context["description"], "reason": context["reason"], **details}
     faces = {}
-    for uid, obj in data["objects"].items():
+    for uid, obj in data.get("objects", {}).items():
         source = fields(obj["object_data"])
         local_key = source["face_namespace"] + ":" + source["face_id"]
         display = PersonRef(source["person_id"], names.get(local_key) or source.get("description", "")).name(names)
         faces[uid] = {"name": display,
                       "box": obj["object_data"]["bbox"][0]["val"], **source}
+    mentions = []
+    for context_id, context in sorted(data.get("contexts", {}).items()):
+        if context["type"] == "caption_mention":
+            mention = fields(context["context_data"])
+            mention["faces"] = []
+            mentions.append((context_id, mention))
+    mention_map = dict(mentions)
+    for relation in data.get("relations", {}).values():
+        subject = relation["rdf_subjects"][0]
+        if subject["type"] == "context" and subject["uid"] in mention_map:
+            mention_map[subject["uid"]]["faces"].extend(r["uid"] for r in relation["rdf_objects"])
+    details["mentions"] = list(mention_map.values())
+    if "0" in data.get("contexts", {}) and not data.get("actions"):
+        context = fields(data["contexts"]["0"]["context_data"])
+        return {"faces": faces, "claims": [], "scene": context["description"], "reason": context["reason"], **details}
     role_map = {}
     for relation in data["relations"].values():
+        if relation["rdf_subjects"][0]["type"] != "action" or relation["name"] == "caption participant":
+            continue
         uid = relation["rdf_subjects"][0]["uid"]
         role_map.setdefault(uid, {})[relation["type"]] = relation["rdf_objects"][0]["uid"]
 
@@ -309,6 +332,12 @@ def card(scene: dict, names: dict) -> dict:
                 span["roles"] = role_map[span["id"]]
                 span["code"] = data["actions"][span["id"]]["type"]
         claims.append({"spans": spans, "subject": roles["actor"], "roles": roles, "code": action["type"]})
+    by_id = {span["id"]: span for claim in claims for span in claim["spans"] if "verb" in span}
+    for relation in data["relations"].values():
+        if relation["name"] == "caption participant":
+            span = by_id[relation["rdf_subjects"][0]["uid"]]
+            span.setdefault("participants", []).extend(
+                {"role": relation["type"], "face": ref["uid"]} for ref in relation["rdf_objects"])
     tagged = [span["id"] for claim in claims for span in claim["spans"] if "verb" in span]
     if set(tagged) != data["actions"].keys() or len(tagged) != len(data["actions"]):
         raise ValueError("Every stored action must have exactly one clickable span")

@@ -15,7 +15,7 @@ from uuid import UUID
 from review_openlabel import read
 
 
-def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str) -> dict:
+def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str, sync_journey: bool = False) -> dict:
     """Use the album's existing read-only clients to check scope and exact face bindings."""
     owner, library = (str(UUID(v)) for v in read(root/"scope.json"))
     album = str(UUID(read(root/"album-after-owner-correction.json")["id"]))
@@ -28,6 +28,28 @@ def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str) -> dict:
     live["members"] = pg(f'''SELECT to_json("assetId") FROM album_asset WHERE "albumId"='{album}' ORDER BY "assetId"''')
     if len(live["members"]) != live["count"]:
         raise ValueError("Album changed during readback")
+    frozen = set(read(root/"album-after-owner-correction.json")["members"])
+    types = read(root/"album-life-stage-pilot/composite-types.json")
+    collages = {asset for asset in frozen if types.get(asset, {}).get("type") == "Collage"}
+    actual = set(live["members"])
+    if actual - frozen or (frozen - collages) - actual:
+        raise ValueError("Journey membership changed outside the reviewed collage set")
+    if collages:
+        ids = ",".join("'" + str(UUID(a)) + "'" for a in sorted(collages))
+        authorized = pg(f"""SELECT to_json(id) FROM asset WHERE id IN ({ids}) AND "ownerId"='{owner}'
+                         AND "libraryId"='{library}' AND "deletedAt" IS NULL AND NOT "isOffline" """)
+        if set(authorized) != collages:
+            raise ValueError("A catalogue original changed scope or availability")
+    if sync_journey and (remove := sorted(actual & collages)):
+        # Changes album membership only. The original assets and all face rows remain accessible.
+        if any(not (root/"collage-layouts"/(asset+".json")).is_file() for asset in remove):
+            raise ValueError("Catalogue the reviewed components before updating the private journey")
+        api_js(f"""await api('/albums/{album}/assets','DELETE',{{ids:{json.dumps(remove)}}});
+                   console.log(JSON.stringify(true));""")
+        actual = set(pg(f"""SELECT to_json("assetId") FROM album_asset WHERE "albumId"='{album}'"""))
+        if actual != frozen - collages:
+            raise ValueError("Journey membership readback differs from the expected set")
+    live.update(journey_members=sorted(actual), members=sorted(frozen), count=len(actual))
     reviewed = read(root/"album-life-stage-pilot/group-actions/verified-actions.json")
     assets = {str(UUID(row["asset"])) for row in reviewed}
     if not assets or not assets.issubset(live["members"]):
@@ -41,17 +63,18 @@ def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str) -> dict:
         p."personGroupId", p.name, f."boundingBoxX1"::float/f."imageWidth",
         f."boundingBoxY1"::float/f."imageHeight", f."boundingBoxX2"::float/f."imageWidth",
         f."boundingBoxY2"::float/f."imageHeight") FROM asset a JOIN asset_exif e ON e."assetId"=a.id
-        JOIN asset_face f ON f."assetId"=a.id JOIN person p ON p."personGroupId"=f."personGroupId"
+        JOIN asset_face f ON f."assetId"=a.id LEFT JOIN person p ON p."personGroupId"=f."personGroupId"
         AND p."ownerId"=f."ownerId" WHERE a.id IN ({asset_list}) AND a."libraryId"='{library}'
         AND a."ownerId"='{owner}' AND f."ownerId"=a."ownerId" AND a."deletedAt" IS NULL
-        AND NOT a."isOffline" AND NOT p."isHidden" AND f."deletedAt" IS NULL AND f."isVisible"
+        AND NOT a."isOffline" AND (f."personGroupId" IS NULL OR NOT p."isHidden") AND f."deletedAt" IS NULL AND f."isVisible"
         AND f."imageHeight">0 AND f."imageWidth">0""")
     names, regions = {}, defaultdict(list)
     inputs = {r["id"]: r for r in read(root/"pool.json") if r["id"] in assets}
     for asset, path, size, face, person, name, *box in native:
         if (inputs[asset]["path"], inputs[asset]["size"]) != (path, size):
             raise ValueError("Asset changed since review")
-        names[person] = name
+        if person:
+            names[person] = name
         regions[asset].append(dict(namespace="immich", face_id=face, person_id=person, box=box))
     dbpath = root/"nikhil-life-stage-backfill/jobs.sqlite3"
     with closing(sqlite3.connect(dbpath.as_uri()+"?mode=ro", uri=True)) as db:
@@ -89,6 +112,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("album_directory", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--sync-journey", action="store_true", help="Remove catalogued collages from the private Immich album")
     parser.add_argument("--photos", default="https://photos.app.home.panderosystems.com")
     parser.add_argument("--immich", default="https://immich.app.home.panderosystems.com")
     args = parser.parse_args()
@@ -97,5 +121,5 @@ if __name__ == "__main__":
     sys.path.insert(0, str(root/"reproduction"))
     from common import pg, api_js
     os.umask(0o077)
-    result = snapshot(root, pg, api_js, args.photos, args.immich)
+    result = snapshot(root, pg, api_js, args.photos, args.immich, args.sync_journey)
     args.output.write_text(json.dumps(result))
