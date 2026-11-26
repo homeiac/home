@@ -60,6 +60,8 @@ Revision 20. Store Immich person IDs alongside reviewed age and action facts usi
 
 Revision 21. The deployed Knowledge Index dashboard has no life-stage, named-action or person-ID refresh panels. Make observability and a measured tuning loop required evidence for every stage. Add a common Grafana layout for queue and dispositions, throughput, ETA, freshness and phase latency. Prepare the life-stage metrics adapter for the private aggregate data. Use the reviewed growing-up journey and stable face-ID reconstruction as the rollout gate for all-photo processing. Keep the current live rollout scoped until those checks pass.
 
+Revision 22. Dashboard updates and live tuning proceed for each active scope as soon as telemetry can be verified. Deploy the shared Grafana row separately through its Flux preview source and publish aggregate life-stage metrics from the existing checkpoint. Measure the bottleneck and verify any tuning independently. The journey and stable face-ID checks gate expansion of person-aware processing to all photos.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.

@@ -190,8 +190,9 @@ second window under similar load and read back the deployed revision. Check
 quality, latency, throughput, errors, retries and duplicate work. Include the
 panel link and both windows in the stage's acceptance evidence. For a synchronous
 stage, document why queue measurements are inapplicable and record equivalent
-request measurements. Use the reviewed growing-up and stable face-ID journey
-as the gate before enabling the shared all-photo rollout through GitOps.
+request measurements. Roll out dashboard and tuning changes through GitOps as
+each stage is instrumented. Use the reviewed growing-up and stable face-ID
+journey as the gate for expanding person-aware processing to all photos.
 - **Value delivered** (top row): files indexed per minute, summaries per minute, how long the quota question takes now versus the ~38 min
   sidecar scan it replaced (`baseline_s`), index size versus library size, photos and video minutes described, and an **illustrative**
   cloud-equivalent cost. No cloud service does this for a Google Photos library, so the cost prices the same work per photo and per video
