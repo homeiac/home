@@ -47,6 +47,8 @@ Revision 14. The post-edit audit found zero remaining comparable conflicts. Libr
 
 Revision 15. The private album opens with 89 highlights. Its native timeline places 22 in a different quarter than the saved capture date. Keep source metadata intact, verify the exact album membership and original access, and show the selected photos in capture-date order on the private review page. Mark the date differences there. Changing shared asset dates is a separate decision.
 
+Revision 16. Start the broader life-stage run with the existing exact-mapped subject inventory and an explicit birth year. Reuse reviewed album results before issuing vision requests. Keep one resumable local result per asset and subject, and record ambiguous face locations and date provenance. The confirmed age map takes precedence over model guesses. Stage other family members when their intended labels and birth-year evidence are available. Keep private inputs and outcomes outside Git.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
