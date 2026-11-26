@@ -41,6 +41,8 @@ Revision 11. The owner confirmed the Immich assignments for the six reviewed cro
 
 Revision 12. The review API committed all six owner decisions atomically. Live readback verified the corrected face and unchanged other face assignments on each photo. Five photos left the subject's reference pool; one group photo still qualifies through another confirmed face. The fixed 40-photo set now has 28 positives. All 40 current confirmed-name sets matched the independent revised answer key and original captions were preserved. The broader audit still has 137 disputed photos. The new reference run leaves identity blocked on the new-identity and unconfirmed-attribution checks, and accounting open on scene enrichment.
 
+Revision 13. The owner authorized the remaining 137 conflicting face assignments to take their Immich names. Freeze that cohort, validate the current Immich source and local face revisions, apply and read back the edits. Build a private growing-up album from the corrected identity. Keep a full candidate inventory, disclose missing mappings and select dated highlights across the available years. Reuse existing Immich assets and saved metadata. Verify the private album by reading it back and repeat the selection without duplicating membership. Continue to score scene quality separately.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
