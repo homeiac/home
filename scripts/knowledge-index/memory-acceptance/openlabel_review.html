@@ -9,6 +9,7 @@ article{background:white;padding:1rem;border:1px solid #ced8d0;border-radius:.7r
 .box{position:absolute;pointer-events:none;border:3px solid #ffea38;box-shadow:0 0 0 2px black}
 .box.held_person,.box.recipient{border-color:#58deff}button{font:inherit;color:#145744;border:0;background:#eef5ef;text-decoration:underline;cursor:pointer;border-radius:.2rem}
 button:focus-visible,a:focus-visible{outline:3px solid #705500}button[aria-pressed=true]{background:#174f41;color:white}output{display:block;min-height:1.5em}
+.date-conflict{background:#fff1cf;border-left:4px solid #9a5a05;padding:.6rem .8rem;margin:.5rem 0}
 a{color:#175441}h2{margin:.6rem 0}
 </style>
 <h1>Face and action review</h1><p>Select a name to see what that person is doing. Select an action to highlight its participants.</p>
@@ -28,6 +29,18 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
   photo.src = item.image;
   photo.alt = 'Album photo from ' + item.date;
   element('h2', article, 'Recorded date · ' + item.date);
+  if (item.date_conflict) {
+    const facts = item.date_conflict;
+    const year = Number(facts.recorded_date.slice(0, 4));
+    const age = year - Number(facts.birth_year);
+    const timing = age === 0 ? "The recorded year is the birth year" :
+      "Someone born in " + facts.birth_year + " would turn " + age + " in " + year;
+    const note = element('aside', article);
+    note.className = 'date-conflict';
+    element('strong', note, 'Capture date disputed');
+    element('div', note, timing + '. The visual review indicates ' +
+      facts.visual_stage.replaceAll('_', ' ') + ' age. The capture year is unknown.');
+  }
   element('h3', article, item.scene ? 'Scene description' : 'What each person is doing');
   if (item.scene) {
     element('p', article, item.scene);
@@ -64,6 +77,7 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
       b.setAttribute('aria-pressed','false');
       if (face) {
         b.dataset.face = span.face;
+        b.title = face.face_namespace + ' face ID · ' + face.face_id;
         b.onclick = () => select(b, {person:span.face}, descriptions.get(span.face)?.join(" ") || face.name);
       } else {
         b.dataset.action = span.id;

@@ -10,6 +10,8 @@ const read = async file => JSON.parse(await readFile(file, 'utf8'));
 const root = path.dirname(timeline);
 const reference = await read(path.join(root, 'album-life-stage-pilot/group-actions/verified-actions.json'));
 const current = await read(sourcesFile);
+const stages = await read(path.join(root, 'album-life-stage-pilot/review-results.json'));
+const birthYear = (await read(path.join(root, 'timeline-age-evidence.json'))).birth_year;
 const audits = await read(path.join(root, 'album-reviewed-spans.json')).catch(error => {
   if (error.code === 'ENOENT') return {};
   throw error;
@@ -23,7 +25,7 @@ try {
   page.on('request', req => req.url().startsWith('file:') ? req.continue() : req.abort());
   await page.goto(pathToFileURL(timeline).href);
   await Promise.all([page.waitForNavigation(), page.click('#openlabel-pilot a')]);
-  let names = 0, verbs = 0;
+  let names = 0, verbs = 0, conflicts = 0;
   const articles = await page.$$('article');
   const expectedIds = reference.map(r => r.asset).concat(Object.keys(audits)).sort();
   assert.deepEqual(await page.$$eval('article', els => els.map(el => el.id).sort()), expectedIds);
@@ -37,7 +39,18 @@ try {
     assert.equal(await article.$eval('a', a => a.href), current.album_url + '/photos/' + asset);
     const sentences = await article.$$eval('p', ps => ps.map(p => p.textContent));
     const audit = audits[asset];
-    let subjectName;
+    const review = stages.photos.find(row => row.asset === asset);
+    const warning = await article.$('.date-conflict');
+    assert.equal(Boolean(warning), review.status === 'conflict');
+    if (warning) {
+      conflicts++;
+      const text = await warning.evaluate(el => el.textContent);
+      assert.ok(text.includes(review.accepted.stage.replaceAll('_', ' ')));
+      assert.ok(text.includes('capture year is unknown'));
+      assert.equal(scene.date_conflict.birth_year, String(birthYear));
+      assert.equal(scene.date_conflict.recorded_date, review.date);
+    }
+    let subjectName, rendered, mentions;
     if (audit?.scene) {
       assert.deepEqual(sentences, [audit.scene]);
       assert.equal((await article.$$('button')).length, 0);
@@ -48,10 +61,17 @@ try {
       const region = current.regions[asset].find(r => r.namespace === audit.namespace && r.face_id === audit.face_id);
       assert.equal(region.person_id, audit.person_id);
       subjectName = current.names[audit.person_id] || current.names[audit.namespace+':'+audit.face_id] || 'Unnamed person';
-      assert.deepEqual(sentences, [subjectName + audit.literal]);
+      mentions = audit.spans.map(s => s.recipient).filter(Boolean);
+      let literal = audit.literal;
+      for (const m of [...mentions].reverse()) {
+        assert.equal(literal.slice(m.start, m.end), m.words);
+        literal = literal.slice(0, m.start) + (current.names[m.person_id] || m.description) + literal.slice(m.end);
+      }
+      rendered = subjectName + literal;
+      assert.deepEqual(sentences, [rendered]);
       const tags = await article.$$eval('button[data-action]', bs => bs.map(b => b.textContent));
       assert.deepEqual(tags, audit.spans.map(s => s.words));
-      assert.equal((await article.$$('button[data-face]')).length, 1);
+      assert.equal((await article.$$('button[data-face]')).length, 1 + mentions.length);
     } else {
       assert.deepEqual(sentences.sort(), Object.entries(reviewed.actions)
         .map(([name, words]) => name + ' ' + words).sort());
@@ -73,18 +93,26 @@ try {
         box: ['left','top','width','height'].map(key => parseFloat(el.style[key])/100),
       })));
       assert.equal(await button.evaluate(b => b.getAttribute('aria-pressed')), 'true');
+      const expectedFaces = new Map();
       if (target.face) {
         names++;
         assert.deepEqual(selected.map(b => b.id), [target.face]);
         const name = scene.faces[target.face].name;
-        const expected = audit ? subjectName + audit.literal : (reviewed.actions[name] ? name + ' ' + reviewed.actions[name] : name);
+        if (audit) {
+          const index = await button.evaluate(b => [...b.parentElement.querySelectorAll('[data-face]')].indexOf(b));
+          expectedFaces.set('person', [audit, ...mentions][index]);
+        }
+        assert.ok((await button.evaluate(b => b.title)).includes(scene.faces[target.face].face_id));
+        const expected = audit ? (expectedFaces.get('person') === audit ? rendered : name) : (reviewed.actions[name] ? name + ' ' + reviewed.actions[name] : name);
         assert.equal(await article.$eval('output', el => el.textContent), expected);
       } else {
         verbs++;
         if (audit) {
           const index = await button.evaluate(b => [...b.parentElement.querySelectorAll('button[data-action]')].indexOf(b));
           const span = audit.spans[index];
-          assert.deepEqual(selected.map(b => b.role), [affectedRoles[span.sense] || 'actor']);
+          expectedFaces.set(affectedRoles[span.sense] || 'actor', audit);
+          if (span.recipient) expectedFaces.set('recipient', span.recipient);
+          assert.deepEqual(selected.map(b => b.role).sort(), [...expectedFaces.keys()].sort());
           assert.ok((await article.$eval('output', el => el.textContent)).includes(subjectName));
         } else {
           const sentence = await button.evaluate(b => b.parentElement.textContent);
@@ -100,9 +128,10 @@ try {
       for (const box of selected) {
         const f = scene.faces[box.id];
         if (audit) {
-          assert.equal(f.face_namespace, audit.namespace);
-          assert.equal(f.face_id, audit.face_id);
-          assert.equal(f.person_id, audit.person_id);
+          const ref = expectedFaces.get(box.role);
+          assert.equal(f.face_namespace, ref.namespace);
+          assert.equal(f.face_id, ref.face_id);
+          assert.equal(f.person_id, ref.person_id);
         }
         const source = current.regions[asset].find(r => r.namespace === f.face_namespace && r.face_id === f.face_id);
         const [x,y,right,bottom] = source.box;
@@ -111,7 +140,7 @@ try {
       }
     }
   }
-  console.log(JSON.stringify({photos: articles.length, name_clicks: names, verb_clicks: verbs}));
+  console.log(JSON.stringify({photos: articles.length, name_clicks: names, verb_clicks: verbs, date_conflicts: conflicts}));
 } finally {
   await browser.close();
 }

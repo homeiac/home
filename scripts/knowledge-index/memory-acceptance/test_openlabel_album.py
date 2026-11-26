@@ -126,3 +126,25 @@ class OpenLabelAlbumTests(unittest.TestCase):
         self.assertEqual(result["claims"], [])
         with self.assertRaisesRegex(ValueError, "conflicts"):
             build_scene("a", [self.parts], self.regions, 200, 100, review)
+
+    def test_recipient_has_distinct_box_and_resolves_name_on_refresh(self):
+        literal = " hugs another person."
+        other = dict(self.second, start=6, end=20, words="another person", description="the child in plaid")
+        review = dict(self.first, literal=literal, spans=[
+            dict(start=1, end=5, words="hugs", sense="hug", recipient=other)])
+        def build():
+            return build_scene("photo", [[self.first, literal]], self.regions, 200, 100, review)
+        scene = build()
+        result = card(scene, {})
+        spans = result["claims"][0]["spans"]
+        verb, = [s for s in spans if "verb" in s]
+        other_id = verb["roles"]["recipient"]
+        self.assertNotEqual(verb["roles"]["actor"], other_id)
+        self.assertEqual(result["faces"][other_id]["name"], "the child in plaid")
+        self.assertEqual([s["face"] for s in spans if "source_words" in s], [other_id])
+        renamed = card(scene, self.names)
+        self.assertEqual(renamed["faces"][other_id]["name"], "Jo")
+        self.assertEqual(renamed["claims"], result["claims"])
+        other.update(self.first)
+        with self.assertRaisesRegex(ValueError, "distinct faces"):
+            build()

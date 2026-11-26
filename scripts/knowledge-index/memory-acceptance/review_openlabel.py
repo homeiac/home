@@ -41,11 +41,12 @@ def publish(root: Path, schema: Path, current: dict, conn) -> dict:
         raise ValueError("The declared pilot contains no reviewed photos")
     manifest = root / "album-reviewed-spans.json"
     marked = read(manifest) if manifest.is_file() else {}
+    recorded = {row["asset"]: row for row in read(pilot / "review-results.json")["photos"]}
+    birth_year = read(root / "timeline-age-evidence.json")["birth_year"]
     if manifest.is_file():
         groups = {row["asset"] for row in reviewed}
         if groups & marked.keys() or groups | marked.keys() != set(current["members"]):
             raise ValueError("Span review must cover exactly the remaining album members")
-        recorded = {row["asset"]: row for row in read(pilot / "review-results.json")["photos"]}
         for asset, audit in marked.items():
             prior = recorded[asset]
             if (audit.get("reason") or None) != (prior.get("local_skip") or None):
@@ -88,13 +89,22 @@ def publish(root: Path, schema: Path, current: dict, conn) -> dict:
             if not audit and labels != set(row["actions"]):
                 raise ValueError("Incomplete reviewed action set")
             scenes[asset] = build_scene(asset, actions, regions, width, height, audit)
+            prior = recorded[asset]
+            if prior["status"] == "conflict":
+                if prior["date"] != row["date"]:
+                    raise ValueError("Recorded date differs from the life-stage review")
+                facts = {"recorded_date": prior["date"], "date_source": prior["date_source"],
+                         "visual_stage": prior["accepted"]["stage"], "birth_year": str(birth_year)}
+                contexts = scenes[asset]["openlabel"].setdefault("contexts", {})
+                contexts["1"] = {"type": "capture_date_conflict", "name": "Capture date disputed",
+                                 "context_data": {"text": [{"name": k, "val": v} for k, v in facts.items()]}}
             cards[asset] = {"asset": asset, "date": row["date"], "image": "thumbnails/"+quote(path.name),
                             "original": current["album_url"].rstrip("/")+"/photos/"+asset}
             build_durations.append(time.perf_counter() - card_started)
     validate_scenes(scenes, schema)
     def check_caption(asset: str, scene: dict) -> None:
         cards[asset].update(card(scene, current["names"]))
-        captions = ["".join(cards[asset]["faces"][s["face"]]["name"] if "face" in s else
+        captions = ["".join(s.get("source_words", cards[asset]["faces"][s["face"]]["name"]) if "face" in s else
                             s.get("text", s.get("verb")) for s in claim["spans"])
                     for claim in cards[asset]["claims"]]
         if sorted(captions) != sorted(expected[asset]):
