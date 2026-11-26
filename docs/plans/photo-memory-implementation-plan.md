@@ -62,6 +62,8 @@ Revision 21. The deployed Knowledge Index dashboard has no life-stage, named-act
 
 Revision 22. Dashboard updates and live tuning proceed for each active scope as soon as telemetry can be verified. Deploy the shared Grafana row separately through its Flux preview source and publish aggregate life-stage metrics from the existing checkpoint. Measure the bottleneck and verify any tuning independently. The journey and stable face-ID checks gate expansion of person-aware processing to all photos.
 
+Revision 23. The deployed panels received real checkpoints, but the first range-rate extrapolation understated throughput before the collector had a full window. Estimate pace from observed checkpoint times, require two advances and suppress resets. Verify Grafana readback against recent worker results. A 12-photo preparation sample and two comparable live windows support retaining four local workers.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
