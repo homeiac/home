@@ -66,6 +66,8 @@ Revision 23. The deployed panels received real checkpoints, but the first range-
 
 Revision 24. The initial life-stage queue reused the Mac pilot and the RTX endpoint is available. Benchmark the existing RTX Bonsai service on the same marked subjects, capture output agreement, pace and GPU headroom, and preserve other local workloads. If the result supports parallel use, claim a disjoint set of pending assets in the same durable ledger and verify no overlap with the Mac.
 
+Revision 25. The native RTX client produced valid JSON after disabling thinking and supplying the existing life-stage fields as a schema. All five benchmark responses validated and four primary stages agreed, with one adjacent stage. The eight-photo queue canary passed. Reuse the caption client and life-stage work function for the RTX worker. Reuse the video tuning row's narrative, comparison bars, live metrics, quality checks and phase timing layout for life stage, with per-backend counts from the existing checkpoint.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
