@@ -627,7 +627,7 @@ def life_stage_tuning_panels():
     for panel in panels:
         if panel["type"] != "timeseries":
             continue
-        panel.update(timeFrom="30m", interval="15s")
+        panel["interval"] = "15s"
         panel["options"]["legend"]["calcs"] = ["lastNotNull"]
         panel["fieldConfig"]["overrides"].append({
             "matcher": {"id": "byName", "options": "RTX 3070"},
