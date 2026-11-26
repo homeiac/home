@@ -13617,7 +13617,7 @@ data:
           },
           "options": {
             "mode": "markdown",
-            "content": "**Before:** Mac-only life-stage queue sustained 15.9\u201316.1 photos/min in two 10-minute windows.\n\n**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once.\n\n**RTX concurrency:** One request saved 14.0 photos/min. Two requests saved 18.0 photos/min in the measured window. **Matched capacity trial:** Retained **2 RTX slots** at **28.68 photos/min**. All 10 selected responses passed validation. All 3 first concurrent requests timed out after the warm-up timed out. All four first requests timed out at 35 seconds following the 120-second warm-up timeout."
+            "content": "**Before:** Mac-only life-stage queue sustained 15.9\u201316.1 photos/min in two 10-minute windows.\n\n**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once.\n\n**RTX concurrency:** One request saved 14.0 photos/min. Two requests saved 18.0 photos/min in the measured window. **Matched capacity trial:** Retained **3 RTX slots** at **42.78 photos/min**. All 20 selected responses passed validation.  The first three- and four-request trials timed out during model startup. The timed runs began after a 346-second warm-up."
           }
         },
         {
@@ -14386,22 +14386,22 @@ data:
           },
           "targets": [
             {
-              "expr": "vector(28.68)",
-              "legendFormat": "2 slots \u00b7 retained",
+              "expr": "vector(22.07)",
+              "legendFormat": "Before \u00b7 2 slots",
               "refId": "A",
               "instant": true,
               "range": false
             },
             {
-              "expr": "vector(0.0)",
-              "legendFormat": "3 slots \u00b7 timed out",
+              "expr": "vector(42.78)",
+              "legendFormat": "After \u00b7 3 slots \u00b7 retained",
               "refId": "B",
               "instant": true,
               "range": false
             },
             {
-              "expr": "vector(0)",
-              "legendFormat": "4 slots \u00b7 timed out",
+              "expr": "vector(28.12)",
+              "legendFormat": "Trial \u00b7 4 slots",
               "refId": "C",
               "instant": true,
               "range": false
@@ -14436,7 +14436,7 @@ data:
               ]
             }
           },
-          "description": "Identical 10-photo target sample, same prompt and validation. The release check requires valid results, stage agreement or a reported alternative, and full GPU residency."
+          "description": "Identical 10-photo target sample, same prompt and validation. The release check requires valid results, stage agreement or a reported alternative, and full GPU residency. The runs used one warmed runner, with concurrency tested in forward and reverse order. Each setting processed the same sample twice. Slots are concurrent requests sent by the worker."
         },
         {
           "id": 272,
@@ -14454,9 +14454,23 @@ data:
           },
           "targets": [
             {
-              "expr": "vector(4.0)",
-              "legendFormat": "2 slots \u00b7 retained",
+              "expr": "vector(5.67)",
+              "legendFormat": "Before \u00b7 2 slots",
               "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(3.93)",
+              "legendFormat": "After \u00b7 3 slots \u00b7 retained",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(6.3)",
+              "legendFormat": "Trial \u00b7 4 slots",
+              "refId": "C",
               "instant": true,
               "range": false
             }
@@ -14490,7 +14504,7 @@ data:
               ]
             }
           },
-          "description": "Identical 10-photo target sample, same prompt and validation. The release check requires valid results, stage agreement or a reported alternative, and full GPU residency."
+          "description": "Identical 10-photo target sample, same prompt and validation. The release check requires valid results, stage agreement or a reported alternative, and full GPU residency. The runs used one warmed runner, with concurrency tested in forward and reverse order. Each setting processed the same sample twice. Slots are concurrent requests sent by the worker."
         }
       ],
       "refresh": "1m",

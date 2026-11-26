@@ -15,6 +15,59 @@
   "decision": "Keep two RTX requests while the live rate remains higher.",
   "slot_trials": {
     "sample_size": 10,
+    "passes": 2,
+    "warmup_seconds": 345.83,
+    "selected_slots": 3,
+    "trials": [
+      {
+        "slots": 2,
+        "photos_per_minute": 22.07,
+        "median_seconds": 5.67,
+        "valid": 20,
+        "exact_matches": 20,
+        "compatible_matches": 20,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null,
+        "per_run_photos_per_minute": [
+          22.53,
+          21.62
+        ]
+      },
+      {
+        "slots": 3,
+        "photos_per_minute": 42.78,
+        "median_seconds": 3.93,
+        "valid": 20,
+        "exact_matches": 19,
+        "compatible_matches": 20,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null,
+        "per_run_photos_per_minute": [
+          50.1,
+          37.34
+        ]
+      },
+      {
+        "slots": 4,
+        "photos_per_minute": 28.12,
+        "median_seconds": 6.3,
+        "valid": 20,
+        "exact_matches": 20,
+        "compatible_matches": 20,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null,
+        "per_run_photos_per_minute": [
+          23.82,
+          34.3
+        ]
+      }
+    ]
+  },
+  "cold_slot_trials": {
+    "sample_size": 10,
     "selected_slots": 2,
     "trials": [
       {

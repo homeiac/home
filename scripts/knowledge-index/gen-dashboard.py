@@ -522,6 +522,7 @@ def life_stage_tuning_panels():
     slot_trials = trials.get("slot_trials")
     slot_story = trials["decision"]
     if slot_trials:
+        passes = slot_trials.get("passes", 1)
         retained = next(t for t in slot_trials["trials"] if t["slots"] == slot_trials["selected_slots"])
         slot_story = (
             f"**Matched capacity trial:** Retained **{retained['slots']} RTX slots** at "
@@ -529,6 +530,11 @@ def life_stage_tuning_panels():
             f"All {retained['valid']} selected responses passed validation. "
             + " ".join(t["failure"] for t in slot_trials["trials"] if t.get("failure"))
         )
+        if trials.get("cold_slot_trials"):
+            slot_story += (
+                " The first three- and four-request trials timed out during model startup."
+                f" The timed runs began after a {slot_trials['warmup_seconds']:.0f}-second warm-up."
+            )
     # This checkpoint reports both GPU backends from the same collector host.
     scope = 'stage="life-stage"'
     saved = f'knowledge_index_photo_stage_backend_completed{{{scope}}}'
@@ -594,15 +600,26 @@ def life_stage_tuning_panels():
     if slot_trials:
         note = (f"Identical {slot_trials['sample_size']}-photo target sample, same prompt and validation. "
                 "The release check requires valid results, stage agreement or a reported alternative, and full GPU residency.")
+        if passes == 2:
+            note += " The runs used one warmed runner, with concurrency tested in forward and reverse order."
+            note += " Each setting processed the same sample twice. Slots are concurrent requests sent by the worker."
+
+        def slot_label(trial):
+            slots = trial["slots"]
+            if slots == slot_trials["selected_slots"]:
+                return f"After · {slots} slots · retained"
+            if slots == 2 and trial["passed"]:
+                return "Before · 2 slots"
+            if trial["passed"]:
+                return f"Trial · {slots} slots"
+            return f"{slots} slots · " + ("timed out" if trial.get("failure") else "failed checks")
+
         for title, field, x, unit in (
             ("RTX · matched capacity at 2, 3 and 4 slots", "photos_per_minute", 0, "suffix: photos/min"),
             ("RTX · median latency at 2, 3 and 4 slots", "median_seconds", 12, "s"),
         ):
             values = [
-                (f'vector({trial[field]})',
-                 f"{trial['slots']} slots · " + ("retained" if trial['slots'] == slot_trials['selected_slots']
-                                               else "passed" if trial['passed'] else
-                                               "timed out" if trial.get("failure") else "failed checks"))
+                (f'vector({trial[field]})', slot_label(trial))
                 for trial in slot_trials["trials"]
                 if trial[field] is not None
             ]
