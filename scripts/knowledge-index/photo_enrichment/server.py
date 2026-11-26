@@ -3,6 +3,7 @@ import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
+import re
 from pathlib import Path
 import secrets
 import urllib.parse
@@ -11,6 +12,24 @@ from .faces import FaceEngine, frigate_candidate
 from .telemetry import get_telemetry
 
 STATIC = Path(__file__).parent / "static"
+
+
+def describe_photo(photo: dict) -> dict:
+    """Present current confirmed names even when a usable scene description is missing."""
+    names = sorted(set(photo.get('confirmed_people') or ()) | {
+        face['person'] for face in photo.get('faces', ())
+        if face.get('label_source') == 'user' and face.get('person')
+    })
+    context = photo.get('context_summary')
+    if context and all(re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', context, re.I) for name in names):
+        text, source = context, 'context'
+    elif names:
+        subjects = ', '.join(names[:-1]) + ' and ' + names[-1] if len(names) > 1 else names[0]
+        text = subjects + (' are' if len(names) > 1 else ' is') + ' in this photo.'
+        source = 'confirmed_faces'
+    else:
+        text, source = photo.get('summary'), 'model'
+    return dict(photo, primary_description=text, description_source=source)
 
 
 def make_server(store, models: Path, bind: str, port: int, public_origin: str | None = None):
@@ -33,6 +52,9 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 body = json.dumps(body, default=str).encode()
             # Prepare under the DB lock, but never hold it while writing a socket.
             self.pending_response=(body,status,content_type)
+
+        def send_photo_page(self, page):
+            self.send(dict(page, photos=[describe_photo(photo) for photo in page["photos"]]))
 
         def write_response(self):
             body,status,content_type=self.pending_response
@@ -90,11 +112,11 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                 if parsed.path == "/api/dates":
                     return self.send(store.dates(query.get("timezone", "UTC")))
                 if parsed.path == "/api/photos":
-                    return self.send(store.photos(query["date"], query.get("timezone", "UTC"), int(query.get("offset", 0))))
+                    return self.send_photo_page(store.photos(query["date"], query.get("timezone", "UTC"), int(query.get("offset", 0))))
                 if parsed.path == '/api/search':
-                    return self.send(store.search(query.get('q',''),query.get('timezone','UTC'),int(query.get('offset',0))))
+                    return self.send_photo_page(store.search(query.get('q',''),query.get('timezone','UTC'),int(query.get('offset',0))))
                 if parsed.path == "/api/photo":
-                    return self.send(store.detail(query["path"]))
+                    return self.send(describe_photo(store.detail(query["path"])))
                 if parsed.path == "/api/thumbnail":
                     return self.send(store.thumbnail(query["path"], query.get("face")), content_type="image/jpeg")
                 if parsed.path == "/api/groups":
