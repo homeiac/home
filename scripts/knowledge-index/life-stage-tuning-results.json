@@ -1,0 +1,16 @@
+{
+  "before": {
+    "rtx_per_minute": 14,
+    "mac_per_minute": 13,
+    "combined_per_minute": 27,
+    "rtx_median_seconds": 3.26
+  },
+  "after": {
+    "rtx_per_minute": 18,
+    "mac_per_minute": 16,
+    "combined_per_minute": 34,
+    "rtx_median_seconds": 5.39
+  },
+  "window_seconds": 60,
+  "decision": "Keep two RTX requests while the live rate remains higher."
+}

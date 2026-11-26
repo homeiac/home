@@ -518,6 +518,7 @@ def tuning_comparison(title, data, x, y, w, h, unit, description, maximum=None):
 
 def life_stage_tuning_panels():
     """Apply the video tuning row pattern to local photo life-stage processing."""
+    trials = json.loads((Path(__file__).parent / "life-stage-tuning-results.json").read_text())
     # This checkpoint reports both GPU backends from the same collector host.
     scope = 'stage="life-stage"'
     saved = f'knowledge_index_photo_stage_backend_completed{{{scope}}}'
@@ -536,7 +537,10 @@ def life_stage_tuning_panels():
     panels.append(tuning_story(
         "**Before:** Mac-only life-stage queue sustained 15.9–16.1 photos/min in two 10-minute windows.\n\n"
         "**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and "
-        "disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once."
+        "disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once.\n\n"
+        f"**RTX concurrency:** One request saved {trials['before']['rtx_per_minute']:.1f} photos/min. "
+        f"Two requests saved {trials['after']['rtx_per_minute']:.1f} photos/min in the measured window. "
+        + trials["decision"]
     ))
     panels.extend([
         tuning_comparison("RTX · matched life-stage request latency",
@@ -564,6 +568,19 @@ def life_stage_tuning_panels():
                           [("vector(22.44)", "Model request p95"), ("vector(0.132)", "Fetch and prepare preview p95")],
                           0, 25, 24, 7, "s", "Same 12-photo concurrent Mac sample. The RTX was added after this phase measurement."),
     ])
+    comparison_note = (
+        f"Two {trials['window_seconds']}-second live windows on the same queue. The Mac ran concurrently "
+        "and both RTX settings used the same prompt and validation."
+    )
+    for title, field, x, y, unit in (
+        ("RTX · one vs two requests", "rtx_per_minute", 0, 32, "suffix: photos/min"),
+        ("Combined · one vs two RTX requests", "combined_per_minute", 12, 32, "suffix: photos/min"),
+        ("RTX · request latency at one and two slots", "rtx_median_seconds", 0, 39, "s"),
+    ):
+        values = [(f'vector({trials[side][field]})', label) for side, label in (
+            ("before", "Before · one RTX request"), ("after", "After · two RTX requests")
+        )]
+        panels.append(tuning_comparison(title, values, x, y, 12 if y == 32 else 24, 7, unit, comparison_note))
     for panel in panels:
         if panel["type"] != "timeseries":
             continue
