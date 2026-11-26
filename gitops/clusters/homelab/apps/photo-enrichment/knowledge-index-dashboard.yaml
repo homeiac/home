@@ -14035,7 +14035,6 @@ data:
             }
           },
           "description": "New records per minute based on observed saved-count changes.",
-          "timeFrom": "30m",
           "interval": "15s"
         },
         {
@@ -14123,7 +14122,6 @@ data:
             }
           },
           "description": "Persisted model results. Reused album results are accounted for separately.",
-          "timeFrom": "30m",
           "interval": "15s"
         },
         {

@@ -76,6 +76,8 @@ Revision 28. Compare two, three and four RTX requests with the same marked photo
 
 Revision 29. Cold vision initialization exceeded the original trial timeout even after restoring two slots. Preserve the failed cold-start attempts as separate evidence. Warm one four-capacity runner fully and compare two, three and four active requests against that same loaded instance before selecting production concurrency.
 
+Revision 30. Let both life-stage graphs use the dashboard time picker so completed runs remain visible over the selected history. Keep the existing throughput calculation and RTX markers. Verify the generated and deployed panels omit their fixed time override.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
