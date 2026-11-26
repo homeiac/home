@@ -43,6 +43,10 @@ Revision 12. The review API committed all six owner decisions atomically. Live r
 
 Revision 13. The owner authorized the remaining 137 conflicting face assignments to take their Immich names. Freeze that cohort, validate the current Immich source and local face revisions, apply and read back the edits. Build a private growing-up album from the corrected identity. Keep a full candidate inventory, disclose missing mappings and select dated highlights across the available years. Reuse existing Immich assets and saved metadata. Verify the private album by reading it back and repeat the selection without duplicating membership. Continue to score scene quality separately.
 
+Revision 14. The post-edit audit found zero remaining comparable conflicts. Library inventory exposed some Immich-confirmed originals in formats outside the local face scanner's image list. Include those originals when the exact external library mapping is verified. Report unmatched local records separately. Select at most one dated photo per calendar quarter, prefer agreement between sources and a saved local description, and use a stable tie-breaker. Dates with no capture evidence stay in the inventory for review.
+
+Revision 15. The private album opens with 89 highlights. Its native timeline places 22 in a different quarter than the saved capture date. Keep source metadata intact, verify the exact album membership and original access, and show the selected photos in capture-date order on the private review page. Mark the date differences there. Changing shared asset dates is a separate decision.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
