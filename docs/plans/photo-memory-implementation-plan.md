@@ -53,6 +53,10 @@ Revision 17. Extend album descriptions to cover each confirmed person in a group
 
 Revision 18. Keep the age and action passes independent. The numbered group-photo test and the single-face retry both attached incorrect actions to some subjects. Benchmark a separate action reviewer on this failure set. Require a second matching action attribution or direct review before publishing a named role. Preserve the owner-reviewed captions and report the release check on the private review page.
 
+Revision 19. Require each vision reviewer to return a small set of normalized action claims with an actor region, visible object or recipient region, and a short evidence note. Compare reviewers against the checked failure set before applying a matching claim to new photos. Score wrong actors and invented movement separately from missed actions. Keep low-coverage results in review and continue age processing independently.
+
+Revision 20. Store Immich person IDs alongside reviewed age and action facts using exact asset and uniquely matched face regions. Read names from the person registry when rendering descriptions, including names mentioned as recipients. Retain local names where the ID is unresolved and expose that disposition. Exercise a simulated rename on all affected captions and keep the underlying observations intact.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.

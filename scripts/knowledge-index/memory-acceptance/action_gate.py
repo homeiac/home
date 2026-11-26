@@ -1,5 +1,6 @@
 """Gate a named visual action on evidence tied to the same marked subject."""
 
+from collections import Counter
 from dataclasses import dataclass
 
 
@@ -36,3 +37,26 @@ def publishable_action(
     if first.actor != actor or not first.verb or any(claim != first for claim in claims[1:]):
         return None
     return first
+
+
+def matching_actions(
+    confirmed_regions: set[str],
+    model_claims: dict[str, set[Action]],
+) -> set[Action]:
+    """Return candidates supported by multiple model families for evidence review."""
+    votes = Counter(
+        claim
+        for claims in model_claims.values()
+        for claim in claims
+        if claim.actor in confirmed_regions and claim.verb
+    )
+    standing = {claim.actor for claim in votes if claim.verb == "stands"}
+    sitting = {claim.actor for claim in votes if claim.verb in {"sits", "sits_on_object"}}
+    conflicting_posture = standing & sitting
+    return {
+        claim for claim, count in votes.items()
+        if count >= 2 and (
+            claim.actor not in conflicting_posture
+            or claim.verb not in {"stands", "sits", "sits_on_object"}
+        )
+    }
