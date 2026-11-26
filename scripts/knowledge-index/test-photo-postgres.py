@@ -61,6 +61,33 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(code['match']([[.2,.2,.6,.6]],
             [['Named',.2,.2,.6,.6],[None,.21,.2,.61,.6]]),{})
 
+    def test_photo_detail_place_evidence(self):
+        import json
+        import sqlite3
+        from contextlib import closing
+        from photo_enrichment.location_evidence import photo_place
+        snapshot = self.state / 'luna-backfill' / 'immich-context.sqlite3'
+        row = dict(path=self.path, size_bytes=(self.library / self.path).stat().st_size, groups=[],
+                   latitude=None, longitude=None, gps_source=None)
+        self.assertEqual(photo_place(row, snapshot)['status'], 'unknown')
+        snapshot.parent.mkdir()
+        with closing(sqlite3.connect(snapshot)) as db, db:
+            db.execute('CREATE TABLE context(path TEXT, size INTEGER, metadata TEXT)')
+            db.execute('INSERT INTO context VALUES(?,?,?)',
+                       (row['path'], row['size_bytes'], json.dumps({'place': {'state': 'Example state'}})))
+        self.assertEqual(self.store.detail(self.path)['place_evidence'],
+                         dict(status='known', source='immich', precision='state', labels=['Example state']))
+        row.update(size_bytes=0, latitude=20, longitude=10, gps_source='exif')
+        self.assertEqual(photo_place(row, snapshot)['status'], 'coordinates')
+        row['groups'] = [dict(id='g1', venue='Park', location='Town')]
+        self.assertEqual(photo_place(row, snapshot)['labels'], ['Park, Town'])
+        row['groups'].append(dict(id='g2', location='Other town'))
+        self.assertEqual(photo_place(row, snapshot)['status'], 'multiple')
+        self.assertEqual(photo_place(row, snapshot)['group_ids']['Other town'], ['g2'])
+        snapshot.write_bytes(b'invalid')
+        row.update(groups=[], latitude=None)
+        self.assertEqual(photo_place(row, snapshot)['status'], 'unavailable')
+
     def test_names_without_gps_enrich_reindex_and_clear_on_correction(self):
         from photo_enrichment.context_worker import initialize,seed,process
         from photo_enrichment.metrics import Metrics

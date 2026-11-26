@@ -15,6 +15,7 @@ import duckdb
 
 from .faces import MODEL_ID, similarity
 from .metadata import VERSION, PHOTO_EXTENSIONS, contained, oriented_image, read_metadata
+from .location_evidence import photo_place
 from .metrics import Metrics
 
 
@@ -256,6 +257,7 @@ class Store:
         file = self.source_file(path)
         photo["faces"] = self.rows("SELECT id, box, confidence, model, person, label_source, updated_at AS revision FROM faces WHERE path=? AND size_bytes=? AND mtime_ns=? ORDER BY id",
                                    [path, photo["size_bytes"], file.stat().st_mtime_ns])
+        photo["place_evidence"] = photo_place(photo, self.state / "luna-backfill" / "immich-context.sqlite3")
         return photo
 
     def _history(self, action: str, payload: dict) -> None:

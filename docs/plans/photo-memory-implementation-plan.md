@@ -33,6 +33,10 @@ Revision 7. On 32 of 33 subject-positive reference items the reader lacked a cur
 
 Revision 8. All 40 live reference details showed their confirmed names, and the original captions matched the frozen digests. Thirty-nine used the interim account; one used an existing contextual caption. Browser readback confirmed the painted-board control shows the same primary text on the card and in details, a pending notice and the original caption. Thirty-one integration tests passed. Person/action grounding and the place/date source checks remain open.
 
+Revision 9. Existing exact-file Immich records contain place labels for eight reference photos. Show saved location evidence and its precision on photo details, alongside the existing source of the capture date. Prefer current explicit group locations; expose competing group claims for review. Use recorded coordinates or an unknown location when place evidence is absent. No external lookups are needed. Separately, six face boxes in the private reference set carry competing names across the two systems. Inspect their annotation history and hold person/action sign-off on those cases until the owner resolves them.
+
+Revision 10. Live readback matched the 40 frozen dates and their sources. Eight photos had an Immich city, two had only coordinates, and 30 had unknown location. The browser showed the city, precision and date source. Thirty-two integration tests passed. The private same-face audit found 143 of 6,383 subject-positive candidate photos have a competing named assignment. All six reference conflicts had a local label saved in a 100-label action. Those six are awaiting owner adjudication; their existing labels and original captions are preserved. Do not treat a spelling match in generated prose as an independent identity check.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.

@@ -2,6 +2,7 @@
 import json
 import sqlite3
 from contextlib import closing
+from .location_evidence import immich_label
 from .places import distance
 from .store import sql_path
 
@@ -16,7 +17,7 @@ def immich_places(snapshot):
         for path,size,raw in source.execute("""SELECT path,size,json_extract(metadata,'$.place')
             FROM context WHERE json_extract(metadata,'$.place')<>'{}'"""):
             place=json.loads(raw)
-            label=', '.join(dict.fromkeys(place[key] for key in ('city','state','country') if place.get(key)))
+            label=immich_label(place)
             yield dict(path=path,size_bytes=size,location=label)
 
 

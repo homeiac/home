@@ -63,10 +63,21 @@ async function showPhoto(path) {
   const photo=await api(query('/api/photo',{path}));$('detail-image').src=query('/api/thumbnail',{path});$('detail-name').textContent=path;
   $('caption').textContent=photo.primary_description||'No model caption saved yet.';
   $('caption-status').hidden=photo.description_source!=='confirmed_faces';$('metadata').replaceChildren();
-  const fields=[['Captured',photo.capture_ts ? new Date(photo.capture_ts*1000).toLocaleString(undefined,{timeZone:timezone()})+' ('+timezone()+')':'Unknown'],
-    ['Date source',photo.capture_source||'Unknown'],['GPS',photo.latitude===null?'Unknown':photo.latitude.toFixed(6)+', '+photo.longitude.toFixed(6)],
+  const fields=[['Captured',photo.capture_ts != null ? new Date(photo.capture_ts*1000).toLocaleString(undefined,{timeZone:timezone()})+' ('+timezone()+')':'Unknown'],
+    ['Date source',photo.capture_source||'Unknown'],['GPS',Number.isFinite(photo.latitude)&&Number.isFinite(photo.longitude)?photo.latitude.toFixed(6)+', '+photo.longitude.toFixed(6):'Unknown'],
     ['GPS source',photo.gps_source||'Unknown'],['Camera',[photo.camera_make,photo.camera_model].filter(Boolean).join(' ')||'Not extracted'],
     ['Extraction',photo.extraction_error||photo.extraction_version||'Not run'],['Caption model',photo.summary_model||'None']];
+  const place=photo.place_evidence;
+  if(place) {
+    if(place.status==='known' || place.status==='multiple') {
+      fields.push([place.status==='multiple'?'Competing saved places':'Place',place.labels.join(' · ')],
+        ['Place source',place.source==='user'?'Your group annotations':'Immich · '+place.precision]);
+    } else {
+      const label=place.status==='coordinates'?'Coordinates recorded':place.status==='unavailable'?'Source unavailable':'Unknown';
+      fields.push(['Place',label]);
+      if(place.place_lookup_unavailable)fields.push(['Place source','Immich snapshot unavailable']);
+    }
+  }
   if(photo.description_source!=='model' && photo.summary)fields.push(['Original model caption',photo.summary]);
   if(photo.description_source==='context')fields.push(['Context caption model',photo.context_model]);
   for(const [key,value] of fields) $('metadata').append(element('dt',key),element('dd',value));
