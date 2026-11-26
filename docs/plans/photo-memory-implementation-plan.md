@@ -49,6 +49,8 @@ Revision 15. The private album opens with 89 highlights. Its native timeline pla
 
 Revision 16. Start the broader life-stage run with the existing exact-mapped subject inventory and an explicit birth year. Reuse reviewed album results before issuing vision requests. Keep one resumable local result per asset and subject, and record ambiguous face locations and date provenance. The confirmed age map takes precedence over model guesses. Stage other family members when their intended labels and birth-year evidence are available. Keep private inputs and outcomes outside Git.
 
+Revision 17. Extend album descriptions to cover each confirmed person in a group photo. Give vision an anonymous numbered region for each resolved face and map names back after inference. Use the owner’s descriptions where available. Verify that different actions stay attached to the right people and that an unclear or overlapping target produces no confident action. Validate on a small private group-photo set while the existing life-stage work continues.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
