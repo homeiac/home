@@ -27,8 +27,12 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
   const photo = element('img', figure);
   photo.src = item.image;
   photo.alt = 'Album photo from ' + item.date;
-  element('h2', article, item.date);
-  element('h3', article, 'What each person is doing');
+  element('h2', article, 'Recorded date · ' + item.date);
+  element('h3', article, item.scene ? 'Scene description' : 'What each person is doing');
+  if (item.scene) {
+    element('p', article, item.scene);
+    element('small', article, 'Individual actions withheld · ' + item.reason);
+  }
   const feedback = document.createElement('output');
   feedback.setAttribute('aria-live','polite');
   function select(button, roles, message) {
@@ -46,7 +50,7 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
   }
   const descriptions = new Map();
   for (const claim of item.claims) {
-    const actor = claim.roles.actor;
+    const actor = claim.subject;
     const sentence = claim.spans.map(s => s.text ?? s.verb ?? item.faces[s.face].name).join('');
     descriptions.set(actor, [...(descriptions.get(actor) || []), sentence]);
   }

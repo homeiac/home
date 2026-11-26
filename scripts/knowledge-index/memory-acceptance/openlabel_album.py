@@ -59,7 +59,59 @@ def fields(element_data: dict) -> dict:
     return {entry["name"]: entry["val"] for entry in element_data["text"]}
 
 
-def build_scene(asset: str, actions: list, regions: dict, width: int, height: int) -> dict:
+# Private span reviews name these senses. Each role identifies the marked
+# person's part in the event, including when the acting person is unknown.
+MARKED_SENSES = {
+    **{term: (VERBS[verb], "actor") for term, verb in (
+        ("stand", "stands"), ("sit", "sits"), ("wave", "waves"), ("smile", "smiles"),
+        ("wear", "wears"), ("rest", "rests"), ("look", "looks"))},
+    "held": ("ACT.002", "held_person"), "grasp": ("ACT.009", "actor"),
+    "around": ("ACT.010", "actor"), "posture": ("ACT.012", "actor"),
+    "hug": ("ACT.013", "actor"), "hugged": ("ACT.013", "recipient"),
+    "walk": ("ACT.014", "actor"), "hands": ("ACT.015", "actor"),
+    "crouch": ("ACT.016", "actor"), "pet": ("ACT.017", "actor"),
+    "lean": ("ACT.018", "actor"), "pose": ("ACT.019", "actor"),
+    "selfie": ("ACT.020", "actor"), "perform": ("ACT.021", "actor"),
+    "crawl": ("ACT.022", "actor"), "comforted": ("ACT.023", "recipient"),
+    "speak": ("ACT.024", "actor"), "kissed": ("ACT.025", "recipient"),
+    "target": ("ACT.026", "recipient"),
+}
+
+
+def marked_actions(asset: str, face: str, parts: list, review: dict) -> tuple[dict, dict]:
+    """Import an audited set of literal spans, rejecting edits or identity drift."""
+    ref, *pieces = parts
+    if any(ref[key] != review[key] for key in ("namespace", "face_id", "person_id")):
+        raise ValueError("Marked face differs from the span review")
+    if not all(isinstance(piece, str) for piece in pieces):
+        raise ValueError("Marked subject review requires a single face reference")
+    literal = "".join(pieces)
+    if literal != review["literal"] or not review["spans"]:
+        raise ValueError("Marked caption changed or has no reviewed spans")
+    actions, relations = {}, {}
+    layers = [{"face": face}]
+    end = 0
+    for span in review["spans"]:
+        start, stop, words = span["start"], span["end"], span["words"]
+        if not (end <= start < stop <= len(literal)) or literal[start:stop] != words:
+            raise ValueError("Action span no longer matches its saved words")
+        code, role = MARKED_SENSES[span["sense"]]
+        uid = stable_id(asset, face, code, str(start))
+        actions[uid] = {"name": words, "type": code, "action_data": {
+            "text": [text_value("source", "marked subject")]}}
+        relations[stable_id(uid, role, face)] = {
+            "type": role, "name": role, "rdf_subjects": [{"type": "action", "uid": uid}],
+            "rdf_objects": [{"type": "object", "uid": face}]}
+        layers.extend([{"text": literal[end:start]}, {"verb": words, "id": uid}])
+        end = stop
+    layers.append({"text": literal[end:]})
+    first = next(iter(actions))
+    actions[first]["action_data"]["text"].append(text_value("marked_caption", json.dumps(layers)))
+    return actions, relations
+
+
+def build_scene(asset: str, actions: list, regions: dict, width: int, height: int,
+                marked: dict | None = None) -> dict:
     """Keep reviewed sentence fragments, source IDs and directional roles together."""
     objects, observations, relations = {}, {}, {}
 
@@ -83,8 +135,21 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
         }
         return uid
 
+    if marked and "scene" in marked:
+        if actions or not marked.get("reason") or not marked["scene"]:
+            raise ValueError("Scene-only evidence conflicts with saved actions")
+        return {"openlabel": {"metadata": {"schema_version": "1.0.0", "vocabulary_release": "album-3",
+                                          "image_width": width, "image_height": height},
+                              "contexts": {"0": {"name": "Scene", "type": "scene_description",
+                              "context_data": {"text": [text_value("description", marked["scene"]),
+                                                        text_value("reason", marked["reason"])]}}}}}
+    if marked and len(actions) != 1:
+        raise ValueError("Expected exactly one saved marked subject")
     for parts in actions:
         actor = bind(parts[0])
+        if marked:
+            observations, relations = marked_actions(asset, actor, parts, marked)
+            continue
         # Saved sentences keep participant references and literal text in reading order.
         chunks = []
         for part in parts:
@@ -141,7 +206,7 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
                     "rdf_subjects": [{"type": "action", "uid": occurrence}],
                     "rdf_objects": [{"type": "object", "uid": face}],
                 }
-    return {"openlabel": {"metadata": {"schema_version": "1.0.0", "vocabulary_release": "album-2",
+    return {"openlabel": {"metadata": {"schema_version": "1.0.0", "vocabulary_release": "album-3" if marked else "album-2",
                                         "image_width": width, "image_height": height},
                           "objects": objects, "actions": observations, "relations": relations}}
 
@@ -149,6 +214,10 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
 def card(scene: dict, names: dict) -> dict:
     """Derive display words and click targets from the stored OpenLABEL document."""
     data = scene["openlabel"]
+    size = {"width": data["metadata"]["image_width"], "height": data["metadata"]["image_height"]}
+    if "contexts" in data and not data.get("actions"):
+        context = fields(data["contexts"]["0"]["context_data"])
+        return {"faces": {}, "claims": [], "scene": context["description"], "reason": context["reason"], **size}
     faces = {}
     for uid, obj in data["objects"].items():
         source = fields(obj["object_data"])
@@ -161,18 +230,30 @@ def card(scene: dict, names: dict) -> dict:
         uid = relation["rdf_subjects"][0]["uid"]
         role_map.setdefault(uid, {})[relation["type"]] = relation["rdf_objects"][0]["uid"]
 
+    claims = []
     sentences = {}
     secondary = {}
     for uid, action in sorted(data["actions"].items()):
         saved = fields(action["action_data"])
-        if "sentence_action" in saved:
+        if saved.get("source") == "marked subject":
+            if "marked_caption" in saved:
+                spans = json.loads(saved["marked_caption"])
+                face = spans[0]["face"]
+                for span in spans:
+                    if "verb" in span:
+                        record = data["actions"][span["id"]]
+                        roles = role_map[span["id"]]
+                        if span["verb"] != record["name"] or set(roles.values()) != {face}:
+                            raise ValueError("Stored marked action is inconsistent with its caption")
+                        span.update(roles=roles, code=record["type"])
+                claims.append({"spans": spans, "subject": face})
+        elif "sentence_action" in saved:
             secondary.setdefault(saved["sentence_action"], []).append((int(saved["offset"]), uid))
         else:
             sentences[uid] = json.loads(saved["caption_parts"])
     if secondary.keys() - sentences.keys():
         raise ValueError("Secondary action missing its reviewed sentence")
 
-    claims = []
     for uid, parts in sentences.items():
         action = data["actions"][uid]
         roles = role_map[uid]
@@ -202,7 +283,10 @@ def card(scene: dict, names: dict) -> dict:
             if "verb" in span:
                 span["roles"] = role_map[span["id"]]
                 span["code"] = data["actions"][span["id"]]["type"]
-        claims.append({"spans": spans, "roles": roles, "code": action["type"]})
+        claims.append({"spans": spans, "subject": roles["actor"], "roles": roles, "code": action["type"]})
+    tagged = [span["id"] for claim in claims for span in claim["spans"] if "verb" in span]
+    if set(tagged) != data["actions"].keys() or len(tagged) != len(data["actions"]):
+        raise ValueError("Every stored action must have exactly one clickable span")
     return {"faces": faces, "claims": claims, "width": data["metadata"]["image_width"],
             "height": data["metadata"]["image_height"]}
 

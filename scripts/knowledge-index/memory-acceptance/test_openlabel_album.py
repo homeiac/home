@@ -84,3 +84,45 @@ class OpenLabelAlbumTests(unittest.TestCase):
             card(scene, self.names)
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             build_scene("a", [self.parts, self.parts], self.regions, 100, 100)
+
+    def test_marked_passive_and_active_have_distinct_click_targets(self):
+        literal = " is held and smiles."
+        review = dict(self.first, literal=literal, spans=[
+            dict(start=1, end=8, words="is held", sense="held"),
+            dict(start=13, end=19, words="smiles", sense="smile")])
+        parts = [[self.first, literal]]
+
+        def build():
+            return build_scene("a", parts, self.regions, 200, 100, review)
+
+        claim, = card(build(), self.names)["claims"]
+        held, smiles = [s for s in claim["spans"] if "verb" in s]
+        self.assertEqual(held["roles"], {"held_person": claim["subject"]})
+        self.assertEqual(smiles["roles"], {"actor": claim["subject"]})
+        self.assertNotEqual(held["id"], smiles["id"])
+        damaged = build()
+        damaged["openlabel"]["actions"]["orphan"] = {
+            "name": "wave", "type": "ACT.004", "action_data": {
+                "text": [{"name": "source", "val": "marked subject"}]}}
+        with self.assertRaisesRegex(ValueError, "clickable span"):
+            card(damaged, self.names)
+        review["spans"][1]["start"] = 7
+        with self.assertRaisesRegex(ValueError, "span"):
+            build()
+        review["literal"] += "!"
+        with self.assertRaisesRegex(ValueError, "caption changed"):
+            build()
+        review["face_id"] = "different"
+        with self.assertRaisesRegex(ValueError, "Marked face"):
+            build()
+
+    def test_scene_only_preserves_words_without_personal_actions(self):
+        review = {"scene": "Two people sit together.", "reason": "ambiguous face location"}
+        scene = build_scene("a", [], self.regions, 200, 100, review)
+        result = card(scene, self.names)
+        self.assertEqual(result["scene"], review["scene"])
+        self.assertEqual(result["reason"], review["reason"])
+        self.assertEqual(result["faces"], {})
+        self.assertEqual(result["claims"], [])
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            build_scene("a", [self.parts], self.regions, 200, 100, review)

@@ -32,6 +32,10 @@ def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str) -> dict:
     assets = {str(UUID(row["asset"])) for row in reviewed}
     if not assets or not assets.issubset(live["members"]):
         raise ValueError("Current album no longer includes the pilot set")
+    if (root / "album-reviewed-spans.json").is_file():
+        assets.update(str(UUID(a)) for a in read(root/"album-reviewed-spans.json"))
+        if assets != set(live["members"]) or assets != set(read(root/"album-after-owner-correction.json")["members"]):
+            raise ValueError("Refresh the private album membership and span review")
     asset_list = ",".join("'" + a + "'" for a in sorted(assets))
     native = pg(f"""SELECT json_build_array(a.id, substr(a."originalPath",19), e."fileSizeInByte", f.id,
         p."personGroupId", p.name, f."boundingBoxX1"::float/f."imageWidth",
@@ -53,7 +57,7 @@ def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str) -> dict:
     with closing(sqlite3.connect(dbpath.as_uri()+"?mode=ro", uri=True)) as db:
         for asset in sorted(assets):
             rows = db.execute("""SELECT label,face_id,action_parts FROM face_actions WHERE asset=?
-                AND source='verified group action' AND face_namespace='photo-index'""", (asset,)).fetchall()
+                AND face_namespace='photo-index'""", (asset,)).fetchall()
             if not rows:
                 continue
             url = photo_url.rstrip("/")+"/api/photo?"+urlencode({"path": inputs[asset]["path"]})

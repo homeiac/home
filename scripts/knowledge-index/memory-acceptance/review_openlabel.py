@@ -1,4 +1,4 @@
-"""Publish the reviewed group-action slice from a private album ledger to a local preview."""
+"""Publish reviewed face-linked actions and withheld scene descriptions from a private album ledger to a local preview."""
 
 import argparse
 import json
@@ -39,6 +39,18 @@ def publish(root: Path, schema: Path, current: dict, conn) -> dict:
     reviewed = read(pilot / "group-actions/verified-actions.json")
     if not reviewed:
         raise ValueError("The declared pilot contains no reviewed photos")
+    manifest = root / "album-reviewed-spans.json"
+    marked = read(manifest) if manifest.is_file() else {}
+    if manifest.is_file():
+        groups = {row["asset"] for row in reviewed}
+        if groups & marked.keys() or groups | marked.keys() != set(current["members"]):
+            raise ValueError("Span review must cover exactly the remaining album members")
+        recorded = {row["asset"]: row for row in read(pilot / "review-results.json")["photos"]}
+        for asset, audit in marked.items():
+            prior = recorded[asset]
+            if (audit.get("reason") or None) != (prior.get("local_skip") or None):
+                raise ValueError("Ambiguous-face disposition changed")
+            reviewed.append({"asset": asset, "date": prior["date"]})
     ledger = root / "nikhil-life-stage-backfill/jobs.sqlite3"
     scenes, cards, expected = {}, {}, {}
     build_durations = []
@@ -52,18 +64,20 @@ def publish(root: Path, schema: Path, current: dict, conn) -> dict:
             path, = (root / "thumbnails").glob(asset+".*")
             with Image.open(path) as image:
                 width, height = ImageOps.exif_transpose(image).size
-            regions = {(r["namespace"], r["face_id"]): r for r in current["regions"][asset]}
+            audit = marked.get(asset)
+            source = "marked subject" if audit else "verified group action"
+            regions = {(r["namespace"], r["face_id"]): r for r in current["regions"].get(asset, [])}
             actions = []
             labels = set()
             expected[asset] = []
             for label, namespace, face, raw in db.execute("""SELECT label,face_namespace,face_id,
-                    action_parts FROM face_actions WHERE asset=? AND source='verified group action'
-                    ORDER BY label""", (asset,)):
-                parts = json.loads(raw)
+                    action_parts FROM face_actions WHERE asset=? AND source=?
+                    ORDER BY label""", (asset, source)):
+                parts = [part for part in json.loads(raw) if part != ""]
                 if (parts[0]["namespace"], parts[0]["face_id"], parts[0]["fallback"]) != (namespace, face, label):
                     raise ValueError("Saved actor does not match the ledger face")
                 original = "".join(p["fallback"] if isinstance(p, dict) else p for p in parts)
-                if original != label+" "+row["actions"][label]:
+                if not audit and original != label+" "+row["actions"][label]:
                     raise ValueError("Saved action differs from the reviewed caption")
                 expected[asset].append("".join(
                     (current["names"].get(p["person_id"]) or current["names"].get(p["namespace"]+":"+p["face_id"])
@@ -71,27 +85,32 @@ def publish(root: Path, schema: Path, current: dict, conn) -> dict:
                     for p in parts))
                 labels.add(label)
                 actions.append(parts)
-            if labels != set(row["actions"]):
+            if not audit and labels != set(row["actions"]):
                 raise ValueError("Incomplete reviewed action set")
-            scenes[asset] = build_scene(asset, actions, regions, width, height)
+            scenes[asset] = build_scene(asset, actions, regions, width, height, audit)
             cards[asset] = {"asset": asset, "date": row["date"], "image": "thumbnails/"+quote(path.name),
                             "original": current["album_url"].rstrip("/")+"/photos/"+asset}
             build_durations.append(time.perf_counter() - card_started)
     validate_scenes(scenes, schema)
-    stored = persist(conn, album["id"], scenes)
-    for asset, scene in stored.items():
+    def check_caption(asset: str, scene: dict) -> None:
         cards[asset].update(card(scene, current["names"]))
         captions = ["".join(cards[asset]["faces"][s["face"]]["name"] if "face" in s else
                             s.get("text", s.get("verb")) for s in claim["spans"])
                     for claim in cards[asset]["claims"]]
         if sorted(captions) != sorted(expected[asset]):
             raise ValueError("Stored scene changed the reviewed caption")
+    for asset, scene in scenes.items():
+        check_caption(asset, scene)
+    stored = persist(conn, album["id"], scenes)
+    for asset, scene in stored.items():
+        check_caption(asset, scene)
     page = Path(__file__).with_name("openlabel_review.html").read_text()
     payload = json.dumps(list(cards.values()), ensure_ascii=False).replace("<","\\u003c")
     atomic_page(root / "OpenLABEL album review.html", page.replace("PILOT_JSON", payload))
     return {"album_highlights": len(album["members"]), "reviewed_photos": len(stored),
             "faces": sum(len(c["faces"]) for c in cards.values()),
-            "actions": sum(len(scene["openlabel"]["actions"]) for scene in stored.values()),
+            "scene_only": sum("scene" in c for c in cards.values()),
+            "actions": sum(len(scene["openlabel"].get("actions", {})) for scene in stored.values()),
             "seconds": round(time.perf_counter()-started,3), "build_p95": sorted(build_durations)[math.ceil(.95*len(build_durations))-1],
             "model_calls": 0}
 
@@ -122,11 +141,13 @@ if __name__ == "__main__":
         metrics = runpy.run_path(str(Path(__file__).resolve().parents[1] / "photo-stage-metrics.py"))
         stage = 'stage="openlabel-pilot"'
         report = []
+        counts = {"complete": result["reviewed_photos"] - result["scene_only"],
+                  "withheld": result["scene_only"]}
         for state in metrics["STATES"]:
-            count = result["reviewed_photos"] if state == "complete" else 0
+            count = counts.get(state, 0)
             report.append(f'knowledge_index_photo_stage_items{{{stage},state="{state}"}} {count}')
         report.extend([
-            f'knowledge_index_photo_stage_completed_total{{{stage}}} {result["reviewed_photos"]}',
+            f'knowledge_index_photo_stage_completed_total{{{stage}}} {counts["complete"]}',
             f'knowledge_index_photo_stage_updated_timestamp_seconds{{{stage}}} {time.time()}',
             f'knowledge_index_photo_stage_phase_p95_seconds{{{stage},phase="build_scene"}} {result["build_p95"]}',
         ])
