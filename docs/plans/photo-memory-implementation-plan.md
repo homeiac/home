@@ -72,6 +72,8 @@ Revision 26. Prometheus returned RTX results, but the overview's default 24-hour
 
 Revision 27. Ollama already allows two parallel RTX requests, while the life-stage dispatch uses one. Measure the one-request baseline, drain the RTX worker at a checkpoint boundary, reuse the same client and validation for two requests, and verify unique saves and quality. Add the one-request and two-request measurements to the existing before/after dashboard row.
 
+Revision 28. Compare two, three and four RTX requests with the same marked photos and saved-output validation. Keep the Mac processing while draining RTX work at a checkpoint for the benchmark. Verify Ollama's actual slot capacity, GPU residency, valid responses and stage agreement, then select the fastest passing setting and publish the results in Grafana.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
