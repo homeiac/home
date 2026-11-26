@@ -16,6 +16,7 @@ Track the stories and their status in [epic #228](https://github.com/homeiac/hom
 | Revision | Evidence | Next action and exit | Deferred |
 |---|---|---|---|
 | 1 · November 25 | The checker passes synthetic tests. The November 25 audit found current names in only a subset of completed captions. Live journey acceptance is outstanding. | Start S1. Freeze the reference baseline and collect the first identity and accounting observations. Exit with an inspectable report and one evidence-based next task. | Worker changes, bulk enrichment, new app installs and downstream journey design. |
+| 2 · November 25 | Seven synthetic checker tests pass. No live reference bundle is attached to S1. | Freeze a private, year-stratified set from existing human annotations, including group and negative controls. Read back the same assets and run canonical and alias lookups through the current app. Record identity and accounting results and a reproducible private report. | Product fixes, identity edits, new inference and rollout. |
 
 ## Rough sequence
 
