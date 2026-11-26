@@ -13083,6 +13083,491 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           }
+        },
+        {
+          "id": 247,
+          "type": "row",
+          "title": "Photo processing \u00b7 progress and live tuning",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 406
+          },
+          "panels": []
+        },
+        {
+          "id": 248,
+          "type": "stat",
+          "title": "Photos complete or reused",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 407
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"complete|reused\"}))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 249,
+          "type": "stat",
+          "title": "Photos queued or running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 407
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 250,
+          "type": "stat",
+          "title": "Stage completion",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 407
+          },
+          "targets": [
+            {
+              "expr": "(sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"complete|reused\"}))) / (sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\".*\"})) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Complete and reused divided by the declared scope, including failed and withheld photos."
+        },
+        {
+          "id": 251,
+          "type": "stat",
+          "title": "Failed or withheld",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 407
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"failed|withheld\"}))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 252,
+          "type": "stat",
+          "title": "Time to drain queue",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 407
+          },
+          "targets": [
+            {
+              "expr": "((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) / (max by(stage) (rate(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m])) > 0) or on(stage) ((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) == 0)) and on(stage) ((time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})) < 180)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Remaining work at the last 15 minutes\u2019 successful rate. A positive queue needs fresh progress and a positive rate for an estimate."
+        },
+        {
+          "id": 253,
+          "type": "stat",
+          "title": "Last progress report",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 407
+          },
+          "targets": [
+            {
+              "expr": "time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 180
+                  },
+                  {
+                    "color": "red",
+                    "value": 600
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 254,
+          "type": "timeseries",
+          "title": "Queue and outcomes by stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 411
+          },
+          "targets": [
+            {
+              "expr": "max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\"})",
+              "legendFormat": "{{stage}} \u00b7 {{state}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 255,
+          "type": "timeseries",
+          "title": "Successful work per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 411
+          },
+          "targets": [
+            {
+              "expr": "max by(stage) (rate(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m])) * 60",
+              "legendFormat": "{{stage}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 256,
+          "type": "timeseries",
+          "title": "Bottleneck timing by phase (p95)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 418
+          },
+          "targets": [
+            {
+              "expr": "max by(stage,phase) (knowledge_index_photo_stage_phase_p95_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})",
+              "legendFormat": "{{stage}} \u00b7 {{phase}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."
         }
       ],
       "refresh": "1m",
@@ -13129,6 +13614,25 @@ data:
               "uid": "prometheus"
             },
             "query": "label_values(media_pipeline_worker_stage{instance=~\"$instance\"}, enricher)",
+            "refresh": 2,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": {
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          },
+          {
+            "type": "query",
+            "name": "photo_stage",
+            "label": "Photo processing stage",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": "label_values(knowledge_index_photo_stage_items{instance=~\"$instance\"}, stage)",
             "refresh": 2,
             "multi": true,
             "includeAll": true,
