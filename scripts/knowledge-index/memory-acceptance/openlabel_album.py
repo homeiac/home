@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
@@ -10,11 +11,39 @@ from jsonschema import Draft7Validator
 from person_references import PersonRef
 
 
-# The type is stable even if the displayed wording changes. Only map the reviewed verb.
+# Principal actions keep their original occurrence IDs across vocabulary revisions.
 VERBS = {
     "stands": "ACT.001", "holds": "ACT.002", "sits": "ACT.003", "waves": "ACT.004",
     "smiles": "ACT.005", "wears": "ACT.006", "rests": "ACT.007", "looks": "ACT.008",
 }
+
+
+# Match complete reviewed constructions. A face placeholder can be the object of
+# a preposition. A relative clause or a new subject must never inherit the actor.
+FACE = "\ufffc"
+COMPOUNDS = (
+    (rf"rests in {FACE}[’']s arms and ", r"looks to the side", "ACT.008"),
+    (r"wears (?:[a-z]+|a [a-z]+ shirt) and ", r"smiles", "ACT.005"),
+    (r"wears (?:[a-z]+|a [a-z]+ shirt) and ", r"sits", "ACT.003"),
+    (r"sits (?:at the front of|on) the (?:[a-z]+ )?scooter and ", r"holds the handlebar", "ACT.009"),
+    (rf"sits beside {FACE} with ", r"an arm around (?:him|her|them)", "ACT.010"),
+    (r"sits with ", r"both children in (?:her|his|their) arms", "ACT.011"),
+)
+
+
+def secondary_span(parts: list[dict]) -> tuple[int, str, str] | None:
+    """Return the grounded second action's offset in the final literal chunk."""
+    if "text" not in parts[-1]:
+        return None
+    text = "".join(part.get("text", FACE) for part in parts[1:])
+    for lead, phrase, code in COMPOUNDS:
+        tail = r"(?: on (?:a|the) (?:[a-z]+ )?[a-z]+)?" if code == "ACT.003" else ""
+        match = re.fullmatch(r"\s*" + lead + "(?P<phrase>" + phrase + ")" + tail + r"[.!]?", text)
+        if match:
+            words = match["phrase"]
+            offset = match.start("phrase") - (len(text) - len(parts[-1]["text"]))
+            return offset, words, code
+    return None
 
 
 def stable_id(*key: str) -> str:
@@ -88,13 +117,31 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
                 text_value("source", "verified group action"),
             ]},
         }
-        for role, face in roles.items():
-            relations[stable_id(action, role, face)] = {
-                "type": role, "name": role,
-                "rdf_subjects": [{"type": "action", "uid": action}],
-                "rdf_objects": [{"type": "object", "uid": face}],
+        bindings = [(action, roles)]
+        extra = secondary_span(chunks)
+        if extra:
+            offset, words, extra_code = extra
+            uid = stable_id(asset, actor, extra_code)
+            if uid in observations:
+                raise ValueError("Duplicate action occurrence")
+            observations[uid] = {
+                "name": words, "type": extra_code, "action_data": {"text": [
+                    text_value("sentence_action", action), text_value("offset", str(offset)),
+                    text_value("source", "verified group action"),
+                ]},
             }
-    return {"openlabel": {"metadata": {"schema_version": "1.0.0", "vocabulary_release": "album-1",
+            extra_roles = {"actor": actor}
+            if extra_code == "ACT.010":
+                extra_roles["recipient"] = chunks[-2]["face"]
+            bindings.append((uid, extra_roles))
+        for occurrence, participants in bindings:
+            for role, face in participants.items():
+                relations[stable_id(occurrence, role, face)] = {
+                    "type": role, "name": role,
+                    "rdf_subjects": [{"type": "action", "uid": occurrence}],
+                    "rdf_objects": [{"type": "object", "uid": face}],
+                }
+    return {"openlabel": {"metadata": {"schema_version": "1.0.0", "vocabulary_release": "album-2",
                                         "image_width": width, "image_height": height},
                           "objects": objects, "actions": observations, "relations": relations}}
 
@@ -109,19 +156,52 @@ def card(scene: dict, names: dict) -> dict:
         display = PersonRef(source["person_id"], names.get(local_key, "")).name(names)
         faces[uid] = {"name": display,
                       "box": obj["object_data"]["bbox"][0]["val"], **source}
-    claims = []
+    role_map = {}
+    for relation in data["relations"].values():
+        uid = relation["rdf_subjects"][0]["uid"]
+        role_map.setdefault(uid, {})[relation["type"]] = relation["rdf_objects"][0]["uid"]
+
+    sentences = {}
+    secondary = {}
     for uid, action in sorted(data["actions"].items()):
-        roles = {r["type"]: r["rdf_objects"][0]["uid"] for r in data["relations"].values()
-                 if r["rdf_subjects"][0]["uid"] == uid}
-        parts = json.loads(fields(action["action_data"])["caption_parts"])
+        saved = fields(action["action_data"])
+        if "sentence_action" in saved:
+            secondary.setdefault(saved["sentence_action"], []).append((int(saved["offset"]), uid))
+        else:
+            sentences[uid] = json.loads(saved["caption_parts"])
+    if secondary.keys() - sentences.keys():
+        raise ValueError("Secondary action missing its reviewed sentence")
+
+    claims = []
+    for uid, parts in sentences.items():
+        action = data["actions"][uid]
+        roles = role_map[uid]
         if roles["actor"] != parts[0]["face"]:
             raise ValueError("Caption and actor disagree")
         if action["type"] == "ACT.002" and roles.get("held_person") != parts[2]["face"]:
             raise ValueError("Caption and held person disagree")
-        prefix, verb, tail = parts[1]["text"].partition(action["name"])
+        # Split the final literal first so offsets still refer to the saved text,
+        # including when the primary and secondary verbs share one literal.
+        spans = list(parts)
+        last_literal = len(parts) - 1
+        for offset, extra_id in sorted(secondary.get(uid, []), reverse=True):
+            extra_action = data["actions"][extra_id]
+            words = extra_action["name"]
+            literal = spans[last_literal]["text"]
+            if role_map[extra_id]["actor"] != roles["actor"] or literal[offset:offset+len(words)] != words:
+                raise ValueError("Secondary action span or actor differs from reviewed caption")
+            spans[last_literal:last_literal+1] = [
+                {"text": literal[:offset]}, {"verb": words, "id": extra_id},
+                {"text": literal[offset+len(words):]},
+            ]
+        prefix, verb, tail = spans[1]["text"].partition(action["name"])
         if not verb or prefix.strip():
             raise ValueError("Verb span differs from saved caption")
-        spans = [parts[0], {"text": prefix}, {"verb": verb, "id": uid}, {"text": tail}, *parts[2:]]
+        spans[1:2] = [{"text": prefix}, {"verb": verb, "id": uid}, {"text": tail}]
+        for span in spans:
+            if "verb" in span:
+                span["roles"] = role_map[span["id"]]
+                span["code"] = data["actions"][span["id"]]["type"]
         claims.append({"spans": spans, "roles": roles, "code": action["type"]})
     return {"faces": faces, "claims": claims, "width": data["metadata"]["image_width"],
             "height": data["metadata"]["image_height"]}

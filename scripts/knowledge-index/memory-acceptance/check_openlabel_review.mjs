@@ -30,6 +30,15 @@ try {
     const sentences = await article.$$eval('p', ps => ps.map(p => p.textContent));
     assert.deepEqual(sentences.sort(), Object.entries(reviewed.actions)
       .map(([name, words]) => name + ' ' + words).sort());
+    // Independently require reviewed phrases to be clickable, including ones
+    // the renderer might otherwise leave as plain text after a name or verb.
+    for (const p of await article.$$('p')) {
+      const sentence = await p.evaluate(el => el.textContent);
+      const tagged = await p.$$eval('button[data-action]', bs => bs.map(b => b.textContent));
+      for (const m of sentence.matchAll(/\band (looks to the side|holds the handlebar|smiles|sits)\b|\b(an arm around him|both children in her arms)\b/g)) {
+        assert.ok(tagged.includes(m[1] || m[2]), 'Reviewed action phrase missing a tag');
+      }
+    }
     for (const button of await article.$$('button')) {
       await button.click();
       const target = await button.evaluate(b => ({...b.dataset}));
@@ -41,7 +50,9 @@ try {
       if (target.face) {
         names++;
         assert.deepEqual(selected.map(b => b.id), [target.face]);
-        assert.equal(await article.$eval('output', el => el.textContent), scene.faces[target.face].name);
+        const name = scene.faces[target.face].name;
+        const expected = reviewed.actions[name] ? name + ' ' + reviewed.actions[name] : name;
+        assert.equal(await article.$eval('output', el => el.textContent), expected);
       } else {
         verbs++;
         const sentence = await button.evaluate(b => b.parentElement.textContent);

@@ -7,11 +7,11 @@
 h1,h2{font-family:Georgia,serif}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:1.25rem;align-items:start}
 article{background:white;padding:1rem;border:1px solid #ced8d0;border-radius:.7rem}figure{margin:0;position:relative}img{display:block;width:100%;height:auto}
 .box{position:absolute;pointer-events:none;border:3px solid #ffea38;box-shadow:0 0 0 2px black}
-.box.held_person{border-color:#58deff}button{font:inherit;color:#145744;border:0;background:#eef5ef;text-decoration:underline;cursor:pointer;border-radius:.2rem}
+.box.held_person,.box.recipient{border-color:#58deff}button{font:inherit;color:#145744;border:0;background:#eef5ef;text-decoration:underline;cursor:pointer;border-radius:.2rem}
 button:focus-visible,a:focus-visible{outline:3px solid #705500}button[aria-pressed=true]{background:#174f41;color:white}output{display:block;min-height:1.5em}
 a{color:#175441}h2{margin:.6rem 0}
 </style>
-<h1>Face and action review</h1><p>Select a name to highlight its face. Select a verb to see who did what.</p>
+<h1>Face and action review</h1><p>Select a name to see what that person is doing. Select an action to highlight its participants.</p>
 <main></main><script id="scenes" type="application/json">PILOT_JSON</script>
 <script>
 function element(tag, parent, text) {
@@ -28,6 +28,7 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
   photo.src = item.image;
   photo.alt = 'Album photo from ' + item.date;
   element('h2', article, item.date);
+  element('h3', article, 'What each person is doing');
   const feedback = document.createElement('output');
   feedback.setAttribute('aria-live','polite');
   function select(button, roles, message) {
@@ -43,6 +44,12 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
     }
     feedback.textContent = message;
   }
+  const descriptions = new Map();
+  for (const claim of item.claims) {
+    const actor = claim.roles.actor;
+    const sentence = claim.spans.map(s => s.text ?? s.verb ?? item.faces[s.face].name).join('');
+    descriptions.set(actor, [...(descriptions.get(actor) || []), sentence]);
+  }
   for (const claim of item.claims) {
     const p = element('p', article);
     for (const span of claim.spans) {
@@ -53,12 +60,12 @@ for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
       b.setAttribute('aria-pressed','false');
       if (face) {
         b.dataset.face = span.face;
-        b.onclick = () => select(b, {person:span.face}, face.name);
+        b.onclick = () => select(b, {person:span.face}, descriptions.get(span.face)?.join(" ") || face.name);
       } else {
         b.dataset.action = span.id;
-        const labels = Object.entries(claim.roles).map(([role,id]) =>
-          (role === 'actor' ? 'Actor' : 'Held person') + ' · ' + item.faces[id].name);
-        b.onclick = () => select(b, claim.roles, [claim.code, ...labels].join(' / '));
+        const labels = Object.entries(span.roles).map(([role,id]) =>
+          ({actor:'Actor', held_person:'Held person', recipient:'Recipient'}[role] || role) + ' · ' + item.faces[id].name);
+        b.onclick = () => select(b, span.roles, [span.verb, span.code, ...labels].join(' / '));
       }
     }
   }

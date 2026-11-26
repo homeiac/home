@@ -28,6 +28,45 @@ class OpenLabelAlbumTests(unittest.TestCase):
         self.assertEqual(before["claims"], after["claims"])
         self.assertEqual(after["faces"][actor]["name"], "Alex")
 
+    def test_compound_after_another_face_keeps_original_actor(self):
+        self.parts = [self.first, " rests in ", self.second, "’s arms and looks to the side."]
+        scene = self.scene()
+        result, = card(scene, self.names)["claims"]
+        verbs = [s for s in result["spans"] if "verb" in s]
+        self.assertEqual([s["verb"] for s in verbs], ["rests", "looks to the side"])
+        self.assertNotEqual(verbs[0]["id"], verbs[1]["id"])
+        self.assertEqual(verbs[0]["roles"], verbs[1]["roles"])
+        self.assertEqual(verbs[1]["roles"], {"actor": result["spans"][0]["face"]})
+        self.assertEqual(verbs[1]["code"], "ACT.008")
+        self.assertEqual(scene, self.scene())
+
+    def test_explicit_second_subject_does_not_inherit_the_first_face(self):
+        self.parts = [self.first, " rests and ", self.second, " looks to the side."]
+        result, = card(self.scene(), self.names)["claims"]
+        self.assertEqual([s["verb"] for s in result["spans"] if "verb" in s], ["rests"])
+
+    def test_secondary_anchor_with_recipient_or_inanimate_object(self):
+        self.parts = [self.first, " sits beside ", self.second, " with an arm around him."]
+        result, = card(self.scene(), self.names)["claims"]
+        arm, = [s for s in result["spans"] if s.get("code") == "ACT.010"]
+        self.assertEqual(arm["roles"]["recipient"], next(
+            s["face"] for s in result["spans"] if "face" in s and s != result["spans"][0]))
+        self.parts = [self.first, " sits on the scooter and holds the handlebar."]
+        result, = card(self.scene(), self.names)["claims"]
+        handle, = [s for s in result["spans"] if s.get("code") == "ACT.009"]
+        self.assertEqual(set(handle["roles"]), {"actor"})
+
+    def test_older_scene_keeps_original_single_action(self):
+        self.parts = [self.first, " rests in ", self.second, "’s arms and looks to the side."]
+        scene = self.scene()
+        data = scene["openlabel"]
+        data["metadata"]["vocabulary_release"] = "album-1"
+        data["actions"] = {k:v for k,v in data["actions"].items() if v["name"] == "rests"}
+        data["relations"] = {k:v for k,v in data["relations"].items()
+                             if v["rdf_subjects"][0]["uid"] in data["actions"]}
+        claim, = card(scene, self.names)["claims"]
+        self.assertEqual([s["verb"] for s in claim["spans"] if "verb" in s], ["rests"])
+
     def test_reassignment_and_unbound_recipient(self):
         self.parts = [self.first, " holds a bag."]
         with self.assertRaisesRegex(ValueError, "explicit held face"):

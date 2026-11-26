@@ -91,7 +91,7 @@ def publish(root: Path, schema: Path, current: dict, conn) -> dict:
     atomic_page(root / "OpenLABEL album review.html", page.replace("PILOT_JSON", payload))
     return {"album_highlights": len(album["members"]), "reviewed_photos": len(stored),
             "faces": sum(len(c["faces"]) for c in cards.values()),
-            "actions": sum(len(c["claims"]) for c in cards.values()),
+            "actions": sum(len(scene["openlabel"]["actions"]) for scene in stored.values()),
             "seconds": round(time.perf_counter()-started,3), "build_p95": sorted(build_durations)[math.ceil(.95*len(build_durations))-1],
             "model_calls": 0}
 
