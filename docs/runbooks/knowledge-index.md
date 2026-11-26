@@ -174,6 +174,7 @@ model inputs out of metrics. Keep existing stage-specific panels for diagnosis.
 |---|---|
 | `knowledge_index_photo_stage_items{stage,state}` | Current, mutually exclusive counts for the declared inventory. Use `pending`, `running`, `complete`, `reused`, `failed` or `withheld` as applicable. |
 | `knowledge_index_photo_stage_completed_total{stage}` | New successful results committed by the active run. Reused results contribute to coverage and scope only. |
+| `knowledge_index_photo_stage_backend_completed{stage,backend}` | Current successful inference results assigned to each local backend. The life-stage tuning row shows both backend histories and the earlier single-backend baseline. |
 | `knowledge_index_photo_stage_updated_timestamp_seconds{stage}` | Most recent worker progress report, independent of scrape time. |
 | `knowledge_index_photo_stage_phase_p95_seconds{stage,phase}` | P95 time across a declared measurement window for each timed phase. |
 
