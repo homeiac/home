@@ -37,6 +37,10 @@ Revision 9. Existing exact-file Immich records contain place labels for eight re
 
 Revision 10. Live readback matched the 40 frozen dates and their sources. Eight photos had an Immich city, two had only coordinates, and 30 had unknown location. The browser showed the city, precision and date source. Thirty-two integration tests passed. The private same-face audit found 143 of 6,383 subject-positive candidate photos have a competing named assignment. All six reference conflicts had a local label saved in a 100-label action. Those six are awaiting owner adjudication; their existing labels and original captions are preserved. Do not treat a spelling match in generated prose as an independent identity check.
 
+Revision 11. The owner confirmed the Immich assignments for the six reviewed crops. Apply exactly those six corrections through the existing revision-checked face review API. Preserve other faces on the same photos and re-evaluate the original 40 items under a new private baseline. Recheck descriptions and subject membership. The wider disagreement cohort needs independent evidence.
+
+Revision 12. The review API committed all six owner decisions atomically. Live readback verified the corrected face and unchanged other face assignments on each photo. Five photos left the subject's reference pool; one group photo still qualifies through another confirmed face. The fixed 40-photo set now has 28 positives. All 40 current confirmed-name sets matched the independent revised answer key and original captions were preserved. The broader audit still has 137 disputed photos. The new reference run leaves identity blocked on the new-identity and unconfirmed-attribution checks, and accounting open on scene enrichment.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
