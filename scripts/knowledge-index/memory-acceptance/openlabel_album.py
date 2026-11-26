@@ -238,8 +238,11 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
 def card(scene: dict, names: dict) -> dict:
     """Derive display words and click targets from the stored OpenLABEL document."""
     from collage_catalogue import project
+    from journey_faces import project_actions
     data, panels = project(scene["openlabel"])
+    data, individual = project_actions(data)
     details = {"width": data["metadata"]["image_width"], "height": data["metadata"]["image_height"]}
+    details["individual"] = individual
     if panels:
         details["panels"] = panels
     for context in data.get("contexts", {}).values():
@@ -250,7 +253,8 @@ def card(scene: dict, names: dict) -> dict:
         source = fields(obj["object_data"])
         local_key = source["face_namespace"] + ":" + source["face_id"]
         display = PersonRef(source["person_id"], names.get(local_key) or source.get("description", "")).name(names)
-        faces[uid] = {"name": display,
+        directory_name = names.get(source["person_id"]) or names.get(local_key) or ""
+        faces[uid] = {"name": display, "unnamed": not directory_name.strip(),
                       "box": obj["object_data"]["bbox"][0]["val"], **source}
     mentions = []
     for context_id, context in sorted(data.get("contexts", {}).items()):

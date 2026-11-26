@@ -28,6 +28,94 @@ try {
   const collageIds = expected => expected.filter(id=>mediaTypes[id]?.type === 'Collage');
   const originalTimeline = await page.$$eval('article a[href*="/photos/"]', links=>links.map(a=>a.href.split('/').pop()));
   assert.equal(collageIds(originalTimeline).length, 0);
+  const reviewFile = path.join(root, 'journey-face-actions.json');
+  const groupReview = await read(reviewFile).catch(e => { if (e.code === 'ENOENT') return {}; throw e; });
+  // Exercise the actual chronological surface before following its catalogue link.
+  await page.$$eval('article img', async photos => {
+    for (const photo of photos) {
+      photo.loading = 'eager';
+      for (let p = photo.closest('details'); p; p = p.parentElement.closest('details')) p.open = true;
+    }
+    await Promise.all(photos.map(photo => photo.decode()));
+  });
+  const coverage = await page.evaluate(({current, groupReview}) => {
+    const scenes = JSON.parse(document.getElementById('journey-scenes').textContent);
+    let groups = 0, nativeFaces = 0, added = 0, dispositions = 0, clicks = 0, aliases = 0;
+    const fail = message => { throw Error(message); };
+    for (const scene of scenes) {
+      const card = document.getElementById(scene.asset);
+      const photo = card?.querySelector('.journey-photo img');
+      if (!photo || !photo.complete || !photo.naturalWidth) fail('Missing journey image');
+      const block = card.querySelector('.photo-action');
+      const refs = current.regions[scene.asset].filter(r => r.namespace === 'immich');
+      const subjects = [...block.querySelectorAll('p[data-subject]')].map(p => scene.faces[p.dataset.subject]);
+      const rows = groupReview[scene.asset] || {};
+      if (refs.length > 1) {
+        groups++;
+        nativeFaces += refs.length;
+        for (const f of refs) {
+          const subjectsForFace = subjects.filter(s => (s.immich_face_id || s.face_id) === f.face_id);
+          const withheld = block.querySelector('.face-disposition [data-immich-face-id="' + f.face_id + '"]');
+          if (subjectsForFace.length + Number(Boolean(withheld)) !== 1) fail('Face missing or repeated');
+          const review = rows[f.face_id];
+          if (review?.same_local_face) {
+            if (subjectsForFace[0]?.face_id !== review.same_local_face) fail('Native alternate differs');
+            aliases++;
+          }
+          if (withheld) {
+            if (review?.reason && !withheld.parentElement.textContent.includes(review.reason)) fail('Wrong disposition');
+            dispositions++;
+          }
+          if (review?.action) {
+            const claim = scene.individual.find(c => scene.faces[c.subject].face_id === f.face_id);
+            const row = claim && block.querySelector('p.individual[data-subject="'+claim.subject+'"]');
+            const verb = row?.querySelector('[data-action]');
+            if (!verb || !review.action.startsWith(verb.textContent+' ')) fail('Missing reviewed verb');
+            const text = row.cloneNode(true);
+            text.firstChild.remove();
+            for (const participant of text.querySelectorAll('[data-face]')) {
+              if (participant.dataset.immichFaceId !== review.target) fail('Wrong action participant');
+              participant.replaceWith('{person}');
+            }
+            if (text.textContent.trim() !== review.action) fail('Individual caption differs');
+            added++;
+          }
+        }
+      }
+      for (const button of block.querySelectorAll('button')) {
+        button.click();
+        const rect = photo.getBoundingClientRect();
+        const boxes = [...card.querySelectorAll('.journey-photo .box')];
+        if (!boxes.length || !rect.width || !rect.height) fail('Journey click missing a highlight');
+        for (const box of boxes) {
+          const f = scene.faces[box.dataset.face];
+          const source = current.regions[scene.asset].find(r => r.namespace === f.face_namespace && r.face_id === f.face_id);
+          const [x,y,right,bottom] = source.box.map(v => Math.max(0, Math.min(1,v)));
+          const hit = box.getBoundingClientRect();
+          // CSS borders give tiny distant faces a minimum drawn width/height.
+          if (Math.abs(hit.left-rect.left-x*rect.width)>1 || Math.abs(hit.top-rect.top-y*rect.height)>1 ||
+              Math.abs(hit.width-Math.max(6,(right-x)*rect.width))>1 ||
+              Math.abs(hit.height-Math.max(6,(bottom-y)*rect.height))>1) fail('Journey highlight misaligned');
+        }
+        const id = button.dataset.immichFaceId;
+        if (id) {
+          const source = scene.faces[boxes[0].dataset.face];
+          if (boxes.length !== 1 || (source.immich_face_id || source.face_id) !== id) fail('Wrong journey face link');
+          if (source.unnamed && (button.dataset.shortFaceId !== id.slice(0,8) ||
+              !getComputedStyle(button,'::after').content.includes(id.slice(0,8)) ||
+              !block.querySelector('output').textContent.includes(id))) fail('Unnamed face ID missing');
+        }
+        if (button.closest('.individual') && button.dataset.action) {
+          const f = scene.faces[button.closest('p').dataset.subject];
+          const actual = boxes.map(b=>scene.faces[b.dataset.face].face_id).sort();
+          const expected = [f.face_id, rows[f.face_id].target].filter(Boolean).sort();
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('Wrong individual action participants');
+        }
+        clicks++;
+      }
+    }
+    return {groups, nativeFaces, added, dispositions, aliases, clicks};
+  }, {current, groupReview});
   await Promise.all([page.waitForNavigation(), page.click('#openlabel-pilot a')]);
   let names = 0, verbs = 0, conflicts = 0;
   const articles = await page.$$('article');
@@ -77,7 +165,7 @@ try {
         await (await detail.$('summary')).click();
       }
     }
-    const sentences = await article.$$eval('p', ps => ps.map(p => {
+    const sentences = await article.$$eval('p:not(.individual)', ps => ps.map(p => {
       const copy = p.cloneNode(true);
       copy.querySelectorAll('.mention').forEach(el => el.replaceWith(el.dataset.replaced ? el.dataset.words : ''));
       return copy.textContent;
@@ -125,7 +213,7 @@ try {
     let subjectName, rendered, mentions;
     if (audit?.scene) {
       assert.deepEqual(sentences, [audit.scene]);
-      assert.equal((await article.$$('button[data-action]')).length, 0);
+      assert.equal((await article.$$('p:not(.individual) button[data-action]')).length, 0);
       assert.ok(await article.$$eval('small', (els,reason) => els.some(el=>el.textContent.includes(reason)), audit.reason));
       continue;
     }
@@ -141,23 +229,23 @@ try {
       }
       rendered = subjectName + literal;
       assert.deepEqual(sentences, [rendered]);
-      const tags = await article.$$eval('button[data-action]', bs => bs.map(b => b.dataset.savedVerb));
+      const tags = await article.$$eval('p:not(.individual) button[data-action]', bs => bs.map(b => b.dataset.savedVerb));
       assert.deepEqual(tags, audit.spans.map(s => s.words));
-      assert.equal((await article.$$('button[data-face]')).length, 1 + mentions.length);
+      assert.equal((await article.$$('p:not(.individual) button[data-face]')).length, 1 + mentions.length);
     } else {
       assert.deepEqual(sentences.sort(), Object.entries(reviewed.actions)
         .map(([name, words]) => name + ' ' + words).sort());
     }
     // Independently require reviewed phrases to be clickable, including ones
     // the renderer might otherwise leave as plain text after a name or verb.
-    for (const p of audit ? [] : await article.$$('p')) {
+    for (const p of audit ? [] : await article.$$('p:not(.individual)')) {
       const sentence = await p.evaluate(el => { const copy=el.cloneNode(true); copy.querySelectorAll('.mention').forEach(n=>n.remove()); return copy.textContent; });
       const tagged = await p.$$eval('button[data-action]', bs => bs.map(b => b.dataset.savedVerb));
       for (const m of sentence.matchAll(/\band (looks to the side|holds the handlebar|smiles|sits)\b|\b(an arm around him|both children in her arms)\b/g)) {
         assert.ok(tagged.includes(m[1] || m[2]), 'Reviewed action phrase missing a tag');
       }
     }
-    for (const button of await article.$$('button[data-face],button[data-action]')) {
+    for (const button of await article.$$('p:not(.individual) button[data-face],p:not(.individual) button[data-action]')) {
       await button.click();
       const target = await button.evaluate(b => ({...b.dataset}));
       const selected = await article.$$eval('.box', boxes => boxes.map(el => ({
@@ -174,7 +262,7 @@ try {
           const index = await button.evaluate(b => [...b.parentElement.querySelectorAll('[data-face]')].indexOf(b));
           expectedFaces.set('person', [audit, ...mentions][index]);
         }
-        assert.ok((await button.evaluate(b => b.title)).includes(scene.faces[target.face].face_id));
+        assert.ok((await button.evaluate(b => b.title)).includes(scene.faces[target.face].immich_face_id || scene.faces[target.face].face_id));
         let enriched = rendered;
         if (audit && !audit.scene) {
           for (const m of decision.mentions) {
@@ -185,7 +273,12 @@ try {
           }
         }
         const expected = audit ? (expectedFaces.get('person') === audit ? enriched : name) : (reviewed.actions[name] ? name + ' ' + reviewed.actions[name] : name);
-        assert.equal(await article.$eval('output', el => el.textContent), expected);
+        const f = scene.faces[target.face];
+        const extraClaim = scene.individual.find(claim => claim.subject === target.face);
+        const description = extraClaim ? extraClaim.spans.map(s =>
+          s.text ?? s.verb ?? scene.faces[s.face].name).join('') : expected;
+        const suffix = f.unnamed && f.face_namespace === 'immich' ? ' · Immich face ID · ' + f.face_id : '';
+        assert.equal(await article.$eval('output', el => el.textContent), description + suffix);
       } else {
         verbs++;
         if (audit) {
@@ -231,7 +324,7 @@ try {
       }
     }
   }
-  console.log(JSON.stringify({photos: articles.length, name_clicks: names, verb_clicks: verbs, date_conflicts: conflicts, participant_clicks: participantClicks, component_photos: panelCount, component_face_clicks:panelFaceClicks, component_action_clicks:panelActionClicks}));
+  console.log(JSON.stringify({journey: coverage, photos: articles.length, name_clicks: names, verb_clicks: verbs, date_conflicts: conflicts, participant_clicks: participantClicks, component_photos: panelCount, component_face_clicks:panelFaceClicks, component_action_clicks:panelActionClicks}));
 } finally {
   await browser.close();
 }

@@ -77,7 +77,7 @@ def write_textfile(metrics: str, out: Path) -> None:
 
 def publish_textfile(metrics: str, host: str, stage: str = STAGE) -> None:
     """Send only aggregate metrics to an existing Prometheus textfile collector."""
-    if stage not in (STAGE, "openlabel-pilot"):
+    if stage not in (STAGE, "openlabel-pilot", "journey-group-actions"):
         raise ValueError("Unknown photo processing stage")
     receiver = f"""
 set -eu

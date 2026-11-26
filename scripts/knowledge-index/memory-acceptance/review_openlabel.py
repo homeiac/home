@@ -15,6 +15,7 @@ from uuid import UUID
 
 from PIL import Image, ImageOps
 
+from journey_faces import complete_faces
 from collage_catalogue import catalogue, filter_timeline, regular_grid
 from caption_participants import age_status, attach
 from openlabel_album import build_scene, card, persist, validate_scenes
@@ -30,7 +31,47 @@ def atomic_page(path: Path, content: str) -> None:
     Path(tmp.name).replace(path)
 
 
-def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | None = None) -> dict:
+def card_json(cards: list[dict]) -> str:
+    """Encode private card data for a standalone HTML script element."""
+    return json.dumps(cards, ensure_ascii=False).replace("<", "\\u003c")
+
+
+def journey_page(path: Path, cards: dict, styles: str, renderer: str, members: list, types: dict) -> str:
+    """Bind action tags to the existing chronological cards, preserving the album layout."""
+    original = path.read_text()
+    start, end = "<!-- BEGIN journey face cards -->", "<!-- END journey face cards -->"
+    if start in original or end in original:
+        if original.count(start) != 1 or original.count(end) != 1:
+            raise ValueError("Invalid journey cards block")
+        before, rest = original.split(start)
+        _, after = rest.split(end)
+        original = before + after
+    collages = {asset for asset in members if types.get(asset, {}).get("type") == "Collage"}
+    page = filter_timeline(original, collages, len(members))
+    link = '<p id="openlabel-pilot"><a href="OpenLABEL%20album%20review.html">Review face and action tags</a></p>'
+    if link not in page:
+        if page.count("</h1>") != 1:
+            raise ValueError("Could not locate the album heading")
+        page = page.replace("</h1>", "</h1>" + link)
+    if page.count("</html>") != 1:
+        raise ValueError("Could not locate end of album")
+    visible = [card for asset, card in cards.items() if asset not in collages]
+    fragment = (f'{start}<style>{styles}</style><script id="journey-scenes" type="application/json">'
+                f'{card_json(visible)}</script><script>{renderer}</script>{end}')
+    return page.replace("</html>", fragment + "</html>")
+
+
+def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | None = None,
+            timeline: Path | None = None) -> dict:
+    if timeline is None:
+        # Rebuild a previously enabled timeline when refreshing names or action evidence.
+        enabled = [p for p in root.glob("*.html") if "<!-- BEGIN journey face cards -->" in p.read_text()]
+        if len(enabled) == 1:
+            timeline, = enabled
+        elif enabled:
+            raise ValueError("Multiple journey pages found; select one with --timeline")
+    if timeline and timeline.resolve().parent != root.resolve():
+        raise ValueError("Timeline and review must share their private album directory")
     started = time.perf_counter()
     album = read(root / "album-after-owner-correction.json")
     if current["album"] != album["id"] or set(current["members"]) != set(album["members"]):
@@ -55,9 +96,14 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
             if (audit.get("reason") or None) != (prior.get("local_skip") or None):
                 raise ValueError("Ambiguous-face disposition changed")
             reviewed.append({"asset": asset, "date": prior["date"]})
+    group_path = root / "journey-face-actions.json"
+    group_reviews = read(group_path) if group_path.exists() else {}
+    if group_reviews.keys() - set(current["members"]):
+        raise ValueError("Per-person review contains assets outside this album")
     ledger = root / "nikhil-life-stage-backfill/jobs.sqlite3"
     scenes, cards, expected = {}, {}, {}
     build_durations = []
+    group_durations = []
     jobs = []
     with closing(sqlite3.connect(ledger.resolve().as_uri()+"?mode=ro", uri=True)) as db:
         db.execute("BEGIN")
@@ -102,6 +148,13 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
             if decision_path.is_file():
                 attach(scenes[asset], asset, inputs, regions, read(decision_path))
             media_type = media_types.get(asset, {}).get("type", "Photo")
+            if media_type != "Collage":
+                started_group = time.perf_counter()
+                primary = card(scenes[asset], current["names"])
+                complete_faces(scenes[asset], asset, regions, {c["subject"] for c in primary["claims"]},
+                               group_reviews.get(asset, {}))
+                if sum(ns == "immich" for ns, _ in regions) > 1:
+                    group_durations.append(time.perf_counter() - started_group)
             if media_type == "Collage":
                 layout = root / "collage-layouts" / (asset + ".json")
                 if layout.is_file():
@@ -140,16 +193,27 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
     for asset, scene in stored.items():
         check_caption(asset, scene)
     page = Path(__file__).with_name("openlabel_review.html").read_text()
-    payload = json.dumps(list(cards.values()), ensure_ascii=False).replace("<","\\u003c")
-    atomic_page(root / "OpenLABEL album review.html", page.replace("PILOT_JSON", payload))
+    renderer = Path(__file__).with_name("album_cards.js").read_text()
+    styles = Path(__file__).with_name("album_card_links.css").read_text()
+    page = page.replace("SHARED_CARD_STYLES", styles).replace("ALBUM_CARD_RENDERER", renderer)
+    if timeline:
+        enriched = journey_page(timeline, cards, styles, renderer, current["members"], media_types)
+        if enriched != timeline.read_text():
+            atomic_page(timeline, enriched)
+    atomic_page(root / "OpenLABEL album review.html", page.replace("PILOT_JSON", card_json(list(cards.values()))))
     if jobs_path:
         atomic_page(jobs_path, "".join(json.dumps(job) + "\n" for job in jobs))
+    groups = [c for a, c in cards.items() if c["media_type"] != "Collage" and
+              sum(r["namespace"] == "immich" for r in current["regions"].get(a, [])) > 1]
+    partial = sum(any("action_withheld" in face for face in c["faces"].values()) for c in groups)
     return {"album_highlights": len(album["members"]), "reviewed_photos": len(stored),
             "faces": sum(len(c["faces"]) for c in cards.values()),
             "scene_only": sum("scene" in c for c in cards.values()),
             "actions": sum(len(scene["openlabel"].get("actions", {})) for scene in stored.values()),
             "seconds": round(time.perf_counter()-started,3), "build_p95": sorted(build_durations)[math.ceil(.95*len(build_durations))-1],
-            "model_calls": 0}
+            "model_calls": 0, "group_photos": len(groups), "group_partial": partial,
+            "additional_face_actions": sum(len(c["individual"]) for c in groups),
+            "group_p95": sorted(group_durations)[math.ceil(.95*len(group_durations))-1] if group_durations else 0}
 
 
 if __name__ == "__main__":
@@ -160,45 +224,31 @@ if __name__ == "__main__":
     parser.add_argument("current_sources", type=Path, help="Private authorized face and album snapshot")
     parser.add_argument("schema", type=Path, help="Pinned OpenLABEL 1.0.0 JSON Schema")
     parser.add_argument("--participant-jobs", type=Path, help="Write private JSONL jobs for the reusable local face matcher")
-    parser.add_argument("--timeline", type=Path, help="Link the preview from the existing private HTML album")
+    parser.add_argument("--timeline", type=Path, help="Refresh face-linked captions in the existing private HTML album")
     parser.add_argument("--metrics-host", help="Existing private node-exporter textfile collector")
     args = parser.parse_args()
     os.umask(0o077)
     with psycopg.connect(autocommit=True) as connection:
-        result = publish(args.album_directory, args.schema, read(args.current_sources), connection, args.participant_jobs)
-    if args.timeline:
-        if args.timeline.resolve().parent != args.album_directory.resolve():
-            raise ValueError("Timeline and pilot must share their private album directory")
-        page = args.timeline.read_text()
-        link = '<p id="openlabel-pilot"><a href="OpenLABEL%20album%20review.html">Review face and action tags</a></p>'
-        original = page
-        inventory = read(args.album_directory / "album-after-owner-correction.json")["members"]
-        types = read(args.album_directory / "album-life-stage-pilot/composite-types.json")
-        collages = {a for a in inventory if types.get(a, {}).get("type") == "Collage"}
-        page = filter_timeline(page, collages, len(inventory))
-        if link not in page:
-            if page.count("</h1>") != 1:
-                raise ValueError("Could not locate the album heading")
-            page = page.replace("</h1>", "</h1>"+link)
-        if original != page:
-            atomic_page(args.timeline, page)
+        result = publish(args.album_directory, args.schema, read(args.current_sources), connection, args.participant_jobs, args.timeline)
     if args.metrics_host:
         metrics = runpy.run_path(str(Path(__file__).resolve().parents[1] / "photo-stage-metrics.py"))
-        stage = 'stage="openlabel-pilot"'
-        report = []
-        counts = {"complete": result["reviewed_photos"] - result["scene_only"],
-                  "withheld": result["scene_only"]}
-        for state in metrics["STATES"]:
-            count = counts.get(state, 0)
-            report.append(f'knowledge_index_photo_stage_items{{{stage},state="{state}"}} {count}')
-        report.extend([
-            f'knowledge_index_photo_stage_completed_total{{{stage}}} {counts["complete"]}',
-            f'knowledge_index_photo_stage_updated_timestamp_seconds{{{stage}}} {time.time()}',
-            f'knowledge_index_photo_stage_phase_p95_seconds{{{stage},phase="build_scene"}} {result["build_p95"]}',
-        ])
-        # Use the shared metric descriptors so node-exporter can merge both textfiles.
-        names = {line.split("{")[0] for line in report}
-        headers = [line for name in sorted(names) for line in
-                   (f"# HELP {name} {metrics['HELP'][name][1]}", f"# TYPE {name} {metrics['HELP'][name][0]}")]
-        metrics["publish_textfile"]("\n".join(headers + report) + "\n", args.metrics_host, "openlabel-pilot")
+        stages = [("openlabel-pilot", result["reviewed_photos"], result["scene_only"], result["build_p95"]),
+                  ("journey-group-actions", result["group_photos"], result["group_partial"], result["group_p95"])]
+        for name, total, partial, duration in stages:
+            stage = f'stage="{name}"'
+            counts = {"complete": total - partial, "withheld": partial}
+            report = []
+            for state in metrics["STATES"]:
+                count = counts.get(state, 0)
+                report.append(f'knowledge_index_photo_stage_items{{{stage},state="{state}"}} {count}')
+            report.extend([
+                f'knowledge_index_photo_stage_completed_total{{{stage}}} {counts["complete"]}',
+                f'knowledge_index_photo_stage_updated_timestamp_seconds{{{stage}}} {time.time()}',
+                f'knowledge_index_photo_stage_phase_p95_seconds{{{stage},phase="build_scene"}} {duration}',
+            ])
+            # Use the shared metric descriptors so node-exporter can merge both textfiles.
+            names = {line.split("{")[0] for line in report}
+            headers = [line for name in sorted(names) for line in
+                       (f"# HELP {name} {metrics['HELP'][name][1]}", f"# TYPE {name} {metrics['HELP'][name][0]}")]
+            metrics["publish_textfile"]("\n".join(headers + report) + "\n", args.metrics_host, name)
     print(json.dumps(result))
