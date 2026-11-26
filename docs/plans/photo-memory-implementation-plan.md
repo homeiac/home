@@ -10,6 +10,7 @@ Track the stories and their status in [epic #228](https://github.com/homeiac/hom
 2. If evidence changes the approach mid-PR, pause code changes. Record the new finding, amend the active plan and issue, and then resume. A passing existing path needs only evidence. An unrelated discovery goes into the backlog. Investigate further now only when it would change the current acceptance decision.
 3. Give each implementation PR one observable behavior or one missing measurement. Include its story, expected result and redacted after-result. Split again if a PR crosses two independently testable changes. A private evidence run can close a gap without a code PR.
 4. At review, update the story and this plan with the result and next small step. Close a product story when its named gates pass for the stated scope. Label measurement-only closure explicitly. A merge, an empty queue or a synthetic pass alone cannot close a product story.
+5. Every stage must complete **Grafana and live tuning** before sign-off. Read back the live dashboard for the stage, locate the bottleneck with measured queue, timing, throughput and resource evidence, record the change or evidence for keeping the settings, then verify under comparable load on the deployed revision. Record accuracy, errors, retries and duplicate work alongside speed.
 
 ## Current decision
 
@@ -57,6 +58,8 @@ Revision 19. Require each vision reviewer to return a small set of normalized ac
 
 Revision 20. Store Immich person IDs alongside reviewed age and action facts using exact asset and uniquely matched face regions. Read names from the person registry when rendering descriptions, including names mentioned as recipients. Retain local names where the ID is unresolved and expose that disposition. Exercise a simulated rename on all affected captions and keep the underlying observations intact.
 
+Revision 21. The deployed Knowledge Index dashboard has no life-stage, named-action or person-ID refresh panels. Make observability and a measured tuning loop required evidence for every stage. Add a common Grafana layout for queue and dispositions, throughput, ETA, freshness and phase latency. Prepare the life-stage metrics adapter for the private aggregate data. Use the reviewed growing-up journey and stable face-ID reconstruction as the rollout gate for all-photo processing. Keep the current live rollout scoped until those checks pass.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
@@ -68,6 +71,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 1. **Freeze the reference baseline.** Reuse the checker template and confirmed annotations. Agree on the reader surfaces, release, selection policy, correction deadline and retry limit. Exercise one synthetic fixture and record how to reproduce it.
 2. **Capture identity and inventory.** Read the existing private mappings and ledger for the frozen set. Run the checker, report coverage by year and source, and name the first failed or missing field.
 
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
+
 **Done when** — A reproducible live reference report exists for the proposed 30–50 cases. Its baseline and source evidence are private. The report names the next gap or records passing identity and accounting gates. This measurement story can close with a failing product gate.
 
 ### S2. Read a photo description that uses the confirmed person’s name and place ([#230](https://github.com/homeiac/home/issues/230))
@@ -78,6 +83,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 2. **Show who is in the scene.** Use saved evidence to put confirmed names in the primary description. Capture the rendered text and the reviewed person/action associations, including a painted figure as a negative control.
 3. **Show the supported place and date.** Carry place/date source, precision and revisions into the agreed surfaces. Preserve the raw caption and show a pending state after invalidation.
 
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
+
 **Done when** — The identity and context gates pass on the reference set. A reader can tell who is in the scene and what supports the place and date. Unknowns remain explicit.
 
 ### S3. Request a growing-up album and review the years it covers ([#231](https://github.com/homeiac/home/issues/231))
@@ -86,6 +93,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 
 1. **Resolve one growing-up request.** Use one supported ordinary-language request and an alias to retrieve the eligible pool. Keep eligible missing-GPS photos and report uncertain dates and exclusions.
 2. **Select chronological highlights.** Apply the agreed selection policy. Show the full pool, ordered selected IDs and coverage for each available year.
+
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
 
 **Done when** — The retrieval and selection gates pass for growing-up on the reference set, including early photos and a wrong-person negative.
 
@@ -96,6 +105,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 1. **Publish one private album.** Use one compatible existing consumer or Immich API path. Map the selected assets and retain the managed album ID.
 2. **Read the album back as its viewer.** Capture membership, original access and the context revision actually shown on each agreed surface.
 
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
+
 **Done when** — The delivery gate passes. The viewer opens the expected private album, can reach every selected original and sees the intended current description on the agreed surface.
 
 ### S5. Keep the album correct after an edit or worker interruption ([#233](https://github.com/homeiac/home/issues/233))
@@ -105,6 +116,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 1. **Propagate one edit path at a time.** Start with a rejected match. Extend to rename, place correction and newly eligible asset using the same fixture. Keep user removals and measure convergence.
 2. **Replay and recover.** Replay an unchanged request, interrupt one job and supply one malformed response. Capture stable membership, bounded attempts, preserved edits, inference deltas, deployed revision and egress.
 
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
+
 **Done when** — Corrections and operations pass on the reference scope. Repeat requests reuse the album and saved inference. An unrelated item completes after the malformed response.
 
 ### S6. Verify the growing-up album across its declared library scope ([#234](https://github.com/homeiac/home/issues/234))
@@ -112,6 +125,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 **Starts after** — S1–S5 reference evidence.
 
 1. **Run scoped rollout acceptance.** Freeze the full journey inventory. Reuse the probes, publish year/source coverage and classify missing, withheld and excluded items. If any required item fails, revise this plan for one bounded fix before coding.
+
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
 
 **Done when** — All eight tasks pass together in a live growing-up rollout run on one release. The report includes the full scope and dispositions.
 
@@ -121,6 +136,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 
 1. **Prove or disprove the first travel match.** Begin with dated colleague membership, travel evidence, site boundary and an on-site negative. Use the shared album path. Size further PRs after the first reference result.
 
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
+
 **Done when** — The offsite-colleagues live rollout passes all required gates on its declared scope, including negative controls for location and travel intent.
 
 ### S8. Find a child, their pet and school friends together ([#236](https://github.com/homeiac/home/issues/236))
@@ -128,6 +145,8 @@ The stories below are ordered by the first useful album. S2 now has a measured s
 **Starts after** — Later journey; refine after the growing-up review.
 
 1. **Prove or disprove one group match.** Use explicit friend and pet evidence. Agree whether together means the same photo or the same event. Include artwork and a different pet as negatives. Size further PRs after the first reference result.
+
+- **Required task** — Capture the live Grafana panels, identify the bottleneck, tune or justify keeping the settings, and verify the outcome.
 
 **Done when** — The child-pet-friends live rollout passes all required gates on its declared scope, including the agreed co-occurrence rule and negative controls.
 

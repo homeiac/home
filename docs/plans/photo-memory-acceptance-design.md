@@ -31,6 +31,14 @@ Each row is one implementation task with a stable checker ID. A ticket can cite 
 | `operations` | Delivery | Replay the request, interrupt/resume a job, and inject a malformed fixture response. Observe the same album ID, zero duplicates or repeated inference on unchanged inputs, retained edits, bounded attempts for the bad item, and completion of an unrelated item. Record deployed Git revision and compare observed outbound traffic to the authorized scope. |
 | `accounting` | None | Compare the entire frozen inventory to the actual per-asset dispositions. Show coverage by year and source, reasons and disposition references for exceptions, and zero unresolved required items or unexplained gaps. |
 
+Every task above also requires a **Grafana and live tuning** capture. Link the
+live stage panel, record the comparable before and after windows, show the
+limiting phase or resource with evidence, and document the tuning change or
+why the settings were retained. Read back outcomes under the deployed revision
+and verify quality, retries, errors and duplicate work. For a synchronous task,
+record request timing and error evidence and explain which queue metrics do
+not apply. A passing screenshot or a single throughput number is insufficient.
+
 **Story-specific retrieval evidence**
 
 | Request | Positive and negative controls |
