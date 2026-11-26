@@ -170,10 +170,16 @@ try {
       copy.querySelectorAll('.mention').forEach(el => el.replaceWith(el.dataset.replaced ? el.dataset.words : ''));
       return copy.textContent;
     }));
-    const decision = await read(path.join(root, 'caption-participants', asset + '.json')).catch(error => {
+    const originalDecision = await read(path.join(root, 'caption-participants', asset + '.json')).catch(error => {
       if (error.code === 'ENOENT') return {mentions:[]};
       throw error;
     });
+    const audit = audits[asset];
+    const decision = audit?.source_literal ? {mentions: audit.accepted_mentions} : originalDecision;
+    if (audit?.source_literal) {
+      assert.equal(scene.caption_sources.source_literal, audit.source_literal);
+      assert.ok(originalDecision.mentions.some(m=>m.reason && scene.caption_sources.review.includes(m.reason)));
+    }
     const notes = await article.$$('.mention');
     assert.equal(notes.length, decision.mentions.length);
     for (const note of notes) {
@@ -198,7 +204,6 @@ try {
       }
       if (reviewedMention.reason) assert.ok((await note.evaluate(el=>el.textContent)).includes(reviewedMention.reason));
     }
-    const audit = audits[asset];
     const review = stages.photos.find(row => row.asset === asset);
     const warning = await article.$('.date-conflict');
     assert.equal(Boolean(warning), review.status === 'conflict');

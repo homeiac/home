@@ -1,6 +1,7 @@
 """Publish reviewed face-linked actions and withheld scene descriptions from a private album ledger to a local preview."""
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -19,8 +20,8 @@ from PIL import Image, ImageOps
 
 from journey_faces import complete_faces
 from collage_catalogue import catalogue, filter_timeline, regular_grid
-from caption_participants import age_status, attach
-from openlabel_album import build_scene, card, persist, stable_id, validate_scenes
+from caption_participants import age_status, attach, fingerprint
+from openlabel_album import build_scene, card, link_depicted_faces, persist, stable_id, validate_scenes
 
 
 def read(path: Path):
@@ -47,7 +48,8 @@ def select_together(cards: dict, people: list[str]) -> list[dict]:
     for item in cards.values():
         if item["media_type"] != "Photo":
             continue
-        subjects = {item["faces"][c["subject"]]["person_id"] for c in item["claims"] + item["individual"]}
+        actors = (item["faces"][c["subject"]] for c in item["claims"] + item["individual"])
+        subjects = {face["person_id"] for face in actors if not face.get("depicted_in")}
         if requested <= subjects:
             # The source age check belongs to the original journey subject. Carry only date certainty.
             copy = dict(item)
@@ -166,10 +168,11 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
                 original = "".join(p["fallback"] if isinstance(p, dict) else p for p in parts)
                 if not audit and original != label+" "+row["actions"][label]:
                     raise ValueError("Saved action differs from the reviewed caption")
+                display_parts = [parts[0], audit["literal"]] if audit and "source_literal" in audit else parts
                 expected[asset].append("".join(
                     (current["names"].get(p["person_id"]) or current["names"].get(p["namespace"]+":"+p["face_id"])
                      or "Unnamed person") if isinstance(p, dict) else p
-                    for p in parts))
+                    for p in display_parts))
                 labels.add(label)
                 actions.append(parts)
             if not audit and labels != set(row["actions"]):
@@ -177,12 +180,32 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
             scenes[asset] = build_scene(asset, actions, regions, width, height, audit)
             prior = recorded[asset]
             inputs = [audit.get("literal", audit.get("scene"))] if audit else list(row["actions"].values())
-            if jobs_path:
-                jobs.append({"asset":asset, "captions":inputs, "image":str(path),
-                             "regions":list(regions.values()), "subject_face_id":(audit or {}).get("face_id")})
             decision_path = root / "caption-participants" / (asset + ".json")
-            if decision_path.is_file():
-                attach(scenes[asset], asset, inputs, regions, read(decision_path))
+            decision = read(decision_path) if decision_path.is_file() else None
+            source_inputs = [audit["source_literal"]] if audit and "source_literal" in audit else inputs
+            corrections = [{"phrase": m["words"], "finding": m["reason"]}
+                           for m in (decision or {}).get("mentions", []) if m.get("reason")]
+            notes = [c["finding"] for c in corrections]
+            if jobs_path:
+                jobs.append({"asset":asset, "captions":source_inputs, "image":str(path),
+                             "regions":list(regions.values()), "subject_face_id":(audit or {}).get("face_id"),
+                             "subject_namespace":(audit or {}).get("namespace"),
+                             "subject_name":next(iter(labels)) if audit and len(labels) == 1 else None,
+                             "corrections":corrections if (audit or {}).get("face_id") else []})
+            if audit and "source_literal" in audit:
+                if not decision or decision["caption_hash"] != fingerprint(source_inputs) or not notes:
+                    raise ValueError("Missing original correction evidence")
+                digest = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
+                if digest != audit["review_digest"] or regions[audit["namespace"], audit["face_id"]]["box"] != audit["review_box"]:
+                    raise ValueError("Correction evidence changed since reconciliation")
+                # Raw sources survive in the ledger and previous scene revisions. Display the accepted claims.
+                scenes[asset]["openlabel"].setdefault("contexts", {})["2"] = {
+                    "name": "Caption sources", "type": "reconciliation_evidence", "context_data": {"text": [
+                        {"name":"source_literal","val":audit["source_literal"]},
+                        {"name":"review","val":" ".join(notes)}, {"name":"digest","val":digest}]}}
+                decision = {"caption_hash": fingerprint(inputs), "mentions": audit["accepted_mentions"]}
+            if decision:
+                attach(scenes[asset], asset, inputs, regions, decision)
             media_type = media_types.get(asset, {}).get("type", "Photo")
             if media_type != "Collage":
                 started_group = time.perf_counter()
@@ -200,6 +223,11 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
                         geometry = regular_grid(original)
                 if geometry:
                     catalogue(scenes[asset], asset, geometry, regions)
+            media_path = root / "depiction-media" / (asset + ".json")
+            if media_path.is_file():
+                media = read(media_path)
+                validate_scenes({asset: media}, schema)
+                link_depicted_faces(scenes[asset], media)
             status = age_status(prior, birth_year)
             if status == "conflict":
                 if prior["date"] != row["date"]:

@@ -86,8 +86,8 @@ def marked_actions(asset: str, face: str, parts: list, review: dict, bind: Calla
         raise ValueError("Marked face differs from the span review")
     if not all(isinstance(piece, str) for piece in pieces):
         raise ValueError("Marked subject review requires a single face reference")
-    literal = "".join(pieces)
-    if literal != review["literal"] or not review["spans"]:
+    literal = review["literal"]
+    if "".join(pieces) != review.get("source_literal", literal) or not review["spans"]:
         raise ValueError("Marked caption changed or has no reviewed spans")
     actions, relations = {}, {}
     layers = [{"face": face}]
@@ -123,6 +123,8 @@ def marked_actions(asset: str, face: str, parts: list, review: dict, bind: Calla
     layers.append({"text": literal[end:]})
     first = next(iter(actions))
     actions[first]["action_data"]["text"].append(text_value("marked_caption", json.dumps(layers)))
+    if "source_literal" in review:
+        actions[first]["action_data"]["text"].append(text_value("source_literal", review["source_literal"]))
     return actions, relations
 
 
@@ -149,6 +151,37 @@ def bind_face(asset: str, objects: dict, regions: dict, width: int, height: int,
     if ref.get("description"):
         objects[uid]["object_data"]["text"].append(text_value("description", ref["description"]))
     return uid
+
+
+DEPICTS = "http://www.wikidata.org/entity/P180"
+
+
+def link_depicted_faces(scene: dict, media: dict) -> None:
+    """Import reviewed OpenLABEL depiction relations after checking both ends and the source boxes."""
+    data = scene["openlabel"]
+    source = media["openlabel"]
+    for key in ("image_width", "image_height"):
+        if source["metadata"][key] != data["metadata"][key]:
+            raise ValueError("Medium geometry and oriented source dimensions differ")
+    objects = data.setdefault("objects", {})
+    for uid, relation in source["relations"].items():
+        if relation["type"] != DEPICTS or uid in data.setdefault("relations", {}):
+            raise ValueError("Expected a distinct reviewed depiction relation")
+        holder, = relation["rdf_subjects"]
+        subject, = relation["rdf_objects"]
+        if holder["type"] != "object" or subject["type"] != "object":
+            raise ValueError("Depiction must connect two objects")
+        medium = source["objects"][holder["uid"]]
+        face = objects[subject["uid"]]
+        if face["type"] != "person" or face["object_data"]["bbox"] != source["objects"][subject["uid"]]["object_data"]["bbox"]:
+            raise ValueError("Depicted face differs from the reviewed source")
+        x, y, width, height = medium["object_data"]["bbox"][0]["val"]
+        cx, cy, fw, fh = face["object_data"]["bbox"][0]["val"]
+        if abs(cx-x) + fw/2 > width/2 or abs(cy-y) + fh/2 > height/2:
+            raise ValueError("Reviewed face is outside its medium")
+        if objects.setdefault(holder["uid"], medium) != medium:
+            raise ValueError("Conflicting medium object")
+        data["relations"][uid] = relation
 
 
 def build_scene(asset: str, actions: list, regions: dict, width: int, height: int,
@@ -246,16 +279,27 @@ def card(scene: dict, names: dict) -> dict:
     if panels:
         details["panels"] = panels
     for context in data.get("contexts", {}).values():
+        if context["type"] == "reconciliation_evidence":
+            details["caption_sources"] = fields(context["context_data"])
         if context["type"] == "capture_date_conflict":
             details["date_conflict"] = fields(context["context_data"])
+    depictions = {}
+    for rel in data.get("relations", {}).values():
+        if rel["type"] == DEPICTS:
+            for target in rel["rdf_objects"]:
+                depictions.setdefault(target["uid"], []).extend(ref["uid"] for ref in rel["rdf_subjects"])
     faces = {}
     for uid, obj in data.get("objects", {}).items():
+        if obj["type"] != "person":
+            continue
         source = fields(obj["object_data"])
         local_key = source["face_namespace"] + ":" + source["face_id"]
         display = PersonRef(source["person_id"], names.get(local_key) or source.get("description", "")).name(names)
         directory_name = names.get(source["person_id"]) or names.get(local_key) or ""
         faces[uid] = {"name": display, "unnamed": not directory_name.strip(),
                       "box": obj["object_data"]["bbox"][0]["val"], **source}
+        if uid in depictions:
+            faces[uid]["depicted_in"] = sorted(set(depictions[uid]))
     mentions = []
     for context_id, context in sorted(data.get("contexts", {}).items()):
         if context["type"] == "caption_mention":

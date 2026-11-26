@@ -31,7 +31,9 @@ flowchart TD
 
 **Where the reader sees it.** Both private HTML views render the same stored facts and link to the Immich original. Names in those files reflect the last publication. Refreshing the source snapshot and republishing resolves new names. Live name propagation, new native Immich description writes and full-library rollout each need separate evidence. [Publisher](../../scripts/knowledge-index/memory-acceptance/review_openlabel.py) · [Browser check](../../scripts/knowledge-index/memory-acceptance/check_openlabel_review.mjs)
 
-**Depicted people.** A video call can be part of a family story. Attach the screen context to the face on the display. The caption can describe what that person visibly does on screen. A query for people physically together uses the face context to distinguish the people in the room from the remote participant.
+**When descriptions disagree.** A saved face action can contain several claims. A later participant review may correct just one. For example, a reviewer can confirm someone is sitting on the steps with a group while finding no evidence that they are friends. Keep the sitting, the steps and the group. Resolve only the disputed relationship. Use the accepted reading for the caption, action links and album query, and keep both sources available on the card.
+
+**Depicted people.** A video call can be part of a family story. Attach the screen context to the face on the display. The caption can describe what that person visibly does on screen. A query for people physically together uses the face context to distinguish the people in the room from the remote participant. The carrier and face are OpenLABEL objects connected by the Wikidata *depicts* relation. A reviewer confirms the relation, and the importer checks the geometry. Overlap alone cannot establish depiction. [Wikidata depicts (P180)](https://www.wikidata.org/wiki/Property:P180)
 
 ## What the platform should answer
 

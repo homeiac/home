@@ -38,7 +38,9 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
       const p = age.parentElement;
       const siblings = Array.from(p.childNodes).slice(0, Array.from(p.childNodes).indexOf(age));
       const wording = siblings.map(n=>n.textContent).join('').trim();
-      if (wording && !/ (?:is|are) in this photo\.$/.test(wording)) {
+      if (Object.values(item.faces).some(f => f.depicted_in) && / (?:is|are) in this photo\.$/.test(wording)) {
+        siblings.forEach(node => node.remove());
+      } else if (wording && !/ (?:is|are) in this photo\.$/.test(wording)) {
         const earlier = document.createElement('details');
         element('summary', earlier, 'Earlier scene description');
         const copy = element('p', earlier);
@@ -250,6 +252,12 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
     line.append(' · ' + face.action_withheld);
   }
   block.append(feedback);
+  if (item.caption_sources) {
+    const history = element('details', block);
+    element('summary', history, 'Caption sources');
+    element('div', history, 'Earlier marked-face caption · ' + 'The marked person ' + item.caption_sources.source_literal.trim());
+    element('div', history, 'Later participant review · ' + item.caption_sources.review);
+  }
   for (const b of block.querySelectorAll('button[data-immich-face-id]')) {
     const id = b.dataset.immichFaceId;
     if (id && Object.values(item.faces).some(f=>f.face_id === id && f.unnamed)) {
