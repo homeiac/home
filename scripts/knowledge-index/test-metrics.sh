@@ -148,6 +148,7 @@ with sqlite3.connect(database) as conn:
         ("private-asset-2", "complete", '{"seconds":12.5}'),
         ("private-asset-3", "reused", None),
         ("private-asset-4", "withheld", None),
+        ("private-asset-5", "complete", '{"seconds":8,"backend":"rtx3070"}'),
     ])
 log.touch()
 render = runpy.run_path(str(here / "photo-stage-metrics.py"))["render"]
@@ -156,7 +157,9 @@ assert 'state="pending"} 1' in stats
 assert 'state="failed"} 0' in stats
 assert 'state="running"' not in stats
 assert 'state="reused"} 1' in stats
-assert 'completed_total{stage="life-stage"} 1' in stats
+assert 'completed_total{stage="life-stage"} 2' in stats
+assert 'backend_completed{stage="life-stage",backend="mac-metal"} 1' in stats
+assert 'backend_completed{stage="life-stage",backend="rtx3070"} 1' in stats
 assert 'phase="model_request"} 12.5' in stats
 assert "private-asset-" not in stats
 PY

@@ -16,6 +16,7 @@ STATES = ("pending", "running", "complete", "reused", "failed", "withheld")
 HELP = {
     "knowledge_index_photo_stage_items": ("gauge", "Current photo count by processing stage and disposition."),
     "knowledge_index_photo_stage_completed_total": ("counter", "New successful results committed in the active stage run."),
+    "knowledge_index_photo_stage_backend_completed": ("gauge", "Current committed inference results by local backend."),
     "knowledge_index_photo_stage_updated_timestamp_seconds": ("gauge", "Unix time of the most recent stage progress report."),
     "knowledge_index_photo_stage_phase_p95_seconds": ("gauge", "Observed p95 phase duration in seconds."),
 }
@@ -28,6 +29,11 @@ def render(database: Path, progress_log: Path) -> str:
         counts = dict(conn.execute("SELECT status, count(*) FROM jobs GROUP BY status"))
         if not counts or counts.keys() - set(STATES):
             raise ValueError("Unexpected life-stage checkpoint dispositions")
+        backends = dict(conn.execute(
+            "SELECT CASE WHEN json_extract(outcome, '$.backend') = 'rtx3070' "
+            "THEN 'rtx3070' ELSE 'mac-metal' END, count(*) "
+            "FROM jobs WHERE status = 'complete' GROUP BY 1"
+        ))
         durations = sorted(
             duration for (duration,) in conn.execute(
                 "SELECT json_extract(outcome, '$.seconds') FROM jobs WHERE status = 'complete'"
@@ -47,6 +53,9 @@ def render(database: Path, progress_log: Path) -> str:
         if state != "running" or state in counts
     ])
     metric("knowledge_index_photo_stage_completed_total", [("", counts.get("complete", 0))])
+    metric("knowledge_index_photo_stage_backend_completed", [
+        (f',backend="{backend}"', count) for backend, count in sorted(backends.items())
+    ])
     metric("knowledge_index_photo_stage_updated_timestamp_seconds", [("", progress_log.stat().st_mtime)])
     if durations:
         metric("knowledge_index_photo_stage_phase_p95_seconds", [

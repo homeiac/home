@@ -440,6 +440,8 @@ def panels():
     audio = audio_story_panels()
     processing = photo_processing_panels()
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
+    processing_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
+    processing += shift(life_stage_tuning_panels(), processing_bottom)
     return (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
             + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
             + shift(all_panels + shift(processing, bottom),
@@ -496,13 +498,80 @@ def photo_processing_panels():
     return panel_set
 
 
+def tuning_story(content):
+    return _panel('text', 'What changed and why', [], 0, 1, 24, 4,
+                  extra={'options': {'mode': 'markdown', 'content': content}})
+
+
+def tuning_comparison(title, data, x, y, w, h, unit, description, maximum=None):
+    panel = _panel('bargauge', title, data, x, y, w, h, unit=unit, decimals=2,
+                   extra={'options': {'orientation': 'horizontal', 'displayMode': 'gradient',
+                                      'reduceOptions': {'calcs': ['lastNotNull']}}},
+                   description=description)
+    for target in panel['targets']:
+        target.update(instant=True, range=False)
+    panel['fieldConfig']['defaults']['min'] = 0
+    if maximum is not None:
+        panel['fieldConfig']['defaults']['max'] = maximum
+    return panel
+
+
+def life_stage_tuning_panels():
+    """Apply the video tuning row pattern to local photo life-stage processing."""
+    scope = 'instance=~"$instance",stage="life-stage"'
+    saved = f'knowledge_index_photo_stage_backend_completed{{{scope}}}'
+
+    def backend_metric(name):
+        return f'{saved[:-1]},backend="{name}"}}'
+
+    def backend_pace(name):
+        metric = backend_metric(name)
+        return (f'max(clamp_min(deriv({metric}[15m]), 0) '
+                f'and on(instance,stage,backend) (changes({metric}[15m]) >= 2) '
+                f'and on(instance,stage,backend) (resets({metric}[15m]) == 0)) * 60')
+
+    mac, rtx = backend_pace("mac-metal"), backend_pace("rtx3070")
+    panels = [row("Life-stage tuning · Mac and RTX", 0)]
+    panels.append(tuning_story(
+        "**Before:** Mac-only life-stage queue sustained 15.9–16.1 photos/min in two 10-minute windows.\n\n"
+        "**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and "
+        "disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once."
+    ))
+    panels.extend([
+        tuning_comparison("RTX · matched life-stage request latency",
+                          [("vector(7.45)", "Before · generic JSON"), ("vector(4.16)", "After · tuned schema")],
+                          0, 5, 12, 8, "s", "Median wall time for the same five photos. All baseline RTX responses were invalid.", 23),
+        tuning_comparison("Mac · matched life-stage request latency",
+                          [("vector(20.09)", "Saved Mac pilot baseline")],
+                          12, 5, 12, 8, "s", "Median request time from the four-worker Mac pilot. Use the live rate for backend capacity.", 23),
+        stat("Before · Mac-only photos / min", "vector(16)", 0, 13, w=6, decimals=1,
+             description="Mean throughput across the two measured Mac-only 10-minute windows."),
+        stat("After · combined photos / min", f'({mac}) + ({rtx})', 6, 13, w=6, decimals=1,
+             description="Both backends need two observed count advances for a combined live estimate."),
+        stat("RTX · matched valid JSON", "vector(100)", 12, 13, w=6, unit="percent",
+             description="0/5 before and 5/5 after changing the RTX request. Valid JSON supports parsing."),
+        stat("Matched primary life stage", "vector(4)", 18, 13, w=6, unit="locale",
+             description="Four of five matched the Mac's primary stage; the fifth was an adjacent life stage."),
+        series("Life-stage throughput by backend",
+               [(mac, "Mac GPU"), (rtx, "RTX 3070"), (f'({mac}) + ({rtx})', "Combined"), ("vector(16)", "Before · Mac only")],
+               0, 17, 12, 8, decimals=1, description="New records per minute based on observed saved-count changes."),
+        series("Life-stage results saved by backend",
+               [(f'max({backend_metric("mac-metal")})', "Mac GPU"),
+                (f'max({backend_metric("rtx3070")})', "RTX 3070")],
+               12, 17, 12, 8, unit="locale", description="Persisted model results. Reused album results are accounted for separately."),
+        tuning_comparison("Bottleneck · model versus preview preparation",
+                          [("vector(22.44)", "Model request p95"), ("vector(0.132)", "Fetch and prepare preview p95")],
+                          0, 25, 24, 7, "s", "Same 12-photo concurrent Mac sample. The RTX was added after this phase measurement."),
+    ])
+    return panels
+
+
 def video_tuning_panels():
     """Present the measured tradeoff and the resulting live video throughput."""
     evidence = json.loads((Path(__file__).parent/'video-tuning/results.json').read_text())
     p = [row('Video tuning · preserve the story', 0)]
     narrative = evidence.get('story', 'Matched video trials are in progress.')
-    p.append(_panel('text', 'What changed and why', [], 0, 1, 24, 4,
-                    extra={'options': {'mode': 'markdown', 'content': narrative}}))
+    p.append(tuning_story(narrative))
     trial_max = int(max((r['successful_per_minute'] for r in evidence.get('trials', [])
                          if r.get('successful_per_minute') is not None), default=1) * 1.1) + 1
     for backend, x, title in (('rtx', 0, 'RTX · matched video trials'), ('mac', 12, 'Mac · matched video trials')):
@@ -510,14 +579,9 @@ def video_tuning_panels():
         exprs = [('vector('+str(r['successful_per_minute'])+')', r.get('label', r['profile'])) for r in rows]
         if not exprs:
             exprs = [('vector(0)', 'Trials in progress')]
-        panel = _panel('bargauge', title, exprs, x, 5, 12, 8, unit='suffix: clips/min', decimals=2,
-                       extra={'options': {'orientation': 'horizontal', 'displayMode': 'gradient',
-                                           'reduceOptions': {'calcs': ['lastNotNull']}}},
-                       description='Private matched sample; successful caption-cache-bypassed model requests divided by trial wall time. '
-                       'Each backend is tested separately. '+evidence.get('method', ''))
-        for target in panel['targets']:
-            target.update(instant=True, range=False)
-        panel['fieldConfig']['defaults'].update(min=0, max=trial_max)
+        panel = tuning_comparison(title, exprs, x, 5, 12, 8, 'suffix: clips/min',
+                                  'Private matched sample; successful caption-cache-bypassed model requests divided by trial wall time. '
+                                  'Each backend is tested separately. '+evidence.get('method', ''), trial_max)
         p.append(panel)
     scope = '{instance=~"$instance",enricher=~"$pipeline_enricher"}'
     p += [stat('Live videos / min · 10m average', 'sum(rate(media_pipeline_video_saved_total'+scope+'[10m])) * 60',
