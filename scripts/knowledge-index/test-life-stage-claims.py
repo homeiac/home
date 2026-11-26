@@ -36,6 +36,14 @@ class LifeStageClaimsTest(unittest.TestCase):
             )
         self.assertIsNone(claims["claim"](self.db))
 
+    def test_parallel_requests_have_distinct_reservations(self):
+        first = claims["claim"](self.db, resume=False)
+        second = claims["claim"](self.db, resume=False)
+        self.assertNotEqual(first[0], second[0])
+        self.assertCountEqual(claims["active"](self.db), [first, second])
+        claims["finish"](self.db, second[0], "complete", "{}")
+        self.assertEqual(claims["active"](self.db), [first])
+
 
 if __name__ == "__main__":
     unittest.main()

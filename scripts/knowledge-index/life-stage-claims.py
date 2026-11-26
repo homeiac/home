@@ -10,16 +10,21 @@ def initialize(conn: sqlite3.Connection) -> None:
     )
 
 
-def claim(conn: sqlite3.Connection, mac_batch: int = 16) -> tuple[str, str] | None:
+def active(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    """Read prior RTX reservations so a restarted dispatcher can drain them."""
+    return conn.execute(
+        "SELECT j.asset, j.input FROM jobs j JOIN rtx_life_stage_claims c USING(asset) "
+        "WHERE j.status = 'running' AND c.state = 'active' ORDER BY j.day, j.asset"
+    ).fetchall()
+
+
+def claim(conn: sqlite3.Connection, mac_batch: int = 16, *, resume=True) -> tuple[str, str] | None:
     """Reserve one tail item beyond the Mac's maximum in-flight head batch."""
     conn.execute("BEGIN IMMEDIATE")
     with conn:
-        reserved = conn.execute(
-            "SELECT j.asset, j.input FROM jobs j JOIN rtx_life_stage_claims c USING(asset) "
-            "WHERE j.status = 'running' AND c.state = 'active' LIMIT 1"
-        ).fetchone()
-        if reserved is not None:
-            return reserved
+        reserved = active(conn) if resume else []
+        if reserved:
+            return reserved[0]
         # The Mac worker reads its next batch without marking those rows active.
         # Keep a cushion beyond its entire batch while the two readers overlap.
         if conn.execute("SELECT count(*) FROM jobs WHERE status='pending'").fetchone()[0] <= 2 * mac_batch:

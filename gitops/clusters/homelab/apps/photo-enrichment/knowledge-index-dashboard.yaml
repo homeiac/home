@@ -13617,7 +13617,7 @@ data:
           },
           "options": {
             "mode": "markdown",
-            "content": "**Before:** Mac-only life-stage queue sustained 15.9\u201316.1 photos/min in two 10-minute windows.\n\n**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once."
+            "content": "**Before:** Mac-only life-stage queue sustained 15.9\u201316.1 photos/min in two 10-minute windows.\n\n**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once.\n\n**RTX concurrency:** One request saved 14.0 photos/min. Two requests saved 18.0 photos/min in the measured window. Keep two RTX requests while the live rate remains higher."
           }
         },
         {
@@ -14186,6 +14186,189 @@ data:
             }
           },
           "description": "Same 12-photo concurrent Mac sample. The RTX was added after this phase measurement."
+        },
+        {
+          "id": 268,
+          "type": "bargauge",
+          "title": "RTX \u00b7 one vs two requests",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 457
+          },
+          "targets": [
+            {
+              "expr": "vector(14)",
+              "legendFormat": "Before \u00b7 one RTX request",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(18)",
+              "legendFormat": "After \u00b7 two RTX requests",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: photos/min",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "description": "Two 60-second live windows on the same queue. The Mac ran concurrently and both RTX settings used the same prompt and validation."
+        },
+        {
+          "id": 269,
+          "type": "bargauge",
+          "title": "Combined \u00b7 one vs two RTX requests",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 457
+          },
+          "targets": [
+            {
+              "expr": "vector(27)",
+              "legendFormat": "Before \u00b7 one RTX request",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(34)",
+              "legendFormat": "After \u00b7 two RTX requests",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "suffix: photos/min",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "description": "Two 60-second live windows on the same queue. The Mac ran concurrently and both RTX settings used the same prompt and validation."
+        },
+        {
+          "id": 270,
+          "type": "bargauge",
+          "title": "RTX \u00b7 request latency at one and two slots",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 464
+          },
+          "targets": [
+            {
+              "expr": "vector(3.26)",
+              "legendFormat": "Before \u00b7 one RTX request",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            },
+            {
+              "expr": "vector(5.39)",
+              "legendFormat": "After \u00b7 two RTX requests",
+              "refId": "B",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 2,
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          },
+          "description": "Two 60-second live windows on the same queue. The Mac ran concurrently and both RTX settings used the same prompt and validation."
         }
       ],
       "refresh": "1m",
