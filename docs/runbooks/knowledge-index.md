@@ -162,6 +162,36 @@ and SMART health per USB/SATA disk (labelled by model: Linux device letters chan
 
 - Dashboard: Grafana > Homelab > **Knowledge Index** (ConfigMap `apps/photo-enrichment/knowledge-index-dashboard.yaml`).
   It is GENERATED: edit `scripts/knowledge-index/gen-dashboard.py`, then `python3 scripts/knowledge-index/gen-dashboard.py > <that yaml>`.
+
+### Shared photo processing panels
+
+The **Photo processing · progress and live tuning** row uses the same layout
+for each processing stage. Publish one authoritative aggregate series per stage.
+Use stable stage and phase labels and keep names, file paths, image IDs and
+model inputs out of metrics. Keep existing stage-specific panels for diagnosis.
+
+| Metric | Required meaning |
+|---|---|
+| `knowledge_index_photo_stage_items{stage,state}` | Current, mutually exclusive counts for the declared inventory. Use `pending`, `running`, `complete`, `reused`, `failed` or `withheld` as applicable. |
+| `knowledge_index_photo_stage_completed_total{stage}` | New successful results committed by the active run. Reused results contribute to coverage and scope only. |
+| `knowledge_index_photo_stage_updated_timestamp_seconds{stage}` | Most recent worker progress report, independent of scrape time. |
+| `knowledge_index_photo_stage_phase_p95_seconds{stage,phase}` | P95 time across a declared measurement window for each timed phase. |
+
+The life-stage adapter reads the private SQLite checkpoint and progress log
+using `photo-stage-metrics.py --database <jobs.sqlite3> --progress-log <run.log> --out <textfile.prom>`.
+It reports model-request p95 for the active run. The checkpoint counts
+in-flight work as pending. The row shows ETA only with fresh progress and a
+measured drain rate, or an empty queue from a fresh report.
+
+Before signing off a stage, open its live Grafana panels, record the baseline
+window and relevant phase, queue and resource evidence, and identify the
+bottleneck. Record the settings change or why they were retained. Compare a
+second window under similar load and read back the deployed revision. Check
+quality, latency, throughput, errors, retries and duplicate work. Include the
+panel link and both windows in the stage's acceptance evidence. For a synchronous
+stage, document why queue measurements are inapplicable and record equivalent
+request measurements. Use the reviewed growing-up and stable face-ID journey
+as the gate before enabling the shared all-photo rollout through GitOps.
 - **Value delivered** (top row): files indexed per minute, summaries per minute, how long the quota question takes now versus the ~38 min
   sidecar scan it replaced (`baseline_s`), index size versus library size, photos and video minutes described, and an **illustrative**
   cloud-equivalent cost. No cloud service does this for a Google Photos library, so the cost prices the same work per photo and per video

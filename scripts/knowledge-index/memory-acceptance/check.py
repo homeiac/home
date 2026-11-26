@@ -79,7 +79,8 @@ META = ("scope_revision", "release", "surface", "policy_revision", "approval_ref
 
 
 def fields(journey):
-    return {**COMMON, "retrieval": {**COMMON["retrieval"], **JOURNEYS[journey]}}
+    stage_rules = {**COMMON, "retrieval": {**COMMON["retrieval"], **JOURNEYS[journey]}}
+    return {stage: {**rules, "grafana_live_tuning": "tuning"} for stage, rules in stage_rules.items()}
 
 
 def template(journey):
@@ -167,7 +168,34 @@ def matches(op, expected, actual):
         return strings(actual) and len(actual) >= 2 and len(set(actual)) == 1
     if op == "private":
         return actual == "private"
+    if op == "tuning":
+        return valid_tuning(actual)
     raise ValueError("unknown operator")
+
+
+def valid_tuning(value):
+    """Require a live dashboard and a comparable tuning result for this stage."""
+    if not isinstance(value, dict) or not all(
+        nonblank(value.get(key)) for key in (
+            "dashboard_panel", "scope", "workload", "bottleneck_evidence",
+            "quality_evidence", "deployed_revision", "decision_evidence",
+        )
+    ):
+        return False
+    if value.get("live_readback") is not True or value.get("decision") not in ("changed", "retained"):
+        return False
+    if value.get("queue_observed") is not True and not nonblank(value.get("queue_not_applicable")):
+        return False
+    for label in ("baseline", "verification"):
+        window = value.get(label)
+        if not isinstance(window, dict) or not all(
+            number(window.get(key)) and window[key] >= 0 for key in (
+                "start", "end", "items_per_minute", "p95_seconds", "errors", "retries", "duplicates",
+            )
+        ) or window["end"] <= window["start"]:
+            return False
+    baseline, verification = value["baseline"], value["verification"]
+    return verification["start"] >= baseline["end"] and verification["duplicates"] == 0
 
 
 def load_object(path):
@@ -201,7 +229,7 @@ def valid_artifacts(directory, refs):
     return True
 
 
-def score_task(directory, task, rules, oracle, binding):
+def score_task(directory, task, rules, oracle, binding, release):
     gaps, failures = [], []
     try:
         capture = load_object(directory / (task + ".json"))
@@ -220,7 +248,9 @@ def score_task(directory, task, rules, oracle, binding):
             gaps.append("missing oracle " + field)
         elif field not in actual:
             gaps.append("unobserved " + field)
-        elif not matches(op, expected, actual[field]):
+        elif not matches(op, expected, actual[field]) or (
+            op == "tuning" and actual[field]["deployed_revision"] != release
+        ):
             failures.append(field)
     return gaps, failures
 
@@ -259,7 +289,7 @@ def evaluate(baseline, directory, run_id):
     binding = {"run_id": run_id, "baseline_sha256": hashlib.sha256(baseline.read_bytes()).hexdigest()}
     results = {}
     for task, rules in fields(journey).items():
-        gaps, failures = score_task(directory, task, rules, plan["expected"].get(task), binding)
+        gaps, failures = score_task(directory, task, rules, plan["expected"].get(task), binding, plan["release"])
         dependencies = [dep for dep in DEPS[task] if results[dep]["status"] != "PASS"]
         status = "FAIL" if failures else "BLOCKED" if gaps or dependencies else "PASS"
         results[task] = {"status": status, "failed": failures, "missing": gaps, "depends_on": dependencies}

@@ -438,9 +438,56 @@ def panels():
     all_panels = all_panels[:len(intro)] + completion + all_panels[len(intro):]
     tuning = video_tuning_panels()
     audio = audio_story_panels()
+    processing = photo_processing_panels()
+    bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
     return (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
             + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
-            + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+            + shift(all_panels + shift(processing, bottom),
+                    RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+
+
+def photo_processing_panels():
+    """Give each processing stage the same operational and live tuning views."""
+    selector = 'instance=~"$instance",stage=~"$photo_stage"'
+
+    def counts(states):
+        return (f'sum by(stage) (max by(stage,state) '
+                f'(knowledge_index_photo_stage_items{{{selector},state=~"{states}"}}))')
+
+    completed = counts("complete|reused")
+    scope = counts(".*")
+    remaining = counts("pending|running")
+    age = f'time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{{{selector}}})'
+    pace = f'max by(stage) (rate(knowledge_index_photo_stage_completed_total{{{selector}}}[15m]))'
+    eta = (f'(({remaining}) / ({pace} > 0) or on(stage) (({remaining}) == 0)) '
+           f'and on(stage) (({age}) < 180)')
+    panel_set = [
+        row("Photo processing · progress and live tuning", 0),
+        stat("Photos complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}"),
+        stat("Photos queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
+        stat("Stage completion", f'({completed}) / ({scope} > 0)', 8, 1,
+             unit="percentunit", decimals=1, legend="{{stage}}",
+             description="Complete and reused divided by the declared scope, including failed and withheld photos."),
+        stat("Failed or withheld", counts("failed|withheld"), 12, 1, unit="locale", legend="{{stage}}"),
+        stat("Time to drain queue", eta, 16, 1, unit="s", legend="{{stage}}",
+             description="Remaining work at the last 15 minutes’ successful rate. A positive queue needs fresh progress and a positive rate for an estimate."),
+        stat("Last progress report", age, 20, 1, unit="s", legend="{{stage}}",
+             thresholds=[("green", None), ("orange", 180), ("red", 600)]),
+        series("Queue and outcomes by stage",
+               [(f'max by(stage,state) (knowledge_index_photo_stage_items{{{selector}}})',
+                 "{{stage}} · {{state}}")], 0, 5, 12, 7, unit="locale"),
+        series("Successful work per minute", [(f'{pace} * 60', "{{stage}}")],
+               12, 5, 12, 7, decimals=1),
+        series("Bottleneck timing by phase (p95)",
+               [(f'max by(stage,phase) (knowledge_index_photo_stage_phase_p95_seconds{{{selector}}})',
+                 "{{stage}} · {{phase}}")], 0, 12, 24, 7, unit="s",
+               description="Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."),
+    ]
+    for panel in panel_set:
+        if panel["type"] == "stat":
+            panel["targets"][0].update(instant=True, range=False)
+            panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting telemetry"
+    return panel_set
 
 
 def video_tuning_panels():
@@ -980,6 +1027,10 @@ def dashboard():
                                 {"type": "query", "name": "pipeline_enricher", "label": "Pipeline enricher", "datasource": DS,
                                  "query": 'label_values(media_pipeline_worker_stage{instance=~"$instance"}, enricher)', "refresh": 2,
                                  "multi": True, "includeAll": True, "allValue": ".*", "current": {"text": "All", "value": "$__all"}, "options": []},
+                                {"type": "query", "name": "photo_stage", "label": "Photo processing stage",
+                                 "datasource": DS, "query": 'label_values(knowledge_index_photo_stage_items{instance=~"$instance"}, stage)',
+                                 "refresh": 2, "multi": True, "includeAll": True, "allValue": ".*",
+                                 "current": {"text": "All", "value": "$__all"}, "options": []},
                                 *[_textbox(n, l, v) for n, l, v in TEXTBOXES]]},
         "title": "Knowledge Index", "uid": "knowledge-index", "version": 1,
     }

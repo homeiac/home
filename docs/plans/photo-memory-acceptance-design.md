@@ -36,8 +36,18 @@ live stage panel, record the comparable before and after windows, show the
 limiting phase or resource with evidence, and document the tuning change or
 why the settings were retained. Read back outcomes under the deployed revision
 and verify quality, retries, errors and duplicate work. For a synchronous task,
-record request timing and error evidence and explain which queue metrics do
-not apply. A passing screenshot or a single throughput number is insufficient.
+record request timing and error evidence and explain which queue metrics are
+inapplicable. Pair dashboard readback with measured timings and quality evidence.
+Each task capture includes `observed.grafana_live_tuning` with:
+
+- `dashboard_panel`, `scope`, `workload`, `bottleneck_evidence`, `quality_evidence`,
+  `decision_evidence` and `deployed_revision`.
+- `live_readback` set to true, `decision` set to `changed` or `retained`, and
+  either `queue_observed` set to true or a `queue_not_applicable` reason.
+- `baseline` and `verification`, each with `start` and `end` Unix seconds,
+  `items_per_minute`, `p95_seconds`, `errors`, `retries` and `duplicates`.
+  The windows are ordered and disjoint. Verification must use the acceptance
+  release and report zero duplicate work.
 
 **Story-specific retrieval evidence**
 
