@@ -76,7 +76,8 @@ def main():
     os.umask(0o077)
     payload=json.load(sys.stdin)
     if payload['mode']=='status':return status()
-    index,library=source_paths()
+    if payload['mode'] in ('inspect','cutover'):
+        index,library=source_paths()
     if payload['mode']=='inspect':
         print('Source catalog exists:',(index/'knowledge.duckdb').exists(),'legacy state exists:',(STATE/'enrichment.duckdb').exists())
         print('Free GiB:',round(shutil.disk_usage(STATE).free/2**30,1));return status()
