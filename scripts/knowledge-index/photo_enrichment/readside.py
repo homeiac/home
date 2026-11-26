@@ -84,7 +84,9 @@ class GalleryReader:
         else:
             if status=='unreviewed':filters+=' AND f.person IS NULL'
             if status=='named':filters+=' AND f.person IS NOT NULL'
-            if person:filters+=' AND f.person=?';params.append(person)
+            if person:
+                clause, params = self.store.face_person_filter(person, status)
+                filters += clause
             total=self.rows('SELECT count(*) n '+base+filters,params)[0]['n']
             faces=self.rows(fields+base+filters+' ORDER BY m.capture_ts DESC NULLS LAST,f.id LIMIT ? OFFSET ?',[*params,limit,offset])
         groups={}

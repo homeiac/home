@@ -411,7 +411,9 @@ class PostgresStore(Store):
                 filters,params='',[]
                 if status=='unreviewed':filters+=' AND f.person IS NULL'
                 if status=='named':filters+=' AND f.person IS NOT NULL'
-                if person:filters+=' AND f.person=?';params.append(person)
+                if person:
+                    clause, params = self.face_person_filter(person, status)
+                    filters += clause
                 data['total']=self.rows('SELECT count(*) n '+base+filters,params)[0]['n']
                 dated=base.replace('WHERE m.kind', 'LEFT JOIN extracted e ON e.path=m.path AND e.size_bytes=m.size_bytes WHERE m.kind')
                 ids=[r['id'] for r in self.rows('SELECT f.id '+dated+filters+

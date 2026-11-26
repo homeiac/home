@@ -21,6 +21,14 @@ Track the stories and their status in [epic #228](https://github.com/homeiac/hom
 
 The private S1 reference run recorded two failed gates and six blocked gates. Identity failed `alias_query_matches`; the new-confirmation and false-attribution checks still need observations. Accounting failed `asset_dispositions` and `unresolved_required_assets`. Readback and source counts cover all 40 cases. The run measured the existing app API. Browser/album delivery, semantic accuracy and journey completion remain open. See [measurement story #229](https://github.com/homeiac/home/issues/229).
 
+### Active change for S2
+
+Revision 4, November 25. The live named-face endpoint returned matches for a saved label and zero for its confirmed alias. Resolve named filters against the existing private reconciliation alias registry, then match all stored spellings before counting and paginating. Verify equality of totals and ordered face IDs across spellings, with an unrelated name as a control. Preserve the existing behavior for installations without a registry. Caption work follows this lookup.
+
+Revision 5. The isolated PostgreSQL and snapshot tests passed. The GUI rollout stopped before preparing a release because it looked up source paths from an idle caption worker. Limit that lookup to inspection and cutover, the two modes that use those paths. Re-run the GUI-only release and verify the endpoint.
+
+Revision 6. The live named filter now returns the same total and ordered face IDs for all three confirmed spellings at the first, middle and last pages. An unrelated known label retained its count and an unknown label returned zero. Thirty integration tests passed. The next gap is the primary photo description when a current context caption is unavailable.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
