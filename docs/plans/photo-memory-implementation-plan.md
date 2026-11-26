@@ -25,6 +25,8 @@ The private S1 reference run recorded two failed gates and six blocked gates. Id
 
 Revision 4, November 25. The live named-face endpoint returned matches for a saved label and zero for its confirmed alias. Resolve named filters against the existing private reconciliation alias registry, then match all stored spellings before counting and paginating. Verify equality of totals and ordered face IDs across spellings, with an unrelated name as a control. Preserve the existing behavior for installations without a registry. Caption work follows this lookup.
 
+Revision 5. The isolated PostgreSQL and snapshot tests passed. The GUI rollout stopped before preparing a release because it looked up source paths from an idle caption worker. Limit that lookup to inspection and cutover, the two modes that use those paths. Re-run the GUI-only release and verify the endpoint.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
