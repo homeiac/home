@@ -82,6 +82,14 @@ Revision 30. Let both life-stage graphs use the dashboard time picker so complet
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.
 
+### OpenLABEL album pilot ([#231](https://github.com/homeiac/home/issues/231))
+
+Start with the existing reviewed group-action subset of the private growing-up album. Join exact saved face IDs to current source regions, preserve reviewed caption wording, and encode the principal actions and supported participant roles in ASAM OpenLABEL 1.0.0. Use one private PostgreSQL pilot store. Render its readback into a linked album preview. Verify the person and verb clicks against the saved faces, replay without additional revisions, and record coverage, latency and model-call count. Show the preview before extending coverage.
+
+Pilot readback covered 5 of 88 highlights. All 13 reviewed sentences retained their wording. Browser checks exercised 18 name clicks and 13 principal verb clicks against source face regions. The held-person example selected the two faces in their reviewed roles. A repeat run left five PostgreSQL rows at revision one and made zero model calls. On the Mac the measured first build took 80 ms and the repeat took 27 ms, excluding the live source lookup. Most end-to-end time was in verifying current membership, identity and geometry. Keep the scoped batch lookup and the existing CPU path for this pilot. Grafana’s shared photo processing panels report stage `openlabel-pilot`.
+
+**Reproduce privately.** Use `memory-acceptance/openlabel_sources.py` with the existing private album directory to refresh the source snapshot. Run `review_openlabel.py` with that directory, the snapshot and the pinned OpenLABEL 1.0.0 JSON Schema. Supply the private database connection through the normal libpq environment and pass `--timeline` to link the HTML preview. The preview is a snapshot of the resolved names. Refresh both steps after a relabel. The browser checker takes the timeline and source snapshot and requires Puppeteer and Chrome. [Pilot entry point](../../scripts/knowledge-index/memory-acceptance/review_openlabel.py) · [ASAM schema](https://openlabel.asam.net/V1-0-0/schema/openlabel_json_schema.json)
+
 ### S1. Measure the growing-up reference set and record the first gap ([#229](https://github.com/homeiac/home/issues/229))
 
 **Starts after** — Start here.

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Album · Face and action review</title>
+<style>
+*{box-sizing:border-box}body{margin:2rem auto;max-width:76rem;padding:0 1rem;color:#183128;background:#f8f7f2;font:17px/1.5 system-ui}
+h1,h2{font-family:Georgia,serif}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:1.25rem;align-items:start}
+article{background:white;padding:1rem;border:1px solid #ced8d0;border-radius:.7rem}figure{margin:0;position:relative}img{display:block;width:100%;height:auto}
+.box{position:absolute;pointer-events:none;border:3px solid #ffea38;box-shadow:0 0 0 2px black}
+.box.held_person{border-color:#58deff}button{font:inherit;color:#145744;border:0;background:#eef5ef;text-decoration:underline;cursor:pointer;border-radius:.2rem}
+button:focus-visible,a:focus-visible{outline:3px solid #705500}button[aria-pressed=true]{background:#174f41;color:white}output{display:block;min-height:1.5em}
+a{color:#175441}h2{margin:.6rem 0}
+</style>
+<h1>Face and action review</h1><p>Select a name to highlight its face. Select a verb to see who did what.</p>
+<main></main><script id="scenes" type="application/json">PILOT_JSON</script>
+<script>
+function element(tag, parent, text) {
+  const el = document.createElement(tag);
+  if (text !== undefined) el.textContent = text;
+  parent.append(el);
+  return el;
+}
+for (const item of JSON.parse(document.querySelector('#scenes').textContent)) {
+  const article = element('article', document.querySelector('main'));
+  article.id = item.asset;
+  const figure = element('figure', article);
+  const photo = element('img', figure);
+  photo.src = item.image;
+  photo.alt = 'Album photo from ' + item.date;
+  element('h2', article, item.date);
+  const feedback = document.createElement('output');
+  feedback.setAttribute('aria-live','polite');
+  function select(button, roles, message) {
+    figure.querySelectorAll('.box').forEach(box => box.remove());
+    article.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
+    for (const [role, id] of Object.entries(roles)) {
+      const [cx, cy, w, h] = item.faces[id].box;
+      const box = element('span', figure);
+      box.className = 'box ' + role;
+      box.dataset.face = id;
+      Object.assign(box.style, {left: (cx-w/2)/item.width*100+'%', top: (cy-h/2)/item.height*100+'%',
+                                width: w/item.width*100+'%', height: h/item.height*100+'%'});
+    }
+    feedback.textContent = message;
+  }
+  for (const claim of item.claims) {
+    const p = element('p', article);
+    for (const span of claim.spans) {
+      if ('text' in span) { p.append(span.text); continue; }
+      const face = item.faces[span.face];
+      const b = element('button', p, face ? face.name : span.verb);
+      b.type = 'button';
+      b.setAttribute('aria-pressed','false');
+      if (face) {
+        b.dataset.face = span.face;
+        b.onclick = () => select(b, {person:span.face}, face.name);
+      } else {
+        b.dataset.action = span.id;
+        const labels = Object.entries(claim.roles).map(([role,id]) =>
+          (role === 'actor' ? 'Actor' : 'Held person') + ' · ' + item.faces[id].name);
+        b.onclick = () => select(b, claim.roles, [claim.code, ...labels].join(' / '));
+      }
+    }
+  }
+  article.append(feedback);
+  element('a', article, 'Open original in Immich').href = item.original;
+}
+</script></html>
