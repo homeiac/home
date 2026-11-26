@@ -13804,7 +13804,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]) == 0)) * 60) + (max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]) == 0)) * 60)",
+              "expr": "(max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]) == 0)) * 60) + (max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]) == 0)) * 60)",
               "legendFormat": "",
               "refId": "A"
             }
@@ -13955,17 +13955,17 @@ data:
           },
           "targets": [
             {
-              "expr": "max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]) == 0)) * 60",
+              "expr": "max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]) == 0)) * 60",
               "legendFormat": "Mac GPU",
               "refId": "A"
             },
             {
-              "expr": "max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]) == 0)) * 60",
+              "expr": "max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]) == 0)) * 60",
               "legendFormat": "RTX 3070",
               "refId": "B"
             },
             {
-              "expr": "(max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"}[15m]) == 0)) * 60) + (max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"}[15m]) == 0)) * 60)",
+              "expr": "(max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"}[15m]) == 0)) * 60) + (max(clamp_min(deriv(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]), 0) and on(instance,stage,backend) (changes(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]) >= 2) and on(instance,stage,backend) (resets(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"}[15m]) == 0)) * 60)",
               "legendFormat": "Combined",
               "refId": "C"
             },
@@ -13992,18 +13992,51 @@ data:
               },
               "decimals": 1
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "RTX 3070"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "orange"
+                    }
+                  },
+                  {
+                    "id": "custom.lineWidth",
+                    "value": 3
+                  },
+                  {
+                    "id": "custom.showPoints",
+                    "value": "always"
+                  },
+                  {
+                    "id": "custom.pointSize",
+                    "value": 5
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
               "displayMode": "list",
-              "placement": "bottom"
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
             },
             "tooltip": {
               "mode": "multi"
             }
           },
-          "description": "New records per minute based on observed saved-count changes."
+          "description": "New records per minute based on observed saved-count changes.",
+          "timeFrom": "30m",
+          "interval": "15s"
         },
         {
           "id": 266,
@@ -14021,12 +14054,12 @@ data:
           },
           "targets": [
             {
-              "expr": "max(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"mac-metal\"})",
+              "expr": "max(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"mac-metal\"})",
               "legendFormat": "Mac GPU",
               "refId": "A"
             },
             {
-              "expr": "max(knowledge_index_photo_stage_backend_completed{instance=~\"$instance\",stage=\"life-stage\",backend=\"rtx3070\"})",
+              "expr": "max(knowledge_index_photo_stage_backend_completed{stage=\"life-stage\",backend=\"rtx3070\"})",
               "legendFormat": "RTX 3070",
               "refId": "B"
             }
@@ -14047,18 +14080,51 @@ data:
                 "mode": "palette-classic"
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "RTX 3070"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "orange"
+                    }
+                  },
+                  {
+                    "id": "custom.lineWidth",
+                    "value": 3
+                  },
+                  {
+                    "id": "custom.showPoints",
+                    "value": "always"
+                  },
+                  {
+                    "id": "custom.pointSize",
+                    "value": 5
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
               "displayMode": "list",
-              "placement": "bottom"
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull"
+              ]
             },
             "tooltip": {
               "mode": "multi"
             }
           },
-          "description": "Persisted model results. Reused album results are accounted for separately."
+          "description": "Persisted model results. Reused album results are accounted for separately.",
+          "timeFrom": "30m",
+          "interval": "15s"
         },
         {
           "id": 267,

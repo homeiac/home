@@ -518,7 +518,8 @@ def tuning_comparison(title, data, x, y, w, h, unit, description, maximum=None):
 
 def life_stage_tuning_panels():
     """Apply the video tuning row pattern to local photo life-stage processing."""
-    scope = 'instance=~"$instance",stage="life-stage"'
+    # This checkpoint reports both GPU backends from the same collector host.
+    scope = 'stage="life-stage"'
     saved = f'knowledge_index_photo_stage_backend_completed{{{scope}}}'
 
     def backend_metric(name):
@@ -563,6 +564,20 @@ def life_stage_tuning_panels():
                           [("vector(22.44)", "Model request p95"), ("vector(0.132)", "Fetch and prepare preview p95")],
                           0, 25, 24, 7, "s", "Same 12-photo concurrent Mac sample. The RTX was added after this phase measurement."),
     ])
+    for panel in panels:
+        if panel["type"] != "timeseries":
+            continue
+        panel.update(timeFrom="30m", interval="15s")
+        panel["options"]["legend"]["calcs"] = ["lastNotNull"]
+        panel["fieldConfig"]["overrides"].append({
+            "matcher": {"id": "byName", "options": "RTX 3070"},
+            "properties": [
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}},
+                {"id": "custom.lineWidth", "value": 3},
+                {"id": "custom.showPoints", "value": "always"},
+                {"id": "custom.pointSize", "value": 5},
+            ],
+        })
     return panels
 
 
