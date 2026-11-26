@@ -519,6 +519,16 @@ def tuning_comparison(title, data, x, y, w, h, unit, description, maximum=None):
 def life_stage_tuning_panels():
     """Apply the video tuning row pattern to local photo life-stage processing."""
     trials = json.loads((Path(__file__).parent / "life-stage-tuning-results.json").read_text())
+    slot_trials = trials.get("slot_trials")
+    slot_story = trials["decision"]
+    if slot_trials:
+        retained = next(t for t in slot_trials["trials"] if t["slots"] == slot_trials["selected_slots"])
+        slot_story = (
+            f"**Matched capacity trial:** Retained **{retained['slots']} RTX slots** at "
+            f"**{retained['photos_per_minute']} photos/min**. "
+            f"All {retained['valid']} selected responses passed validation. "
+            + " ".join(t["failure"] for t in slot_trials["trials"] if t.get("failure"))
+        )
     # This checkpoint reports both GPU backends from the same collector host.
     scope = 'stage="life-stage"'
     saved = f'knowledge_index_photo_stage_backend_completed{{{scope}}}'
@@ -540,7 +550,7 @@ def life_stage_tuning_panels():
         "disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once.\n\n"
         f"**RTX concurrency:** One request saved {trials['before']['rtx_per_minute']:.1f} photos/min. "
         f"Two requests saved {trials['after']['rtx_per_minute']:.1f} photos/min in the measured window. "
-        + trials["decision"]
+        + slot_story
     ))
     panels.extend([
         tuning_comparison("RTX · matched life-stage request latency",
@@ -581,6 +591,22 @@ def life_stage_tuning_panels():
             ("before", "Before · one RTX request"), ("after", "After · two RTX requests")
         )]
         panels.append(tuning_comparison(title, values, x, y, 12 if y == 32 else 24, 7, unit, comparison_note))
+    if slot_trials:
+        note = (f"Identical {slot_trials['sample_size']}-photo target sample, same prompt and validation. "
+                "The release check requires valid results, stage agreement or a reported alternative, and full GPU residency.")
+        for title, field, x, unit in (
+            ("RTX · matched capacity at 2, 3 and 4 slots", "photos_per_minute", 0, "suffix: photos/min"),
+            ("RTX · median latency at 2, 3 and 4 slots", "median_seconds", 12, "s"),
+        ):
+            values = [
+                (f'vector({trial[field]})',
+                 f"{trial['slots']} slots · " + ("retained" if trial['slots'] == slot_trials['selected_slots']
+                                               else "passed" if trial['passed'] else
+                                               "timed out" if trial.get("failure") else "failed checks"))
+                for trial in slot_trials["trials"]
+                if trial[field] is not None
+            ]
+            panels.append(tuning_comparison(title, values, x, 46, 12, 7, unit, note))
     for panel in panels:
         if panel["type"] != "timeseries":
             continue
