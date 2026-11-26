@@ -4,11 +4,14 @@ import argparse
 from contextlib import closing
 import math
 from pathlib import Path
+import shlex
 import sqlite3
+import subprocess
 import tempfile
 
 
 STAGE = "life-stage"
+TEXTFILE_DIRECTORY = "/var/lib/prometheus/node-exporter"
 STATES = ("pending", "running", "complete", "reused", "failed", "withheld")
 HELP = {
     "knowledge_index_photo_stage_items": ("gauge", "Current photo count by processing stage and disposition."),
@@ -52,21 +55,50 @@ def render(database: Path, progress_log: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database", type=Path, required=True)
-    parser.add_argument("--progress-log", type=Path, required=True)
-    parser.add_argument("--out", type=Path, required=True, help="Prometheus textfile path")
-    args = parser.parse_args()
-    metrics = render(args.database, args.progress_log)
-    with tempfile.NamedTemporaryFile(mode="w", dir=args.out.parent, delete=False) as tmp:
+def write_textfile(metrics: str, out: Path) -> None:
+    with tempfile.NamedTemporaryFile(mode="w", dir=out.parent, delete=False) as tmp:
         tmp.write(metrics)
     try:
         # The node exporter may run as a different user.
         Path(tmp.name).chmod(0o644)
-        Path(tmp.name).replace(args.out)
+        Path(tmp.name).replace(out)
     finally:
         Path(tmp.name).unlink(missing_ok=True)
+
+
+def publish_textfile(metrics: str, host: str) -> None:
+    """Send only aggregate metrics to an existing Prometheus textfile collector."""
+    receiver = f"""
+set -eu
+umask 022
+cd {shlex.quote(TEXTFILE_DIRECTORY)}
+incoming=$(mktemp .photo-life-stage.XXXXXX)
+trap 'rm -f "$incoming"' EXIT
+cat > "$incoming"
+test -s "$incoming"
+chmod 0644 "$incoming"
+mv -f "$incoming" knowledge_index_photo_stage_life_stage.prom
+"""
+    subprocess.run(
+        ["/usr/bin/ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+         "--", host, "sh -c " + shlex.quote(receiver)],
+        input=metrics, text=True, check=True, timeout=25,
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--database", type=Path, required=True)
+    parser.add_argument("--progress-log", type=Path, required=True)
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument("--out", type=Path, help="Local Prometheus textfile path")
+    output.add_argument("--ssh-host", help="Host with the existing Prometheus textfile collector")
+    args = parser.parse_args()
+    metrics = render(args.database, args.progress_log)
+    if args.ssh_host:
+        publish_textfile(metrics, args.ssh_host)
+    else:
+        write_textfile(metrics, args.out)
 
 
 if __name__ == "__main__":

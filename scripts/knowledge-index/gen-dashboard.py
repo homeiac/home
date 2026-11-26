@@ -458,7 +458,13 @@ def photo_processing_panels():
     scope = counts(".*")
     remaining = counts("pending|running")
     age = f'time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{{{selector}}})'
-    pace = f'max by(stage) (rate(knowledge_index_photo_stage_completed_total{{{selector}}}[15m]))'
+    saved = f'knowledge_index_photo_stage_items{{{selector},state="complete"}}'
+    counter = f'knowledge_index_photo_stage_completed_total{{{selector}}}'
+    # Estimate slope across actual samples so a newly scraped stage does not
+    # extrapolate a small fraction of its rate across an entire range.
+    pace = (f'max by(stage) (clamp_min(deriv({saved}[15m]), 0) '
+            f'and on(instance,stage) (changes({saved}[15m]) >= 2) '
+            f'and on(instance,stage) (resets({counter}[15m]) == 0))')
     eta = (f'(({remaining}) / ({pace} > 0) or on(stage) (({remaining}) == 0)) '
            f'and on(stage) (({age}) < 180)')
     panel_set = [
@@ -470,7 +476,7 @@ def photo_processing_panels():
              description="Complete and reused divided by the declared scope, including failed and withheld photos."),
         stat("Failed or withheld", counts("failed|withheld"), 12, 1, unit="locale", legend="{{stage}}"),
         stat("Time to drain queue", eta, 16, 1, unit="s", legend="{{stage}}",
-             description="Remaining work at the last 15 minutes’ successful rate. A positive queue needs fresh progress and a positive rate for an estimate."),
+             description="Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."),
         stat("Last progress report", age, 20, 1, unit="s", legend="{{stage}}",
              thresholds=[("green", None), ("orange", 180), ("red", 600)]),
         series("Queue and outcomes by stage",

@@ -179,9 +179,12 @@ model inputs out of metrics. Keep existing stage-specific panels for diagnosis.
 
 The life-stage adapter reads the private SQLite checkpoint and progress log
 using `photo-stage-metrics.py --database <jobs.sqlite3> --progress-log <run.log> --out <textfile.prom>`.
+For a separate worker host, `--ssh-host` publishes those aggregate samples to
+the existing collector. The active Mac worker publishes once per minute.
 It reports model-request p95 for the active run. The checkpoint counts
-in-flight work as pending. The row shows ETA only with fresh progress and a
-measured drain rate, or an empty queue from a fresh report.
+in-flight work as pending. The row estimates ETA from the slope across actual
+checkpoints, with a fresh report and at least two advances in a reset-free
+window. A fresh report with an empty queue shows zero.
 
 Before signing off a stage, open its live Grafana panels, record the baseline
 window and relevant phase, queue and resource evidence, and identify the

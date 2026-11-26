@@ -13323,7 +13323,7 @@ data:
           },
           "targets": [
             {
-              "expr": "((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) / (max by(stage) (rate(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m])) > 0) or on(stage) ((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) == 0)) and on(stage) ((time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})) < 180)",
+              "expr": "((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) / (max by(stage) (clamp_min(deriv(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]), 0) and on(instance,stage) (changes(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]) >= 2) and on(instance,stage) (resets(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m]) == 0)) > 0) or on(stage) ((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) == 0)) and on(stage) ((time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})) < 180)",
               "legendFormat": "{{stage}}",
               "refId": "A",
               "instant": true,
@@ -13358,7 +13358,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Remaining work at the last 15 minutes\u2019 successful rate. A positive queue needs fresh progress and a positive rate for an estimate."
+          "description": "Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."
         },
         {
           "id": 253,
@@ -13485,7 +13485,7 @@ data:
           },
           "targets": [
             {
-              "expr": "max by(stage) (rate(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m])) * 60",
+              "expr": "max by(stage) (clamp_min(deriv(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]), 0) and on(instance,stage) (changes(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]) >= 2) and on(instance,stage) (resets(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m]) == 0)) * 60",
               "legendFormat": "{{stage}}",
               "refId": "A"
             }
