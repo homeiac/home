@@ -53,6 +53,7 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
     photo.alt = 'Album photo from ' + item.date;
     element('h2', article, 'Recorded date · ' + item.date);
   }
+  if (item.journey_date_note) element('small', block, item.journey_date_note);
   if (item.date_conflict) {
     const facts = item.date_conflict;
     const year = Number(facts.recorded_date.slice(0, 4));
@@ -66,7 +67,7 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
       facts.visual_stage.replaceAll('_', ' ') + ' age. The capture year is unknown.');
   }
   if (item.date_status === 'composite') element('small', block, 'Composite image · component photos may have different capture dates.');
-  if (item.date_status === 'unresolved') element('small', block, 'Age and capture date could not be checked reliably.');
+  if (!item.journey_date_note && item.date_status === 'unresolved') element('small', block, 'Age and capture date could not be checked reliably.');
   const section = element('div', block);
   const claims = [...item.claims, ...item.individual];
   const solo = claims.length === 1 && item.faces[claims[0].subject];

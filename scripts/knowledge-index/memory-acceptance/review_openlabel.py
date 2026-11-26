@@ -4,11 +4,13 @@ import argparse
 import json
 import math
 import os
+import re
 import runpy
 import sqlite3
 import tempfile
 import time
 from contextlib import closing
+from html import escape
 from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID
@@ -18,7 +20,7 @@ from PIL import Image, ImageOps
 from journey_faces import complete_faces
 from collage_catalogue import catalogue, filter_timeline, regular_grid
 from caption_participants import age_status, attach
-from openlabel_album import build_scene, card, persist, validate_scenes
+from openlabel_album import build_scene, card, persist, stable_id, validate_scenes
 
 
 def read(path: Path):
@@ -34,6 +36,38 @@ def atomic_page(path: Path, content: str) -> None:
 def card_json(cards: list[dict]) -> str:
     """Encode private card data for a standalone HTML script element."""
     return json.dumps(cards, ensure_ascii=False).replace("<", "\\u003c")
+
+
+def select_together(cards: dict, people: list[str]) -> list[dict]:
+    """Select original photos with distinct reviewed subjects for all requested people."""
+    requested = set(people)
+    if len(requested) < 2 or len(requested) != len(people) or not all(requested):
+        raise ValueError("Choose at least two distinct person IDs")
+    selected = []
+    for item in cards.values():
+        if item["media_type"] != "Photo":
+            continue
+        subjects = {item["faces"][c["subject"]]["person_id"] for c in item["claims"] + item["individual"]}
+        if requested <= subjects:
+            # The source age check belongs to the original journey subject. Carry only date certainty.
+            copy = dict(item)
+            copy.pop("date_conflict", None)
+            copy["journey_date_note"] = {
+                "confirmed": "Confirmed date in the source journey.",
+                "conflict": "The source journey flags a conflict with this recorded date.",
+                "compatible": "The source review found the recorded date plausible.",
+            }.get(item["date_status"], "The capture date is uncertain.")
+            selected.append(copy)
+    return sorted(selected, key=lambda item: (item["date"], item["asset"]))
+
+
+def render_review(template: str, cards: list[dict], title: str, intro: str) -> str:
+    """Render one private scope with the shared caption and face controls."""
+    # Insert the card payload last so private caption text is never treated as markup.
+    header, body = template.split("PILOT_JSON")
+    labels = {"REVIEW_TITLE": title, "REVIEW_INTRO": intro}
+    header = re.sub(r"REVIEW_TITLE|REVIEW_INTRO", lambda m: escape(labels[m[0]]), header)
+    return header + card_json(cards) + body
 
 
 def journey_page(path: Path, cards: dict, styles: str, renderer: str, members: list, types: dict) -> str:
@@ -62,7 +96,7 @@ def journey_page(path: Path, cards: dict, styles: str, renderer: str, members: l
 
 
 def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | None = None,
-            timeline: Path | None = None) -> dict:
+            timeline: Path | None = None, together: list[str] | None = None) -> dict:
     if timeline is None:
         # Rebuild a previously enabled timeline when refreshing names or action evidence.
         enabled = [p for p in root.glob("*.html") if "<!-- BEGIN journey face cards -->" in p.read_text()]
@@ -78,6 +112,8 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
         raise ValueError("Refresh the album inventory before publishing")
     if not current["private"]:
         raise ValueError("Private review requires an owner-only album")
+    if together and any(not (current["names"].get(pid) or "").strip() for pid in together):
+        raise ValueError("Choose current confirmed person IDs for this private snapshot")
     pilot = root / "album-life-stage-pilot"
     reviewed = read(pilot / "group-actions/verified-actions.json")
     if not reviewed:
@@ -192,6 +228,10 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
     stored = persist(conn, album["id"], scenes)
     for asset, scene in stored.items():
         check_caption(asset, scene)
+    if together:
+        pair_started = time.perf_counter()
+        selected = select_together(cards, together)
+        selection_time = time.perf_counter() - pair_started
     page = Path(__file__).with_name("openlabel_review.html").read_text()
     renderer = Path(__file__).with_name("album_cards.js").read_text()
     styles = Path(__file__).with_name("album_card_links.css").read_text()
@@ -200,13 +240,26 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
         enriched = journey_page(timeline, cards, styles, renderer, current["members"], media_types)
         if enriched != timeline.read_text():
             atomic_page(timeline, enriched)
-    atomic_page(root / "OpenLABEL album review.html", page.replace("PILOT_JSON", card_json(list(cards.values()))))
+    instructions = "Select a name to see what that person is doing. Select an action to highlight its participants."
+    atomic_page(root / "OpenLABEL album review.html", render_review(page, list(cards.values()),
+                                                                  "Face and action review", instructions))
+    pair_result = {}
+    if together:
+        pair_started = time.perf_counter()
+        names = sorted(current["names"][pid] for pid in together)
+        title = " and ".join(names) + " together"
+        label = f"{len(selected)} matching photos in the reviewed collection. " if selected else (
+            "No reviewed photo in this collection has an action for every selected person. ")
+        filename = "Together-" + stable_id(album["id"], *sorted(together)) + ".html"
+        atomic_page(root / filename, render_review(page, selected, title, label + instructions))
+        pair_result = {"together_page": filename, "together_photos": len(selected),
+                       "selection_and_render_ms": round((time.perf_counter() - pair_started + selection_time) * 1000, 2)}
     if jobs_path:
         atomic_page(jobs_path, "".join(json.dumps(job) + "\n" for job in jobs))
     groups = [c for a, c in cards.items() if c["media_type"] != "Collage" and
               sum(r["namespace"] == "immich" for r in current["regions"].get(a, [])) > 1]
     partial = sum(any("action_withheld" in face for face in c["faces"].values()) for c in groups)
-    return {"album_highlights": len(album["members"]), "reviewed_photos": len(stored),
+    return {**pair_result, "album_highlights": len(album["members"]), "reviewed_photos": len(stored),
             "faces": sum(len(c["faces"]) for c in cards.values()),
             "scene_only": sum("scene" in c for c in cards.values()),
             "actions": sum(len(scene["openlabel"].get("actions", {})) for scene in stored.values()),
@@ -226,10 +279,13 @@ if __name__ == "__main__":
     parser.add_argument("--participant-jobs", type=Path, help="Write private JSONL jobs for the reusable local face matcher")
     parser.add_argument("--timeline", type=Path, help="Refresh face-linked captions in the existing private HTML album")
     parser.add_argument("--metrics-host", help="Existing private node-exporter textfile collector")
+    parser.add_argument("--together", nargs="+", type=UUID, metavar="PERSON_ID",
+                        help="Publish an additional private same-photo view for these confirmed people")
     args = parser.parse_args()
     os.umask(0o077)
     with psycopg.connect(autocommit=True) as connection:
-        result = publish(args.album_directory, args.schema, read(args.current_sources), connection, args.participant_jobs, args.timeline)
+        result = publish(args.album_directory, args.schema, read(args.current_sources), connection, args.participant_jobs, args.timeline,
+                         [str(pid) for pid in args.together] if args.together else None)
     if args.metrics_host:
         metrics = runpy.run_path(str(Path(__file__).resolve().parents[1] / "photo-stage-metrics.py"))
         stages = [("openlabel-pilot", result["reviewed_photos"], result["scene_only"], result["build_p95"]),
