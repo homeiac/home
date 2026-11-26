@@ -29,6 +29,10 @@ Revision 5. The isolated PostgreSQL and snapshot tests passed. The GUI rollout s
 
 Revision 6. The live named filter now returns the same total and ordered face IDs for all three confirmed spellings at the first, middle and last pages. An unrelated known label retained its count and an unknown label returned zero. Thirty integration tests passed. The next gap is the primary photo description when a current context caption is unavailable.
 
+Revision 7. On 32 of 33 subject-positive reference items the reader lacked a current contextual caption. For the first visible change, show a factual primary sentence naming the people with current user-confirmed faces when enriched prose is missing. Keep the raw local caption available separately and distinguish this interim account from completed scene enrichment. Exercise the photo detail and gallery cards, a renamed face and an unconfirmed control. Location and person/action inference remain separate checks.
+
+Revision 8. All 40 live reference details showed their confirmed names, and the original captions matched the frozen digests. Thirty-nine used the interim account; one used an existing contextual caption. Browser readback confirmed the painted-board control shows the same primary text on the card and in details, a pending notice and the original caption. Thirty-one integration tests passed. Person/action grounding and the place/date source checks remain open.
+
 ## Rough sequence
 
 The stories below are ordered by the first useful album. S2 now has a measured starting point. S2 and S3 can diverge after identity passes. S7 and S8 stay rough until the first album has been reviewed. The numbered changes below are candidate PR boundaries; use the contract result to choose which work is needed.

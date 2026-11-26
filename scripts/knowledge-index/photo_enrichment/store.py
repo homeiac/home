@@ -241,7 +241,12 @@ class Store:
         condition = """coalesce(CAST(CAST(timezone(?,to_timestamp(capture_ts)) AS DATE) AS VARCHAR),'unknown')=?
             AND NOT EXISTS (SELECT 1 FROM catalog.gphotos_album_dup d WHERE d.path=m.path)"""
         total = self.rows("SELECT count(*) AS n FROM enriched_media m WHERE " + condition, [timezone, date])[0]["n"]
-        photos = self.rows("SELECT * FROM enriched_media m WHERE " + condition + " ORDER BY capture_ts NULLS LAST, path LIMIT ? OFFSET ?",
+        photos = self.rows("""SELECT m.*, (SELECT array_agg(DISTINCT f.person ORDER BY f.person)
+                           FROM faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+                               AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+                           WHERE f.path=m.path AND f.size_bytes=m.size_bytes AND f.label_source='user'
+                               AND f.person IS NOT NULL) AS confirmed_people
+                           FROM enriched_media m WHERE """ + condition + " ORDER BY capture_ts NULLS LAST, path LIMIT ? OFFSET ?",
                            [timezone, date, limit, offset])
         return dict(photos=photos, total=total, offset=offset)
 

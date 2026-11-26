@@ -51,8 +51,9 @@ async function loadPhotos() {
     const body=element('div',undefined,'card-body');body.append(element('span',photo.latitude!==null?'GPS available':'Location unknown','badge'));
     if(photo.suggested_location)body.append(element('span',photo.suggested_location,'badge'));
     for(const person of photo.saved_people||[])body.append(element('span',person,'badge'));
-    if(photo.context_summary)body.append(element('span','Enriched caption','badge'));
-    body.append(element('p',photo.context_summary||photo.summary||'No model caption yet','card-caption'));body.append(button('Review photo',()=>showPhoto(photo.path)));
+    if(photo.description_source==='confirmed_faces')body.append(element('span','Scene description pending','badge'));
+    if(photo.description_source==='context')body.append(element('span','Enriched caption','badge'));
+    body.append(element('p',photo.primary_description||'No model caption yet','card-caption'));body.append(button('Review photo',()=>showPhoto(photo.path)));
     card.append(image,label,body);$('photos').append(card);
   }
   document.querySelectorAll('#dates button').forEach(b=>b.classList.toggle('active',b.dataset.date===state.date));selected();pagination();
@@ -60,12 +61,14 @@ async function loadPhotos() {
 }
 async function showPhoto(path) {
   const photo=await api(query('/api/photo',{path}));$('detail-image').src=query('/api/thumbnail',{path});$('detail-name').textContent=path;
-  $('caption').textContent=photo.context_summary||photo.summary||'No model caption saved yet.';$('metadata').replaceChildren();
+  $('caption').textContent=photo.primary_description||'No model caption saved yet.';
+  $('caption-status').hidden=photo.description_source!=='confirmed_faces';$('metadata').replaceChildren();
   const fields=[['Captured',photo.capture_ts ? new Date(photo.capture_ts*1000).toLocaleString(undefined,{timeZone:timezone()})+' ('+timezone()+')':'Unknown'],
     ['Date source',photo.capture_source||'Unknown'],['GPS',photo.latitude===null?'Unknown':photo.latitude.toFixed(6)+', '+photo.longitude.toFixed(6)],
     ['GPS source',photo.gps_source||'Unknown'],['Camera',[photo.camera_make,photo.camera_model].filter(Boolean).join(' ')||'Not extracted'],
     ['Extraction',photo.extraction_error||photo.extraction_version||'Not run'],['Caption model',photo.summary_model||'None']];
-  if(photo.context_summary)fields.push(['Original caption',photo.summary],['GPS caption model',photo.context_model]);
+  if(photo.description_source!=='model' && photo.summary)fields.push(['Original model caption',photo.summary]);
+  if(photo.description_source==='context')fields.push(['Context caption model',photo.context_model]);
   for(const [key,value] of fields) $('metadata').append(element('dt',key),element('dd',value));
   if(photo.location_context){
     const context=photo.location_context;

@@ -314,6 +314,32 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(self.store.face_library('Synthetic person', 'named')['total'], 1)
             self.assertEqual(self.store.face_library('Al', 'named')['total'], 0)
 
+    def test_confirmed_names_in_primary_text_while_scene_is_pending(self):
+        from photo_enrichment.server import describe_photo
+        self.add_review_faces()
+        self.store.label_face('review-a', 'Ren')
+        self.store.db.execute("UPDATE faces SET person='Unverified',label_source='auto' WHERE id='review-b'")
+        for snapshot in (False, True):
+            if snapshot:
+                export_snapshot(self.state)
+            date = next(d['date'] for d in self.store.dates('UTC') if any(
+                p['path'] == self.path for p in self.store.photos(d['date'], 'UTC')['photos']))
+            entry = next(p for p in self.store.photos(date, 'UTC')['photos'] if p['path'] == self.path)
+            for photo in (entry, self.store.detail(self.path)):
+                photo['summary'] = 'A man beside a painted dog.'
+                shown = describe_photo(photo)
+                self.assertEqual(shown['primary_description'], 'Ren and Synthetic person are in this photo.')
+                self.assertEqual(shown['description_source'], 'confirmed_faces')
+                self.assertEqual(shown['summary'], photo['summary'])
+        self.store.label_face('review-a', 'Corrected')
+        updated = self.store.search('Synthetic person')['photos']
+        self.assertIn('Corrected and Synthetic person', describe_photo(next(p for p in updated if p['path'] == self.path))['primary_description'])
+        self.assertEqual(describe_photo(dict(summary='A beach.', confirmed_people=[]))['primary_description'], 'A beach.')
+        context = dict(context_summary='Ren walks on the beach.', confirmed_people=['Ren'])
+        self.assertEqual(describe_photo(context)['description_source'], 'context')
+        context['confirmed_people'] = ['Ren', 'Lee']
+        self.assertEqual(describe_photo(context)['description_source'], 'confirmed_faces')
+
     def test_mixed_confirmation_preserves_each_name_and_audits(self):
         faces=self.add_review_faces()
         before=len(self.store.rows('SELECT * FROM annotation_history'))

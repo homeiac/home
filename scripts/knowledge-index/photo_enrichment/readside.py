@@ -125,10 +125,14 @@ class GalleryReader:
         total=self.rows('SELECT count(*) n FROM enriched_media m WHERE '+condition,params)[0]['n']
         photos=self.rows("""SELECT m.*,c.summary AS context_summary,c.context AS location_context,
             s.location AS suggested_location,s.location_source,s.tags AS search_tags,
-            (SELECT list(DISTINCT f.person ORDER BY f.person) FROM reviewed_faces f JOIN face_scans fs
-             ON fs.path=f.path AND fs.size_bytes=f.size_bytes AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
-             WHERE f.path=m.path AND f.size_bytes=m.size_bytes AND f.person IS NOT NULL) AS saved_people
-            FROM enriched_media m LEFT JOIN photo_context c ON c.path=m.path AND c.size_bytes=m.size_bytes AND c.status='done'
+            people.saved_people,people.confirmed_people
+            FROM enriched_media m LEFT JOIN LATERAL (
+                SELECT list(DISTINCT f.person ORDER BY f.person) AS saved_people,
+                    list(DISTINCT f.person ORDER BY f.person) FILTER(WHERE f.label_source='user') AS confirmed_people
+                FROM reviewed_faces f JOIN face_scans fs ON fs.path=f.path AND fs.size_bytes=f.size_bytes
+                    AND fs.mtime_ns=f.mtime_ns AND fs.model=f.model
+                WHERE f.path=m.path AND f.size_bytes=m.size_bytes AND f.person IS NOT NULL
+            ) people ON true LEFT JOIN photo_context c ON c.path=m.path AND c.size_bytes=m.size_bytes AND c.status='done'
             LEFT JOIN photo_search s ON s.path=m.path AND s.size_bytes=m.size_bytes
             WHERE """+condition+' ORDER BY capture_ts NULLS LAST,m.path LIMIT ? OFFSET ?',
             [*params,limit,offset])
