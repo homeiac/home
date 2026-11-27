@@ -193,6 +193,54 @@ scripts/backup/gphotos-ingest-ctl.sh status
 
 The ledger skips completed archives. An index failure records pending recovery work without discarding preserved originals. Keep Takeout extraction and index builds outside the K3s VM's control-plane I/O path. See the [backup scripts](../../scripts/backup/README.md) and [host ingest implementation](../../scripts/backup/host/gphotos-ingest-host.sh).
 
+### Family access: Google sign-in while Immich stays private
+
+The Takeout backup setup already had a Google Cloud project and a Desktop OAuth
+client for rclone. Immich uses a separate Web client in that same project. Keeping
+the clients separate lets backup authorization and family login evolve independently.
+
+The callback does not require a publicly reachable Immich server. Google redirects
+the person's browser to the registered HTTPS URL; that browser reaches Immich over
+the home network. Immich validates the identity using outbound HTTPS to Google.
+Traefik continues terminating TLS with the existing certificate.
+
+```mermaid
+sequenceDiagram
+    participant Phone as Family phone or laptop
+    participant Google as Google sign-in
+    participant Home as Local DNS, PVE relay and Traefik
+    participant Photos as Immich
+    Phone->>Google: Authenticate with Google
+    Google-->>Phone: Redirect browser to private HTTPS callback
+    Phone->>Home: Resolve and open callback locally
+    Home->>Photos: Forward callback
+    Photos->>Google: Outbound authorization-code exchange
+    Google-->>Photos: Validated identity
+    Photos-->>Phone: Existing account and shared albums
+```
+
+The Web client registers `/auth/login`, `/user-settings`, and
+`/api/oauth/mobile-redirect` on the Immich origin. The last path returns Google
+login to the iPhone or Android app. The same server address works on home Wi-Fi;
+access away from home still needs the private network connection.
+
+![Google Web client callback setup before credential creation](assets/immich-google-login/google-callbacks.jpg)
+
+*Captured before credential creation. No client secret, client ID, personal email,
+or authorization code is included.*
+
+The client secret and deployment-specific URL live in SOPS-encrypted Helm values.
+The chart renders configuration into a Kubernetes Secret. Password login stays
+available, automatic Google registration is disabled, and family accounts must be
+created explicitly. Google sign-in authenticates a person; album sharing controls
+which photos that person can see.
+
+Google Wi-Fi prioritizes ordinary internet access with a public secondary DNS
+resolver. If a device uses that resolver, the private callback may fail, just as
+opening Immich may fail. The accepted photo availability tradeoff and PVE failure
+behavior are recorded in the [network architecture](../reference/google-wifi-immich-architecture.md).
+The [sign-in runbook](../runbooks/immich-google-login.md) covers deployment and rollback.
+
 ### 3. Verify backup and restoration before cloud reclamation
 
 Inspect the mirror targets before using `cloud-backup-install-mirror.sh`; check `cloud-backup-status.sh` and mirror reports. The current USB SSD policy copies Drive/OneDrive plus only the Photos quota-candidate subset because the full photo library does not fit. The additional HDD target excludes Photos. Thus this setup does **not** establish two complete copies of every photo. Expand destination capacity and coverage if that is the requirement; verify every proposed reclaim item independently. Verify selected files and metadata against **both** physical destinations, including hashes where available and restore/open tests. A successful mirror exit code alone is not that proof.

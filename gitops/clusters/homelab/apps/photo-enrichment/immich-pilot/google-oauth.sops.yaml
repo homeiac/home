@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: immich-google-oauth
+    namespace: immich-pilot
+    labels:
+        reconcile.fluxcd.io/watch: Enabled
+type: Opaque
+stringData:
+    values.yaml: ENC[AES256_GCM,data:SnvSwBsA3FSR/zwE/Oa2HCeUF7xrORHaJLUvX3fzRj8OXOgNSqJNNFfnSKYCWOlgorphAzEw4Fmi0uiU1V9SGCiZpXiIUis2Fv2bsplRP62dfdUFxjjQsL0+O0xypocOa8BA5RSLfp5R95+hbe5SPjfZ6r+96UxGug3dvplhILUp+p513hEs3voKJfx5chkDzUr+TYdNoyo8Tnoscjx7wHvCjs+qy4DiZHywriA1kZbm6y80elyU/bEfSxzyLtNPOB2Q8mQLTNv1z6r60RNNn45YBzg43HGpaX/YEQgu6NC/muNVoUSCItQKCdcGVa0TqgVWrU5DdoofqzsYfyBxJjz4QLyT+JZh0A6lww8Gv3KebOc+MUqE+tkrHLoJfQIEArK1qKQVCN0/kUjOCCovj5rMvjbR78nr8Te0Jx3AkuGHokMXt8tyqvbNjBvGFVbqrJs/8GEf6G4eawH0HogQimMCYYMe13Nc9E4pr37PMWt4wAnPK1F2KU6dh5m7VYG+MOvfLEAHsoVQhDEq+ezuOy1iTjNhYZbl6AUmzu3KIjzx2Mvrl3bQr3vUTvcuXNjb+wiGaqlP2FHV7USfYcZ2pAuAGVJTy6kNjBGBqcBN74osLLocBtxHwZLclxWxBIn7yluSj0n5tcroKodgYYJesumCpadB/jmKSYalvnkMJ2eRpwUsubEUadkih+Z+8NRk8lCqtpu+vQJkONNo5XpP2QkXgi+rRNmKzTQFIXxzBzs4JjRbZig24yn499HBC1vb6iaYN8AzFQTCg77TPpQxEDA7vYQlI8L78xTmfcWlDj7JT+vCnm7QeCDzxNggQCm9xRhml17Zn4hd6zHq6TmvGmpV0XXE2UGF2bafibTEGZBTTaOC9Sn/3XRUvnQHhgfeLA5ufjaxusU=,iv:44BjzadRWDxf5Orf+AsflD3qebm9+Uk5/faMyDjV2nU=,tag:FaxzjhF6sZ8L6mTMjIBhxQ==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBHTkNXQkJSdXVkTUdDcXRj
+            SWYzRGtxWXFtOEk4b0NoZSt6MnRaK0lrSkNnCjVJVEcxRHlhNEw4dmM3U3BFODFU
+            UDBKbk9JTGtsZ0hHVWpyRzE3S2ZacmcKLS0tIDBqTFRvRHY2c2ZXcmY3bFNSS2Ey
+            TC9kb0o3SXVRTlFueEMyM0FjT3BkdzAKRXeSeFy2J+4Vo9lJCAvm0HTUbMOfYi2E
+            ELsWA7jOjzyUSjdHwpmxwN/Cla+BL9mywlH40NjgSxzE9524noTMuA==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-11-27T02:34:38Z"
+    mac: ENC[AES256_GCM,data:bneG8zOTHAwICT0Zq88SAEipKE7KH/ht+exfdY26QiqFXThHGy5uKHqzeFTiO4wMjTxqeFhdGRFS2ZIzR7tyFHYwAewKepFmL/MuNjfktWkwEikPIp2nxhuatdbzAQ79j1VhZq3ihRRLmjwRZVr0pc+2RgMcc86NsV1Oy/gabbo=,iv:gJHqGW/miej0r5Pu/7tOLJEvdKgG8uWItXIAFK8Xa6w=,tag:mpOwlSrZ9TXxYPbjFW9VMA==,type:str]
+    version: 3.13.1

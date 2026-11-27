@@ -8,6 +8,13 @@ SOPS-encrypted `immich-wifi/network.sops.yaml`; public diagrams use role names.
 
 ## Availability decision
 
+Google sign-in uses this same private path: Google's redirect is followed by the
+phone or laptop browser, and Immich validates the code over outbound HTTPS.
+No inbound Google connection or public port forwarding is required. The
+[Google sign-in runbook](../runbooks/immich-google-login.md) covers web and iPhone
+callbacks; the [existing photo-pipeline blog](../blog/2026-11-15-taking-my-files-back-from-google-and-onedrive.md#family-access-google-sign-in-while-immich-stays-private)
+includes the sequence diagram and credential-free setup screenshot.
+
 **Ordinary household internet access takes priority over photo availability.**
 The owner explicitly accepts Immich being unavailable during a PVE failure.
 Google Home is configured with PVE's local resolver as primary and **1.1.1.1** as

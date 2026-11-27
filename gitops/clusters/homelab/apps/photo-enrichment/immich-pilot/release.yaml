@@ -15,6 +15,10 @@ metadata:
 spec:
   interval: 30m
   timeout: 10m
+  valuesFrom:
+    - kind: Secret
+      name: immich-google-oauth
+      valuesKey: values.yaml
   chart:
     spec:
       chart: immich
@@ -33,6 +37,8 @@ spec:
             image:
               tag: v3.4.2
     immich:
+      # OAuth credentials must remain in a Secret after Helm renders them.
+      configurationKind: Secret
       # Preserve the existing UI-managed upload layout when switching to a config file.
       configuration:
         storageTemplate:

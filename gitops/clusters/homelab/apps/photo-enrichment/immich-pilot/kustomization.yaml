@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - database.yaml
   - database-secret.sops.yaml
+  - google-oauth.sops.yaml
   - release.yaml
   - ingress.yaml
   - piglet-storage.yaml

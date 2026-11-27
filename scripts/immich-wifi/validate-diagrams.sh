@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 root, output = map(Path, sys.argv[1:])
 output.mkdir(parents=True, exist_ok=True)
 paths = [
+    'docs/blog/2026-11-15-taking-my-files-back-from-google-and-onedrive.md',
     'docs/reference/google-wifi-immich-architecture.md',
     'docs/source/md/homelab-network-topology.md',
     'docs/product/seamless-access/architecture-seamless-access.md',
