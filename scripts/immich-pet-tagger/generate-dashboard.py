@@ -76,7 +76,7 @@ def dashboard() -> dict:
           description='Available only after the manual scan completes. v1.10.0 overwrites live low-confidence counts with an unpopulated review list during a scan; do not interpret that as zero.')['fieldConfig']['defaults']['noValue'] = 'Available after scan'
 
     panels.append({'id': len(panels) + 1, 'type': 'text', 'title': 'Reading this scan',
-        'gridPos': {'x': 0, 'y': 8, 'w': 24, 'h': 3}, 'options': {'mode': 'markdown',
+        'gridPos': {'x': 0, 'y': 8, 'w': 24, 'h': 4}, 'options': {'mode': 'markdown',
         'content': '**Waffles only · CPU inference · private homelab**  \n'
         'Immich photos → animal detection → embedding + Waffles classifier → Immich People and `Pets/Review`. '
         '**Fetched is the scan scope, not completed work.** Outcomes mix crops and assets; they cannot be summed into a completion percentage or ETA. '
@@ -99,14 +99,14 @@ def dashboard() -> dict:
     graph = {'id': len(panels) + 1, 'type': 'nodeGraph', 'title': 'Waffles recognition pipeline',
              'datasource': DS, 'gridPos': {'x': 0, 'y': 11, 'w': 24, 'h': 9},
              'description': 'Logical flow, not measured transfer rates or phase timings. Detection/classifier value is scan state: 1 running, 2 completed. Other nodes show their named counts; crops and assets are different units.',
-             'targets': [{'refId': 'nodes', 'expr': ' or '.join(label(expr, [('id', key), ('title', title)]) for key, title, expr in nodes),
+             'targets': [{'refId': 'nodes', 'expr': ' or '.join(label(f'({expr}) or vector(0/0)', [('id', key), ('title', title)]) for key, title, expr in nodes),
                           'format': 'table', 'instant': True, 'range': False},
                          {'refId': 'edges', 'expr': ' or '.join(label('vector(1)', [('id', a+'_'+b), ('source', a), ('target', b)]) for a, b in edges),
                           'format': 'table', 'instant': True, 'range': False}],
              'options': {'nodes': {'mainStatUnit': 'short'}},
+             'fieldConfig': {'defaults': {'mappings': [{'type': 'special', 'options': {'match': 'nan', 'result': {'text': 'Unavailable', 'color': 'gray'}}}]}, 'overrides': []},
              'transformations': [
-                 {'id': 'calculateField', 'filter': {'id': 'byRefId', 'options': 'nodes'}, 'options': {'mode': 'reduceRow', 'reduce': {'reducer': 'sum', 'include': ['Value', 'Value #nodes']}, 'alias': 'mainstat'}},
-                 {'id': 'organize', 'filter': {'id': 'byRefId', 'options': 'nodes'}, 'options': {'excludeByName': {'Time': True, 'Value': True, 'Value #nodes': True}}},
+                 {'id': 'organize', 'filter': {'id': 'byRefId', 'options': 'nodes'}, 'options': {'excludeByName': {'Time': True}, 'renameByName': {'Value': 'mainstat', 'Value #nodes': 'mainstat'}}},
                  {'id': 'organize', 'filter': {'id': 'byRefId', 'options': 'edges'}, 'options': {'excludeByName': {'Time': True, 'Value': True, 'Value #edges': True}}}]}
     panels.append(graph)
     pace = live(f'(max(clamp_min(deriv({M}scan_items{{scope="manual",outcome="added"}}[5m]), 0) '
@@ -142,6 +142,9 @@ def dashboard() -> dict:
           description='Final count from the latest completed cycle. Not a lifetime total; can overlap the manual scan. Upstream omits it while running.')
     panel('Latest cycle final report', [(live(f'max({M}scan_ran_at_timestamp_seconds{{scope="latest_cycle"}}) * 1000'), '')], 12, 45, w=6, unit='dateTimeAsIso')
     panel('Prometheus scrape', [('max(up{namespace="immich-pilot",service="immich-pet-tagger-metrics"})', '')], 18, 45, w=6, mappings=health)
+    for p in panels:
+        if p['gridPos']['y'] >= 11:
+            p['gridPos']['y'] += 1
     return {'uid': 'immich-waffles', 'title': 'Waffles · Immich Pet Tagger', 'schemaVersion': 39,
             'version': 1, 'editable': False, 'tags': ['immich', 'waffles', 'pets', 'gitops'],
             'timezone': 'utc', 'refresh': '30s', 'time': {'from': 'now-6h', 'to': 'now'},

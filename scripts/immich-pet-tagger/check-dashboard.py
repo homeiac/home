@@ -44,7 +44,18 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--queries-only', action='store_true')
+    parser.add_argument('--source', action='store_true', help='Inspect Prometheus discovery and scraping')
     args = parser.parse_args()
+    if args.source:
+        path = '/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/targets'
+        targets = kubectl('get', '--raw', path)['data']['activeTargets']
+        found = [t for t in targets if t.get('labels', {}).get('service') == 'immich-pet-tagger-metrics']
+        for target in found:
+            logging.info('Collector target: health=%s lastScrape=%s error=%s',
+                         target['health'], target['lastScrape'], target['lastError'])
+        if not found:
+            logging.info('Collector not yet discovered by Prometheus.')
+        return
     spec = importlib.util.spec_from_file_location('generate', HERE / 'generate-dashboard.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

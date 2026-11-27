@@ -648,7 +648,7 @@ data:
             "x": 0,
             "y": 8,
             "w": 24,
-            "h": 3
+            "h": 4
           },
           "options": {
             "mode": "markdown",
@@ -665,7 +665,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 11,
+            "y": 12,
             "w": 24,
             "h": 9
           },
@@ -673,7 +673,7 @@ data:
           "targets": [
             {
               "refId": "nodes",
-              "expr": "label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"fetched\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"photos\", \"\", \"\")), \"title\", \"Photos fetched\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_references)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"references\", \"\", \"\")), \"title\", \"Waffles references\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_negatives)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"negatives\", \"\", \"\")), \"title\", \"Negative examples\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_state{scope=\"manual\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"scan\", \"\", \"\")), \"title\", \"Detection + classifier\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"tags\", \"\", \"\")), \"title\", \"New face assignments\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"unknown\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"unknown\", \"\", \"\")), \"title\", \"Unknown crops\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"failed\", \"\", \"\")), \"title\", \"Failed outcomes\", \"\", \"\")",
+              "expr": "label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"fetched\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"photos\", \"\", \"\")), \"title\", \"Photos fetched\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_references)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"references\", \"\", \"\")), \"title\", \"Waffles references\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_negatives)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"negatives\", \"\", \"\")), \"title\", \"Negative examples\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_state{scope=\"manual\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"scan\", \"\", \"\")), \"title\", \"Detection + classifier\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"tags\", \"\", \"\")), \"title\", \"New face assignments\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"unknown\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"unknown\", \"\", \"\")), \"title\", \"Unknown crops\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"failed\", \"\", \"\")), \"title\", \"Failed outcomes\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
@@ -691,25 +691,24 @@ data:
               "mainStatUnit": "short"
             }
           },
-          "transformations": [
-            {
-              "id": "calculateField",
-              "filter": {
-                "id": "byRefId",
-                "options": "nodes"
-              },
-              "options": {
-                "mode": "reduceRow",
-                "reduce": {
-                  "reducer": "sum",
-                  "include": [
-                    "Value",
-                    "Value #nodes"
-                  ]
-                },
-                "alias": "mainstat"
-              }
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {
+                  "type": "special",
+                  "options": {
+                    "match": "nan",
+                    "result": {
+                      "text": "Unavailable",
+                      "color": "gray"
+                    }
+                  }
+                }
+              ]
             },
+            "overrides": []
+          },
+          "transformations": [
             {
               "id": "organize",
               "filter": {
@@ -718,9 +717,11 @@ data:
               },
               "options": {
                 "excludeByName": {
-                  "Time": true,
-                  "Value": true,
-                  "Value #nodes": true
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value": "mainstat",
+                  "Value #nodes": "mainstat"
                 }
               }
             },
@@ -750,7 +751,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 20,
+            "y": 21,
             "w": 12,
             "h": 7
           },
@@ -804,7 +805,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 20,
+            "y": 21,
             "w": 12,
             "h": 7
           },
@@ -886,7 +887,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 27,
+            "y": 28,
             "w": 12,
             "h": 7
           },
@@ -947,7 +948,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 27,
+            "y": 28,
             "w": 12,
             "h": 7
           },
@@ -1008,7 +1009,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 34,
+            "y": 35,
             "w": 8,
             "h": 7
           },
@@ -1062,7 +1063,7 @@ data:
           },
           "gridPos": {
             "x": 8,
-            "y": 34,
+            "y": 35,
             "w": 8,
             "h": 7
           },
@@ -1116,7 +1117,7 @@ data:
           },
           "gridPos": {
             "x": 16,
-            "y": 34,
+            "y": 35,
             "w": 8,
             "h": 7
           },
@@ -1177,7 +1178,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 41,
+            "y": 42,
             "w": 6,
             "h": 4
           },
@@ -1247,7 +1248,7 @@ data:
           },
           "gridPos": {
             "x": 6,
-            "y": 41,
+            "y": 42,
             "w": 6,
             "h": 4
           },
@@ -1302,7 +1303,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 41,
+            "y": 42,
             "w": 6,
             "h": 4
           },
@@ -1357,7 +1358,7 @@ data:
           },
           "gridPos": {
             "x": 18,
-            "y": 41,
+            "y": 42,
             "w": 6,
             "h": 4
           },
@@ -1412,7 +1413,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 45,
+            "y": 46,
             "w": 6,
             "h": 4
           },
@@ -1498,7 +1499,7 @@ data:
           },
           "gridPos": {
             "x": 6,
-            "y": 45,
+            "y": 46,
             "w": 6,
             "h": 4
           },
@@ -1553,7 +1554,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 45,
+            "y": 46,
             "w": 6,
             "h": 4
           },
@@ -1608,7 +1609,7 @@ data:
           },
           "gridPos": {
             "x": 18,
-            "y": 45,
+            "y": 46,
             "w": 6,
             "h": 4
           },
