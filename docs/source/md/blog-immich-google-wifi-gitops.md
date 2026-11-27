@@ -26,11 +26,11 @@ diagram had changed, so copying the diagram directly would have been a mistake.
 
 The resulting path reuses that reachable host, with a TCP relay for Immich:
 
-```text
-Phone or laptop on Google Wi-Fi
-    → reachable local host:443
-    → existing Traefik HTTPS listener
-    → Immich
+```mermaid
+flowchart LR
+    Client["Phone or laptop on Google Wi-Fi"] --> Relay["Reachable local TLS relay"]
+    Relay --> Traefik["Existing Traefik HTTPS listener"]
+    Traefik --> Immich["Immich"]
 ```
 
 The relay passes encrypted TLS through. It does not have a copy of the wildcard
@@ -54,9 +54,22 @@ Public wildcard DNS remains unchanged. Google Wi-Fi's custom DNS setting makes
 this answer available to its clients without editing every phone or laptop.
 
 The resolver must be tested before changing that setting: once selected, it also
-handles ordinary internet DNS for the Wi-Fi. A public secondary resolver would
-not provide the private override, so it is not an interchangeable backup. Devices
-configured to bypass network DNS need to use the network resolver for this name.
+handles ordinary internet DNS for the Wi-Fi. That exposed a household reliability
+problem: if the Proxmox host failed, a primary-only setup could also interrupt
+ordinary browsing. The owner made the priority explicit: photos can be down;
+normal internet access should not depend on the photo gateway.
+
+We therefore selected public secondary DNS, 1.1.1.1, in Google Home. It is
+independent of the Proxmox host, but it does not provide the private override.
+Resolvers must not be treated as a guaranteed ordered failover pair: if Google
+uses the public answer while both are healthy, photos can still fail. This is a
+conscious best-effort photo configuration. An independent local resolver with the
+same override would be the stronger design if photo availability became important.
+
+The emergency instruction is simple: on a phone using cellular data, switch
+Google Home DNS back to Automatic. Restore ordinary browsing first and repair
+the photo path afterwards. The architecture document includes this recovery
+without requiring SSH or knowledge of private addresses.
 
 This preserves the existing album URL. Immich's share-link feature lets visitors
 view an album without creating accounts. Its term “public share link” describes
@@ -112,6 +125,8 @@ returned the relay address over UDP and TCP, while ordinary internet names still
 resolved. That completed the DNS handoff; the final human check is opening a real
 album in a phone or laptop browser.
 
+The [network architecture](../../reference/google-wifi-immich-architecture.md)
+contains Mermaid diagrams for DNS, HTTPS, PVE failure, and GitOps ownership.
 Implementation and current verification results are in the
 [runbook](../../runbooks/immich-google-wifi.md). Vendor references:
 [Immich sharing](https://docs.immich.app/features/sharing/),

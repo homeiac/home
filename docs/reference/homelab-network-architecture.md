@@ -1,5 +1,24 @@
 # Homelab Network Architecture Reference
 
+## Current network access documentation
+
+The legacy `.homelab` examples below describe an older configuration. Current
+services use the wildcard HTTPS architecture, with a Google Wi-Fi addition for
+Immich documented in
+[Google Wi-Fi, Immich, and household DNS availability](google-wifi-immich-architecture.md).
+That document contains the current Mermaid diagrams for DNS, HTTPS, failure
+handling, and the Flux ConfigMap + Job deployment.
+
+Google Home now uses PVE's dnsmasq resolver as primary and public **1.1.1.1** as
+secondary. The owner accepts best-effort photos so a PVE outage need not also
+break ordinary internet name resolution. The resolvers return different Immich
+addresses, so photo failures are possible even while both are healthy. Emergency
+recovery is Google Home DNS → **Automatic**, using cellular data if needed.
+
+See the [operating runbook](../runbooks/immich-google-wifi.md) before changing DNS
+or rebooting PVE. Resolver reachability has been checked; a deliberate household
+DNS outage has not been tested.
+
 *Based on investigation of actual Traefik + MetalLB + OPNsense Unbound DNS configuration*
 
 ## DNS Architecture Pattern

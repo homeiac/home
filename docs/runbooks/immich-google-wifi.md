@@ -6,13 +6,30 @@ Phones and laptops on the normal Google Wi-Fi network open the existing Immich
 HTTPS album links in their browsers. They do not need Tailscale, a new SSID, a
 hosts-file entry, or an Immich account when the owner uses an album share link.
 
+## Household internet comes first
+
+The owner accepts photo downtime if PVE fails. Google Home's intended and
+owner-confirmed DNS settings are the encrypted `RELAY_ADDRESS` as primary and
+**1.1.1.1 as secondary**. This keeps an ordinary public resolver independent of
+PVE. Either resolver may answer while healthy, and the public one lacks the
+Immich override, so photo access is explicitly best-effort.
+
+**Emergency recovery:** use cellular data on a phone, then Google Home → Wi-Fi →
+Network settings → Advanced networking → DNS → **Automatic** → Save. Test an
+ordinary website before troubleshooting photos. This recovery does not require
+PVE, SSH, Kubernetes, or the private network addresses.
+
+See the [network architecture and Mermaid diagrams](../reference/google-wifi-immich-architecture.md)
+for the normal DNS/HTTPS paths, PVE failure, and the deployment ownership model.
+No deliberate household DNS outage has been tested.
+
 ## Live discovery, 2026-11-26
 
 A request explicitly bound to the laptop's Wi-Fi interface reached the existing
 Home Assistant proxy with HTTP 200. The upstream-facing Proxmox address is
 reachable from Google Wi-Fi; the homelab's ingress address is not directly routed.
-Immich returned 200 through Traefik. Google Wi-Fi currently uses automatic DNS,
-which returns the homelab ingress address for Immich.
+Immich returned 200 through Traefik. At initial discovery, Google Wi-Fi used automatic DNS,
+which returned the homelab ingress address for Immich.
 
 Exact addresses, hostnames, host identity, and interface names are in
 `immich-wifi/network.sops.yaml`, encrypted with the repository's existing SOPS age
@@ -68,18 +85,28 @@ rerun the installer through GitOps, change a comment in its bundled host script.
 
 The access checker first verifies UDP/TCP DNS, public-name resolution, valid TLS,
 the Immich ping endpoint, rejected unrelated SNI, and rejected mismatched HTTP
-Host. Exit 3 means those checks passed but Google Wi-Fi has not yet adopted the
-custom resolver. Devices with explicit secure/private DNS may bypass local DNS;
+Host. Exit 4 means the router returned the public resolver's answer, so photo
+access is degraded under the accepted public-secondary policy. Devices with explicit secure/private DNS may bypass local DNS;
 use network-provided DNS for this private hostname.
 
 ## Google Home handoff
 
 Only do this after the relay and resolver tests pass. In Google Home, open
-Wi-Fi → Network settings → Advanced networking → DNS → Custom. Set the primary
-IPv4 resolver to the decrypted `RELAY_ADDRESS`; leave the secondary empty if
-accepted. Do not
-use a public resolver as a secondary: clients could receive the old homelab IP.
-Do not configure a public IPv6 resolver that bypasses the same override.
+Wi-Fi → Network settings → Advanced networking → DNS → Custom. Set:
+
+- Primary IPv4 DNS: the decrypted `RELAY_ADDRESS`.
+- Secondary IPv4 DNS: **1.1.1.1**.
+
+Save. The owner confirmed both were saved on 2026-11-26. This supersedes the
+initial primary-only recommendation: protecting ordinary internet access now
+explicitly takes priority over deterministic private photo resolution. A public
+secondary can be used while the primary is healthy and return the homelab address,
+so intermittent Immich failure is an accepted consequence, not proof that the
+relay is broken. Do not describe the resolver order as guaranteed failover.
+
+Additional public IPv6 resolvers also lack the private override. No IPv6 resolver
+change is required for this rollout. Devices overriding network DNS may likewise
+receive the public Immich address.
 
 The router has a read-only local status endpoint; its DNS setting is changed
 through the owner's Google Home session. Re-run the access checker afterwards.
@@ -136,3 +163,8 @@ so the post-change DNS checks ran from PVE's Google Wi-Fi connection. The earlie
 laptop Wi-Fi HTTPS tests remain the full client-path evidence; a real album in a
 phone/laptop browser has not been observed by the agent. Re-run
 `bash scripts/immich-wifi/verify-google-dns.sh` for the router-side checks.
+
+The owner subsequently confirmed adding public secondary DNS. Verification must
+check ordinary resolution through Google Wi-Fi and public secondary reachability,
+then report whether the router returned the local or public Immich answer. This
+is not a simulated PVE outage and does not measure failover delay.

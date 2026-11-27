@@ -1,5 +1,35 @@
 # Homelab Network Topology
 
+## Current Google Wi-Fi access and DNS availability
+
+Updated 2026-11-26. Google Wi-Fi clients reach Immich through a DNS-only dnsmasq
+resolver and HAProxy TLS relay on PVE. Traefik still terminates HTTPS. The owner
+prioritizes ordinary internet access during a PVE outage: Google Home uses PVE
+as primary DNS and **1.1.1.1 as secondary**. Immich is best-effort because the
+public secondary does not provide the local override and either resolver may be
+selected while healthy.
+
+```mermaid
+flowchart LR
+    Clients["Phones and laptops"] --> Google["Google Wi-Fi"]
+    Google -->|"Primary DNS"| DNS["PVE dnsmasq"]
+    Google -.->|"Independent secondary DNS"| Public["1.1.1.1"]
+    Google -->|"Immich HTTPS with local answer"| Relay["PVE HAProxy"]
+    Relay --> Traefik["Traefik and existing wildcard TLS"]
+    Traefik --> Immich["Immich"]
+```
+
+**If ordinary browsing breaks, restore Google Home DNS to Automatic using a
+phone on cellular data. Photos can wait.** Full paths, failure modes, GitOps
+ownership, and recovery are in the
+[current Google Wi-Fi architecture](../../reference/google-wifi-immich-architecture.md)
+and [setup runbook](../../runbooks/immich-google-wifi.md).
+
+The older diagrams below are historical context. Their individual host, VM,
+Traefik addresses, and Flint bridge status must be checked against live state and
+the canonical inventory before use. New network-specific settings are encrypted
+with SOPS rather than duplicated in these public diagrams.
+
 ## Overview
 
 This document describes the complete network topology of the homelab, including all subnets, key devices, and how they interconnect.

@@ -1,8 +1,8 @@
 # Architecture: Seamless Homelab Access
 
-**Version**: 1.0
-**Date**: 2026-01-01
-**Status**: Approved (validated by Claude Web + ChatGPT)
+**Version**: 1.1
+**Date**: 2026-11-26
+**Status**: Implemented; public secondary DNS selected for household availability
 
 ---
 
@@ -11,6 +11,34 @@
 This architecture enables accessing homelab services using the **same FQDN** from anywhere—at home or via Tailscale—with **valid LetsEncrypt certificates** and **no public internet exposure**.
 
 **Core Pattern**: Public DNS → Private IPs + Tailscale Subnet Router + DNS-01 Certificates
+
+### Google Wi-Fi addition: Immich and household DNS
+
+Google Wi-Fi is a separate client network; the older "at home" path below assumes
+a client already on the homelab subnet. Immich now has a local DNS override and
+TLS passthrough relay on PVE, while Traefik retains the existing certificate and
+HTTPS route. The public wildcard record is unchanged.
+
+```mermaid
+flowchart LR
+    Google["Google Wi-Fi clients"] -->|"Local Immich DNS answer"| Relay["PVE TLS relay"]
+    Relay --> Traefik["Existing Traefik<br/>TLS termination"]
+    Traefik --> Immich["Immich"]
+    Google -->|"Primary DNS"| DNS["PVE dnsmasq"]
+    Google -.->|"Secondary DNS, independent of PVE"| Secondary["1.1.1.1"]
+```
+
+The owner's availability policy is **ordinary internet first; photos may fail**.
+Google Home uses a public secondary so DNS is not entirely dependent on PVE.
+Because either resolver may be used and the public resolver lacks the local
+override, this does not guarantee Immich availability, even with PVE running.
+It is not a highly available photo gateway or an outage-tested DNS service.
+
+The [current network architecture](../../reference/google-wifi-immich-architecture.md)
+documents Mermaid diagrams for the normal path, PVE failure, and GitOps ownership.
+The [setup and recovery runbook](../../runbooks/immich-google-wifi.md) documents
+the encrypted inventory, dedicated services, Google Home settings, and how to
+restore **Automatic DNS** without needing a working PVE host.
 
 ---
 

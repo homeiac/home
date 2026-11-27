@@ -37,8 +37,9 @@ fi
 echo 'Google Wi-Fi effective DNS'
 answer=$(dig -b "$wifi_ip" +time=3 +tries=1 +short @"$GOOGLE_GATEWAY_ADDRESS" "$hostname" A)
 if [[ $answer != "$relay" ]]; then
-  echo "PENDING: Google Wi-Fi custom DNS must point to $relay."
-  exit 3
+  echo "DEGRADED: Google Wi-Fi returned an answer other than the local relay."
+  echo "This can occur with the configured public secondary; ordinary internet has priority."
+  exit 4
 fi
 curl --interface "$wifi" --connect-timeout 5 --max-time 20 --silent --show-error --fail \
   --resolve "$hostname:443:$answer" "https://$hostname/api/server/ping"
