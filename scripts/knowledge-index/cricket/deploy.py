@@ -91,8 +91,11 @@ def main() -> None:
         private["ledger.sqlite3"] = base64.b64encode(ledger.read_bytes()).decode()
     for name in ("people.json", "reference.jpg", "policy.json"):
         private[name] = base64.b64encode((args.state / name).read_bytes()).decode()
-    for path in (args.state / "evidence").glob("*.json"):
-        private["evidence/" + path.name] = base64.b64encode(path.read_bytes()).decode()
+    for path in (args.state / "evidence").iterdir():
+        if path.suffix in {".json", ".jpg"}:
+            private["evidence/" + path.name] = base64.b64encode(
+                path.read_bytes()
+            ).decode()
     release = (
         "cricket-"
         + hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()[:16]

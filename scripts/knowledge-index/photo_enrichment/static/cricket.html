@@ -6,12 +6,16 @@
 <main>
 <section class="toolbar" aria-label="Highlight filters">
 <label>Album<select id="album"></select></label>
+<label>Search moments<input id="search" type="search" maxlength="200" placeholder="Person, result or description"></label>
 <label>Show<select id="filter"><option value="all">All moments</option><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="four">Fours</option><option value="six">Sixes</option><option value="batting_out">Batter out</option><option value="bowling_wicket">Bowling wickets</option><option value="boundary_unclear">Boundary unclear</option></select></label>
 <label class="checkbox"><input id="show-dismissed" type="checkbox">Include dismissed suggestions</label>
 <button id="refresh">Refresh</button>
 </section>
 <p id="status" role="status" aria-live="polite">Loading highlights…</p>
+<p id="progress" class="details"></p>
+<nav class="actions" aria-label="Saved cricket searches"><a href="/cricket?filter=four">Fours</a><a href="/cricket?filter=six">Sixes</a><a href="/cricket?filter=batting_out">Batter out</a><a href="/cricket?filter=bowling_wicket">Bowling wickets</a><a href="/cricket">All moments</a></nav>
 <section id="cards" aria-label="Highlights"></section>
+<button id="more" hidden>Show more moments</button>
 <section class="add"><h2>Missing a moment?</h2><p>Open an original, find the delivery, and add a highlight.</p><label>Original<select id="original"></select></label><button id="add">Add highlight</button></section>
 </main>
 <dialog id="editor"><form id="edit-form">

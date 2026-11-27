@@ -79,6 +79,15 @@ class APITests(unittest.TestCase):
 
     def test_list_get_create_correct_and_restart_readback(self) -> None:
         self.assertTrue(self.request("/api/config")[2]["cricket"])
+        results = self.request("/api/cricket/search?album=album&filter=four&q=test")[2][
+            "results"
+        ]
+        self.assertEqual([r["event"] for r in results], [self.event])
+        self.assertNotIn("owner", results[0])
+        self.assertNotIn("path", results[0])
+        self.assertEqual(
+            self.request("/api/cricket/status?album=album")[2], {"jobs": []}
+        )
         self.assertEqual(
             self.request("/api/cricket/people")[2]["people"],
             [{"id": "person-a", "name": "Test batter"}],

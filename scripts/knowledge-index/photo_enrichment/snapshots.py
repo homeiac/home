@@ -14,7 +14,7 @@ from .postgres import TABLES, connect
 from .store import sql_path
 
 CONTEXT_TABLES = ("photo_context", "photo_place_cache")
-SEARCH_TABLES = ("photo_search", "photo_group_index")
+SEARCH_TABLES = ("photo_search", "photo_group_index", "cricket_highlights")
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -65,6 +65,8 @@ def export_snapshot(state: Path, prom: Path | None = None) -> dict:
                 db.execute('COMMIT')
                 from .search_index import build
                 build(db,directory,state/'luna-backfill/immich-context.sqlite3')
+                from cricket.search import build_index
+                build_index(db,directory,state/'cricket')
                 for table in SEARCH_TABLES:
                     target=directory/(table+'.parquet')
                     count=db.execute('SELECT count(*) FROM read_parquet(?)',[str(target)]).fetchone()[0]
