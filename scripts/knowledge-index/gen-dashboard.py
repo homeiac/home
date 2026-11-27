@@ -477,9 +477,9 @@ def photo_processing_panels():
     eta = (f'(({remaining}) / ({pace} > 0) or on(stage) (({remaining}) == 0)) '
            f'and on(stage) (({age}) < 180)')
     panel_set = [
-        row("Photo processing · progress and live tuning", 0),
+        row("Photo processing · life stage + action per face, OCR and live tuning", 0),
         stat("Items complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}",
-             description="The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."),
+             description="Each completed library face has a life stage and a visible action linked to its existing Immich face ID. The OCR stage counts photos checked for text, including photos with no text."),
         stat("Items queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
         stat("Stage completion", f'({completed}) / ({scope} > 0)', 8, 1,
              unit="percentunit", decimals=1, legend="{{stage}}",
@@ -500,6 +500,11 @@ def photo_processing_panels():
                description="Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."),
     ]
     for panel in panel_set:
+        if panel["type"] != "row":
+            panel["transformations"] = [{
+                "id": "renameByRegex",
+                "options": {"regex": "^library-face-observations(.*)$", "renamePattern": "Life stage + action per face$1"},
+            }]
         if panel["type"] == "stat":
             panel["targets"][0].update(instant=True, range=False)
             panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting telemetry"
@@ -513,13 +518,22 @@ def photo_backend_panels(y):
     pace = (f'max by(stage,backend) (clamp_min(deriv({window}), 0) '
             f'and (resets({window}) == 0)) * 60')
     legend = "{{stage}} · {{backend}}"
+    face_result = ("Each saved library result links a life stage and a visible action to one existing Immich face ID. "
+                   "For a new face, RTX gets both in one model call. Mac uses two calls. "
+                   "Resumed work can reuse a previously saved stage or action.")
     panels = [
-        series("Results per minute by backend", [(pace, legend)], 0, y, 12, 7, decimals=1,
-               description="New successful results per minute on each backend, measured over 15 minutes. For the library face stage, each result is one face occurrence."),
+        series("Results saved per minute by backend (15 min)", [(pace, legend)], 0, y, 12, 7, decimals=1,
+               description="Rate of new saves over the last 15 minutes. " + face_result),
         series("Results saved by backend", [(f'max by(stage,backend) ({saved})', legend)],
                12, y, 12, 7, unit="locale",
-               description="New successful results committed by each backend. Previously saved observations reused from another run are excluded."),
+               description="New saves since the start of processing. Fully reused observations are excluded. " + face_result),
     ]
+    for panel in panels:
+        for backend, display in (("mac-metal", "Mac Metal"), ("rtx3070", "RTX 3070")):
+            panel["fieldConfig"]["overrides"].append({
+                "matcher": {"id": "byName", "options": "library-face-observations · " + backend},
+                "properties": [{"id": "displayName", "value": display + " · life stage + action per face"}],
+            })
     trial = json.loads((Path(__file__).parent / "library-backfill-tuning.json").read_text())
     for x, (backend, result) in enumerate(trial["backends"].items()):
         before, after = result["before"], result["selected"]
@@ -539,7 +553,7 @@ def photo_backend_panels(y):
         timing = (f' Before tuning, median preview preparation took {durations["preview_seconds"]} s, '
                   f'life stage {durations["age_seconds"]} s and action {durations["action_seconds"]} s.')
         panels.append(tuning_comparison(
-            f'Library backfill · {backend} before and after', rates, x * 12, y + 7, 12, 7,
+            f'Two-pass life stage + action per face · {backend} before and after', rates, x * 12, y + 7, 12, 7,
             "suffix: faces/min", result["decision"] + evidence + timing + " " + trial["method"]))
     paired = json.loads((Path(__file__).parent / "library-pass-comparison.json").read_text())
     quality = ["| Backend | Model calls per face | Completed | Exact life stage | Saved with supported action | Both correct |",
@@ -554,10 +568,10 @@ def photo_backend_panels(y):
                            f'{arm["reviewed_stage_exact"]}/{reviewed} | {arm["supported_actions"]}/{total} | '
                            f'{arm["both_correct"]}/{reviewed} |')
         panels.append(tuning_comparison(
-            f'Age and action · {backend} · two calls vs one', rates, x * 12, y + 14, 12, 6,
+            f'Life stage + action per face · {backend} · two calls vs one', rates, x * 12, y + 14, 12, 6,
             "suffix: faces/min", paired["method"] + " " + result["decision"]))
     quality.extend(["", paired["method"], "", paired["decision"]])
-    panels.append(_panel("text", "Age and action · quality on the same faces", [], 0, y + 20, 24, 8,
+    panels.append(_panel("text", "Life stage + action per face · quality comparison", [], 0, y + 20, 24, 8,
                          extra={"options": {"mode": "markdown", "content": "\n".join(quality)}}))
     return panels
 

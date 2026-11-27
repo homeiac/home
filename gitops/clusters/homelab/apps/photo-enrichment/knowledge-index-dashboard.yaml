@@ -27,7 +27,7 @@ data:
         {
           "id": 247,
           "type": "row",
-          "title": "Photo processing \u00b7 progress and live tuning",
+          "title": "Photo processing \u00b7 life stage + action per face, OCR and live tuning",
           "collapsed": false,
           "gridPos": {
             "h": 1,
@@ -88,7 +88,16 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."
+          "description": "Each completed library face has a life stage and a visible action linked to its existing Immich face ID. The OCR stage counts photos checked for text, including photos with no text.",
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 249,
@@ -140,7 +149,16 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 250,
@@ -194,7 +212,16 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Complete and reused divided by the declared scope, including failed and withheld items."
+          "description": "Complete and reused divided by the declared scope, including failed and withheld items.",
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 251,
@@ -246,7 +273,16 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 252,
@@ -299,7 +335,16 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."
+          "description": "Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset.",
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 253,
@@ -359,12 +404,21 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 273,
           "type": "timeseries",
-          "title": "Results per minute by backend",
+          "title": "Results saved per minute by backend (15 min)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -399,7 +453,32 @@ data:
               },
               "decimals": 1
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "library-face-observations \u00b7 mac-metal"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Mac Metal \u00b7 life stage + action per face"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "library-face-observations \u00b7 rtx3070"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "RTX 3070 \u00b7 life stage + action per face"
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
@@ -410,7 +489,7 @@ data:
               "mode": "multi"
             }
           },
-          "description": "New successful results per minute on each backend, measured over 15 minutes. For the library face stage, each result is one face occurrence."
+          "description": "Rate of new saves over the last 15 minutes. Each saved library result links a life stage and a visible action to one existing Immich face ID. For a new face, RTX gets both in one model call. Mac uses two calls. Resumed work can reuse a previously saved stage or action."
         },
         {
           "id": 274,
@@ -449,7 +528,32 @@ data:
                 "mode": "palette-classic"
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "library-face-observations \u00b7 mac-metal"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Mac Metal \u00b7 life stage + action per face"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "library-face-observations \u00b7 rtx3070"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "RTX 3070 \u00b7 life stage + action per face"
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "legend": {
@@ -460,12 +564,12 @@ data:
               "mode": "multi"
             }
           },
-          "description": "New successful results committed by each backend. Previously saved observations reused from another run are excluded."
+          "description": "New saves since the start of processing. Fully reused observations are excluded. Each saved library result links a life stage and a visible action to one existing Immich face ID. For a new face, RTX gets both in one model call. Mac uses two calls. Resumed work can reuse a previously saved stage or action."
         },
         {
           "id": 275,
           "type": "bargauge",
-          "title": "Library backfill \u00b7 Mac Metal before and after",
+          "title": "Two-pass life stage + action per face \u00b7 Mac Metal before and after",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -547,7 +651,7 @@ data:
         {
           "id": 276,
           "type": "bargauge",
-          "title": "Library backfill \u00b7 RTX 3070 before and after",
+          "title": "Two-pass life stage + action per face \u00b7 RTX 3070 before and after",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -629,7 +733,7 @@ data:
         {
           "id": 277,
           "type": "bargauge",
-          "title": "Age and action \u00b7 Mac Metal \u00b7 two calls vs one",
+          "title": "Life stage + action per face \u00b7 Mac Metal \u00b7 two calls vs one",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -690,7 +794,7 @@ data:
         {
           "id": 278,
           "type": "bargauge",
-          "title": "Age and action \u00b7 RTX 3070 \u00b7 two calls vs one",
+          "title": "Life stage + action per face \u00b7 RTX 3070 \u00b7 two calls vs one",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -751,7 +855,7 @@ data:
         {
           "id": 279,
           "type": "text",
-          "title": "Age and action \u00b7 quality on the same faces",
+          "title": "Life stage + action per face \u00b7 quality comparison",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -833,7 +937,16 @@ data:
             "tooltip": {
               "mode": "multi"
             }
-          }
+          },
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 255,
@@ -883,7 +996,16 @@ data:
             "tooltip": {
               "mode": "multi"
             }
-          }
+          },
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 256,
@@ -933,7 +1055,16 @@ data:
               "mode": "multi"
             }
           },
-          "description": "Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."
+          "description": "Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing.",
+          "transformations": [
+            {
+              "id": "renameByRegex",
+              "options": {
+                "regex": "^library-face-observations(.*)$",
+                "renamePattern": "Life stage + action per face$1"
+              }
+            }
+          ]
         },
         {
           "id": 175,
