@@ -187,7 +187,7 @@ def normalized_action(action):
     # Some responses put an article and a single object noun in the second field.
     # Keep longer clauses on the validation path; their subject can be ambiguous.
     if (
-        verb in {"holds", "hugs", "kisses"}
+        verb in {"holds", "hugs", "kisses", "faces"}
         and isinstance(text, str)
         and re.fullmatch(r"(?:a|an|the) [A-Za-z]+[.]?", text)
     ):

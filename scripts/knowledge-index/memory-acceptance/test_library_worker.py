@@ -12,6 +12,10 @@ class LibraryWorkerTests(unittest.TestCase):
             worker.normalized_action({"verb": "holds", "action": "a diploma"}),
             ("holds", "holds a diploma"),
         )
+        self.assertEqual(
+            worker.normalized_action({"verb": "faces", "action": "the camera"}),
+            ("faces", "faces the camera"),
+        )
         for action in (
             {"verb": "sits", "action": "a diploma"},
             {"verb": "holds", "action": "the bystander holds a diploma"},
