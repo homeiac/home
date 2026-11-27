@@ -101,7 +101,11 @@ def extract(packet: dict) -> dict:
             else positions(start, end, min(8, max(1, int((end - start) * 2))))
         )
         frames = []
-        for stamp in stamps:
+        actual_stamps = []
+        missing = 0
+        for stamp in [*stamps, *([] if photo else [start])]:
+            if stamp == start and frames:
+                break
             command = [
                 "nice",
                 "-n",
@@ -135,11 +139,23 @@ def extract(packet: dict) -> dict:
             process = subprocess.run(
                 command, capture_output=True, timeout=90, check=True
             )
-            if not process.stdout or len(process.stdout) > 4 * 1024 * 1024:
+            if not process.stdout:
+                missing += 1
+                continue
+            if len(process.stdout) > 4 * 1024 * 1024:
                 raise ValueError("Invalid frame size")
             frames.append(base64.b64encode(process.stdout).decode())
+            actual_stamps.append(stamp)
+        if not frames:
+            raise ValueError("No readable frame in evidence window")
         result.append(
-            {"start": start, "end": end, "positions": stamps, "frames": frames}
+            {
+                "start": start,
+                "end": end,
+                "positions": actual_stamps,
+                "frames": frames,
+                "missing_frames": missing,
+            }
         )
     return {"version": VERSION, "windows": result}
 

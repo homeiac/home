@@ -9,7 +9,10 @@ from .ledger import Ledger
 
 def categories(data: dict, default_batter: str | None) -> list[str]:
     """Saved Adil filters are based on the corrected actor, role, and result."""
-    if not default_batter or data["actor"] != default_batter:
+    unidentified_bowler = data["actor"] is None and data["role"] == "bowling"
+    if not default_batter or (
+        data["actor"] != default_batter and not unidentified_bowler
+    ):
         return []
     role, outcome = data["role"], data["outcome"]
     result = [role] if role in {"batting", "bowling"} else []
@@ -116,7 +119,7 @@ def build_index(db: object, directory: Path, state: Path) -> None:
             if (state / "people.json").exists()
             else {}
         )
-        records = rows(Ledger(state / "ledger.sqlite3"), people)
+        records = rows(Ledger(state / "ledger.sqlite3", read_only=True), people)
     db.execute(
         "CREATE TEMP TABLE idx_cricket_highlights(event VARCHAR,owner VARCHAR,album VARCHAR,asset VARCHAR,path VARCHAR,kind VARCHAR,revision BIGINT,actor VARCHAR,person VARCHAR,role VARCHAR,outcome VARCHAR,wicket_credit VARCHAR,start_seconds DOUBLE,end_seconds DOUBLE,review_state VARCHAR,categories VARCHAR[],highlight_url VARCHAR,original_url VARCHAR,search_text VARCHAR)"
     )

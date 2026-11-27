@@ -71,6 +71,12 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(categories(delivery(actor="other"), "person-a"), [])
         self.assertEqual(
             categories(
+                delivery(actor=None, role="bowling", outcome="dismissal"), "person-a"
+            ),
+            ["bowling", "bowling_wicket"],
+        )
+        self.assertEqual(
+            categories(
                 delivery(role="bowling", outcome="run_out", wicket_credit="run_out"),
                 "person-a",
             ),

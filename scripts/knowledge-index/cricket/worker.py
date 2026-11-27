@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import signal
+import sqlite3
 import subprocess
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -53,6 +54,12 @@ def policy(path: Path) -> dict:
             or not 0 <= desired <= maximum
         ):
             raise ValueError("Worker count exceeds configured resource bound")
+    allowed = value.get("allowed_assets")
+    if allowed is not None and (
+        not isinstance(allowed, list)
+        or not all(isinstance(a, str) and a for a in allowed)
+    ):
+        raise ValueError("Invalid pilot scope")
     return value
 
 
@@ -201,6 +208,7 @@ def main() -> None:
                     TypeError,
                     subprocess.SubprocessError,
                     RuntimeError,
+                    sqlite3.Error,
                 ) as error:
                     try:
                         failed(ledger, job, type(error).__name__)
@@ -233,7 +241,14 @@ def main() -> None:
             for name, backend in config["backends"].items():
                 for _ in range(max(0, desired[name] - active[name])):
                     job = claim(
-                        ledger, album["owner"], album["id"], args.version, args.evidence
+                        ledger,
+                        album["owner"],
+                        album["id"],
+                        args.version,
+                        args.evidence,
+                        allowed=set(config["allowed_assets"])
+                        if config.get("allowed_assets") is not None
+                        else None,
                     )
                     if job is None:
                         break
@@ -267,6 +282,9 @@ def main() -> None:
                 "jobs": states,
                 "source_minutes_complete": minutes,
                 "pressure_paused": pressure,
+                "scope_assets": len(config["allowed_assets"])
+                if config.get("allowed_assets") is not None
+                else "album",
                 "host_memory_available_bytes": memory,
                 "completed_this_run": completed,
                 "errors_this_run": errors,

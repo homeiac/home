@@ -19,7 +19,13 @@ UNIT = Path("/etc/systemd/system/photo-enrichment-gui.service")
 
 def run(*args: str) -> None:
     """Run bounded service controls and stop on failure."""
-    subprocess.run(args, check=True, timeout=120)
+    timeout = (
+        750
+        if args[:2] == ("systemctl", "restart")
+        and args[-1].startswith("cricket-highlights")
+        else 120
+    )
+    subprocess.run(args, check=True, timeout=timeout)
 
 
 def main() -> None:
@@ -41,6 +47,10 @@ def main() -> None:
     # Never copy a bootstrap ledger over live corrections or an existing operator policy.
     for name, content in value["private"].items():
         path = STATE / name
+        if Path(name).is_absolute() or ".." in Path(name).parts:
+            raise ValueError("Invalid private path")
+        if path.exists():
+            continue
         if not path.resolve().is_relative_to(STATE):
             raise ValueError("Invalid private path")
         if not path.exists():
@@ -126,7 +136,12 @@ def main() -> None:
         run("systemctl", "restart", UNIT.name)
         raise
     (STATE / "installed").write_text(stamp)
-    worker = UNIT.with_name("cricket-highlights.service")
+    authority = (STATE / "ledger.sqlite3").resolve().parent
+    worker = UNIT.with_name(
+        "cricket-highlights-ssd.service"
+        if authority != STATE
+        else "cricket-highlights.service"
+    )
     if worker.exists():
         shutil.copy2(worker, backup / worker.name)
     worker.write_text(f"""[Unit]
@@ -150,7 +165,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths={STATE} /var/lib/prometheus/node-exporter
+ReadWritePaths={STATE} {authority} /var/lib/prometheus/node-exporter
 [Install]
 WantedBy=multi-user.target
 """)
@@ -160,7 +175,13 @@ WantedBy=multi-user.target
     run("systemctl", "enable", "--now", worker.name)
     run("systemctl", "restart", worker.name)
     sys.stdout.write(
-        json.dumps({"ui": "healthy", "worker": "disabled", "backup": str(backup)})
+        json.dumps(
+            {
+                "ui": "healthy",
+                "worker": "enabled" if policy["enabled"] else "disabled",
+                "backup": str(backup),
+            }
+        )
         + "\n"
     )
 

@@ -170,8 +170,14 @@ def restore(source: Path, destination: Path) -> None:
 class Ledger:
     """Store scoped proposals and immutable correction history on local disk."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, read_only: bool = False) -> None:
         self.path = path.resolve()
+        self.read_only = read_only
+        if read_only:
+            with self.connect() as db:
+                if db.execute("PRAGMA user_version").fetchone()[0] != VERSION:
+                    raise ValueError("Unsupported read-only ledger schema")
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         existed = self.path.exists()
         if not existed:
@@ -198,7 +204,13 @@ class Ledger:
     @contextmanager
     def connect(self, write: bool = False) -> Iterator[sqlite3.Connection]:
         """Commit successful operations, roll back failures, and close connections."""
-        db = sqlite3.connect(self.path, timeout=10)
+        if write and self.read_only:
+            raise PermissionError("Read-only ledger")
+        db = (
+            sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True, timeout=10)
+            if self.read_only
+            else sqlite3.connect(self.path, timeout=10)
+        )
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         try:

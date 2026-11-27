@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .analyze import VERSION, parse_reply, prompt, proposal
+from .contact_sheet import sheet
+from .context import apply_hint
 from .ledger import Ledger
 from .models import infer
 from .prepare import save_private
@@ -46,7 +48,7 @@ def analyze_one(
     start = time.monotonic()
     window = row["window"]
     photo = row["asset"]["kind"] == "photo"
-    frames = ([portrait] if portrait else []) + window["frames"]
+    frames = ([portrait] if portrait else []) + [sheet(window)]
     raw = infer(backend, prompt(window, photo=photo, reference=bool(portrait)), frames)
     events = parse_reply(raw)
     proposals = []
@@ -67,6 +69,10 @@ def analyze_one(
     if events and not proposals:
         raise ValueError("All model events failed validation")
     # Neutral descriptions of scenery are useful evidence, but are not cricket cards.
+    proposals = [
+        apply_hint(p, window.get("context_summary", ""), default_batter)
+        for p in proposals
+    ]
     useful = [
         p
         for p in proposals
