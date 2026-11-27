@@ -1,0 +1,202 @@
+{
+  "date": "2026-11-26",
+  "method": "Matched bars show successful two-pass face observations per wall-clock minute across two passes over the same 12 faces, reversing the order on the second pass. Ten faces had reviewed life stages. Each live bar uses a separate three-minute window of production saves. The live photo mix varies. Repeated benchmark images can benefit from warm caches.",
+  "backends": {
+    "Mac Metal": {
+      "parser_replay": {
+        "total": 24,
+        "previously_accepted": 22,
+        "preserved": 22,
+        "accepted_now": 24
+      },
+      "before": {
+        "lanes": 4,
+        "attempts": 24,
+        "successful": 23,
+        "per_min": 10.77,
+        "pass_rates": [
+          8.37,
+          14.6
+        ],
+        "reviewed_stage_exact": 10,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.04,
+          "age_seconds": 11.0,
+          "action_seconds": 9.77
+        },
+        "supported_actor_actions": 17
+      },
+      "selected": {
+        "lanes": 4,
+        "attempts": 24,
+        "successful": 24,
+        "per_min": 16.18,
+        "pass_rates": [
+          13.96,
+          19.25
+        ],
+        "reviewed_stage_exact": 9,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 7.0,
+          "action_seconds": 6.21
+        },
+        "supported_actor_actions": 19
+      },
+      "more_lanes": {
+        "lanes": 6,
+        "attempts": 24,
+        "successful": 22,
+        "per_min": 14.33,
+        "pass_rates": [
+          14.19,
+          14.47
+        ],
+        "reviewed_stage_exact": 11,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.06,
+          "age_seconds": 10.71,
+          "action_seconds": 10.71
+        }
+      },
+      "visual_prefix": {
+        "lanes": 4,
+        "attempts": 24,
+        "successful": 22,
+        "per_min": 9.3,
+        "pass_rates": [
+          8.41,
+          10.4
+        ],
+        "reviewed_stage_exact": 12,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.04,
+          "age_seconds": 10.92,
+          "action_seconds": 12.61
+        }
+      },
+      "confirmation": {
+        "lanes": 6,
+        "attempts": 24,
+        "successful": 24,
+        "per_min": 11.85,
+        "pass_rates": [
+          9.24,
+          16.51
+        ],
+        "reviewed_stage_exact": 10,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 16.54,
+          "action_seconds": 16.7
+        }
+      },
+      "live_before": 9.67,
+      "live_after": 11.67,
+      "decision": "Retained four Mac worker lanes and four Metal slots. Six lanes failed to beat the final four-lane replay. A reviewed age estimate also varied at both settings. The concurrency-only trial at 6 lanes saved 14.33 faces/min. Moving images ahead of the question at 4 lanes saved 9.3 faces/min. The selected run keeps the original image order and joins unambiguous verb/object replies. On identical recorded responses, the final validator preserved all 22 previously accepted age/action results and accepted 24 of 24."
+    },
+    "RTX 3070": {
+      "parser_replay": {
+        "total": 24,
+        "previously_accepted": 21,
+        "preserved": 21,
+        "accepted_now": 24
+      },
+      "before": {
+        "lanes": 3,
+        "attempts": 24,
+        "successful": 21,
+        "per_min": 18.34,
+        "pass_rates": [
+          16.62,
+          20.26
+        ],
+        "reviewed_stage_exact": 10,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 4.26,
+          "action_seconds": 4.33
+        },
+        "supported_actor_actions": 17
+      },
+      "selected": {
+        "lanes": 3,
+        "attempts": 24,
+        "successful": 23,
+        "per_min": 21.11,
+        "pass_rates": [
+          20.4,
+          21.95
+        ],
+        "reviewed_stage_exact": 10,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 3.62,
+          "action_seconds": 4.56
+        },
+        "supported_actor_actions": 17
+      },
+      "more_lanes": {
+        "lanes": 4,
+        "attempts": 24,
+        "successful": 19,
+        "per_min": 16.16,
+        "pass_rates": [
+          15.73,
+          16.68
+        ],
+        "reviewed_stage_exact": 9,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.06,
+          "age_seconds": 5.48,
+          "action_seconds": 6.1
+        }
+      },
+      "visual_prefix": {
+        "lanes": 3,
+        "attempts": 24,
+        "successful": 22,
+        "per_min": 19.48,
+        "pass_rates": [
+          17.78,
+          21.53
+        ],
+        "reviewed_stage_exact": 10,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 3.62,
+          "action_seconds": 4.48
+        }
+      },
+      "confirmation": {
+        "lanes": 3,
+        "attempts": 24,
+        "successful": 24,
+        "per_min": 20.43,
+        "pass_rates": [
+          18.49,
+          22.83
+        ],
+        "reviewed_stage_exact": 10,
+        "reviewed_attempts": 20,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 4.23,
+          "action_seconds": 4.79
+        }
+      },
+      "live_before": 17.0,
+      "live_after": 14.0,
+      "decision": "Three RTX worker lanes feed the four-slot Ollama server. The concurrency-only trial at 4 lanes saved 16.16 faces/min. Moving images ahead of the question at 3 lanes saved 19.48 faces/min. The selected run keeps the original image order and joins unambiguous verb/object replies. On identical recorded responses, the final validator preserved all 21 previously accepted age/action results and accepted 24 of 24."
+    }
+  }
+}
