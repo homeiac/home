@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 export async function shareNewAlbums(api, owner, viewers, handled, save) {
@@ -48,4 +48,4 @@ async function main() {
   });
   console.log(JSON.stringify({albumsProcessedToDate: handled.size, viewerGrantsAdded: count}));
 }
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) await main();
+if (process.argv[1] && pathToFileURL(await realpath(process.argv[1])).href === import.meta.url) await main();
