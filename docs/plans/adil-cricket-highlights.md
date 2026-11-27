@@ -4,6 +4,18 @@ Date: 2026-11-27
 
 Status: Implementation started; tracked in [#250](https://github.com/homeiac/home/issues/250)
 
+Completed PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
+[playback API #252](https://github.com/homeiac/home/pull/252), and
+[correction UI #253](https://github.com/homeiac/home/pull/253). These are stacked
+review branches; publication of a PR does not imply production deployment.
+
+Live inventory on November 27: **1,500 original assets: 633 videos and 867 photos**
+in “All cricket videos.” Videos total approximately 245.6 minutes; the longest is
+6.8 minutes. All originals matched the media host. The newer audio-story pipeline
+already has results for 632 videos (168 speech, 381 no speech, 80 uncertain speech,
+3 no audio); reuse these before extracting audio again. The earlier optional
+caption-transcription helper is not the only available audio source.
+
 Build a best-effort cricket highlight browser for the existing album of 1,500+ photos and videos. Make likely highlights easy to find, play, and correct. Accuracy can improve later; corrections must work from the first usable version and survive every subsequent backfill.
 
 ## Agreed behavior

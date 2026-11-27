@@ -66,3 +66,20 @@ node cricket/check_ui.cjs /private/tmp/cricket-ui-demo/ready.json /private/tmp/c
 The check requires Playwright and Chrome and launches a fresh headless profile.
 Set `PLAYWRIGHT_MODULE` to an isolated installation when not on Node's module path.
 Use a new state directory for each check so the starting fixture is unchanged.
+
+## Inventory and role identity rules
+
+`inspect_album.py` reads all matching accessible albums, follows metadata-search
+pagination, and writes a private inventory only when requested. It uses the v3
+album-user owner field and paginated search; see the
+[Immich v3 migration notes](https://immich.app/blog/v3-migration).
+`inspect_runtime.py` checks the selected host from the inventory, matches original
+sizes, and reuses read-only audio-story results by canonical or alias path.
+
+`python3 -m cricket.importer --inventory PRIVATE.json --runtime PRIVATE.json
+--ledger PRIVATE.sqlite3 --people PEOPLE.json --dry-run` resolves the named album
+and unique person before writing. Remove `--dry-run` to import and enqueue.
+Repeat imports preserve jobs and corrections. Role classification applies the
+default person only to a featured batter; bowling identity requires separate
+matching evidence. Visual role extraction is connected with the evidence/model
+worker in the next PRs, rather than guessing roles from album membership.
