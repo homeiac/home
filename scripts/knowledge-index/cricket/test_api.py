@@ -30,7 +30,9 @@ class APITests(unittest.TestCase):
             )
         self.event = self.ledger.create_event("one", "album", "clip", delivery())
         self.other_event = self.ledger.create_event("two", "album", "clip", delivery())
-        self.api = CricketAPI(self.ledger, "one", self.root)
+        self.api = CricketAPI(
+            self.ledger, "one", self.root, {"person-a": "Test batter"}
+        )
         self.store = SimpleNamespace(lock=threading.RLock())
         self.server = make_server(
             self.store, self.root, "127.0.0.1", 0, cricket=self.api
@@ -77,6 +79,12 @@ class APITests(unittest.TestCase):
 
     def test_list_get_create_correct_and_restart_readback(self) -> None:
         self.assertTrue(self.request("/api/config")[2]["cricket"])
+        self.assertEqual(
+            self.request("/api/cricket/people")[2]["people"],
+            [{"id": "person-a", "name": "Test batter"}],
+        )
+        for route in ("/cricket", "/cricket.js", "/cricket.css"):
+            self.assertEqual(self.request(route)[0], 200)
         self.assertEqual(
             self.request("/api/cricket/albums")[2]["albums"][0]["id"], "album"
         )
@@ -227,6 +235,7 @@ class APITests(unittest.TestCase):
         try:
             self.base = f"http://127.0.0.1:{server.server_port}"
             self.assertEqual(self.request("/api/cricket/albums")[0], 404)
+            self.assertEqual(self.request("/cricket")[0], 404)
         finally:
             self.base = old_base
             server.shutdown()

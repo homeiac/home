@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cricket highlights</title><link rel="stylesheet" href="/cricket.css"><script src="/cricket.js" defer></script></head>
+<body>
+<header><a href="/">← Photo library</a><p class="eyebrow">YOUR CRICKET MEMORIES</p><h1>Cricket highlights</h1><p>Find the moment. Keep the celebration. Correct anything.</p></header>
+<main>
+<section class="toolbar" aria-label="Highlight filters">
+<label>Album<select id="album"></select></label>
+<label>Show<select id="filter"><option value="all">All moments</option><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="four">Fours</option><option value="six">Sixes</option><option value="batting_out">Batter out</option><option value="bowling_wicket">Bowling wickets</option><option value="boundary_unclear">Boundary unclear</option></select></label>
+<label class="checkbox"><input id="show-dismissed" type="checkbox">Include dismissed suggestions</label>
+<button id="refresh">Refresh</button>
+</section>
+<p id="status" role="status" aria-live="polite">Loading highlights…</p>
+<section id="cards" aria-label="Highlights"></section>
+<section class="add"><h2>Missing a moment?</h2><p>Open an original, find the delivery, and add a highlight.</p><label>Original<select id="original"></select></label><button id="add">Add highlight</button></section>
+</main>
+<dialog id="editor"><form id="edit-form">
+<div class="dialog-top"><h2 id="edit-title">Correct highlight</h2><button id="cancel" type="button">Close</button></div>
+<video id="edit-video" controls preload="metadata"></video><img id="edit-image" alt="Original cricket photo" hidden>
+<div class="fields"><label>Person<select id="person"></select></label><label>Activity<select id="role"><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="other">Other</option><option value="unknown">Unclear</option></select></label>
+<label>Result<select id="outcome"><option value="four">Four</option><option value="six">Six</option><option value="boundary_unclear">Boundary unclear</option><option value="dismissal">Dismissal</option><option value="run_out">Run-out</option><option value="other">No highlight / other</option><option value="unknown">Unclear</option></select></label>
+<label>Wicket credit<select id="credit"><option value="unknown">Unclear / not applicable</option><option value="bowler">Credited to bowler</option><option value="run_out">Run-out</option></select></label></div>
+<div id="timing" class="fields"><label>Start in seconds<input id="start" type="number" min="0" step="0.1" required><button id="start-now" type="button">Use current position for start</button></label><label>End in seconds<input id="end" type="number" min="0" step="0.1" required><button id="end-now" type="button">Use current position for end</button></label></div>
+<p id="save-status" role="status" aria-live="polite"></p><button id="save" type="submit">Save correction</button>
+</form></dialog>
+</body></html>

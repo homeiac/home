@@ -68,15 +68,28 @@ def public_event(event: dict) -> dict:
 class CricketAPI:
     """One configured owner's view; identity never comes from request parameters."""
 
-    def __init__(self, ledger: Ledger, owner: str, library: Path) -> None:
+    def __init__(
+        self, ledger: Ledger, owner: str, library: Path, people: dict | None = None
+    ) -> None:
         self.ledger = ledger
         self.owner = require_text(owner)
         self.library = library.resolve()
+        self.people = people or {}
+        for identifier, name in self.people.items():
+            require_text(identifier)
+            require_text(name)
 
     def get(
         self, route: str, query: dict, range_header: str | None = None
     ) -> dict | FileBody:
         """Serve authorized metadata or a range-capable original file."""
+        if route == "/api/cricket/people":
+            return {
+                "people": [
+                    {"id": identifier, "name": name}
+                    for identifier, name in self.people.items()
+                ]
+            }
         if route == "/api/cricket/albums":
             with self.ledger.connect() as db:
                 return {

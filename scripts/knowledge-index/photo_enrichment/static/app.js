@@ -343,7 +343,7 @@ $('view-faces').onclick=()=>run(()=>switchView('faces'));$('view-photos').onclic
 $('refresh').onclick=()=>run(async()=>{state.faceSelection.clear();await switchView(state.view);await loadAutoAccept();status('Library refreshed. Confirmed edits are visible immediately.');});
 $('export').onclick=()=>run(async()=>{await api('/api/export',{});status('A complete analytical snapshot is now available.');});
 run(async()=>{
-  const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;state.contextSuggestions=config.search_index;$('photo-search-form').hidden=!config.search_index;
+  const config=await api('/api/config');state.csrf=config.csrf;state.frigate=config.frigate;$('cricket-link').hidden=!config.cricket;state.contextSuggestions=config.search_index;$('photo-search-form').hidden=!config.search_index;
   state.autoAcceptSupported=Boolean(config.auto_accept);$('auto-accept-settings').hidden=!state.autoAcceptSupported;await loadAutoAccept();
   if(config.background_only){$('extract').hidden=true;$('detect').hidden=true;$('export').textContent='Refresh analytics';}
   const health=await api('/api/status');if(health.captured_at)$('freshness').textContent='DuckDB browsing snapshot · your edits update immediately · '+new Date(health.captured_at*1000).toLocaleTimeString();

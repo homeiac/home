@@ -84,6 +84,13 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             if parsed.path.startswith('/api/cricket/') and cricket is None:
                 return self.send({'error':'Cricket highlights are not enabled'},404)
             if self.command == "GET":
+                if parsed.path in ('/cricket','/cricket.js','/cricket.css'):
+                    if cricket is None:
+                        return self.send({'error':'Cricket highlights are not enabled'},404)
+                    name, kind = {'/cricket':('cricket.html','text/html; charset=utf-8'),
+                                  '/cricket.js':('cricket.js','text/javascript'),
+                                  '/cricket.css':('cricket.css','text/css')}[parsed.path]
+                    return self.send((STATIC/name).read_bytes(),content_type=kind)
                 if parsed.path.startswith('/api/cricket/'):
                     result = cricket.get(parsed.path, query, self.headers.get('Range'))
                     if isinstance(result, FileBody):
@@ -188,7 +195,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
         def dispatch_safely(self):
             try:
                 route=urllib.parse.urlsplit(self.path).path
-                if route.startswith('/api/cricket/'):
+                if route.startswith('/api/cricket/') or route in ('/cricket','/cricket.js','/cricket.css'):
                     self.dispatch()
                 elif route.startswith('/api/') and route != '/api/diagnostics' and hasattr(store,'request_session'):
                     with store.request_session(readonly=self.command=='GET' or route=='/api/group-suggestions') as reader:
