@@ -18,10 +18,20 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--query', default='tan dog pointed ears')
 parser.add_argument('--size', type=int, default=80)
 parser.add_argument('--random', action='store_true', help='Sample potential negatives for visual review')
+parser.add_argument('--person-id', help='Review actual tags for an existing Immich person')
+parser.add_argument('--since', help='Restrict review to photos taken on or after this date')
+parser.add_argument('--until', help='Restrict review to photos taken on or before this date')
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 args.output.mkdir(mode=0o700, parents=True, exist_ok=True)
-if args.random:
+if args.person_id:
+    body = {'size': args.size, 'type': 'IMAGE', 'personIds': [args.person_id]}
+    if args.since:
+        body['takenAfter'] = args.since+'T00:00:00.000Z'
+    if args.until:
+        body['takenBefore'] = args.until+'T23:59:59.999Z'
+    assets = api('/search/metadata', 'POST', body)['assets']['items']
+elif args.random:
     assets = api('/search/random', 'POST', {'size': args.size, 'type': 'IMAGE'})
 else:
     result = api('/search/smart', 'POST', {'query': args.query, 'size': args.size, 'type': 'IMAGE'})

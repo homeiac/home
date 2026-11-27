@@ -50,7 +50,7 @@ Negative examples matter just as much. Other dogs are especially valuable here;
 unrelated rooms, people, and scenery help reject background matches. Private asset
 IDs, training selections, and photo thumbnails remain outside the repository.
 
-I start with a 0.90 confidence threshold and disable the whole-image fallback by
+I use a 0.90 confidence threshold and disable the whole-image fallback by
 setting its threshold above 1.0. The pinned code compares that value with a
 probability, so a photo without an animal detection cannot pass. This can miss
 some real Waffles photos, but it makes early review easier to trust. It is not a
@@ -58,8 +58,9 @@ claim of measured accuracy.
 
 ## Controlled rollout
 
-Before enrollment, the setup script creates an Immich database backup. Automatic
-scanning stays disabled through a small startup wrapper, including after restarts.
+Before enrollment, the setup script creates an Immich database backup. During
+enrollment, automatic scanning stayed disabled through a small startup wrapper,
+including after restarts.
 Manual enrollment and bounded scans still work. The wrapper has tests that verify
 the disabled, enabled, and invalid-configuration cases.
 
@@ -70,18 +71,39 @@ background scanner and historical backfill be enabled.
 
 ## Results
 
-Setup is awaiting approval of the dedicated API credential. The running Immich
-version, Flux source branch, available CPU capacity, and pinned image have been
-verified. Kubernetes accepted the workload, storage, service, route, and startup
+The dedicated credential was approved, encrypted, and deployed through Flux.
+The running Immich version, Flux source branch, available CPU capacity, and pinned
+image have been verified. Kubernetes accepted the workload, storage, service, route, and startup
 ConfigMap in a server-side dry run. All three startup-gate tests passed. The
 539 MiB database archive was fully read by `pg_restore` without connecting to a
 database; this validates archive readability, not a complete disaster-recovery test.
 
-Visual review selected 23 Waffles references and 42 negative examples. Another
-10 likely Waffles photos and 13 negatives were reserved for testing. These are
-selection counts, not deployed enrollment counts or accuracy results. No library
-tags have been added by this setup yet. The tagger directory is not included in
-the live parent Kustomization until its dedicated secret is ready.
+The pod is healthy, the private HTTPS endpoint responds successfully, and all
+23 reviewed Waffles references were tagged without an API failure. The deployed
+classifier has 42 negative examples. Across the read-only checks, it recognized
+10 of 13 Waffles photos and rejected all 13 clear non-Waffles examples, including
+three different-looking dogs. Three real Waffles photos were missed: two fell
+below the confidence threshold, and one lacked an animal detection. This is a
+small, selected spot check, not a library-wide accuracy guarantee.
+
+The most instructive moment was a labeling mistake during review. Three photos
+showed a much darker, muddy-looking dog. The model confidently said Waffles. I
+asked the owner, who confirmed that it was Waffles. Those images stayed out of
+training and became useful examples of recognition across a dramatic appearance
+change. A model's result is only a false positive when the ground-truth label is
+actually correct.
+
+A separate one-day scan fetched 12 assets and added six Waffles tags, all checked
+visually. Its remaining counters were three low-confidence crops, two unknown
+crops, one already-tagged match, and one unavailable thumbnail, with zero API
+failures. These counters mix assets and detected crops, so they should not be
+summed as mutually exclusive photo counts. The conservative behavior leaves
+some photos for review instead of forcing a label.
+
+With those checks complete, hourly scanning is enabled through Git. The upstream
+upload-time cursor starts at the current UTC day's midnight when absent; older
+photos need a separate manual historical scan. The scan panel exposes progress
+and can stop that backfill without deleting existing recognition metadata.
 
 The reusable commands, permissions, operating controls, and recovery procedure are
 in the [runbook](../runbooks/immich-pet-tagger.md).

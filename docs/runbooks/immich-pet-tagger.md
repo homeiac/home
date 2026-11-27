@@ -1,11 +1,11 @@
 # Waffles recognition in Immich
 
-The prepared pet tagger deployment runs alongside Immich in `immich-pilot`, managed by the
+The pet tagger runs alongside Immich in `immich-pilot`, managed by the
 `photo-enrichment-preview` Flux Kustomization. Its source is the
 `codex/photo-enrichment-217` branch, not `master`.
 
-Current status: manifests validated; deployment awaits the dedicated API-key
-approval. The parent photo Kustomization does not yet include this directory.
+Current status: deployed and healthy. Waffles has 23 references and 42 negative
+examples. Automatic scans run hourly with the validated confidence settings.
 
 ## Deployment
 
@@ -33,8 +33,9 @@ reset/delete actions that need deletion permissions will fail; do not use them.
 2. Create the dedicated key in the owner's signed-in Immich settings with the
    permissions above; keep it in a private file outside the checkout.
 3. Run `prepare-secret.py /absolute/private/key-file`. Never stage that input file.
-4. Run `generate-startup.py`, the startup tests, and `kubectl kustomize` on the
-   tagger directory. Add the directory to the photo stack's kustomization.
+4. Run `generate-startup.py` and `validate.py`. The latter checks the startup gate,
+   full stack rendering, the image digest, and SOPS recovery without printing secrets.
+   Add the directory to the photo stack's kustomization.
 5. Commit reviewed manifests and encrypted credentials to the Flux source branch.
    Run `reconcile.sh`, then `check-status.sh` and `manage.py status`.
 6. Use `reference-candidates.py --output /absolute/private/candidates` to produce
@@ -44,6 +45,10 @@ reset/delete actions that need deletion permissions will fail; do not use them.
 7. Run `manage.py enroll --selection /absolute/private/selection.json`.
 8. Test a bounded window: `manage.py scan --since YYYY-MM-DD --until YYYY-MM-DD`.
    Inspect every newly tagged photo and keep test examples separate from training.
+   Before writing any test tags, use `evaluate.py /private/heldout.json --output
+   /private/results.log`. The input has `positive` and `negative` arrays of asset
+   UUIDs. This calls the upstream classifier inside the deployed container without
+   writing face assignments and rejects exact training/test overlap.
 
 Scripts live under `scripts/immich-pet-tagger/`. They take credentials from an
 injected `IMMICH_API_KEY` or the already-existing Kubernetes Secret, never literals.
@@ -51,16 +56,19 @@ Private manifests, IDs, thumbnails, API keys, and database dumps stay outside Gi
 
 ## Automatic scans and recovery
 
-`AUTOMATIC_SCANS=false` prevents the upstream background loop from running,
+Set `AUTOMATIC_SCANS=false` to prevent the upstream background loop from running,
 including after a pod restart. Manual scans and enrollment remain available.
 The small startup wrapper changes only background scheduling; inference and API
 behavior come from the pinned upstream image. `generate-startup.py` embeds it in
 the versioned ConfigMap. Revisit this wrapper when upgrading upstream.
 
-After validation, change `AUTOMATIC_SCANS` to `true` in Git and reconcile. The
+The validated deployment uses `AUTOMATIC_SCANS=true`. Change it in Git and reconcile. The
 upstream poller scans once at startup and hourly thereafter. Its upload-time
-cursor is on the PVC. On an empty cursor it may process the entire library, so
-choose the backfill explicitly and allow enough time for CPU inference.
+cursor is on the PVC. The pinned version initializes an absent cursor to the
+current UTC day's midnight; it does not automatically backfill older uploads.
+Use an explicit manual date window for historical photos and allow enough time
+for CPU inference. Manual scans use photo-taken dates and do not advance the
+automatic upload-time cursor.
 
 To stop an active manual scan, run `manage.py stop`. To disable scheduled scans,
 set `AUTOMATIC_SCANS=false` in Git and reconcile. To remove the workload, remove
