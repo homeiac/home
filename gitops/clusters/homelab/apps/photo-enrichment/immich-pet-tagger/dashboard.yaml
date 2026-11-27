@@ -2474,7 +2474,7 @@ data:
             "w": 12,
             "h": 4
           },
-          "description": "1 normal, 2 warning, 4 critical. Extra workers refuse startup outside normal pressure and drain on sustained warning or critical pressure.",
+          "description": "1 normal, 2 warning, 4 critical. Mac extras record warnings and continue under the approved policy; critical or unknown pressure stops extra capacity. Baseline Metal remains running.",
           "targets": [
             {
               "refId": "A",

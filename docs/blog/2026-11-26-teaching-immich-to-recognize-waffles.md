@@ -291,8 +291,8 @@ not be relabeled as verified two-thread measurements.
 The thread phase then encountered sustained Mac memory pressure while starting
 its first two-thread extra worker, before a measured trial. Its
 [separate journal and report](../experiments/waffles/2026-11-26-cpu-threads-results.md)
-record the rejection. There is no thread-count winner or CPU-versus-Metal speedup
-to report under that shared load; Mac extra capacity was restored to zero while
+retain that first rejection. It produced no thread-count winner or CPU-versus-Metal
+speedup; Mac extra capacity was restored to zero while
 the original Metal baseline continued.
 
 We separately adopted still-fawn's two CPU extras using its two quality-valid
@@ -300,8 +300,45 @@ three-lane passes as evidence. A bounded production observation kept every
 admitted baseline advancing, with host temperatures at 38–43°C and at least
 1706 MiB available memory. This is an operational adoption, documented in the
 [journal](../experiments/waffles/README.md#production-adoption-after-the-interrupted-comparison),
-not a completed combined benchmark. Mac extras remain drained; still-fawn now
-processes production with one baseline and two extra workers.
+not a completed combined benchmark. still-fawn then entered production with one
+baseline and two extra workers.
+
+The owner challenged the Mac reduction. The journal showed that warning pressure
+had cancelled trials without a demonstrated crash or quality failure. Rancher
+Desktop was allocated 24 GiB while its guest used about 4.93 GiB excluding
+reclaimable memory. At the owner's request, we reduced its allocation to 8 GiB,
+verified recovery of 14 healthy local Kubernetes workloads and Dagger, and kept
+Waffles baseline identities unchanged. This reduces the VM allocation by 16 GiB;
+it does not mean the Mac immediately gains 16 GiB of free physical memory.
+
+The owner then explicitly authorized starting jobs despite warning pressure. A
+new preregistered session records warning level 2 while allowing work to continue.
+Critical pressure, crashes and recognition failures still stop the trial. The old
+rejections remain in the journal; they were policy decisions, not proof of an
+optimal one-worker Mac configuration.
+
+The amended run completed quality-valid two- and four-thread passes at 83.9 and
+66.0 photos/minute respectively. Before repetitions completed, the owner requested
+three total Mac production workers. We stopped the automatic sweep and adopted
+one unchanged Metal baseline plus two CPU workers using the validated two-thread
+setting. This is an explicit operational choice, not a benchmark-selected optimum.
+
+### Trace the waiting before blaming the hardware
+
+The subsequent diagnosis left those jobs running. A native stack sample found
+70.3% of the Metal worker's main-thread samples in HTTPS reads. Small queue GETs
+had medians of 18.1 ms from the Mac and 12.2 ms inside still-fawn, but read-only
+candidate-selection queries took 478–646 ms, scanning and sorting roughly 61,000
+jobs to select one. Source inspection showed that claims hold a per-backend
+advisory lock, serializing Mac workers through that work.
+
+Recent production processing stages averaged 0.38 seconds on Mac Metal versus
+0.68 on still-fawn CPU, while committed-result intervals were 0.99 versus 1.28
+seconds. These are different real photos, not a matched hardware benchmark, but
+the trace and query plans explain why faster model execution gets diluted by queue
+waiting. The [diagnosis](../experiments/waffles/2026-11-26-pipeline-diagnosis.md)
+records the limits of those measurements. We did not change the query, index,
+lock or transport during a diagnosis-only request.
 
 ### Auditing an apparent throughput cliff
 

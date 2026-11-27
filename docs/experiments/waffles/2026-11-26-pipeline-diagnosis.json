@@ -1,0 +1,152 @@
+{
+  "scope": "Read-only diagnosis; jobs continued. Mac increased separately by explicit owner request to one Metal and two CPU workers.",
+  "stack": {
+    "samples": 825,
+    "main_thread_counts": {
+      "_ssl__SSLSocket_read": 580,
+      "_ssl__SSLSocket_do_handshake_impl": 35,
+      "lock_PyThread_acquire_lock": 145
+    },
+    "sha256": "8feee683b24a8e8d6e5fe75cdc4e05beb278154693de4568e7c78bced87178ea"
+  },
+  "recent_production": [
+    {
+      "worker": "fun-bedbug",
+      "pool": "base",
+      "device": "cpu",
+      "completed": 28,
+      "processing_mean": "5.7764",
+      "processing_p50": 5.57893868163228,
+      "processing_p95": 7.370975485350934
+    },
+    {
+      "worker": "mac",
+      "pool": "base",
+      "device": "mps",
+      "completed": 181,
+      "processing_mean": "0.3755",
+      "processing_p50": 0.3502179160132073,
+      "processing_p95": 0.6311542920011561
+    },
+    {
+      "worker": "mac",
+      "pool": "burst",
+      "device": "cpu",
+      "completed": 186,
+      "processing_mean": "0.2819",
+      "processing_p50": 0.2504187080048723,
+      "processing_p95": 0.45524709350138437
+    },
+    {
+      "worker": "pve",
+      "pool": "base",
+      "device": "cpu",
+      "completed": 84,
+      "processing_mean": "1.6225",
+      "processing_p50": 1.561782690929249,
+      "processing_p95": 1.9747130441130136
+    },
+    {
+      "worker": "still-fawn",
+      "pool": "base",
+      "device": "cpu",
+      "completed": 141,
+      "processing_mean": "0.6795",
+      "processing_p50": 0.658848678926006,
+      "processing_p95": 0.8387641159351915
+    },
+    {
+      "worker": "still-fawn",
+      "pool": "burst",
+      "device": "cpu",
+      "completed": 229,
+      "processing_mean": "0.8887",
+      "processing_p50": 0.8486752810422331,
+      "processing_p95": 1.268647201033309
+    }
+  ],
+  "base_cycles": [
+    {
+      "worker": "fun-bedbug",
+      "intervals": 27,
+      "completion_cycle_mean": "6.5461408888888889",
+      "processing_mean": 5.793476459673709
+    },
+    {
+      "worker": "mac",
+      "intervals": 180,
+      "completion_cycle_mean": "0.98542072222222222222",
+      "processing_mean": 0.37423908978218806
+    },
+    {
+      "worker": "pve",
+      "intervals": 83,
+      "completion_cycle_mean": "2.1592417831325301",
+      "processing_mean": 1.6239843874698483
+    },
+    {
+      "worker": "still-fawn",
+      "intervals": 140,
+      "completion_cycle_mean": "1.2797151500000000",
+      "processing_mean": 0.6783373885871177
+    }
+  ],
+  "request_probes": {
+    "mac": {
+      "at": "2026-11-27T06:24:41.467797+00:00",
+      "median_ms": 18.130666503566317,
+      "sample_ms": [
+        18.149874988012016,
+        19.976082985522225,
+        18.11145801912062,
+        22.132541984319687,
+        24.790541996480897,
+        13.251124997623265,
+        15.975791000528261,
+        14.412332995561883
+      ]
+    },
+    "still-fawn": {
+      "at": "2026-11-27T06:24:44.110016+00:00",
+      "median_ms": 12.215759488753974,
+      "sample_ms": [
+        47.65974613837898,
+        36.265987902879715,
+        8.350056130439043,
+        13.17444397136569,
+        7.1655758656561375,
+        5.328444996848702,
+        20.340377930551767,
+        11.257075006142259
+      ]
+    }
+  },
+  "candidate_select_ms": {
+    "mac-base": 477.589,
+    "mac-burst": 646.332,
+    "still-fawn-base": 0.267
+  },
+  "candidate_select_caveat": "Only SELECT candidate executed, with FOR UPDATE/SKIP LOCKED removed. Still-fawn returned zero rows because its slot was occupied; its tiny time is not comparable.",
+  "mac_host": {
+    "before": {
+      "cpu_percent": 14.4,
+      "swap_bytes": 5669978112,
+      "available_bytes": 12581879808,
+      "pressure": 1,
+      "gpu_percent": 100
+    },
+    "after": {
+      "cpu_percent": 13.5,
+      "swap_bytes": 5669978112,
+      "available_bytes": 11626463232,
+      "pressure": 1,
+      "gpu_percent": 100
+    }
+  },
+  "limits": [
+    "Different production photos per backend; not a matched hardware benchmark.",
+    "Short stack sample; counts represent main-thread sample time, not GPU execution time.",
+    "Per-process GPU powermetrics unavailable without interactive sudo; no GPU ownership percentages claimed.",
+    "Diagnostic probes and SQL timing add a small read load; no production SQL/client/index/lock was changed."
+  ]
+}

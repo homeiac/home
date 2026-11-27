@@ -10,9 +10,11 @@ rows=[json.loads(l) for l in (folder/'2026-11-26-cpu-threads.jsonl').read_text()
 start=max(i for i,r in enumerate(rows) if r['event']=='protocol');rows=rows[start:];protocol=rows[0]
 complete=next((r for r in reversed(rows) if r['event']=='experiment_completed'),None)
 failure=next((r for r in reversed(rows) if r['event']=='experiment_failed'),None)
+earlier=sum(r['event']=='protocol' for r in [json.loads(l) for l in (folder/'2026-11-26-cpu-threads.jsonl').read_text().splitlines()])-1
 lines=['# One-model CPU-thread results','', '**Status: '+('complete' if complete else 'incomplete / stopped' if failure else 'running')+'.**','',
        'One extra Mac CPU process; baseline Metal and all admitted production workers stay running. Same 122 photos, six excluded warm-up photos, reverse order on the second pass. Earlier process-sweep environment variables did not verify the detector thread count; this phase explicitly controls the pinned Ultralytics selector.','',
        '| Threads | Pass | Photos/min | Mean seconds/photo | TP / FP | Valid |','|---:|---|---:|---:|---|---|']
+lines[4:4]=['Warning-pressure policy: **'+protocol.get('memory_warning_policy','stop')+'**. Critical pressure remains a stop condition. Earlier journal sessions retained: '+str(earlier)+'.', '']
 for r in rows:
     if r['event']=='trial_finished':lines.append(f"| {r['threads']} | {r['run'].split('-')[-1]} | {r['photos_per_minute']:.1f} | {r['mean_processing_seconds']:.3f} | {r['accuracy']['true_positive']} / {r['accuracy']['false_positive']} | {r['valid']} |")
 if complete:

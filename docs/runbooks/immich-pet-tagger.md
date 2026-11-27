@@ -244,8 +244,10 @@ bash scripts/immich-pet-tagger/check-distributed.sh
 ```
 
 Safety bounds allow Mac 0–15 extras, still-fawn 0–3 and PVE 0–1. They are not
-measured optima. Mac model loading is staggered and refuses non-normal memory
-pressure. Extras drain on critical pressure or warning sustained for six seconds.
+measured optima. Mac model loading is staggered. Under the owner-approved policy,
+warning pressure (level 2) is recorded and work continues; critical pressure
+(level 4), unknown pressure or a failed probe refuses/drains extra capacity.
+`mac_burst_guard.py` is installed only for the native Mac extra-worker service.
 still-fawn's extra pod has a separate 3-CPU/6-GiB ceiling; its baseline retains
 2 CPU/3 GiB. Those shared ceilings do not create five physical cores on its
 four-core host. Low CPU requests and nice priority favor existing workloads.
@@ -259,11 +261,17 @@ The adapter explicitly configures pinned Ultralytics because its device selector
 otherwise overrides `OMP_NUM_THREADS`. Thread settings above the default apply
 only to Mac CPU extras; switching back to Metal restores the default automatically.
 See the [thread experiment](../experiments/waffles/2026-11-26-cpu-threads.md).
+The amended run uses `thread-experiment.py PRIVATE_DIRECTORY --allow-memory-warning`.
+The older continuous-process runner retains its original warning-stop protocol.
 
 Observed production policy after the November 26 experiments: Mac, PVE and
 fun-bedbug each retain one baseline; still-fawn retains its baseline plus two
-CPU extras using three affinity lanes. Mac extras are zero after sustained
-memory-pressure rejections. Chief-horse remains guarded standby. The
+CPU extras using three affinity lanes. Mac extras were initially drained by the
+warning guard; after reducing Rancher Desktop from 24 GiB to 8 GiB, the owner
+authorized another thread sweep with warnings observed. After two quality-valid
+single passes, the owner requested three Mac production workers: one Metal baseline
+plus two CPU extras at two threads each. The sweep was interrupted; no optimal
+thread count is claimed. Chief-horse remains guarded standby. The
 [adoption record](../experiments/waffles/README.md#production-adoption-after-the-interrupted-comparison)
 distinguishes independently validated still-fawn capacity from the incomplete
 combined comparison. `wait-production-progress.py` verifies that all admitted

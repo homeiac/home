@@ -20,8 +20,15 @@ The [one-model CPU-thread experiment](2026-11-26-cpu-threads.md) follows resourc
 rejections at higher process counts. Its results must remain separate because
 the pinned detector library's thread override is explicitly controlled there.
 Its [results](2026-11-26-cpu-threads-results.md) and
-[journal](2026-11-26-cpu-threads.jsonl) record a startup memory-pressure rejection
-before the first measurement, not a completed thread comparison.
+[journal](2026-11-26-cpu-threads.jsonl) retain the initial warning rejection and
+the follow-up after Rancher was reduced to 8 GiB and warnings became observational.
+Two- and four-thread single passes both passed quality; the owner then requested
+three Mac production workers, so the sweep was interrupted without an optimum.
+
+The [read-only pipeline diagnosis](2026-11-26-pipeline-diagnosis.md) found that
+queue candidate selection scans/sorts about 61,000 jobs and takes roughly half a
+second while claims serialize per backend. The Mac Metal main thread spent 70.3%
+of sampled time in HTTPS reads. No query, index, lock or client fix was applied.
 
 ## Production adoption after the interrupted comparison
 
@@ -37,8 +44,10 @@ Across startup plus observation, production completions increased by 323 on
 still-fawn, 185 on Mac, 76 on PVE and 30 on fun-bedbug. These unequal real photos
 are operational progress, not a controlled before/after speedup. Production now
 uses the original baseline workers plus two still-fawn extras with three CPU
-affinity lanes. Mac extras remain zero under the observed shared memory pressure;
-chief-horse remains guarded standby and RTX is unused.
+affinity lanes. Subsequently the owner explicitly increased Mac to its Metal
+baseline plus two quality-valid CPU extras at two threads each. This is an operator
+setting, not the winner of a completed sweep. Chief-horse remains guarded standby
+and RTX is unused.
 
 The [throughput exporter audit](2026-11-26-throughput-exporter-audit.md) explains
 the reported simultaneous graph drop: old and new queue-pod slopes were added
