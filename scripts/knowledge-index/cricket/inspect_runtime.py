@@ -20,6 +20,12 @@ for line in Path('/proc/meminfo').read_text().splitlines():
     if k in ('MemAvailable','MemTotal','SwapFree','SwapTotal'):result['memory'][k]=v.strip()
 for unit in ('photo-enrichment-gui','knowledge-index-enrich','knowledge-index-audio-story'):
     result['services'][unit]=subprocess.run(['systemctl','is-active',unit],capture_output=True,text=True).stdout.strip()
+result['worker_args']={}
+for unit in ('knowledge-index-enrich','photo-enrichment-gui'):
+    pid=subprocess.check_output(['systemctl','show',unit,'-p','MainPID','--value'],text=True).strip()
+    if pid.isdigit() and pid!='0':
+        argv=Path('/proc',pid,'cmdline').read_bytes().decode().split('\0')
+        result['worker_args'][unit]={flag:argv[argv.index(flag)+1] for flag in ('--endpoint','--model','--parallel','--port') if flag in argv}
 result['gui_release']=str(Path('/opt/photo-enrichment/gui').resolve())
 audio=Path('/local-3TB-backup/photo-enrichment/audio-story/ledger.sqlite3')
 if audio.exists():

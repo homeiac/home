@@ -95,7 +95,11 @@ def extract(packet: dict) -> dict:
     ranges = [(0, 0)] if photo else windows(packet["duration"])
     result = []
     for start, end in ranges:
-        stamps = [None] if photo else positions(start, end)
+        stamps = (
+            [None]
+            if photo
+            else positions(start, end, min(8, max(1, int((end - start) * 2))))
+        )
         frames = []
         for stamp in stamps:
             command = [
