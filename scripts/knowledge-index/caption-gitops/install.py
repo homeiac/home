@@ -19,6 +19,9 @@ ROOT = Path('/opt/knowledge-index')
 UNIT = 'knowledge-index-enrich.service'
 UNIT_PATH = Path('/etc/systemd/system') / UNIT
 FILES = {
+    'gphotos.py': ROOT / 'adapters/gphotos.py',
+    'knowledge.sql': ROOT / 'knowledge.sql',
+    'canon_raw.py': ROOT / 'enrichers/canon_raw.py',
     'media_summary.py': ROOT / 'enrichers/media_summary.py',
     'pipeline_metrics.py': ROOT / 'enrichers/pipeline_metrics.py',
     'summary_cache.py': ROOT / 'enrichers/summary_cache.py',
@@ -41,7 +44,8 @@ def command(*args: str, check: bool = True, timeout: int = 60) -> subprocess.Com
 def validate(bundle: dict) -> dict:
     """Reject incomplete bundles, unexpected destinations and malformed settings."""
     # Accept the previous bundle during the bootstrap-to-Flux transition.
-    if set(bundle) not in (set(FILES), set(FILES) - EXPORTER_FILES) or any(not isinstance(v, str) for v in bundle.values()):
+    legacy = set(FILES) - {'canon_raw.py', 'gphotos.py', 'knowledge.sql'}
+    if set(bundle) not in (set(FILES), legacy, legacy - EXPORTER_FILES) or any(not isinstance(v, str) for v in bundle.values()):
         raise ValueError('Unexpected or missing worker files')
     for name, content in bundle.items():
         if name.endswith('.py'):
@@ -78,7 +82,7 @@ def replace(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(path.name + '.gitops-tmp')
     temp.write_bytes(content)
-    temp.chmod(0o644)
+    temp.chmod(0o755 if path == FILES.get('gphotos.py') else 0o644)
     temp.replace(path)
 
 
@@ -110,7 +114,11 @@ def reconcile(bundle: dict) -> dict:
     transient = Path('/run/systemd/transient') / UNIT
     changed = {name: content.encode() for name, content in bundle.items()
                if not FILES[name].exists() or FILES[name].read_bytes() != content.encode()}
-    restart = bool(set(changed) - {'dispatch-policy.json'} - EXPORTER_FILES or overrides or transient.exists())
+    catalog_hash = hashlib.sha256(bundle['knowledge.sql'].encode()).hexdigest() if 'knowledge.sql' in bundle else None
+    catalog_stamp = ROOT / 'caption-gitops/catalog.sha256'
+    rebuild = catalog_hash and ('knowledge.sql' in changed or not catalog_stamp.exists()
+                                or catalog_stamp.read_text() != catalog_hash)
+    restart = bool(rebuild or set(changed) - {'dispatch-policy.json'} - EXPORTER_FILES or overrides or transient.exists())
     was_active = command('systemctl', 'is-active', '--quiet', UNIT, check=False).returncode == 0
     was_enabled = command('systemctl', 'is-enabled', '--quiet', UNIT, check=False).returncode == 0
     originals = {path: path.read_bytes() if path.exists() else None for path in [*FILES.values(), *overrides]}
@@ -131,6 +139,8 @@ def reconcile(bundle: dict) -> dict:
             path.unlink()
         for name, content in changed.items():
             replace(FILES[name], content)
+        if rebuild:
+            command(str(ROOT / 'venv/bin/python'), str(ROOT / 'kidx.py'), 'rebuild', config['index'])
         command('systemd-analyze', 'verify', str(FILES['knowledge-index-enrich.service']))
         command('systemctl', 'daemon-reload')
         if not config['enabled']:
@@ -153,12 +163,16 @@ def reconcile(bundle: dict) -> dict:
                 path.unlink(missing_ok=True)
             else:
                 replace(path, content)
+        if rebuild and originals.get(FILES['knowledge.sql']) is not None:
+            command(str(ROOT / 'venv/bin/python'), str(ROOT / 'kidx.py'), 'rebuild', config['index'], check=False)
         command('systemctl', 'daemon-reload', check=False)
         if not was_enabled:
             command('systemctl', 'disable', UNIT, check=False)
         if was_active:
             command('systemctl', 'start', UNIT, check=False)
         raise
+    if rebuild:
+        replace(catalog_stamp, catalog_hash.encode())
     digest = hashlib.sha256(json.dumps(bundle, sort_keys=True).encode()).hexdigest()
     state = {'bundle_sha256': digest, 'enabled': config['enabled'], 'changed_files': sorted(changed),
              'restarted': restart, 'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}
@@ -203,7 +217,11 @@ def reconcile_audio(bundle: dict) -> dict:
     unit = 'knowledge-index-audio-story.service'
     changed = {name: content.encode() for name, content in bundle.items()
                if not AUDIO_FILES[name].exists() or AUDIO_FILES[name].read_bytes() != content.encode()}
-    restart = bool(set(changed) - {'audio-config.json'})
+    catalog_hash = hashlib.sha256(bundle['knowledge.sql'].encode()).hexdigest() if 'knowledge.sql' in bundle else None
+    catalog_stamp = ROOT / 'caption-gitops/catalog.sha256'
+    rebuild = catalog_hash and ('knowledge.sql' in changed or not catalog_stamp.exists()
+                                or catalog_stamp.read_text() != catalog_hash)
+    restart = bool(rebuild or set(changed) - {'audio-config.json'})
     previous = {path: path.read_bytes() if path.exists() else None for path in AUDIO_FILES.values()}
     active = command('systemctl', 'is-active', '--quiet', unit, check=False).returncode == 0
     enabled = command('systemctl', 'is-enabled', '--quiet', unit, check=False).returncode == 0

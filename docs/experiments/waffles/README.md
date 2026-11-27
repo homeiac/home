@@ -125,3 +125,5 @@ The [November 27 quality and media recovery study](2026-11-27-quality-and-media-
 compares existing descriptions with all completed classifications, visually audits
 disagreements, and corrects the assumption that a preview 404 means unavailable
 media. It records frozen samples, query-selection tradeoffs and the recovery gate.
+
+The [caption recovery science journal](science-journal.md) records the exact two-database selection, the 2,192-asset baseline, verified captions, and the evidence for repairing or excluding damaged previews.

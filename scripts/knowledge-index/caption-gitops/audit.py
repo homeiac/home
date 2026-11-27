@@ -39,18 +39,18 @@ def main() -> None:
     con = duckdb.connect(config={'threads': 2})
     con.read_parquet(new, union_by_name=True).create_view('new_rows')
     con.execute('CREATE VIEW fresh AS SELECT ' + KEY + " FROM new_rows WHERE status = 'ok'")
-    total = con.execute('SELECT count(*) FROM fresh').fetchone()[0]
-    unique = con.execute('SELECT count(*) FROM (SELECT DISTINCT ' + KEY + ' FROM fresh)').fetchone()[0]
+    total = con.execute('SELECT count(*) FROM fresh').fetchall()[0][0]
+    unique = con.execute('SELECT count(*) FROM (SELECT DISTINCT ' + KEY + ' FROM fresh)').fetchall()[0][0]
     prior = 0
     if old:
         con.read_parquet(old, union_by_name=True).create_view('old_rows')
-        prior = con.execute("SELECT count(*) FROM fresh SEMI JOIN (SELECT * FROM old_rows WHERE status = 'ok') USING (" + KEY + ')').fetchone()[0]
+        prior = con.execute("SELECT count(*) FROM fresh SEMI JOIN (SELECT * FROM old_rows WHERE status = 'ok') USING (" + KEY + ')').fetchall()[0][0]
     result = {'since': baseline['at'], 'new_files': len(new), 'new_successful_rows': total,
               'new_unique_items': unique, 'duplicates_within_new_rows': total - unique,
               'duplicates_of_previously_completed_items': prior,
               'last_batch_saved_at': datetime.datetime.fromtimestamp(
                   max(Path(p).stat().st_mtime for p in new), datetime.timezone.utc).isoformat(),
-              'new_errors': con.execute("SELECT count(*) FROM new_rows WHERE status <> 'ok'").fetchone()[0]}
+              'new_errors': con.execute("SELECT count(*) FROM new_rows WHERE status <> 'ok'").fetchall()[0][0]}
     print(json.dumps(result, sort_keys=True))
     if prior or total != unique:
         raise SystemExit(1)

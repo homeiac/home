@@ -96,3 +96,9 @@ The November 22 diagnosis and frozen-cohort verification use
 `../diagnose-caption-gaps.sh` and `../verify-caption-gaps.sh`. Combined coverage is
 checked by `../check-caption-coverage.sh`. These report counts or opaque ledger IDs,
 not photo identities. Their private incident manifest stays in `/var/tmp` on Piglet.
+
+## Canon CR2 input
+
+The bundle installs the Takeout adapter and catalog view with the caption worker. An SQL revision triggers an atomic catalog rebuild over the existing Parquet partitions. On a new index host, run the existing `install-duckdb.sh` provisioner to install the pinned LibRaw Python binding. The read-only lookup uses the configured “Existing Google Photos” library and the Immich preview volume on VM 105. A metadata lookup failure leaves the item retryable so an outage cannot cause duplicate inference.
+
+During a concurrent recovery, run `caption-recovery/reserve-cr2.py LEDGER` with the existing `CB_HOST` setting. This reserves exact path and size pairs in the host index for up to 24 hours. Rerun it after recovery finishes to release completed items immediately, or before expiry if that recovery is still active. It reports only an aggregate count.

@@ -26,6 +26,7 @@ import datetime
 import fcntl
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -210,7 +211,21 @@ def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="open
 
 
 def summarize(row, library, a, metrics=None, cache=None):
-    """-> dict of result columns for one queue row; never raises (errors become status='error' rows)."""
+    """Keep concurrent RAW aliases on one inference and checkpoint before Parquet flush."""
+    if row["ext"].lower() != "cr2" or cache is None:
+        return _summarize(row, library, a, metrics, cache)
+    import canon_raw
+    try:
+        original = canon_raw.original_path(library, row["path"], row["size_bytes"])
+        fingerprint = canon_raw.sha256(original)
+    except (OSError, ValueError):
+        # Standard per-item error handling below records a missing or changed original.
+        return _summarize(row, library, a, metrics, cache)
+    with cache.raw_lock(fingerprint):
+        return _summarize(row, library, a, metrics, cache, fingerprint)
+
+
+def _summarize(row, library, a, metrics=None, cache=None, fingerprint=None):
     base = {"source": "gphotos", "path": row["path"], "size_bytes": row["size_bytes"], "enricher": a.enricher, "model": a.model,
             "prompt_version": PROMPT_VERSION, "summary": None, "tags": None, "frames_sampled": None, "duration_s": None,
             "status": "error", "error": None, "inference_backend": getattr(a, "backend", "primary")}
@@ -225,6 +240,25 @@ def summarize(row, library, a, metrics=None, cache=None):
                 positions = video_positions(dur, n, end_weighted=a.frames == 4)
                 decode_options = {'threads': a.video_decode_threads} if getattr(a, 'video_decode_threads', 0) else {}
                 jpegs = [video_preview(jpeg_frame(ap, t, **decode_options), getattr(a, 'video_edge', 1024)) for t in positions]
+            elif row["ext"].lower() == "cr2":
+                import canon_raw
+                original = canon_raw.original_path(library, row["path"], row["size_bytes"])
+                asset = canon_raw.lookup(row["path"], row["size_bytes"])
+                existing = canon_raw.saved_caption(asset, original, fingerprint)
+                if not existing and fingerprint:
+                    existing = cache.raw_caption(a.enricher, fingerprint)
+                    if not existing:
+                        existing = canon_raw.match_catalog(a.index, library, row, a.enricher, fingerprint)
+                if existing:
+                    summary, tags, model = existing
+                    base.update(summary=summary, tags=tags, status="ok", model=model,
+                                prompt_version="saved-caption", inference_backend="reuse")
+                    if fingerprint and model != 'immich-description':
+                        cache.remember_raw(a.enricher, fingerprint, summary, tags, model)
+                    metrics.item(kind, "ok")
+                    return base
+                image, _ = canon_raw.frame(original, asset.get("preview"))
+                jpegs = [image]
             else:
                 jpegs = [jpeg_frame(ap)]
         speech = ""
@@ -264,6 +298,8 @@ def summarize(row, library, a, metrics=None, cache=None):
             summary, tags = cached
             metrics.cache_hit(kind)
             base["inference_backend"] = "cache"
+        if fingerprint:
+            cache.remember_raw(a.enricher, fingerprint, summary, tags, a.model)
         base.update(summary=summary, tags=tags, status="ok")
     except Exception as exc:  # one bad file must not stop the run
         base["error"] = ("%s: %s" % (type(exc).__name__, exc))[:500]
@@ -302,9 +338,18 @@ def queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):
             raise ValueError('Repair paths must be strings')
         priority = 'list_contains(?, path) DESC, ' + priority
         params.insert(1, paths)
+    # A separate recovery run can own an exact source revision until its lease expires.
+    reservation = Path(index, '_caption_reservations.json')
+    available = ""
+    if reservation.exists():
+        claims = json.loads(reservation.read_text())
+        if claims["expires"] > time.time() and claims["items"]:
+            available = ("WHERE NOT EXISTS (SELECT 1 FROM unnest(?::STRUCT(path VARCHAR, size_bytes BIGINT)[]) "
+                         "AS claims(item) WHERE item.path=q.path AND item.size_bytes=q.size_bytes) ")
+            params.insert(1, claims["items"])
     with duckdb.connect(os.path.join(index, "knowledge.duckdb"), read_only=True) as con:
-        cur = con.execute("SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) "
-                          f"ORDER BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?", params)
+        cur = con.execute("SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) AS q "
+                          f"{available}ORDER BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?", params)
         names = [column[0] for column in cur.description[:-1]]
         rows = cur.fetchall()
     if metrics is not None:

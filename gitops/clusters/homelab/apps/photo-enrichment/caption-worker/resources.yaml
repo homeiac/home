@@ -1,23 +1,87 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-73fb734422c1
+  name: caption-worker-a6ba0c720248
   namespace: monitoring
 data:
-  bundle.json: '{"caption_completion.py": "\"\"\"Caption coverage with the existing Takeout filename/size copy assumption.\n\nKeep
-    year-folder files and standalone album files. Map an album copy to the\nlexically first matching year-folder path. This
-    preserves the existing exclusion\ncount without merging separate year-folder files. A caption on any mapped copy\ncovers
-    its group; it does not imply that every copy was sent to a model.\n\"\"\"\nimport glob\nfrom pathlib import Path\n\n\ndef
-    completion_counts(con, index: str, luna_dir: str) -> list[tuple]:\n    \"\"\"Return kind, model, scope, total and complete
-    from current media versions.\"\"\"\n    local = str(Path(index) / ''summaries/*/*.parquet'')\n    luna = str(Path(luna_dir)
-    / ''*.parquet'')\n    empty = ''SELECT NULL::VARCHAR AS path, NULL::BIGINT AS size_bytes WHERE false''\n    local_sql
-    = (\"SELECT DISTINCT path,size_bytes FROM read_parquet(?,union_by_name=true) \"\n                 \"WHERE source=''gphotos''
-    AND status=''ok''\") if glob.glob(local) else empty\n    luna_sql = (\"SELECT DISTINCT source_path AS path,size_bytes
-    FROM read_parquet(?,union_by_name=true) \"\n                \"WHERE state=''ok''\") if glob.glob(luna) else empty\n    params
-    = ([local] if glob.glob(local) else []) + ([luna] if glob.glob(luna) else [])\n    return con.execute(\"\"\"\n        WITH
-    inventory AS (\n            SELECT DISTINCT path,size_bytes,name,\n                CASE WHEN lower(ext) IN (''mp4'',''mov'',''3gp'',''avi'',''mpg'',''m4v'')\n                     THEN
-    ''video'' ELSE ''photo'' END AS kind,\n                regexp_matches(path, ''/Photos from [0-9]{4}/'') AS annual\n            FROM
-    gphotos_files WHERE kind=''media''\n        ), annual AS (\n            SELECT name,size_bytes,min(path) AS representative\n            FROM
+  bundle.json: '{"canon_raw.py": "\"\"\"Read Canon RAW caption inputs on the index host. Never upload a derivative.\"\"\"\nimport
+    base64\nimport hashlib\nimport io\nimport json\nfrom pathlib import Path, PurePosixPath\nimport subprocess\nimport time\n\nfrom
+    PIL import Image, ImageOps\n\nEXTERNAL = ''/external/gphotos/''\n\n\ndef guest(*command: str) -> str:\n    \"\"\"Use the
+    index host''s existing VM guest agent read path.\"\"\"\n    for attempt in range(3):\n        result = subprocess.run([''qm'',
+    ''guest'', ''exec'', ''105'', ''--timeout'', ''60'', ''--'', *command],\n                                capture_output=True,
+    check=True, text=True, timeout=70)\n        report = json.loads(result.stdout)\n        if report.get(''exited'') and
+    report.get(''exitcode'') == 0 and not report.get(''out-truncated''):\n            return report.get(''out-data'', '''')\n        transient
+    = any(code in report.get(''err-data'', '''') for code in (''502 Bad Gateway'', ''503 Service Unavailable''))\n        if
+    not transient or attempt == 2:\n            raise RuntimeError(''Immich guest read failed or was truncated'')\n        time.sleep(2
+    ** attempt)\n\n\ndef lookup(path: str, size: int) -> dict:\n    \"\"\"Match the exact external path and owner of the configured
+    library.\"\"\"\n    relative = PurePosixPath(path)\n    if relative.is_absolute() or ''..'' in relative.parts or relative.suffix.lower()
+    != ''.cr2'':\n        raise ValueError(''Invalid external CR2 path'')\n    # Only hex enters the query. Takeout paths
+    may contain quotes or newlines.\n    encoded = (EXTERNAL + path).encode().hex()\n    sql = f\"\"\"\n      SELECT json_build_object(''id'',a.id,''size'',e.\"fileSizeInByte\",''native'',e.description,\n        ''unavailable'',a.\"deletedAt\"
+    IS NOT NULL OR a.\"isOffline\" OR a.type<>''IMAGE'',\n        ''excluded'',h.value->>''excludeFromProcessing'',''packet'',m.value,\n        ''preview'',f.path)\n      FROM
+    asset a JOIN library l ON l.id=a.\"libraryId\" AND l.\"ownerId\"=a.\"ownerId\"\n      LEFT JOIN asset_exif e ON e.\"assetId\"=a.id\n      LEFT
+    JOIN asset_metadata m ON m.\"assetId\"=a.id AND m.key=''home.knowledge-index.v1''\n      LEFT JOIN asset_metadata h ON
+    h.\"assetId\"=a.id AND h.key=''home.media-health.v1''\n      LEFT JOIN asset_file f ON f.\"assetId\"=a.id AND f.type=''preview''\n      WHERE
+    l.name=''Existing Google Photos'' AND a.\"isExternal\"\n        AND a.\"originalPath\"=convert_from(decode(''{encoded}'',''hex''),''UTF8'')\"\"\"\n    rows
+    = guest(''/usr/local/bin/k3s'',''kubectl'',''-n'',''immich-pilot'',''exec'',''deploy/immich-postgres'',''--'',''psql'',''-XAt'',''-v'',''ON_ERROR_STOP=1'',\n                 ''-U'',''immich'',''-d'',''immich'',''-c'',sql).splitlines()\n    if
+    not rows:\n        return {}\n    if len(rows) != 1:\n        raise ValueError(''Ambiguous Immich RAW asset'')\n    asset
+    = json.loads(rows[0])\n    if asset[''unavailable''] or asset[''excluded''] == ''true'' or asset[''size''] != size:\n        raise
+    ValueError(''Immich RAW asset unavailable, excluded or changed'')\n    return asset\n\n\ndef original_path(library: str,
+    path: str, size: int) -> Path:\n    \"\"\"Verify that the source still resolves inside the same library.\"\"\"\n    root
+    = Path(library).resolve(strict=True)\n    original = (root / path).resolve(strict=True)\n    if not original.is_relative_to(root)
+    or original.stat().st_size != size:\n        raise ValueError(''RAW original changed since import'')\n    return original\n\n\ndef
+    sha256(original: Path) -> str:\n    with original.open(''rb'') as stream:\n        return hashlib.file_digest(stream,
+    ''sha256'').hexdigest()\n\n\ndef match_catalog(index: str, library: str, row: dict, enricher: str, fingerprint: str) ->
+    tuple | None:\n    \"\"\"Reuse a machine caption only after the candidate original matches byte-for-byte.\"\"\"\n    import
+    duckdb\n    with duckdb.connect(str(Path(index) / ''knowledge.duckdb''), read_only=True) as con:\n        candidates =
+    con.execute(\"\"\"SELECT path, summary, tags, model FROM media_summaries\n            WHERE source=''gphotos'' AND size_bytes=?
+    AND enricher=? AND path<>?\n              AND status=''ok'' AND length(trim(summary))>0 AND model<>''immich-description''\n            ORDER
+    BY path\"\"\", [row[''size_bytes''], enricher, row[''path'']]).fetchall()\n    for path, summary, tags, model in candidates:\n        try:\n            candidate
+    = original_path(library, path, row[''size_bytes''])\n            if sha256(candidate) == fingerprint:\n                return
+    summary, tags or [], model\n        except (OSError, ValueError):\n            continue\n    return None\n\n\ndef saved_caption(asset:
+    dict, original: Path, fingerprint: str | None = None) -> tuple | None:\n    \"\"\"Prefer user text and validate any saved
+    model caption against original bytes.\"\"\"\n    native = (asset.get(''native'') or '''').strip()\n    packet = asset.get(''packet'')
+    or {}\n    summary = (packet.get(''summary'') or '''').strip()\n    if native and native != summary:\n        return native,
+    [], ''immich-description''\n    if not summary:\n        return None\n    digest = packet.get(''contentSha256'')\n    if
+    digest:\n        if (fingerprint or sha256(original)) != digest:\n            raise ValueError(''Saved caption belongs
+    to different RAW bytes'')\n    return summary, packet.get(''tags'') or [], packet.get(''summaryModel'') or ''immich-description''\n\n\ndef
+    jpeg(image: Image.Image, edge: int) -> bytes:\n    \"\"\"Return an oriented, bounded RGB JPEG in memory.\"\"\"\n    frame
+    = ImageOps.exif_transpose(image)\n    frame.thumbnail((edge, edge), Image.Resampling.LANCZOS)\n    result = io.BytesIO()\n    frame.convert(''RGB'').save(result,
+    format=''JPEG'', quality=88)\n    return result.getvalue()\n\n\ndef preview_bytes(path: str) -> bytes:\n    \"\"\"Read
+    the actual Immich preview, bounded before the guest-agent transfer.\"\"\"\n    location = PurePosixPath(path)\n    if
+    not location.is_relative_to(''/data/thumbs'') or ''..'' in location.parts:\n        raise ValueError(''Unexpected Immich
+    preview location'')\n    # The deployment mounts this VM directory at /data. Resolve again inside the VM\n    # and stream
+    bounded chunks so large previews survive guest-agent output limits.\n    program = \"\"\"import base64,json,os,sys\nfrom
+    pathlib import Path\nroot=Path(''/var/lib/immich-pilot/library/thumbs'').resolve(strict=True)\npath=(root / sys.argv[1]).resolve(strict=True)\nif
+    not path.is_relative_to(root): raise ValueError(''outside preview directory'')\nwith path.open(''rb'') as f:\n    stat=os.fstat(f.fileno())\n    if
+    not 0 < stat.st_size <= 32*1024*1024: raise ValueError(''invalid preview size'')\n    f.seek(int(sys.argv[2]))\n    print(json.dumps([stat.st_size,stat.st_mtime_ns,base64.b64encode(f.read(196608)).decode()]))\n\"\"\"\n    data
+    = bytearray()\n    revision = None\n    while True:\n        size, mtime, chunk = json.loads(guest(''python3'', ''-c'',
+    program,\n            str(location.relative_to(''/data/thumbs'')), str(len(data))))\n        if revision is not None and
+    revision != (size, mtime):\n            raise ValueError(''Immich preview changed during read'')\n        revision = size,
+    mtime\n        block = base64.b64decode(chunk, validate=True)\n        if not block or len(data) + len(block) > size:\n            raise
+    ValueError(''Incomplete Immich preview'')\n        data.extend(block)\n        if len(data) == size:\n            return
+    bytes(data)\n\n\ndef frame(original: Path, preview: str | None, edge: int = 1024) -> tuple[bytes, str]:\n    \"\"\"Use
+    Immich''s rendered image first, then develop the sensor data with LibRaw.\"\"\"\n    if preview:\n        try:\n            data
+    = preview_bytes(preview)\n            with Image.open(io.BytesIO(data)) as image:\n                image.load()\n                if
+    image.format == ''JPEG'' and max(image.size) <= edge:\n                    return data, ''immich-preview''\n                return
+    jpeg(image, edge), ''immich-preview''\n        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):\n            pass\n    #
+    Google Takeout can preserve the camera filename on a converted JPEG.\n    with original.open(''rb'') as stream:\n        if
+    stream.read(3) == bytes.fromhex(''ff d8 ff''):\n            stream.seek(0)\n            with Image.open(stream) as image:\n                return
+    jpeg(image, edge), ''original-jpeg''\n    import rawpy\n    with rawpy.imread(str(original)) as raw:\n        pixels =
+    raw.postprocess(use_camera_wb=True, half_size=True, output_bps=8)\n    return jpeg(Image.fromarray(pixels), edge), ''libraw''\n",
+    "caption_completion.py": "\"\"\"Caption coverage with the existing Takeout filename/size copy assumption.\n\nKeep year-folder
+    files and standalone album files. Map an album copy to the\nlexically first matching year-folder path. This preserves
+    the existing exclusion\ncount without merging separate year-folder files. A caption on any mapped copy\ncovers its group;
+    it does not imply that every copy was sent to a model.\n\"\"\"\nimport glob\nfrom pathlib import Path\n\n\ndef completion_counts(con,
+    index: str, luna_dir: str) -> list[tuple]:\n    \"\"\"Return kind, model, scope, total and complete from current media
+    versions.\"\"\"\n    local = str(Path(index) / ''summaries/*/*.parquet'')\n    luna = str(Path(luna_dir) / ''*.parquet'')\n    empty
+    = ''SELECT NULL::VARCHAR AS path, NULL::BIGINT AS size_bytes WHERE false''\n    local_sql = (\"SELECT DISTINCT path,size_bytes
+    FROM read_parquet(?,union_by_name=true) \"\n                 \"WHERE source=''gphotos'' AND status=''ok''\") if glob.glob(local)
+    else empty\n    luna_sql = (\"SELECT DISTINCT source_path AS path,size_bytes FROM read_parquet(?,union_by_name=true) \"\n                \"WHERE
+    state=''ok''\") if glob.glob(luna) else empty\n    params = ([local] if glob.glob(local) else []) + ([luna] if glob.glob(luna)
+    else [])\n    return con.execute(\"\"\"\n        WITH inventory AS (\n            SELECT DISTINCT path,size_bytes,name,\n                CASE
+    WHEN lower(ext) IN (''mp4'',''mov'',''3gp'',''avi'',''mpg'',''m4v'')\n                     THEN ''video'' ELSE ''photo''
+    END AS kind,\n                regexp_matches(path, ''/Photos from [0-9]{4}/'') AS annual\n            FROM gphotos_files
+    WHERE kind=''media''\n        ), annual AS (\n            SELECT name,size_bytes,min(path) AS representative\n            FROM
     inventory WHERE annual GROUP BY name,size_bytes\n        ), local_saved AS (\"\"\" + local_sql + \"\"\"), luna_saved AS
     (\"\"\" + luna_sql + \"\"\"),\n        mapped AS (\n            SELECT i.*,\n                CASE WHEN i.annual THEN i.path
     ELSE coalesce(a.representative,i.path) END AS canonical,\n                l.path IS NOT NULL AS local_ok, c.path IS NOT
@@ -199,31 +263,156 @@ data:
     ok)\n    o.add(\"knowledge_index_exporter_duration_seconds\", round(time.time() - t0, 2))\n    o.add(\"knowledge_index_last_run_timestamp_seconds\",
     int(time.time()))\n    tmp = a.out + \".tmp\"\n    with open(tmp, \"w\", encoding=\"utf-8\") as fh:\n        fh.write(o.render())\n    os.chmod(tmp,
     0o644)\n    os.replace(tmp, a.out)\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main(sys.argv[1:]))\n",
-    "knowledge-index-enrich.service": "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target
-    zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
+    "gphotos.py": "#!/usr/bin/env python3\n\"\"\"Google Photos adapter for the knowledge index (issue #212).\n\nUsage:\n  gphotos.py
+    emit <unit> <root> <out_dir> [--paths-from FILE] [--versions DIR] [--prom FILE] [--expected N]\n\n  root       library
+    root, read-only: the folder that holds \"Google Photos/\" (<dataset>/library)\n  out_dir    the knowledge-index dataset;
+    this adapter writes only below it:\n               files/gphotos/<unit>.parquet             one row per file (common `files`
+    schema)\n               gphotos_sidecars/<unit>.parquet          one row per Takeout .json sidecar\n               files/gphotos/<unit>.versions.parquet    only
+    with --versions (rows under \".versions/\")\n  --paths-from FILE   index only these library-relative paths (one per line)
+    instead of walking root\n                      (the ingest hook passes the files an archive just delivered)\n  --prom
+    FILE         write live progress metrics (Prometheus textfile, updated every ~2 s; see progress.py)\n  --expected N        files
+    the ledger says exist (progress ratio while listing)\n  --versions DIR      also index DIR (<dataset>/.versions); paths
+    are stored as \".versions/<rel>\"\n\nAdapter contract (docs/runbooks/knowledge-index.md): emit(unit, root, out_dir) is
+    idempotent (parquet is\nwritten to <name>.tmp and renamed, so re-running a unit replaces its file), reads only from root,
+    writes\nonly below out_dir, and prints one summary line: \"rows=N bytes=B seconds=S\".\n\nSidecar matching is NOT done
+    here: a photo and its sidecar can come from different archives. This adapter\nrecords, per sidecar, `target_name` (the
+    media file name it describes, with the \"(n)\" duplicate suffix\nre-inserted before the extension, as gphotos-quota-list.py
+    does) and knowledge.sql joins across the library.\n\"\"\"\nimport datetime\nimport json\nimport os\nimport re\nimport
+    sys\nimport time\n\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\nfrom progress import
+    Progress  # noqa: E402\n\nMEDIA_EXTS = {\"cr2\", \"jpg\", \"jpeg\", \"heic\", \"png\", \"gif\", \"webp\", \"mp4\", \"mov\",
+    \"3gp\", \"avi\", \"mpg\", \"m4v\"}\nDUP = re.compile(r\"\\((\\d+)\\)\\.json$\")\n\nFILES_SCHEMA = (\n    \"source VARCHAR,
+    unit VARCHAR, path VARCHAR, name VARCHAR, ext VARCHAR, size_bytes BIGINT, \"\n    \"mtime TIMESTAMP, kind VARCHAR, hash_algo
+    VARCHAR, hash VARCHAR, origin_id VARCHAR, ingested_at TIMESTAMP\"\n)\nSIDECAR_SCHEMA = (\n    \"path VARCHAR, title VARCHAR,
+    target_name VARCHAR, description VARCHAR, upload_ts BIGINT, taken_ts BIGINT, \"\n    \"geo_lat DOUBLE, geo_lon DOUBLE,
+    geo_alt DOUBLE, url VARCHAR, device_type VARCHAR, device_folder VARCHAR, \"\n    \"app_package VARCHAR, views INTEGER,
+    favorited BOOLEAN, people VARCHAR[], parse_error VARCHAR\"\n)\n\n\ndef sidecar_target(jname, title):\n    \"\"\"Media
+    file name a sidecar describes (same rule as gphotos-quota-list.py).\"\"\"\n    m = DUP.search(jname)\n    if m and title:\n        stem,
+    ext = os.path.splitext(title)\n        return \"%s(%s)%s\" % (stem, m.group(1), ext)\n    return title\n\n\ndef file_kind(name):\n    ext
+    = os.path.splitext(name)[1][1:].lower()\n    if ext == \"json\":\n        return \"sidecar\"\n    return \"media\" if
+    ext in MEDIA_EXTS else \"other\"\n\n\ndef _int(v):\n    try:\n        return int(float(v))\n    except (TypeError, ValueError):\n        return
+    None\n\n\ndef _float(v):\n    try:\n        return float(v)\n    except (TypeError, ValueError):\n        return None\n\n\ndef
+    parse_sidecar(abs_path, rel_path):\n    \"\"\"One gphotos_sidecars row (tuple in SIDECAR_SCHEMA order); unparseable ->
+    NULLs + parse_error.\"\"\"\n    jname = os.path.basename(rel_path)\n    try:\n        with open(abs_path, encoding=\"utf-8\")
+    as fh:\n            meta = json.load(fh)\n        if not isinstance(meta, dict):\n            raise ValueError(\"top level
+    is not an object\")\n    except (OSError, ValueError) as exc:\n        return (rel_path,) + (None,) * 15 + (\"%s: %s\"
+    % (type(exc).__name__, exc),)\n    title = meta.get(\"title\")\n    geo = meta.get(\"geoData\") or {}\n    origin = (meta.get(\"googlePhotosOrigin\")
+    or {}).get(\"mobileUpload\") or {}\n    people = [p.get(\"name\") for p in (meta.get(\"people\") or []) if isinstance(p,
+    dict) and p.get(\"name\")]\n    fav = meta.get(\"favorited\")\n    return (\n        rel_path, title, sidecar_target(jname,
+    title), meta.get(\"description\"),\n        _int((meta.get(\"creationTime\") or {}).get(\"timestamp\")),\n        _int((meta.get(\"photoTakenTime\")
+    or {}).get(\"timestamp\")),\n        _float(geo.get(\"latitude\")), _float(geo.get(\"longitude\")), _float(geo.get(\"altitude\")),\n        meta.get(\"url\"),
+    origin.get(\"deviceType\"), (origin.get(\"deviceFolder\") or {}).get(\"localFolderName\"),\n        (meta.get(\"appSource\")
+    or {}).get(\"androidPackageName\"),\n        _int(meta.get(\"imageViews\")), fav if isinstance(fav, bool) else None, people,
+    None,\n    )\n\n\ndef _walk(base, on_count=None):\n    n = 0\n    for d, _, files in os.walk(base):\n        for f in
+    files:\n            n += 1\n            if on_count and n % 500 == 0:\n                on_count(n)\n            yield
+    os.path.relpath(os.path.join(d, f), base)\n\n\ndef _file_row(source, unit, rel, abs_path, now):\n    st = os.stat(abs_path)\n    name
+    = os.path.basename(rel)\n    return (source, unit, rel, name, os.path.splitext(name)[1][1:].lower(), st.st_size,\n            datetime.datetime.fromtimestamp(st.st_mtime,
+    datetime.timezone.utc).replace(tzinfo=None),\n            file_kind(name), None, None, None, now)\n\n\ndef _write_parquet(con,
+    schema, rows, target):\n    \"\"\"Write rows to <target>.tmp as Parquet, then atomically rename (idempotent re-runs).\"\"\"\n    os.makedirs(os.path.dirname(target),
+    exist_ok=True)\n    tmp = target + \".tmp\"\n    con.execute(\"DROP TABLE IF EXISTS t\")\n    con.execute(\"CREATE TEMP
+    TABLE t (%s)\" % schema)\n    if rows:\n        ph = \",\".join(\"?\" * (schema.count(\",\") + 1))\n        con.executemany(\"INSERT
+    INTO t VALUES (%s)\" % ph, rows)\n    con.execute(\"COPY t TO ''%s'' (FORMAT parquet, COMPRESSION zstd)\" % tmp.replace(\"''\",
+    \"''''\"))\n    os.replace(tmp, target)\n\n\ndef emit(unit, root, out_dir, paths=None, versions=None, prom=None, expected=0):\n    \"\"\"Index
+    `root` (or only `paths`, library-relative) as `unit`. Returns (rows, bytes).\"\"\"\n    t0 = time.time()\n    root = root.rstrip(\"/\")\n    now
+    = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)\n    prog = Progress(unit, prom, expected)\n    try:\n        return
+    _emit(unit, root, out_dir, paths, versions, prog, now, t0)\n    except BaseException:\n        prog.finish(ok=False)\n        raise\n\n\ndef
+    _emit(unit, root, out_dir, paths, versions, prog, now, t0):\n    import duckdb\n    rels = sorted(set(paths)) if paths
+    is not None else sorted(_walk(root, lambda n: prog.update(listed=n)))\n    prog.update(force=True, phase=\"reading\",
+    listed=len(rels), total=len(rels))\n    files, sidecars, nbytes_seen, nerr = [], [], 0, 0\n    for i, rel in enumerate(rels,
+    1):\n        ap = os.path.join(root, rel)\n        if not os.path.isfile(ap):\n            continue  # listed but gone
+    (replaced later): skip, never fail the unit\n        row = _file_row(\"gphotos\", unit, rel, ap, now)\n        files.append(row)\n        nbytes_seen
+    += row[5]\n        if rel.endswith(\".json\"):\n            sc = parse_sidecar(ap, rel)\n            sidecars.append(sc)\n            nerr
+    += 1 if sc[-1] else 0\n        if i % 200 == 0:\n            prog.update(done=i, sidecars=len(sidecars), bytes=nbytes_seen,
+    errors=nerr)\n    prog.update(force=True, phase=\"writing\", done=len(rels), sidecars=len(sidecars), bytes=nbytes_seen,
+    errors=nerr)\n    con = duckdb.connect()\n    _write_parquet(con, FILES_SCHEMA, files, os.path.join(out_dir, \"files\",
+    \"gphotos\", unit + \".parquet\"))\n    _write_parquet(con, SIDECAR_SCHEMA, sidecars, os.path.join(out_dir, \"gphotos_sidecars\",
+    unit + \".parquet\"))\n    nrows, nbytes = len(files), sum(r[5] for r in files)\n    if versions:\n        prog.update(force=True,
+    phase=\"versions\")\n        vers = [_file_row(\"gphotos\", unit, \".versions/\" + rel, os.path.join(versions, rel), now)\n                for
+    rel in sorted(_walk(versions.rstrip(\"/\")))]\n        _write_parquet(con, FILES_SCHEMA, vers, os.path.join(out_dir, \"files\",
+    \"gphotos\", unit + \".versions.parquet\"))\n        nrows += len(vers)\n        nbytes += sum(r[5] for r in vers)\n    prog.finish(ok=True)\n    print(\"rows=%d
+    bytes=%d seconds=%.1f\" % (nrows, nbytes, time.time() - t0))\n    return nrows, nbytes\n\n\ndef main(argv):\n    if len(argv)
+    < 5 or argv[1] != \"emit\":\n        sys.exit(__doc__)\n    unit, root, out_dir = argv[2:5]\n    opts = argv[5:]\n    paths
+    = versions = prom = None\n    expected = 0\n    if \"--prom\" in opts:\n        prom = opts[opts.index(\"--prom\") + 1]\n    if
+    \"--expected\" in opts:\n        expected = int(opts[opts.index(\"--expected\") + 1])\n    if \"--paths-from\" in opts:\n        with
+    open(opts[opts.index(\"--paths-from\") + 1], encoding=\"utf-8\") as fh:\n            paths = [ln.rstrip(\"\\n\") for ln
+    in fh if ln.strip()]\n    if \"--versions\" in opts:\n        versions = opts[opts.index(\"--versions\") + 1]\n    emit(unit,
+    root, out_dir, paths, versions, prom, expected)\n\n\nif __name__ == \"__main__\":\n    main(sys.argv)\n", "knowledge-index-enrich.service":
+    "[Unit]\nDescription=GitOps photo and video caption worker\nWants=network-online.target\nAfter=network-online.target zfs-mount.service\nRequiresMountsFor=/local-3TB-backup/knowledge-index
+    /local-3TB-backup/gphotos\nStartLimitIntervalSec=0\n\n[Service]\nType=simple\nEnvironmentFile=/etc/default/knowledge-index\nEnvironment=PYTHONUNBUFFERED=1\nEnvironment=KI_PIPELINE_PROM=/var/lib/prometheus/node-exporter/knowledge_index_pipeline.prom\nEnvironment=KI_GPU_DISPATCH_POLICY_FILE=/opt/knowledge-index/caption-gitops/dispatch-policy.json\nExecStart=/opt/knowledge-index/venv/bin/python
     /opt/knowledge-index/caption-gitops/run.py\nRestart=always\nRestartSec=60\nRestartPreventExitStatus=75\nTimeoutStopSec=45\nKillMode=control-group\nNice=10\nIOSchedulingClass=idle\n\n[Install]\nWantedBy=multi-user.target\n",
-    "media_summary.py": "#!/usr/bin/env python3\n\"\"\"Photo/video summary enricher for the knowledge index (issue #212, OpenSpec
-    change add-media-summaries-enricher).\n\nUsage:\n  media_summary.py run --index DIR --library DIR --endpoint URL --model
-    NAME --enricher ID\n                       [--limit N] [--batch-size 50] [--parallel 1] [--frames 8] [--min-free-mib 3000]
-    [--dry-run]\n\n  --index      knowledge-index dataset mount (reads knowledge.duckdb, writes summaries/<enricher>/<batch>.parquet)\n  --library    photos
-    library root, read-only: the folder that holds \"Google Photos/\" (<dataset>/library)\n  --endpoint   OpenAI-compatible
-    server on the home network, e.g. http://<gpu-vm>:11434 (Ollama) or a llama.cpp server\n  --enricher   id of this model+prompt
-    combination, e.g. qwen25vl-3b-p1 (bump it to re-summarize with a new model/prompt)\n  --api ollama       use Ollama native
-    /api/chat (recommended with Ollama: honors think:false; --num-ctx sets the context)\n  --extra-json JSON  extra chat-request
-    fields, e.g. ''{\"think\": false}'' (thinking models: 10x slower and wasteful otherwise)\n  --dry-run    summarize --limit
-    files, print them, write nothing (the \"sample\" mode)\n  --prom FILE  publish live stage / Ollama timings for node-exporter
-    (ignored in sample mode)\n  --min-free-mib  refuse to start when the GPU has less free memory (nvidia-smi); 0 disables;
-    --smi-cmd overrides the binary\n\nQueue: SELECT ... FROM gphotos_to_summarize(<enricher>): media with no `ok` row for
-    their current bytes (errors are retried).\nPhoto: one image (long edge 1024). Video: --frames frames across the clip +
-    audio transcript (faster-whisper, if installed).\nReads media read-only, writes summaries below <index>/summaries and
-    optional telemetry to --prom,\nsends nothing outside the given endpoint. Telemetry never contains media paths or contents.\n\"\"\"\nimport
-    argparse\nimport base64\nimport datetime\nimport fcntl\nimport json\nimport os\nimport re\nimport subprocess\nimport sys\nimport
-    time\nimport urllib.request\nfrom collections import deque\nfrom concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor,
-    wait\nfrom copy import copy\nfrom contextlib import nullcontext\nfrom functools import partial\n\nimport duckdb\nfrom
-    pipeline_metrics import PipelineMetrics\nfrom summary_cache import SummaryCache\n\nVIDEO_EXTS = {\"mp4\", \"mov\", \"3gp\",
-    \"avi\", \"mpg\", \"m4v\"}\nSCHEMA = (\"source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR,
-    prompt_version VARCHAR, \"\n          \"summary VARCHAR, tags VARCHAR[], frames_sampled INTEGER, duration_s DOUBLE, status
-    VARCHAR, error VARCHAR, \"\n          \"created_at TIMESTAMP\")\nPROMPT_VERSION = \"p1\"\n\n\ndef free_gpu_mib(smi_cmd):\n    \"\"\"Free
+    "knowledge.sql": "-- Knowledge index views (issue #212). Applied by kidx.py rebuild; @INDEX@ = the index dataset mount
+    point.\n-- No data lives in knowledge.duckdb: every view reads the immutable Parquet below @INDEX@, so a rule\n-- change
+    (e.g. the quota cutoff) never needs a re-ingest.\n\n-- ---- common facts: latest row wins when a later unit re-delivers
+    a path (a re-exported, replaced file)\nCREATE OR REPLACE VIEW files AS\nSELECT * FROM read_parquet(''@INDEX@/files/*/*.parquet'',
+    union_by_name = true)\nQUALIFY row_number() OVER (PARTITION BY source, path ORDER BY ingested_at DESC, unit DESC) = 1;\n\n--
+    ---- Photos raw sidecar fields (one row per .json), same latest-wins rule (the newer unit''s file name sorts later: units
+    are archive names / backfill-YYYYMMDD)\nCREATE OR REPLACE VIEW gphotos_sidecars AS\nSELECT * EXCLUDE (filename) FROM read_parquet(''@INDEX@/gphotos_sidecars/*.parquet'',
+    union_by_name = true, filename = true)\nQUALIFY row_number() OVER (PARTITION BY path ORDER BY filename DESC) = 1;\n\n--
+    ---- mutable per-location inventory (Phase 2 fills it; empty and typed until then)\nCREATE OR REPLACE VIEW copies AS\nSELECT
+    * FROM read_parquet(''@INDEX@/copies/*.parquet'', union_by_name = true);\n\n-- ---- Photos: library files vs. replaced
+    older copies kept under .versions/\nCREATE OR REPLACE VIEW gphotos_files AS\n-- Older inventory partitions predate CR2
+    support. Reclassify without rescanning originals.\nSELECT * REPLACE (CASE WHEN kind=''other'' AND lower(ext)=''cr2'' THEN
+    ''media'' ELSE kind END AS kind)\nFROM files WHERE source = ''gphotos'' AND path NOT LIKE ''.versions/%'';\n\nCREATE OR
+    REPLACE VIEW gphotos_versions AS\nSELECT * FROM files WHERE source = ''gphotos'' AND path LIKE ''.versions/%'';\n\n--
+    ---- sidecars that carry a title AND an upload time (the only ones that identify a photo''s upload date),\n-- ---- each
+    with the two file names it can describe: the title itself and \"<stem>-edited<ext>\"\nCREATE OR REPLACE VIEW gphotos_sidecar_targets
+    AS\nSELECT s.*,\n       regexp_replace(path, ''/[^/]+$'', '''') AS folder,\n       CASE WHEN regexp_matches(target_name,
+    ''^.+\\.[^.]*$'')\n            THEN regexp_replace(target_name, ''^(.+)(\\.[^.]*)$'', ''\\1-edited\\2'')\n            ELSE
+    target_name || ''-edited'' END AS edited_name\nFROM gphotos_sidecars s\nWHERE title IS NOT NULL AND upload_ts IS NOT NULL;\n\n--
+    ---- every non-sidecar library file (kind media or other, as gphotos-quota-list.py: it treats every\n-- ---- non-.json
+    file as media) joined to its sidecar by (folder, title incl. \"(n)\" suffix, \"-edited\")\nCREATE OR REPLACE VIEW gphotos_media
+    AS\nWITH m AS (\n  SELECT f.*, regexp_replace(f.path, ''/[^/]+$'', '''') AS folder FROM gphotos_files f WHERE f.kind <>
+    ''sidecar''\n), cand AS (\n  SELECT m.path AS media_path, t.path AS sidecar_path,\n         CASE WHEN m.name = t.target_name
+    THEN 1 ELSE 2 END AS prio\n  FROM m JOIN gphotos_sidecar_targets t\n    ON t.folder = m.folder AND (m.name = t.target_name
+    OR m.name = t.edited_name)\n), best AS (\n  SELECT media_path, sidecar_path FROM cand\n  QUALIFY row_number() OVER (PARTITION
+    BY media_path ORDER BY prio, sidecar_path) = 1\n)\nSELECT m.path, m.name, m.ext, m.kind, m.size_bytes, m.mtime, m.unit,
+    m.folder,\n       regexp_extract(m.folder, ''[^/]+$'') AS folder_name,\n       b.sidecar_path,\n       t.upload_ts, t.taken_ts,
+    t.url, t.description, t.device_type, t.favorited, t.people,\n       NOT (coalesce(t.geo_lat, 0) = 0 AND coalesce(t.geo_lon,
+    0) = 0) AS has_geo,\n       CASE WHEN regexp_matches(regexp_extract(m.folder, ''[^/]+$''), ''^Photos from [0-9]{4}$'')
+    THEN NULL\n            ELSE regexp_extract(m.folder, ''[^/]+$'') END AS album,\n       regexp_matches(m.name, ''-edited(\\.[^.]*)?$'')
+    AS is_edited\nFROM m\nLEFT JOIN best b ON b.media_path = m.path\nLEFT JOIN gphotos_sidecar_targets t ON t.path = b.sidecar_path;\n\n--
+    ---- album duplicate: a media file in an album folder with the same (name, size) as one in a \"Photos from YYYY\" folder\nCREATE
+    OR REPLACE VIEW gphotos_album_dup AS\nSELECT a.* FROM gphotos_media a\nWHERE a.album IS NOT NULL\n  AND EXISTS (SELECT
+    1 FROM gphotos_media y WHERE y.album IS NULL AND y.name = a.name AND y.size_bytes = a.size_bytes);\n\n-- ---- counts against
+    Google quota: uploaded on/after 2021-06-01 UTC (epoch 1622505600) or no sidecar, minus album\n-- ---- duplicates; the
+    matched sidecar files ride along (kind = ''sidecar''), exactly the set gphotos-quota-list.py prints\nCREATE OR REPLACE
+    VIEW gphotos_quota AS\nWITH sel AS (\n  SELECT m.*, CASE WHEN m.upload_ts IS NULL THEN ''no-sidecar'' ELSE ''uploaded-on-or-after-cutoff''
+    END AS quota_reason\n  FROM gphotos_media m\n  WHERE (m.upload_ts IS NULL OR m.upload_ts >= 1622505600)\n    AND NOT EXISTS
+    (SELECT 1 FROM gphotos_album_dup d WHERE d.path = m.path)\n)\nSELECT path, name, kind, size_bytes, taken_ts, upload_ts,
+    quota_reason FROM sel\nUNION\nSELECT s.path, f.name, ''sidecar'', f.size_bytes, NULL, NULL, s.quota_reason\nFROM (SELECT
+    DISTINCT sidecar_path AS path, quota_reason FROM sel WHERE sidecar_path IS NOT NULL) s\nJOIN gphotos_files f ON f.path
+    = s.path;\n\n-- ---- AI enrichment (photo/video summaries from a local GPU model): written by enrichers, one Parquet per\n--
+    ---- (enricher, batch) under summaries/<enricher>/; typed and empty until the first enricher runs.\n-- ---- Latest row
+    wins per (source, path, enricher); `size_bytes` records which bytes were summarized.\nCREATE OR REPLACE VIEW media_summaries
+    AS\nSELECT * FROM read_parquet(''@INDEX@/summaries/*/*.parquet'', union_by_name = true)\nQUALIFY row_number() OVER (PARTITION
+    BY source, path, enricher ORDER BY created_at DESC) = 1;\n\n-- ---- work queue for an enricher: media with no successful
+    summary for their current bytes, with the context the\n-- ---- prompt needs. A table macro (not a view) so a brand-new
+    enricher id works before it has any rows:\n-- ----   SELECT path FROM gphotos_to_summarize(''qwen25vl-3b-p1'') ORDER BY
+    taken_ts DESC LIMIT 500\nCREATE OR REPLACE MACRO gphotos_to_summarize(enr) AS TABLE\nSELECT m.path, m.name, m.ext, m.size_bytes,
+    m.taken_ts, m.album, m.has_geo, m.people, m.description\nFROM gphotos_media m\nLEFT JOIN media_summaries s\n  ON s.source
+    = ''gphotos'' AND s.path = m.path AND s.enricher = enr AND s.size_bytes = m.size_bytes AND s.status = ''ok''\nWHERE m.kind
+    = ''media'' AND s.path IS NULL;\n", "media_summary.py": "#!/usr/bin/env python3\n\"\"\"Photo/video summary enricher for
+    the knowledge index (issue #212, OpenSpec change add-media-summaries-enricher).\n\nUsage:\n  media_summary.py run --index
+    DIR --library DIR --endpoint URL --model NAME --enricher ID\n                       [--limit N] [--batch-size 50] [--parallel
+    1] [--frames 8] [--min-free-mib 3000] [--dry-run]\n\n  --index      knowledge-index dataset mount (reads knowledge.duckdb,
+    writes summaries/<enricher>/<batch>.parquet)\n  --library    photos library root, read-only: the folder that holds \"Google
+    Photos/\" (<dataset>/library)\n  --endpoint   OpenAI-compatible server on the home network, e.g. http://<gpu-vm>:11434
+    (Ollama) or a llama.cpp server\n  --enricher   id of this model+prompt combination, e.g. qwen25vl-3b-p1 (bump it to re-summarize
+    with a new model/prompt)\n  --api ollama       use Ollama native /api/chat (recommended with Ollama: honors think:false;
+    --num-ctx sets the context)\n  --extra-json JSON  extra chat-request fields, e.g. ''{\"think\": false}'' (thinking models:
+    10x slower and wasteful otherwise)\n  --dry-run    summarize --limit files, print them, write nothing (the \"sample\"
+    mode)\n  --prom FILE  publish live stage / Ollama timings for node-exporter (ignored in sample mode)\n  --min-free-mib  refuse
+    to start when the GPU has less free memory (nvidia-smi); 0 disables; --smi-cmd overrides the binary\n\nQueue: SELECT ...
+    FROM gphotos_to_summarize(<enricher>): media with no `ok` row for their current bytes (errors are retried).\nPhoto: one
+    image (long edge 1024). Video: --frames frames across the clip + audio transcript (faster-whisper, if installed).\nReads
+    media read-only, writes summaries below <index>/summaries and optional telemetry to --prom,\nsends nothing outside the
+    given endpoint. Telemetry never contains media paths or contents.\n\"\"\"\nimport argparse\nimport base64\nimport datetime\nimport
+    fcntl\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\nimport time\nimport
+    urllib.request\nfrom collections import deque\nfrom concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait\nfrom
+    copy import copy\nfrom contextlib import nullcontext\nfrom functools import partial\n\nimport duckdb\nfrom pipeline_metrics
+    import PipelineMetrics\nfrom summary_cache import SummaryCache\n\nVIDEO_EXTS = {\"mp4\", \"mov\", \"3gp\", \"avi\", \"mpg\",
+    \"m4v\"}\nSCHEMA = (\"source VARCHAR, path VARCHAR, size_bytes BIGINT, enricher VARCHAR, model VARCHAR, prompt_version
+    VARCHAR, \"\n          \"summary VARCHAR, tags VARCHAR[], frames_sampled INTEGER, duration_s DOUBLE, status VARCHAR, error
+    VARCHAR, \"\n          \"created_at TIMESTAMP\")\nPROMPT_VERSION = \"p1\"\n\n\ndef free_gpu_mib(smi_cmd):\n    \"\"\"Free
     GPU memory in MiB (minimum over GPUs), or None when nvidia-smi is unavailable.\"\"\"\n    try:\n        out = subprocess.run([smi_cmd,
     \"--query-gpu=memory.free\", \"--format=csv,noheader,nounits\"],\n                             capture_output=True, text=True,
     timeout=20, check=True).stdout\n        return min(int(x) for x in out.split())\n    except (OSError, subprocess.SubprocessError,
@@ -295,37 +484,51 @@ data:
     nullcontext()\n    with tracking, urllib.request.urlopen(req, timeout=timeout) as resp:\n        out = json.load(resp)\n    if
     mac_frames is not None:\n        metrics.mac_response(mac_frames, kind, time.monotonic() - started, out)\n    if api ==
     \"ollama\" and metrics is not None:\n        metrics.ollama(out, kind)\n    return out[\"message\"][\"content\"] if api
-    == \"ollama\" else out[\"choices\"][0][\"message\"][\"content\"]\n\n\ndef summarize(row, library, a, metrics=None, cache=None):\n    \"\"\"->
-    dict of result columns for one queue row; never raises (errors become status=''error'' rows).\"\"\"\n    base = {\"source\":
-    \"gphotos\", \"path\": row[\"path\"], \"size_bytes\": row[\"size_bytes\"], \"enricher\": a.enricher, \"model\": a.model,\n            \"prompt_version\":
-    PROMPT_VERSION, \"summary\": None, \"tags\": None, \"frames_sampled\": None, \"duration_s\": None,\n            \"status\":
-    \"error\", \"error\": None, \"inference_backend\": getattr(a, \"backend\", \"primary\")}\n    ap = os.path.join(library,
-    row[\"path\"])\n    metrics = metrics or PipelineMetrics(None, a.enricher)\n    kind = \"video\" if row[\"ext\"] in VIDEO_EXTS
-    else \"photo\"\n    try:\n        with metrics.measure(\"decode\", kind):\n            if kind == \"video\":\n                dur
-    = video_duration(ap)\n                n = max(1, min(a.frames, int(dur) or 1))\n                positions = video_positions(dur,
-    n, end_weighted=a.frames == 4)\n                decode_options = {''threads'': a.video_decode_threads} if getattr(a, ''video_decode_threads'',
-    0) else {}\n                jpegs = [video_preview(jpeg_frame(ap, t, **decode_options), getattr(a, ''video_edge'', 1024))
-    for t in positions]\n            else:\n                jpegs = [jpeg_frame(ap)]\n        speech = \"\"\n        if kind
-    == \"video\":\n            with metrics.measure(\"transcribe\", kind):\n                speech = transcript(ap)\n            base.update(frames_sampled=n,
-    duration_s=dur)\n        with metrics.measure(\"prompt\", kind):\n            story = kind == ''video'' and getattr(a,
-    ''video_prompt'', ''baseline'') == ''story''\n            prompt = story_prompt(row, dur, positions, speech) if story
-    else build_prompt(row, kind == \"video\", len(jpegs), speech)\n            if story:\n                base[''prompt_version'']
-    = ''video-story-v1''\n        extra = dict(a.extra)\n        video_tokens = getattr(a, ''video_tokens'', 384)\n        if
-    kind == ''video'':\n            if a.api == ''ollama'':\n                extra[''options''] = {**extra.get(''options'',
-    {}), ''num_predict'': video_tokens}\n            else:\n                extra[''max_tokens''] = video_tokens\n        cache_key
-    = SummaryCache.key(prompt, jpegs, {\n            \"endpoint\": a.endpoint, \"enricher\": a.enricher, \"model\": a.model,\n            \"prompt_version\":
-    base[''prompt_version''], \"api\": a.api, \"num_ctx\": a.num_ctx, \"extra\": extra,\n        }) if cache is not None else
-    None\n        cached = cache.get(cache_key) if cache is not None else None\n        if cached is None:\n            base[\"_model_failure\"]
-    = True\n            with metrics.measure(\"inference\", kind):\n                answer = ask_model(a.endpoint, a.model,
-    prompt, jpegs, extra=extra, api=a.api,\n                                   num_ctx=a.num_ctx, metrics=metrics, kind=kind,
-    timeout=getattr(a, \"request_timeout\", 600),\n                                   headers=getattr(a, \"model_headers\",
-    None))\n            with metrics.measure(\"parse\", kind):\n                summary, tags = parse_answer(answer)\n            base.pop(\"_model_failure\",
+    == \"ollama\" else out[\"choices\"][0][\"message\"][\"content\"]\n\n\ndef summarize(row, library, a, metrics=None, cache=None):\n    \"\"\"Keep
+    concurrent RAW aliases on one inference and checkpoint before Parquet flush.\"\"\"\n    if row[\"ext\"].lower() != \"cr2\"
+    or cache is None:\n        return _summarize(row, library, a, metrics, cache)\n    import canon_raw\n    try:\n        original
+    = canon_raw.original_path(library, row[\"path\"], row[\"size_bytes\"])\n        fingerprint = canon_raw.sha256(original)\n    except
+    (OSError, ValueError):\n        # Standard per-item error handling below records a missing or changed original.\n        return
+    _summarize(row, library, a, metrics, cache)\n    with cache.raw_lock(fingerprint):\n        return _summarize(row, library,
+    a, metrics, cache, fingerprint)\n\n\ndef _summarize(row, library, a, metrics=None, cache=None, fingerprint=None):\n    base
+    = {\"source\": \"gphotos\", \"path\": row[\"path\"], \"size_bytes\": row[\"size_bytes\"], \"enricher\": a.enricher, \"model\":
+    a.model,\n            \"prompt_version\": PROMPT_VERSION, \"summary\": None, \"tags\": None, \"frames_sampled\": None,
+    \"duration_s\": None,\n            \"status\": \"error\", \"error\": None, \"inference_backend\": getattr(a, \"backend\",
+    \"primary\")}\n    ap = os.path.join(library, row[\"path\"])\n    metrics = metrics or PipelineMetrics(None, a.enricher)\n    kind
+    = \"video\" if row[\"ext\"] in VIDEO_EXTS else \"photo\"\n    try:\n        with metrics.measure(\"decode\", kind):\n            if
+    kind == \"video\":\n                dur = video_duration(ap)\n                n = max(1, min(a.frames, int(dur) or 1))\n                positions
+    = video_positions(dur, n, end_weighted=a.frames == 4)\n                decode_options = {''threads'': a.video_decode_threads}
+    if getattr(a, ''video_decode_threads'', 0) else {}\n                jpegs = [video_preview(jpeg_frame(ap, t, **decode_options),
+    getattr(a, ''video_edge'', 1024)) for t in positions]\n            elif row[\"ext\"].lower() == \"cr2\":\n                import
+    canon_raw\n                original = canon_raw.original_path(library, row[\"path\"], row[\"size_bytes\"])\n                asset
+    = canon_raw.lookup(row[\"path\"], row[\"size_bytes\"])\n                existing = canon_raw.saved_caption(asset, original,
+    fingerprint)\n                if not existing and fingerprint:\n                    existing = cache.raw_caption(a.enricher,
+    fingerprint)\n                    if not existing:\n                        existing = canon_raw.match_catalog(a.index,
+    library, row, a.enricher, fingerprint)\n                if existing:\n                    summary, tags, model = existing\n                    base.update(summary=summary,
+    tags=tags, status=\"ok\", model=model,\n                                prompt_version=\"saved-caption\", inference_backend=\"reuse\")\n                    if
+    fingerprint and model != ''immich-description'':\n                        cache.remember_raw(a.enricher, fingerprint,
+    summary, tags, model)\n                    metrics.item(kind, \"ok\")\n                    return base\n                image,
+    _ = canon_raw.frame(original, asset.get(\"preview\"))\n                jpegs = [image]\n            else:\n                jpegs
+    = [jpeg_frame(ap)]\n        speech = \"\"\n        if kind == \"video\":\n            with metrics.measure(\"transcribe\",
+    kind):\n                speech = transcript(ap)\n            base.update(frames_sampled=n, duration_s=dur)\n        with
+    metrics.measure(\"prompt\", kind):\n            story = kind == ''video'' and getattr(a, ''video_prompt'', ''baseline'')
+    == ''story''\n            prompt = story_prompt(row, dur, positions, speech) if story else build_prompt(row, kind == \"video\",
+    len(jpegs), speech)\n            if story:\n                base[''prompt_version''] = ''video-story-v1''\n        extra
+    = dict(a.extra)\n        video_tokens = getattr(a, ''video_tokens'', 384)\n        if kind == ''video'':\n            if
+    a.api == ''ollama'':\n                extra[''options''] = {**extra.get(''options'', {}), ''num_predict'': video_tokens}\n            else:\n                extra[''max_tokens'']
+    = video_tokens\n        cache_key = SummaryCache.key(prompt, jpegs, {\n            \"endpoint\": a.endpoint, \"enricher\":
+    a.enricher, \"model\": a.model,\n            \"prompt_version\": base[''prompt_version''], \"api\": a.api, \"num_ctx\":
+    a.num_ctx, \"extra\": extra,\n        }) if cache is not None else None\n        cached = cache.get(cache_key) if cache
+    is not None else None\n        if cached is None:\n            base[\"_model_failure\"] = True\n            with metrics.measure(\"inference\",
+    kind):\n                answer = ask_model(a.endpoint, a.model, prompt, jpegs, extra=extra, api=a.api,\n                                   num_ctx=a.num_ctx,
+    metrics=metrics, kind=kind, timeout=getattr(a, \"request_timeout\", 600),\n                                   headers=getattr(a,
+    \"model_headers\", None))\n            with metrics.measure(\"parse\", kind):\n                summary, tags = parse_answer(answer)\n            base.pop(\"_model_failure\",
     None)\n            if cache is not None:\n                cache.put(cache_key, summary, tags)\n        else:\n            summary,
-    tags = cached\n            metrics.cache_hit(kind)\n            base[\"inference_backend\"] = \"cache\"\n        base.update(summary=summary,
-    tags=tags, status=\"ok\")\n    except Exception as exc:  # one bad file must not stop the run\n        base[\"error\"]
-    = (\"%s: %s\" % (type(exc).__name__, exc))[:500]\n    metrics.item(kind, base[\"status\"])\n    return base\n\n\ndef write_batch(rows,
-    out_dir, enricher):\n    d = os.path.join(out_dir, \"summaries\", enricher)\n    os.makedirs(d, exist_ok=True)\n    target
-    = os.path.join(d, \"b%s-%04d.parquet\" % (datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y%m%dT%H%M%S%f\"),
+    tags = cached\n            metrics.cache_hit(kind)\n            base[\"inference_backend\"] = \"cache\"\n        if fingerprint:\n            cache.remember_raw(a.enricher,
+    fingerprint, summary, tags, a.model)\n        base.update(summary=summary, tags=tags, status=\"ok\")\n    except Exception
+    as exc:  # one bad file must not stop the run\n        base[\"error\"] = (\"%s: %s\" % (type(exc).__name__, exc))[:500]\n    metrics.item(kind,
+    base[\"status\"])\n    return base\n\n\ndef write_batch(rows, out_dir, enricher):\n    d = os.path.join(out_dir, \"summaries\",
+    enricher)\n    os.makedirs(d, exist_ok=True)\n    target = os.path.join(d, \"b%s-%04d.parquet\" % (datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y%m%dT%H%M%S%f\"),
     len(os.listdir(d))))\n    tmp = target + \".tmp\"\n    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)\n    con
     = duckdb.connect()\n    con.execute(\"CREATE TABLE t (%s)\" % SCHEMA)\n    cols = [\"source\", \"path\", \"size_bytes\",
     \"enricher\", \"model\", \"prompt_version\", \"summary\", \"tags\", \"frames_sampled\",\n            \"duration_s\", \"status\",
@@ -338,38 +541,42 @@ data:
     open(manifest, encoding=''utf-8'') as stream:\n            items = json.load(stream)\n        if not isinstance(items,
     list) or len(items) > 1000:\n            raise ValueError(''Expected at most 1000 repair items'')\n        paths = [item[''path'']
     for item in items]\n        if any(not isinstance(path, str) for path in paths):\n            raise ValueError(''Repair
-    paths must be strings'')\n        priority = ''list_contains(?, path) DESC, '' + priority\n        params.insert(1, paths)\n    with
-    duckdb.connect(os.path.join(index, \"knowledge.duckdb\"), read_only=True) as con:\n        cur = con.execute(\"SELECT
-    *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) \"\n                          f\"ORDER BY {priority}taken_ts
-    DESC NULLS LAST, path LIMIT ?\", params)\n        names = [column[0] for column in cur.description[:-1]]\n        rows
-    = cur.fetchall()\n    if metrics is not None:\n        metrics.queue_size(rows[0][-1] if rows else 0)\n    return [r for
-    r in (dict(zip(names, row[:-1])) for row in rows) if r[\"path\"] not in seen][:limit]\n\n\nMAC_ENDPOINT = \"http://127.0.0.1:19476\"\n\n\ndef
-    mac_headers():\n    with open(\"/opt/knowledge-index/mac-bonsai.key\", encoding=\"ascii\") as file:\n        return {\"Authorization\":
-    \"Bearer \" + file.read().strip()}\n\n\ndef mac_route(args):\n    \"\"\"Discover the authenticated Mac server''s Git-configured
-    request limit.\"\"\"\n    if not getattr(args, \"mac_assist\", False) or args.model != \"bonsai-27b\" or args.dry_run:\n        return
-    0, None\n    try:\n        headers = mac_headers()\n        probe = urllib.request.Request(MAC_ENDPOINT + \"/v1/models\",
-    headers=headers)\n        with urllib.request.urlopen(probe, timeout=1) as response:\n            models = json.load(response)[\"data\"]\n        for
-    model in models:\n            if model[\"id\"] == \"bonsai-27b-metal\":\n                for tag in model[\"tags\"]:\n                    match
-    = re.fullmatch(r\"backfill-parallel=([1-9]|1[0-9]|20)\", tag)\n                    if match:\n                        return
-    int(match[1]), headers\n    except (OSError, ValueError, KeyError, TypeError):\n        pass\n    return 0, None\n\n\ndef
-    split_batch(rows, primary_slots, mac_slots, primary, metal, *, refill=None, prefer_photos=False, mac_video_slots=None):\n    \"\"\"Keep
-    slots fed across queue reads. Retry interrupted Mac work on the RTX.\"\"\"\n    pending = deque(rows)\n    retry = deque()\n    disabled
-    = False\n    with ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:\n        active = {}\n\n        def
-    submit(backend):\n            nonlocal refill\n            if backend == \"metal\" and disabled:\n                return\n            if
-    not pending and not retry and refill is not None and not disabled:\n                pending.extend(refill())\n                if
-    not pending:\n                    refill = None\n            candidates = retry if backend == \"primary\" and retry else
-    pending\n            if candidates:\n                video_full = backend == ''metal'' and mac_video_slots is not None
-    and sum(\n                    b == ''metal'' and r[''ext''] in VIDEO_EXTS for b, r in active.values()) >= mac_video_slots\n                if
-    backend == \"metal\" and (prefer_photos or video_full):\n                    # Long visual prompts take substantially
-    longer on the Mac.\n                    photo = next((i for i, row in enumerate(candidates) if row[\"ext\"] not in VIDEO_EXTS),
-    None)\n                    if video_full and photo is None:\n                        return\n                    photo
-    = photo if photo is not None else 0\n                    row = candidates[photo]\n                    del candidates[photo]\n                else:\n                    row
-    = candidates.popleft()\n                task = metal if backend == \"metal\" else primary\n                active[pool.submit(task,
-    row)] = (backend, row)\n\n        for backend, count in ((\"primary\", primary_slots), (\"metal\", mac_slots)):\n            for
-    _ in range(count):\n                submit(backend)\n        while active:\n            completed, _ = wait(active, return_when=FIRST_COMPLETED)\n            for
-    future in completed:\n                backend, row = active.pop(future)\n                result = future.result()\n                if
-    backend == \"metal\" and result[\"status\"] != \"ok\" and result.get(\"_model_failure\"):\n                    disabled
-    = True\n                    retry.append(row)\n                    submit(backend)\n                else:\n                    submit(backend)\n                    yield
+    paths must be strings'')\n        priority = ''list_contains(?, path) DESC, '' + priority\n        params.insert(1, paths)\n    #
+    A separate recovery run can own an exact source revision until its lease expires.\n    reservation = Path(index, ''_caption_reservations.json'')\n    available
+    = \"\"\n    if reservation.exists():\n        claims = json.loads(reservation.read_text())\n        if claims[\"expires\"]
+    > time.time() and claims[\"items\"]:\n            available = (\"WHERE NOT EXISTS (SELECT 1 FROM unnest(?::STRUCT(path
+    VARCHAR, size_bytes BIGINT)[]) \"\n                         \"AS claims(item) WHERE item.path=q.path AND item.size_bytes=q.size_bytes)
+    \")\n            params.insert(1, claims[\"items\"])\n    with duckdb.connect(os.path.join(index, \"knowledge.duckdb\"),
+    read_only=True) as con:\n        cur = con.execute(\"SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?)
+    AS q \"\n                          f\"{available}ORDER BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?\", params)\n        names
+    = [column[0] for column in cur.description[:-1]]\n        rows = cur.fetchall()\n    if metrics is not None:\n        metrics.queue_size(rows[0][-1]
+    if rows else 0)\n    return [r for r in (dict(zip(names, row[:-1])) for row in rows) if r[\"path\"] not in seen][:limit]\n\n\nMAC_ENDPOINT
+    = \"http://127.0.0.1:19476\"\n\n\ndef mac_headers():\n    with open(\"/opt/knowledge-index/mac-bonsai.key\", encoding=\"ascii\")
+    as file:\n        return {\"Authorization\": \"Bearer \" + file.read().strip()}\n\n\ndef mac_route(args):\n    \"\"\"Discover
+    the authenticated Mac server''s Git-configured request limit.\"\"\"\n    if not getattr(args, \"mac_assist\", False) or
+    args.model != \"bonsai-27b\" or args.dry_run:\n        return 0, None\n    try:\n        headers = mac_headers()\n        probe
+    = urllib.request.Request(MAC_ENDPOINT + \"/v1/models\", headers=headers)\n        with urllib.request.urlopen(probe, timeout=1)
+    as response:\n            models = json.load(response)[\"data\"]\n        for model in models:\n            if model[\"id\"]
+    == \"bonsai-27b-metal\":\n                for tag in model[\"tags\"]:\n                    match = re.fullmatch(r\"backfill-parallel=([1-9]|1[0-9]|20)\",
+    tag)\n                    if match:\n                        return int(match[1]), headers\n    except (OSError, ValueError,
+    KeyError, TypeError):\n        pass\n    return 0, None\n\n\ndef split_batch(rows, primary_slots, mac_slots, primary,
+    metal, *, refill=None, prefer_photos=False, mac_video_slots=None):\n    \"\"\"Keep slots fed across queue reads. Retry
+    interrupted Mac work on the RTX.\"\"\"\n    pending = deque(rows)\n    retry = deque()\n    disabled = False\n    with
+    ThreadPoolExecutor(max_workers=primary_slots + mac_slots) as pool:\n        active = {}\n\n        def submit(backend):\n            nonlocal
+    refill\n            if backend == \"metal\" and disabled:\n                return\n            if not pending and not
+    retry and refill is not None and not disabled:\n                pending.extend(refill())\n                if not pending:\n                    refill
+    = None\n            candidates = retry if backend == \"primary\" and retry else pending\n            if candidates:\n                video_full
+    = backend == ''metal'' and mac_video_slots is not None and sum(\n                    b == ''metal'' and r[''ext''] in
+    VIDEO_EXTS for b, r in active.values()) >= mac_video_slots\n                if backend == \"metal\" and (prefer_photos
+    or video_full):\n                    # Long visual prompts take substantially longer on the Mac.\n                    photo
+    = next((i for i, row in enumerate(candidates) if row[\"ext\"] not in VIDEO_EXTS), None)\n                    if video_full
+    and photo is None:\n                        return\n                    photo = photo if photo is not None else 0\n                    row
+    = candidates[photo]\n                    del candidates[photo]\n                else:\n                    row = candidates.popleft()\n                task
+    = metal if backend == \"metal\" else primary\n                active[pool.submit(task, row)] = (backend, row)\n\n        for
+    backend, count in ((\"primary\", primary_slots), (\"metal\", mac_slots)):\n            for _ in range(count):\n                submit(backend)\n        while
+    active:\n            completed, _ = wait(active, return_when=FIRST_COMPLETED)\n            for future in completed:\n                backend,
+    row = active.pop(future)\n                result = future.result()\n                if backend == \"metal\" and result[\"status\"]
+    != \"ok\" and result.get(\"_model_failure\"):\n                    disabled = True\n                    retry.append(row)\n                    submit(backend)\n                else:\n                    submit(backend)\n                    yield
     row, result\n            # Primary slots may already have drained when a late Mac request fails.\n            primary_active
     = sum(backend == \"primary\" for backend, _ in active.values())\n            for _ in range(min(len(retry), primary_slots
     - primary_active)):\n                submit(\"primary\")\n            # A later page may bring photos while the single
@@ -621,24 +828,33 @@ data:
     settings must match. No filename/size heuristic can cause a hit.\n\"\"\"\nimport hashlib\nimport json\nimport sqlite3\nfrom
     pathlib import Path\nfrom threading import Lock\n\n\nclass SummaryCache:\n    \"\"\"Store only parsed successful answers;
     survive batch retries and restarts.\"\"\"\n\n    def __init__(self, path: str):\n        Path(path).parent.mkdir(parents=True,
-    exist_ok=True)\n        self.connection = sqlite3.connect(path, check_same_thread=False)\n        self.lock = Lock()\n        self.connection.execute(\"CREATE
-    TABLE IF NOT EXISTS answers (key TEXT PRIMARY KEY, answer TEXT NOT NULL)\")\n\n    @staticmethod\n    def key(prompt:
-    str, images: list[bytes], settings: dict) -> str:\n        \"\"\"Fingerprint exact inputs with unambiguous boundaries
-    and a cache version.\"\"\"\n        digest = hashlib.sha256()\n        for part in [b\"summary-cache-v1\", json.dumps(settings,
-    sort_keys=True, separators=(\",\", \":\")).encode(),\n                     prompt.encode(), *images]:\n            digest.update(len(part).to_bytes(8,
-    \"big\"))\n            digest.update(part)\n        return digest.hexdigest()\n\n    def get(self, key: str) -> tuple[str,
-    list[str]] | None:\n        \"\"\"Return a previously validated answer, if present.\"\"\"\n        with self.lock:\n            row
-    = self.connection.execute(\"SELECT answer FROM answers WHERE key=?\", (key,)).fetchone()\n        if row is None:\n            return
-    None\n        summary, tags = json.loads(row[0])\n        return summary, tags\n\n    def put(self, key: str, summary:
-    str, tags: list[str]) -> None:\n        \"\"\"Atomically save a successful parsed answer, independently of Parquet batches.\"\"\"\n        with
-    self.lock, self.connection:\n            self.connection.execute(\"INSERT OR IGNORE INTO answers VALUES (?, ?)\",\n                                    (key,
-    json.dumps([summary, tags])))\n\n    def close(self) -> None:\n        \"\"\"Release the connection.\"\"\"\n        self.connection.close()\n\n    def
-    __enter__(self):\n        return self\n\n    def __exit__(self, *exc):\n        self.close()\n"}'
+    exist_ok=True)\n        self.connection = sqlite3.connect(path, check_same_thread=False)\n        self.lock = Lock()\n        self.raw_locks
+    = [Lock() for _ in range(64)]\n        self.connection.execute(\"\"\"CREATE TABLE IF NOT EXISTS raw_answers\n            (enricher
+    TEXT, sha256 TEXT, answer TEXT NOT NULL, PRIMARY KEY(enricher,sha256))\"\"\")\n        self.connection.execute(\"CREATE
+    TABLE IF NOT EXISTS answers (key TEXT PRIMARY KEY, answer TEXT NOT NULL)\")\n\n    def raw_lock(self, fingerprint: str):\n        \"\"\"The
+    Mac and RTX dispatch threads share this worker and cache.\"\"\"\n        return self.raw_locks[int(fingerprint[:2], 16)
+    % len(self.raw_locks)]\n\n    def raw_caption(self, enricher: str, fingerprint: str) -> tuple | None:\n        with self.lock:\n            row
+    = self.connection.execute(\"SELECT answer FROM raw_answers WHERE enricher=? AND sha256=?\",\n                                          (enricher,
+    fingerprint)).fetchone()\n        return tuple(json.loads(row[0])) if row else None\n\n    def remember_raw(self, enricher:
+    str, fingerprint: str, summary: str, tags: list, model: str) -> None:\n        with self.lock, self.connection:\n            self.connection.execute(\"INSERT
+    OR IGNORE INTO raw_answers VALUES (?, ?, ?)\",\n                                    (enricher, fingerprint, json.dumps([summary,
+    tags, model])))\n\n    @staticmethod\n    def key(prompt: str, images: list[bytes], settings: dict) -> str:\n        \"\"\"Fingerprint
+    exact inputs with unambiguous boundaries and a cache version.\"\"\"\n        digest = hashlib.sha256()\n        for part
+    in [b\"summary-cache-v1\", json.dumps(settings, sort_keys=True, separators=(\",\", \":\")).encode(),\n                     prompt.encode(),
+    *images]:\n            digest.update(len(part).to_bytes(8, \"big\"))\n            digest.update(part)\n        return
+    digest.hexdigest()\n\n    def get(self, key: str) -> tuple[str, list[str]] | None:\n        \"\"\"Return a previously
+    validated answer, if present.\"\"\"\n        with self.lock:\n            row = self.connection.execute(\"SELECT answer
+    FROM answers WHERE key=?\", (key,)).fetchone()\n        if row is None:\n            return None\n        summary, tags
+    = json.loads(row[0])\n        return summary, tags\n\n    def put(self, key: str, summary: str, tags: list[str]) -> None:\n        \"\"\"Atomically
+    save a successful parsed answer, independently of Parquet batches.\"\"\"\n        with self.lock, self.connection:\n            self.connection.execute(\"INSERT
+    OR IGNORE INTO answers VALUES (?, ?)\",\n                                    (key, json.dumps([summary, tags])))\n\n    def
+    close(self) -> None:\n        \"\"\"Release the connection.\"\"\"\n        self.connection.close()\n\n    def __enter__(self):\n        return
+    self\n\n    def __exit__(self, *exc):\n        self.close()\n"}'
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-73fb734422c1
+  name: caption-worker-a6ba0c720248
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -693,7 +909,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-73fb734422c1
+          name: caption-worker-a6ba0c720248
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -768,7 +984,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-73fb734422c1
+              name: caption-worker-a6ba0c720248
           - name: credentials
             secret:
               secretName: caption-worker-deploy

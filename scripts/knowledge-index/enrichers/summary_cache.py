@@ -17,7 +17,25 @@ class SummaryCache:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(path, check_same_thread=False)
         self.lock = Lock()
+        self.raw_locks = [Lock() for _ in range(64)]
+        self.connection.execute("""CREATE TABLE IF NOT EXISTS raw_answers
+            (enricher TEXT, sha256 TEXT, answer TEXT NOT NULL, PRIMARY KEY(enricher,sha256))""")
         self.connection.execute("CREATE TABLE IF NOT EXISTS answers (key TEXT PRIMARY KEY, answer TEXT NOT NULL)")
+
+    def raw_lock(self, fingerprint: str):
+        """The Mac and RTX dispatch threads share this worker and cache."""
+        return self.raw_locks[int(fingerprint[:2], 16) % len(self.raw_locks)]
+
+    def raw_caption(self, enricher: str, fingerprint: str) -> tuple | None:
+        with self.lock:
+            row = self.connection.execute("SELECT answer FROM raw_answers WHERE enricher=? AND sha256=?",
+                                          (enricher, fingerprint)).fetchone()
+        return tuple(json.loads(row[0])) if row else None
+
+    def remember_raw(self, enricher: str, fingerprint: str, summary: str, tags: list, model: str) -> None:
+        with self.lock, self.connection:
+            self.connection.execute("INSERT OR IGNORE INTO raw_answers VALUES (?, ?, ?)",
+                                    (enricher, fingerprint, json.dumps([summary, tags, model])))
 
     @staticmethod
     def key(prompt: str, images: list[bytes], settings: dict) -> str:

@@ -33,7 +33,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from progress import Progress  # noqa: E402
 
-MEDIA_EXTS = {"jpg", "jpeg", "heic", "png", "gif", "webp", "mp4", "mov", "3gp", "avi", "mpg", "m4v"}
+MEDIA_EXTS = {"cr2", "jpg", "jpeg", "heic", "png", "gif", "webp", "mp4", "mov", "3gp", "avi", "mpg", "m4v"}
 DUP = re.compile(r"\((\d+)\)\.json$")
 
 FILES_SCHEMA = (

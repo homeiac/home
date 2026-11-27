@@ -15,9 +15,11 @@ IMAGE = 'alpine/git:v2.49.1@sha256:53a6239398162098fed2f49a46512f9cbba9e3f31b9f2
 def resources() -> list[dict]:
     """Bundle code from its canonical source and name the rollout by content hash."""
     bundle = {name: (HERE.parent / 'enrichers' / name).read_text()
-              for name in ('media_summary.py', 'pipeline_metrics.py', 'summary_cache.py')}
+              for name in ('media_summary.py', 'canon_raw.py', 'pipeline_metrics.py', 'summary_cache.py')}
     bundle.update({name: (HERE / name).read_text()
                    for name in ('run.py', 'config.json', 'knowledge-index-enrich.service')})
+    bundle['gphotos.py'] = (HERE.parent / 'adapters/gphotos.py').read_text()
+    bundle['knowledge.sql'] = (HERE.parent / 'knowledge.sql').read_text()
     bundle['dispatch-policy.json'] = (HERE.parent / 'bonsai-dispatch-policy.json').read_text()
     for name in ('export-metrics.py', 'caption_completion.py'):
         bundle[name] = (HERE.parent / name).read_text()

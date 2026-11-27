@@ -33,7 +33,7 @@ install_files() {
   local worker_files=()
   # A metrics/index refresh must not overwrite the GitOps-managed worker.
   if ! cb_ssh "test -f $KI/caption-gitops/applied.json"; then
-    worker_files=(enrichers/media_summary.py enrichers/pipeline_metrics.py enrichers/summary_cache.py)
+    worker_files=(enrichers/canon_raw.py enrichers/media_summary.py enrichers/pipeline_metrics.py enrichers/summary_cache.py)
   fi
   ( cd "$HERE" && tar -cf - adapters/gphotos.py "${worker_files[@]}" kidx.py progress.py export-metrics.py caption_completion.py knowledge.sql index-unit.sh ) | cb_ssh "tar -xf - -C $KI && chmod 0755 $KI/index-unit.sh $KI/kidx.py $KI/export-metrics.py $KI/adapters/gphotos.py $KI/enrichers/media_summary.py"
   cb_ssh "cat > $KI/oracle/gphotos-quota-list.py" < "$HERE/../backup/host/gphotos-quota-list.py"

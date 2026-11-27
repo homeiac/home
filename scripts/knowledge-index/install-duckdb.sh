@@ -20,7 +20,7 @@ set -euo pipefail
 have=$($VENV/bin/python -c 'import duckdb; print(duckdb.__version__)' 2>/dev/null || true)
 if [[ "$have" == "$DUCKDB_VERSION" ]]; then echo "duckdb $have already installed"
 else python3 -m pip --python "$VENV/bin/python" install --quiet --disable-pip-version-check --no-cache-dir "duckdb==$DUCKDB_VERSION"; fi
-python3 -m pip --python "$VENV/bin/python" install --quiet --disable-pip-version-check --only-binary=:all: 'Pillow==12.0.0' 'pillow-heif==1.1.1'
+python3 -m pip --python "$VENV/bin/python" install --quiet --disable-pip-version-check --only-binary=:all: 'Pillow==12.0.0' 'pillow-heif==1.1.1' 'rawpy==0.25.1'
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 $VENV/bin/python - "$T" <<'PY'
 import duckdb, sys

@@ -25,9 +25,11 @@ import duckdb
 def bundle() -> dict:
     """Return the same canonical files used by the manifest generator."""
     result = {name: (HERE.parent / 'enrichers' / name).read_text()
-              for name in ('media_summary.py', 'pipeline_metrics.py', 'summary_cache.py')}
+              for name in ('media_summary.py', 'canon_raw.py', 'pipeline_metrics.py', 'summary_cache.py')}
     result.update({name: (HERE / name).read_text()
                    for name in ('run.py', 'config.json', 'knowledge-index-enrich.service')})
+    result['gphotos.py'] = (HERE.parent / 'adapters/gphotos.py').read_text()
+    result['knowledge.sql'] = (HERE.parent / 'knowledge.sql').read_text()
     result['dispatch-policy.json'] = (HERE.parent / 'bonsai-dispatch-policy.json').read_text()
     for name in install.EXPORTER_FILES:
         result[name] = (HERE.parent / name).read_text()
@@ -123,6 +125,9 @@ class GitOpsTests(unittest.TestCase):
             payload = bundle()
             for name, target in paths.items():
                 target.write_text(payload[name])
+            stamp = root/'caption-gitops/catalog.sha256'
+            stamp.parent.mkdir()
+            stamp.write_text(install.hashlib.sha256(payload['knowledge.sql'].encode()).hexdigest())
             if exporter_only:
                 paths['export-metrics.py'].write_text('# previous exporter\n')
             elif not policy_only:
@@ -168,7 +173,7 @@ class GitOpsTests(unittest.TestCase):
 
     def test_previous_bundle_is_accepted_during_bootstrap(self):
         payload = bundle()
-        for name in install.EXPORTER_FILES:
+        for name in install.EXPORTER_FILES | {'canon_raw.py','knowledge.sql','gphotos.py'}:
             del payload[name]
         install.validate(payload)
 

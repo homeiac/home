@@ -18,7 +18,9 @@ SELECT * FROM read_parquet('@INDEX@/copies/*.parquet', union_by_name = true);
 
 -- ---- Photos: library files vs. replaced older copies kept under .versions/
 CREATE OR REPLACE VIEW gphotos_files AS
-SELECT * FROM files WHERE source = 'gphotos' AND path NOT LIKE '.versions/%';
+-- Older inventory partitions predate CR2 support. Reclassify without rescanning originals.
+SELECT * REPLACE (CASE WHEN kind='other' AND lower(ext)='cr2' THEN 'media' ELSE kind END AS kind)
+FROM files WHERE source = 'gphotos' AND path NOT LIKE '.versions/%';
 
 CREATE OR REPLACE VIEW gphotos_versions AS
 SELECT * FROM files WHERE source = 'gphotos' AND path LIKE '.versions/%';
