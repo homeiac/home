@@ -28,6 +28,7 @@ assert status('/admin/tuning',secret('admin-token'),{'worker':'mac','slots':5})=
 assert status('/admin/tuning',secret('admin-token'),{'worker':'mac','slots':0})==400
 assert status('/admin/burst',worker,{'worker':'mac','slots':1,'mode':'production'})==403
 assert status('/admin/burst',secret('admin-token'),{'worker':'mac','slots':16,'mode':'production'})==400
+assert status('/admin/burst',secret('admin-token'),{'worker':'mac','slots':1,'mode':'production','cpu_threads':17})==400
 assert status('/immich/api/assets/00000000-0000-4000-8000-000000000000/thumbnail',worker)==404
 assert status('/immich/api/users/me',worker)==404
 data=request('/admin/status')

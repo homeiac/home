@@ -80,6 +80,7 @@ def main() -> None:
     burst.add_argument('slots',type=int);burst.add_argument('--mode',choices=['production','benchmark'],default='production');burst.add_argument('--note',default='Operator extra capacity')
     burst.add_argument('--cpu-cores',type=int,help='Linux extra-worker CPU affinity count; baseline affinity is unchanged')
     burst.add_argument('--device',choices=['cpu','mps'],help='Compute device for extra workers only; baseline device is unchanged')
+    burst.add_argument('--threads',type=int,help='Mac CPU inference threads per extra process; drains/replaces extras, never baseline')
     commands.add_parser('tuning')
     args = parser.parse_args()
     if args.command == 'export':
@@ -101,7 +102,7 @@ def main() -> None:
         if args.slots<1:raise ValueError('Keep one baseline worker; use burst WORKER 0 to drain extra workers')
         logging.info('%s',request('/admin/burst',{'worker':args.worker,'slots':args.slots-1,'mode':'production','note':args.note}))
     elif args.command == 'burst':
-        logging.info('%s',request('/admin/burst',{'worker':args.worker,'slots':args.slots,'mode':args.mode,'note':args.note,**({'cpu_cores':args.cpu_cores} if args.cpu_cores is not None else {}),**({'device':args.device} if args.device else {})}))
+        logging.info('%s',request('/admin/burst',{'worker':args.worker,'slots':args.slots,'mode':args.mode,'note':args.note,**({'cpu_cores':args.cpu_cores} if args.cpu_cores is not None else {}),**({'device':args.device} if args.device else {}),**({'cpu_threads':args.threads} if args.threads is not None else {})}))
     elif args.command == 'tuning':
         logging.info('%s',json.dumps({'baseline':request('/api/tuning'),'extra':request('/api/burst')},indent=2))
     else:

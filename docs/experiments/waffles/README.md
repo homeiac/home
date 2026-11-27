@@ -12,6 +12,19 @@ The user requires a baseline worker on every node throughout tuning. The
 production workers from extra capacity. Its measurements must remain separate
 from the earlier isolated trials.
 
+[Results](2026-11-26-continuous-production-results.md) and the
+[append-only journal](2026-11-26-continuous-production.jsonl) retain valid passes,
+resource rejections and the incomplete combined comparison.
+
+The [one-model CPU-thread experiment](2026-11-26-cpu-threads.md) follows resource
+rejections at higher process counts. Its results must remain separate because
+the pinned detector library's thread override is explicitly controlled there.
+
+The [throughput exporter audit](2026-11-26-throughput-exporter-audit.md) explains
+the reported simultaneous graph drop: old and new queue-pod slopes were added
+together. The corrected query deduplicates durable totals before taking the
+derivative. PostgreSQL-based benchmark measurements were unaffected.
+
 ## Preregistered isolated experiment — interrupted
 
 - [Protocol](2026-11-26-live-tuning.md): hypotheses, frozen inputs, trial order,

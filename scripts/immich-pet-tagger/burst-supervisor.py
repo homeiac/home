@@ -18,7 +18,7 @@ def main():
     base=os.environ['QUEUE_URL'].rstrip('/');worker=os.environ['WORKER_NAME']
     token=Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()
     ready=Path(os.environ.get('BURST_READY_DIR','/tmp/waffles-burst-ready'));ready.mkdir(parents=True,exist_ok=True)
-    children=[];stopping=False;target=0;last_heartbeat=0;cores=0;device='mps' if sys.platform=='darwin' else 'cpu'
+    children=[];stopping=False;target=0;last_heartbeat=0;cores=0;device='mps' if sys.platform=='darwin' else 'cpu';threads=2
     allowed=sorted(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else []
     def stop(*_):
         nonlocal stopping
@@ -44,10 +44,12 @@ def main():
                 if allowed and not 1<=requested_cores<=len(allowed):raise ValueError('Invalid CPU affinity count')
                 requested_device=tuning['workers'][worker].get('device',device)
                 if requested_device not in ('cpu','mps'):raise ValueError('Invalid compute device')
-                target=value;cores=requested_cores;device=requested_device
+                requested_threads=int(tuning['workers'][worker].get('cpu_threads',2))
+                if not 1<=requested_threads<=16:raise ValueError('Invalid thread count')
+                target=value;cores=requested_cores;device=requested_device;threads=requested_threads
             except Exception:logging.warning('Burst policy unavailable; retaining target')
             for item in children:
-                if item['device']!=device and not item['draining']:
+                if (item['device']!=device or item['threads']!=threads) and not item['draining']:
                     item['draining']=True;item['process'].terminate()
             if allowed and cores:
                 for item in children:
@@ -61,8 +63,8 @@ def main():
             # pressure guards by launching all allocations before they appear.
             if len(children)<target and all((ready/i['instance']).exists() for i in children) and can_run(starting=True):
                 instance=worker+'-burst-'+uuid.uuid4().hex[:12]
-                process=subprocess.Popen([sys.executable,'-B',str(Path(__file__).with_name('burst-worker.py'))],env={**os.environ,'WAFFLES_INSTANCE':instance,'BURST_READY_DIR':str(ready),'BURST_CPU_CORES':str(cores),'BURST_DEVICE':device},preexec_fn=lambda:os.nice(10))
-                children.append({'process':process,'draining':False,'instance':instance,'device':device})
+                process=subprocess.Popen([sys.executable,'-B',str(Path(__file__).with_name('burst-worker.py'))],env={**os.environ,'WAFFLES_INSTANCE':instance,'BURST_READY_DIR':str(ready),'BURST_CPU_CORES':str(cores),'BURST_DEVICE':device,'OMP_NUM_THREADS':str(threads),'MKL_NUM_THREADS':str(threads),'OPENBLAS_NUM_THREADS':str(threads)},preexec_fn=lambda:os.nice(10))
+                children.append({'process':process,'draining':False,'instance':instance,'device':device,'threads':threads})
                 logging.info('Started extra %s process; target=%d',worker,target)
             if time.monotonic()-last_heartbeat>=15:
                 body={'worker':worker,'pool':'burst','instance':worker+'-burst-supervisor-'+socket.gethostname(),'role':'supervisor','device':'standby','ready':False}

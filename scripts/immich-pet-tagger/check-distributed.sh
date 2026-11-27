@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export KUBECONFIG="${KUBECONFIG:-$HOME/kubeconfig}"
 kubectl -n flux-system get kustomization photo-enrichment-preview
-kubectl -n database get job waffles-schema-v3
-kubectl -n database wait --for=condition=complete job/waffles-schema-v3 --timeout=60s
+kubectl -n database get job waffles-schema-v4
+kubectl -n database wait --for=condition=complete job/waffles-schema-v4 --timeout=60s
 for workload in waffles-queue waffles-worker-pve waffles-worker-still-fawn waffles-burst-pve waffles-burst-still-fawn; do
   kubectl -n immich-pilot rollout status "deployment/$workload" --timeout=60s
 done

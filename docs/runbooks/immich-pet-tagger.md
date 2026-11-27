@@ -206,14 +206,19 @@ caps, fencing and baseline progress without changing production jobs or runs.
 
 ## Live tuning and experimental evidence
 
-Immich thumbnail errors are per-asset failures. Each job receives at most four
-total attempts, with 30 seconds before retry. Exhausted jobs remain `failed` and
+Immich thumbnail errors are per-asset failures. Thumbnail/inference receives at
+most four total attempts, with 30 seconds before retry. Face/tag application has
+its own four-attempt bound and 60-second retry delay, without repeating inference.
+Exhausted jobs remain `failed` and
 workers immediately continue other eligible assets; these warnings never pause
 the run or experiment. `thumbnail_http_404` identifies a missing preview rather
 than a negative Waffles classification. Grafana shows failures by reason. The
 bounded retry path is tested against isolated PostgreSQL tables, including stale
 failure acknowledgements and continuing to the next job. Memory and quality
-safeguards remain separate from source-asset availability errors.
+safeguards remain separate from source-asset availability errors. `apply_http_404`
+identifies a failed write-stage request. If a face was added before a review-tag
+failure, its count is retained and subsequent attempts recheck existing faces;
+the asset is not counted as fully processed until the whole write stage succeeds.
 
 One permanent baseline process remains on every admitted backend: Mac uses
 Apple Metal; PVE, still-fawn and fun-bedbug use CPU. Chief-horse remains desired
@@ -246,6 +251,14 @@ still-fawn's extra pod has a separate 3-CPU/6-GiB ceiling; its baseline retains
 four-core host. Low CPU requests and nice priority favor existing workloads.
 Linux extra-worker affinity can change live across 1–3 CPU lanes without restarting
 the baseline. VPA stays in recommendation mode. Native-host capacity guards remain.
+
+Mac CPU extras also accept `--threads 2|4|8|16` (any integer 1–16 is allowed).
+This drains and replaces only the extra process, then reports its effective
+PyTorch setting. Baseline Metal and Linux model-thread behavior stay unchanged.
+The adapter explicitly configures pinned Ultralytics because its device selector
+otherwise overrides `OMP_NUM_THREADS`. Thread settings above the default apply
+only to Mac CPU extras; switching back to Metal restores the default automatically.
+See the [thread experiment](../experiments/waffles/2026-11-26-cpu-threads.md).
 
 The [continuous-production protocol](../experiments/waffles/2026-11-26-continuous-production.md)
 compares CPU and Metal on the same 122 photos, with the 26 reviewed holdouts.

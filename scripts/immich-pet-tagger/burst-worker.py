@@ -58,6 +58,7 @@ def main() -> None:
                 state['cpu_seconds'] = usage.ru_utime + usage.ru_stime
                 state['cpu_affinity'] = len(os.sched_getaffinity(0)) if hasattr(os,'sched_getaffinity') else 0
                 torch = sys.modules.get('torch')
+                state['cpu_threads'] = torch.get_num_threads() if torch else int(os.environ.get('OMP_NUM_THREADS','2'))
                 state['accelerator_bytes'] = torch.mps.driver_allocated_memory() if torch and state.get('device') == 'mps' and state['ready'] else 0
                 request('/api/heartbeat', {**state, 'rss_bytes': rss if sys.platform == 'darwin' else rss * 1024})
             except Exception:
@@ -87,6 +88,15 @@ def main() -> None:
         if forced=='mps' and compute_device.pick_device()!='mps':
             raise RuntimeError('Requested Metal is unavailable')
         compute_device.pick_device=lambda:forced
+    # Pinned Ultralytics resets PyTorch threads in select_device(), ignoring
+    # OMP_NUM_THREADS. Keep its selector and the CLIP/default pool consistent.
+    if worker=='mac' and forced=='cpu':
+        import torch
+        import ultralytics.utils.torch_utils as yolo_torch
+        requested_threads=int(os.environ.get('OMP_NUM_THREADS','2'))
+        yolo_torch.NUM_THREADS=requested_threads
+        torch.set_num_threads(requested_threads)
+        assert torch.get_num_threads()==requested_threads
     import classifier
     import embedder
     import inference

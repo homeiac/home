@@ -4,6 +4,7 @@ export const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];
 export const SLOT_LIMITS={mac:1,pve:1,'still-fawn':1,'fun-bedbug':1,'chief-horse':1};
 export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};
 export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};
+export const THREAD_LIMITS={mac:16,pve:2,'still-fawn':2,'fun-bedbug':2,'chief-horse':2};
 export const CLAIM_SQL=`WITH candidate AS (
  SELECT j.run_id,j.asset_id FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id
  WHERE r.state='running' AND $1=ANY(r.workers)
@@ -39,11 +40,13 @@ export function validateTuning(worker,slots) {
   return {slots};
 }
 
-export function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu') {
+export function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu',threads=2) {
   if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>BURST_LIMITS[worker]||!['production','benchmark'].includes(mode))throw Error('Invalid burst policy');
   if(!Number.isInteger(cpu)||cpu<(BURST_CPU_LIMITS[worker]?1:0)||cpu>BURST_CPU_LIMITS[worker])throw Error('Invalid burst CPU parallelism');
   if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw Error('Invalid burst compute device');
-  return {slots,mode,cpu_cores:cpu,device};
+  if(!Number.isInteger(threads)||threads<1||threads>THREAD_LIMITS[worker])throw Error('Invalid extra-worker thread count');
+  if((worker!=='mac'||device!=='cpu')&&threads!==2)throw Error('Thread tuning is limited to Mac CPU extras');
+  return {slots,mode,cpu_cores:cpu,device,cpu_threads:threads};
 }
 
 export function validateResult(value) {
@@ -81,4 +84,14 @@ export async function fail(db,job) {
     lease_until=NULL
     WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND lease_until>now()`,
     [job.run_id,job.asset_id,job.claim])).rowCount===1;
+}
+
+export async function applyFailure(db,job,added,reason) {
+  if(!Number.isInteger(added)||added<0||added>1||!/^apply_(failed|http_[45][0-9]{2})$/.test(reason))throw Error('Invalid apply failure');
+  return (await db.query(`UPDATE waffles.jobs SET
+    status=CASE WHEN apply_attempts>=3 THEN 'failed' ELSE 'classified' END,
+    apply_attempts=apply_attempts+1,available_at=now()+interval '60 seconds',
+    last_error=$4,applied=applied+$3
+    WHERE run_id=$1 AND asset_id=$2 AND status='classified'`,
+    [job.run_id,job.asset_id,added,reason])).rowCount===1;
 }

@@ -3,7 +3,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
-import {claim,finish,fail,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst} from './queue-core.mjs';
+import {claim,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst} from './queue-core.mjs';
 import {discover} from './discovery.mjs';
 const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');
 const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
@@ -51,10 +51,10 @@ async function writeOne() {
         if(!tagId){const tags=await(await api('/tags','PUT',{tags:['Pets/Review']})).json();tagId=tags.find(t=>t.value==='Pets/Review'||t.name==='Pets/Review')?.id;if(!tagId)throw Error('Review tag unavailable');}
         await api('/tags/'+tagId+'/assets','PUT',{ids:[job.asset_id]});
       }
-      await db.query("UPDATE waffles.jobs SET status='complete',completed_at=now(),applied=applied+$3,last_error=NULL WHERE run_id=$1 AND asset_id=$2",[job.run_id,job.asset_id,added]);
+      await db.query("UPDATE waffles.jobs SET status='complete',completed_at=now(),applied=applied+$3,last_error=NULL,apply_attempts=apply_attempts+1 WHERE run_id=$1 AND asset_id=$2",[job.run_id,job.asset_id,added]);
     } catch(e) {
       // Retry application without repeating inference; record no private API response.
-      await db.query("UPDATE waffles.jobs SET available_at=now()+interval '60 seconds',last_error='apply_failed',applied=applied+$3 WHERE run_id=$1 AND asset_id=$2",[job.run_id,job.asset_id,added]);
+      await applyFailure(db,job,added,Number.isInteger(e.status)?'apply_http_'+e.status:'apply_failed');
       console.error('Immich apply retry:',/^Immich HTTP \d+$/.test(e.message)?e.message:e.constructor.name);
     }
     return true;
@@ -106,9 +106,11 @@ async function refresh() {
         lines.push(metric('pool_active_instances',group.filter(w=>w.ready&&!w.draining&&w.pool===lane).length,{worker:name,pool:lane}),
           metric('pool_desired_instances',lane==='base'?1:(burst[name]?.slots??0),{worker:name,pool:lane}));
       }
-      lines.push(metric('burst_cpu_cores',burst[name]?.cpu_cores??BURST_CPU_LIMITS[name],{worker:name}));
+      lines.push(metric('burst_cpu_cores',burst[name]?.cpu_cores??BURST_CPU_LIMITS[name],{worker:name}),metric('burst_cpu_threads',burst[name]?.cpu_threads??2,{worker:name}));
       lines.push(metric('burst_device',(burst[name]?.device??(name==='mac'?'mps':'cpu'))==='mps'?1:0,{worker:name}));
       for(const instance of group.filter(w=>w.pool==='burst')) {
+        if(instance.ready&&!instance.draining&&instance.device==='cpu'&&instance.cpu_threads)
+          lines.push(metric('instance_cpu_threads',instance.cpu_threads,{worker:name,instance:instance.id}));
         lines.push(metric('instance_cpu_seconds_total',instance.cpu_seconds,{worker:name,instance:instance.id}),
           metric('instance_accelerator_bytes',instance.accelerator_bytes,{worker:name,instance:instance.id}));
       }
@@ -137,7 +139,7 @@ http.createServer(async(req,res)=>{
     }
     if(req.method==='GET'&&url.pathname==='/api/burst') {
       const stored=(await pool.query("SELECT value FROM waffles.settings WHERE key='burst'")).rows[0]?.value??{};
-      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,{slots:0,mode:'production',cpu_cores:BURST_CPU_LIMITS[w],device:w==='mac'?'mps':'cpu',...stored[w]}])),limits:BURST_LIMITS,cpu_limits:BURST_CPU_LIMITS});return;
+      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,{slots:0,mode:'production',cpu_cores:BURST_CPU_LIMITS[w],device:w==='mac'?'mps':'cpu',cpu_threads:2,...stored[w]}])),limits:BURST_LIMITS,cpu_limits:BURST_CPU_LIMITS,thread_limits:THREAD_LIMITS});return;
     }
     if(req.method==='GET'&&/^\/immich\/api\/assets\/[0-9a-f-]{36}\/thumbnail$/.test(url.pathname)) {
       const id=url.pathname.split('/')[4];
@@ -163,10 +165,10 @@ http.createServer(async(req,res)=>{
         for(const key of ['cpu_percent','gpu_percent','pressure','swap_bytes'])if(Number.isFinite(source[key])&&source[key]>=0)observation[key]=source[key];
         await pool.query("INSERT INTO waffles.settings(key,value) VALUES('mac-observation',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[observation]);
       }
-      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code,pool,cpu_seconds,accelerator_bytes,cpu_affinity) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code,pool,cpu_seconds,accelerator_bytes,cpu_affinity,cpu_threads) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         ON CONFLICT(id) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code),pool=excluded.pool,
-        cpu_seconds=greatest(excluded.cpu_seconds,waffles.instances.cpu_seconds),accelerator_bytes=excluded.accelerator_bytes,cpu_affinity=excluded.cpu_affinity`,
-        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null,lane,Number(body.cpu_seconds)||0,Number(body.accelerator_bytes)||0,Number.isInteger(body.cpu_affinity)?body.cpu_affinity:null]);
+        cpu_seconds=greatest(excluded.cpu_seconds,waffles.instances.cpu_seconds),accelerator_bytes=excluded.accelerator_bytes,cpu_affinity=excluded.cpu_affinity,cpu_threads=excluded.cpu_threads`,
+        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null,lane,Number(body.cpu_seconds)||0,Number(body.accelerator_bytes)||0,Number.isInteger(body.cpu_affinity)?body.cpu_affinity:null,Number.isInteger(body.cpu_threads)?body.cpu_threads:null]);
       await pool.query(`INSERT INTO waffles.workers(name,device,ready,rss_bytes) VALUES($1,$2,$3,$4)
         ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes WHERE $5<> 'supervisor'`,
         [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0,body.role??'inference']);
@@ -216,10 +218,12 @@ http.createServer(async(req,res)=>{
     }
     if(req.method==='POST'&&url.pathname==='/admin/burst') {
       const stored=(await pool.query("SELECT value FROM waffles.settings WHERE key='burst'")).rows[0]?.value??{};
-      const value=validateBurst(body.worker,body.slots,body.mode,body.cpu_cores??stored[body.worker]?.cpu_cores??BURST_CPU_LIMITS[body.worker],body.device??stored[body.worker]?.device??(body.worker==='mac'?'mps':'cpu'));
+      const device=body.device??stored[body.worker]?.device??(body.worker==='mac'?'mps':'cpu');
+      const threads=body.cpu_threads??(device==='cpu'&&stored[body.worker]?.device==='cpu'?stored[body.worker]?.cpu_threads??2:2);
+      const value=validateBurst(body.worker,body.slots,body.mode,body.cpu_cores??stored[body.worker]?.cpu_cores??BURST_CPU_LIMITS[body.worker],device,threads);
       await transaction(async db=>{
         await db.query("INSERT INTO waffles.settings(key,value) VALUES('burst',jsonb_build_object($1::text,$2::jsonb)) ON CONFLICT(key) DO UPDATE SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)",[body.worker,value]);
-        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note) VALUES($1,$2,$3)',[body.worker,body.slots,`burst ${value.mode} ${value.device} cpu=${value.cpu_cores}: `+String(body.note??'').slice(0,150)]);
+        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note) VALUES($1,$2,$3)',[body.worker,body.slots,`burst ${value.mode} ${value.device} cpu=${value.cpu_cores} threads=${value.cpu_threads}: `+String(body.note??'').slice(0,150)]);
       });respond(res,{worker:body.worker,...value});return;
     }
     if(req.method==='GET'&&url.pathname==='/admin/status') {
@@ -231,6 +235,7 @@ http.createServer(async(req,res)=>{
         count(i.id) FILTER(WHERE i.ready AND NOT i.draining AND i.pool='burst')::int burst_instances,
         array_agg(DISTINCT i.cpu_affinity) FILTER(WHERE i.ready AND NOT i.draining AND i.pool='burst') burst_cpu_affinity,
         array_agg(DISTINCT i.device) FILTER(WHERE i.ready AND NOT i.draining AND i.pool='burst') burst_devices,
+        array_agg(DISTINCT i.cpu_threads) FILTER(WHERE i.ready AND NOT i.draining AND i.pool='burst') burst_threads,
         count(i.id) FILTER(WHERE i.ready AND NOT i.draining)>0 AS ready,
         coalesce(sum(i.rss_bytes),0)::bigint rss_bytes,
         (SELECT count(*)::int FROM waffles.instances dead WHERE dead.worker=w.name AND dead.exit_code<>0 AND NOT dead.draining) unexpected_exits

@@ -31,7 +31,7 @@ def resources():
     container = {'name': 'queue', 'image': NODE_IMAGE, 'securityContext': CONTAINER_SECURITY,
                  'volumeMounts': [{'name': 'code', 'mountPath': '/code', 'readOnly': True}],
                  'resources': {'requests': {'cpu': '25m', 'memory': '64Mi'}, 'limits': {'cpu': '500m', 'memory': '256Mi'}}}
-    yield obj('Job', 'waffles-schema-v3', 'database', api='batch/v1', spec={'backoffLimit': 3, 'template': {'spec': {
+    yield obj('Job', 'waffles-schema-v4', 'database', api='batch/v1', spec={'backoffLimit': 3, 'template': {'spec': {
         **base, 'restartPolicy': 'Never', 'containers': [{**container, 'command': ['node', '/code/bootstrap.mjs'],
          'env': pg + [env('PGUSER', 'postgres'), env('PGPASSWORD', secret='postgres-credentials', key='postgres-password'), env('ROLE_PASSWORD', secret='waffles-queue', key='password')]}]}}})
     app = {'app': 'waffles-queue'}

@@ -270,6 +270,49 @@ settings, timestamps, throughput, latency, resource samples and unsuccessful tri
 Production progress is recorded separately from repeated benchmark photos.
 Private photos and asset identifiers stay outside Git.
 
+The first continuous CPU sweep produced two valid one-extra-process Mac passes
+at 120.3 and 190.9 photos/minute. Three extra processes encountered sustained Mac
+memory pressure, so larger configurations were skipped. still-fawn's two extra
+processes measured 100.6/94.4 photos/minute with two CPU lanes and 108.4/101.2
+with three. Every valid pass retained 9/13 Waffles matches, zero false positives
+and identical binary decisions. Mac memory pressure interrupted the remaining
+one-lane trial and the combined comparison's startup. The
+[results](../experiments/waffles/2026-11-26-continuous-production-results.md)
+remain explicitly incomplete; the provisional settings are not a demonstrated
+combined production gain. Extra capacity was drained, and baselines continued.
+
+A separate [one-model thread protocol](../experiments/waffles/2026-11-26-cpu-threads.md)
+tests 2, 4, 8 and 16 CPU threads in both orders. Inspection found that pinned
+Ultralytics resets PyTorch's detector thread pool despite `OMP_NUM_THREADS=2`.
+The new Mac CPU adapter controls that selector explicitly and reports its actual
+thread count. This changes only extra workers; previous process-sweep rates must
+not be relabeled as verified two-thread measurements.
+
+### Auditing an apparent throughput cliff
+
+The dashboard briefly showed a simultaneous backend throughput drop around
+21:44 Pacific. The science journal and PostgreSQL counts contradicted a processing
+collapse: Mac completed 99 photos between 21:43:30 and 21:44:30. Prometheus still
+held both retired and replacement queue exporters, and the original query added
+their slopes even though both represented the same durable database totals.
+Deduplicating each backend's totals before calculating the five-minute derivative
+corrected Mac's earlier 166.4 photos/minute display to 59.3; the later value was
+82.8. The [audit](../experiments/waffles/2026-11-26-throughput-exporter-audit.md)
+retains both versions. PostgreSQL-timed benchmark results were unaffected. Actual
+rollout interruptions and lease recovery remain visible in the corrected history.
+
+### Keeping asset failures local
+
+An unavailable source asset must not become a global stop condition. During the
+backfill, three existing videos returned 404 for their preview thumbnails while
+their asset metadata was available. We retained them as failed assets and kept
+the workers moving. Thumbnail/inference has four total attempts with a 30-second
+delay. Face/tag application has a separate four-attempt bound and 60-second delay;
+it reuses the classification and rechecks existing faces. Grafana exposes failure
+reasons such as `thumbnail_http_404` and `apply_http_404`. Missing input is never
+quietly counted as a successful non-Waffles decision. Memory and recognition
+quality safeguards are separate from these per-asset failures.
+
 ### Adding native hosts without moving their other workloads
 
 fun-bedbug and chief-horse were also available outside Kubernetes. Live checks

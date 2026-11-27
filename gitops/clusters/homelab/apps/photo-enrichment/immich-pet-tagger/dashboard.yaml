@@ -1492,7 +1492,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "(sum(waffles_assignments{run=\"$run\"}) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,state)(waffles_assignments{run=\"$run\"})) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "New assignments",
               "instant": true,
               "range": false
@@ -1651,7 +1651,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "waffles_worker_rss_bytes",
+              "expr": "max by(worker)(waffles_worker_rss_bytes)",
               "legendFormat": "{{worker}}",
               "instant": false,
               "range": true
@@ -1810,7 +1810,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "60 * sum by(run)(waffles_jobs{run=~\"before-[12]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"before-[12]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"before-[12]\"}))",
+              "expr": "60 * sum by(run)(max by(run,worker,state)(waffles_jobs{run=~\"before-[12]\",state=\"complete\"})) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"before-[12]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"before-[12]\"}))",
               "legendFormat": "{{run}}",
               "instant": true,
               "range": false
@@ -1863,7 +1863,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "60 * sum by(run)(waffles_jobs{run=~\"after-[12]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"after-[12]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"after-[12]\"}))",
+              "expr": "60 * sum by(run)(max by(run,worker,state)(waffles_jobs{run=~\"after-[12]\",state=\"complete\"})) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"after-[12]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"after-[12]\"}))",
               "legendFormat": "{{run}}",
               "instant": true,
               "range": false
@@ -2090,7 +2090,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "60 * sum by(run)(waffles_jobs{run=~\"burst-.*-pool-before-[ab]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"burst-.*-pool-before-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"burst-.*-pool-before-[ab]\"}))",
+              "expr": "60 * sum by(run)(max by(run,worker,state)(waffles_jobs{run=~\"burst-.*-pool-before-[ab]\",state=\"complete\"})) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"burst-.*-pool-before-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"burst-.*-pool-before-[ab]\"}))",
               "legendFormat": "{{run}}",
               "instant": true,
               "range": false
@@ -2143,7 +2143,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "60 * sum by(run)(waffles_jobs{run=~\"burst-.*-pool-after-[ab]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"burst-.*-pool-after-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"burst-.*-pool-after-[ab]\"}))",
+              "expr": "60 * sum by(run)(max by(run,worker,state)(waffles_jobs{run=~\"burst-.*-pool-after-[ab]\",state=\"complete\"})) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"burst-.*-pool-after-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"burst-.*-pool-after-[ab]\"}))",
               "legendFormat": "{{run}}",
               "instant": true,
               "range": false
@@ -2425,7 +2425,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(waffles_instance_accelerator_bytes{worker=\"mac\"})",
+              "expr": "sum(max by(worker,instance)(waffles_instance_accelerator_bytes{worker=\"mac\"}))",
               "legendFormat": "Metal driver allocations",
               "instant": false,
               "range": true
@@ -2584,14 +2584,14 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "(sum(waffles_device_jobs{run=\"$run\",worker=\"mac\",device=\"cpu\"}) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,pool,device)(waffles_device_jobs{run=\"$run\",worker=\"mac\",device=\"cpu\"})) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "CPU",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "(sum(waffles_device_jobs{run=\"$run\",worker=\"mac\",device=\"mps\"}) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,pool,device)(waffles_device_jobs{run=\"$run\",worker=\"mac\",device=\"mps\"})) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Metal",
               "instant": true,
               "range": false
@@ -2644,7 +2644,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "(sum by(worker,pool)(waffles_device_jobs{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum by(worker,pool)(max by(run,worker,pool,device)(waffles_device_jobs{run=\"$run\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "{{worker}} \u00b7 {{pool}}",
               "instant": true,
               "range": false
@@ -2693,11 +2693,11 @@ data:
             "w": 24,
             "h": 5
           },
-          "description": "Per-asset errors never pause the run. Four total attempts with a 30-second retry delay, then retain failed status and process other assets. thumbnail_http_404 means Immich could not supply a preview; this is not a successful non-Waffles result.",
+          "description": "Per-asset errors never pause the run. Four attempts per stage: thumbnail/inference retries after 30 seconds; face/tag application after 60 seconds. Exhaustion retains failed status and workers move on. thumbnail_http_404 means an unavailable preview; apply_http_404 means a write-stage failure.",
           "targets": [
             {
               "refId": "A",
-              "expr": "(sum by(reason)(waffles_failed_jobs{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum by(reason)(max by(run,reason)(waffles_failed_jobs{run=\"$run\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "{{reason}}",
               "instant": true,
               "range": false
@@ -2707,6 +2707,119 @@ data:
             "defaults": {
               "unit": "locale",
               "decimals": 0,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 42,
+          "title": "Mac CPU threads \u00b7 extra worker",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 103,
+            "w": 8,
+            "h": 5
+          },
+          "description": "CPU inference threads per extra Mac process. Baseline Metal stays unchanged. Thread changes drain and replace only extras; each configuration is warmed and quality-checked before selection.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(waffles_burst_cpu_threads{worker=\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Desired",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "(max(waffles_instance_cpu_threads{worker=\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Effective PyTorch threads",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 0,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 43,
+          "title": "One CPU model \u00b7 thread sweep photos/min",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 103,
+            "w": 16,
+            "h": 5
+          },
+          "description": "Same 122 photos and reviewed holdouts, one extra CPU model. Counterbalanced 2/4/8/16-thread experiment; warm-up excluded, production baselines continue. Only completed runs appear; consult the journal for validity and failed trials.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "60 * sum by(run)(max by(run,worker,state)(waffles_jobs{run=~\"burst-.*-threads-[0-9]+-[ab]\",state=\"complete\"})) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"burst-.*-threads-[0-9]+-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"burst-.*-threads-[0-9]+-[ab]\"}))",
+              "legendFormat": "{{run}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 1,
               "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"

@@ -1,16 +1,18 @@
 // Pure validation checks run locally; --postgres also exercises real concurrent claims.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {claim,finish,fail,validateResult,validateTuning,validateBurst} from './queue-core.mjs';
+import {claim,finish,fail,applyFailure,validateResult,validateTuning,validateBurst} from './queue-core.mjs';
 const value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};
 assert.equal(validateResult(value).seconds,1.2);
 assert.deepEqual(validateTuning('mac',1),{slots:1});
 for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));
-assert.deepEqual(validateBurst('mac',15,'benchmark'),{slots:15,mode:'benchmark',cpu_cores:0,device:'mps'});
-assert.deepEqual(validateBurst('still-fawn',0,'production'),{slots:0,mode:'production',cpu_cores:3,device:'cpu'});
-assert.deepEqual(validateBurst('still-fawn',2,'benchmark',1),{slots:2,mode:'benchmark',cpu_cores:1,device:'cpu'});
+assert.deepEqual(validateBurst('mac',15,'benchmark'),{slots:15,mode:'benchmark',cpu_cores:0,device:'mps',cpu_threads:2});
+assert.deepEqual(validateBurst('still-fawn',0,'production'),{slots:0,mode:'production',cpu_cores:3,device:'cpu',cpu_threads:2});
+assert.deepEqual(validateBurst('still-fawn',2,'benchmark',1),{slots:2,mode:'benchmark',cpu_cores:1,device:'cpu',cpu_threads:2});
 assert.throws(()=>validateBurst('still-fawn',2,'benchmark',4));
 assert.equal(validateBurst('mac',1,'benchmark',0,'cpu').device,'cpu');
+assert.equal(validateBurst('mac',1,'benchmark',0,'cpu',16).cpu_threads,16);
+assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cpu',17));
 assert.throws(()=>validateBurst('still-fawn',1,'benchmark',1,'mps'));
 assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cuda'));
 for(const [worker,slots,mode] of [['mac',16,'benchmark'],['pve',2,'production'],['chief-horse',1,'production'],['mac',-1,'production'],['mac',1,'other']])assert.throws(()=>validateBurst(worker,slots,mode));
@@ -30,6 +32,7 @@ if(process.argv.includes('--postgres')) {
     for(const name of ['runs','jobs','settings'])await db.query(`CREATE TABLE ${names[name]} (LIKE waffles.${name} INCLUDING ALL)`);
     await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base'`);
     await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS device text`);
+    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS apply_attempts integer NOT NULL DEFAULT 0`);
     await isolated.query("INSERT INTO waffles.settings VALUES('burst','{\"pve\":{\"slots\":2,\"mode\":\"benchmark\"}}')");
     for(const [id,mode] of [['bench','benchmark'],['prod','production']]) {
       await isolated.query("INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,$2,'running',ARRAY['pve'],'{}')",[id,mode]);
@@ -50,6 +53,13 @@ if(process.argv.includes('--postgres')) {
     await isolated.query("UPDATE waffles.settings SET value='{\"pve\":{\"slots\":0,\"mode\":\"benchmark\"}}' WHERE key='burst'");
     assert.equal(await claim(isolated,'pve','burst'),null);
     assert.equal(await finish(isolated,baseline,value),true);
+    for(let attempt=1;attempt<=4;attempt++) {
+      assert.equal(await applyFailure(isolated,baseline,attempt===1?1:0,'apply_http_404'),true);
+      const row=(await isolated.query('SELECT status,apply_attempts,applied FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2',[baseline.run_id,baseline.asset_id])).rows[0];
+      assert.equal(row.apply_attempts,attempt);assert.equal(row.applied,1);
+      assert.equal(row.status,attempt===4?'failed':'classified');
+    }
+    assert.equal(await applyFailure(isolated,baseline,0,'apply_http_404'),false,'Exhausted writes cannot retry forever');
     let unavailable=await claim(isolated,'pve');assert.equal(unavailable.run_id,'prod','Zero burst slots must not stop baseline work');
     const missingId=unavailable.asset_id;
     for(let attempt=1;attempt<=4;attempt++) {

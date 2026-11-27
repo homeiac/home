@@ -38,6 +38,7 @@ def stop(*args):
 signal.signal(signal.SIGTERM,stop)
 (root/(name+'.started')).touch()
 (root/(name+'.device')).write_text(os.environ['BURST_DEVICE'])
+(root/(name+'.threads')).write_text(os.environ['OMP_NUM_THREADS'])
 ready=Path(os.environ['BURST_READY_DIR']);ready.mkdir(exist_ok=True);(ready/name).touch()
 while not stopping:time.sleep(.05)
 time.sleep(.25);(root/(name+'.finished')).touch()
@@ -50,10 +51,12 @@ time.sleep(.25);(root/(name+'.finished')).touch()
         policy['slots']=3;wait(lambda:len(list(root.glob('*.started')))==3)
         policy['device']='cpu';wait(lambda:len(list(root.glob('*.started')))==6)
         assert len([p for p in root.glob('*.device') if p.read_text()=='cpu'])==3
-        policy['slots']=0;wait(lambda:len(list(root.glob('*.finished')))==6)
+        policy['cpu_threads']=4;wait(lambda:len(list(root.glob('*.started')))==9)
+        assert len([p for p in root.glob('*.threads') if p.read_text()=='4'])==3
+        policy['slots']=0;wait(lambda:len(list(root.glob('*.finished')))==9)
         assert baseline.poll() is None and supervisor.poll() is None
         assert set(paths)<={'/api/burst','/api/heartbeat'}
         assert heartbeats and all(h['pool']=='burst' for h in heartbeats)
     finally:
         supervisor.terminate();supervisor.wait(timeout=10);baseline.terminate();baseline.wait();server.shutdown()
-print('Extra workers scaled 0→1→3, switched Metal→CPU, drained to 0; baseline stayed alive; no production-control calls')
+print('Extras scaled, switched Metal→CPU and 2→4 threads, then drained; baseline stayed alive; no production-control calls')

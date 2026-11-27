@@ -8,22 +8,34 @@ The frozen sample contains 122 photos including 13 Waffles and 13 non-Waffles co
 
 | Backend / device | Extra processes | CPU lanes | Pass | Photos/min | Mean seconds/photo | TP / FP | Valid |
 |---|---:|---:|---|---:|---:|---|---|
-| mac / cpu | 1 | default | a | 260.3 | 0.161 | 9 / 0 | True |
+| mac / cpu | 1 | default | a | 120.3 | 0.232 | 9 / 0 | True |
+| mac / cpu | 1 | default | b | 190.9 | 0.191 | 9 / 0 | True |
+| still-fawn / cpu | 2 | 1 | a | 58.2 | 1.894 | 9 / 0 | True |
+| still-fawn / cpu | 2 | 2 | a | 100.6 | 1.064 | 9 / 0 | True |
+| still-fawn / cpu | 2 | 3 | a | 108.4 | 0.976 | 9 / 0 | True |
+| still-fawn / cpu | 2 | 3 | b | 101.2 | 1.004 | 9 / 0 | True |
+| still-fawn / cpu | 2 | 2 | b | 94.4 | 1.102 | 9 / 0 | True |
 
 ## Selected settings
 
+- mac: 1 extra cpu processes, default CPU lanes; paired rate 147.6 photos/min. Provisional; the complete experiment has not passed.
+- still-fawn: 2 extra cpu processes, 3 CPU lanes; paired rate 104.7 photos/min. Provisional; the complete experiment has not passed.
 
 Failure retained: Mac sustained memory pressure guard (RuntimeError). Extra capacity restored; baseline production is not paused by this runner.
 
+Trial failure retained: mac cpu 3 extras, attempt 1: Mac sustained memory pressure guard.
+
+Trial failure retained: still-fawn cpu 2 extras, attempt 1: Mac sustained memory pressure guard.
+
 ## Observed resource ranges
 
-Mac whole-system CPU: 0.0–27.0%. Apple GPU: 98–100%. These include other applications.
-Mac system swap at first/last sample: 19.32/19.30 GiB. This includes preexisting swap; it is not attributed entirely to Waffles.
-still-fawn maximum observed host temperature: 40.0°C.
+Mac whole-system CPU: 0.0–30.6%. Apple GPU: 93–100%. These include other applications.
+Mac system swap at first/last sample: 19.09/18.89 GiB. This includes preexisting swap; it is not attributed entirely to Waffles.
+still-fawn maximum observed host temperature: 45.0°C.
 
 ## Provenance
 
-Session `1127054012`; code revision `a94ef333adbc4af58f7d2c9c7da18ef15b1ae2cc`.
+Session `1127054343`; code revision `eb22dcf8986dcb83cccdc4046cb8378d7670de39`.
 Sample SHA-256 `3beae47139538015c9968b5d39a38b5bfb3bdb1f9b740370406d6ca73ee57ca2`.
 Classifier SHA-256 `99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2`.
 

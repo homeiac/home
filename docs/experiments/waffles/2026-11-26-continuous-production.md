@@ -49,7 +49,7 @@ Higher CPU allocations must have their own recorded settings and warm-up.
 The user explicitly approved comparing CPU-only and Metal extras. For each of
 1, 3, 5 and 7 extra Mac processes, test CPU then Metal, then repeat the entire
 sequence in reverse. Reverse photo order in the second half. A permanent Metal
-baseline continues production. Each process has two OpenMP/BLAS threads, matching
+baseline continues production. Each process requests two OpenMP/BLAS threads, matching
 the existing adapter. At most eight model processes run in this initial sweep;
 the 15-extra safety bound is not a tested recommendation.
 
@@ -123,3 +123,13 @@ Quality failures and unhealthy baseline/host workloads still abort the experimen
 Combined ABBA uses one extra **CPU** Mac worker and one extra still-fawn worker as
 before; selected eligible extra capacity is after. Missing Immich assets continue
 to use the independent four-attempt per-asset policy.
+
+## Thread-count provenance correction
+
+Subsequent source inspection found pinned Ultralytics calls
+`torch.set_num_threads(min(8, cpu_count-1))` when selecting CPU or MPS. The process
+environment requests above therefore do not prove that every detector ran with
+two threads. No actual thread-count claim is attached to these process-sweep
+results. The separate [one-model thread protocol](2026-11-26-cpu-threads.md)
+controls that selector explicitly on Mac CPU extras and validates it at
+2, 4, 8 and 16 threads before measuring. Existing Linux behavior stays unchanged.
