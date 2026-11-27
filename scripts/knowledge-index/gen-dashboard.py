@@ -452,7 +452,35 @@ def panels():
     remaining = (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
                  + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
                  + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
-    return processing + shift(remaining, processing_height)
+    recovery = caption_recovery_panels()
+    return recovery + shift(processing + shift(remaining, processing_height), 12)
+
+
+def caption_recovery_panels():
+    """Show the frozen missing-description cohort and its own private-ledger measurements."""
+    base = 'knowledge_index_caption_recovery_assets'
+    fresh = ' and on() (time() - max(knowledge_index_caption_recovery_snapshot_seconds) < 180)'
+    done = f'sum(max by(state) ({base}{{state=~"verified|already_described"}}))'
+    total = f'sum(max by(state) ({base}))'
+    panels = [
+        row("Basic-caption recovery · missing Immich descriptions", 0),
+        stat("Verified in Immich", done + fresh, 0, 1, w=5, unit="locale",
+             description="Saved captions read back on the original asset, including independently filled descriptions."),
+        stat("Recovery complete", f'100 * {done} / {total}' + fresh, 5, 1, w=4, unit="percent", decimals=1),
+        stat("Awaiting Immich readback", f'max({base}{{state="queued"}})' + fresh, 9, 1, w=5, unit="locale"),
+        stat("Waiting for a caption", f'max({base}{{state="pending"}})' + fresh, 14, 1, w=5, unit="locale"),
+        stat("Recovery errors", f'max({base}{{state="error"}})' + fresh, 19, 1, w=5, unit="locale", thresholds=RED_IF_POS),
+        series("Basic-caption recovery by state", [(f'max by(state) ({base})' + fresh, '{{state}}')], 0, 5, w=12,h=7,
+               description="One disposition per original asset in the frozen recovery ledger."),
+        series("Recovery captions saved per minute by backend",
+               [('max by(backend) (knowledge_index_caption_recovery_saved_per_minute)' + fresh, '{{backend}}')],
+               12, 5, w=12, h=7,
+               description="Ledger answers saved in the last 15 minutes divided by 15. Includes reused answers with their original model timestamp."),
+    ]
+    for panel in panels:
+        if panel["type"] == "stat":
+            panel["targets"][0].update(instant=True, range=False)
+    return panels
 
 
 def photo_processing_panels():

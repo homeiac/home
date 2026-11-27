@@ -75,8 +75,10 @@ def write_textfile(metrics: str, out: Path) -> None:
         Path(tmp.name).unlink(missing_ok=True)
 
 
-def publish_textfile(metrics: str, host: str) -> None:
+def publish_textfile(metrics: str, host: str, *, filename: str = "knowledge_index_photo_stage_life_stage.prom") -> None:
     """Send only aggregate metrics to an existing Prometheus textfile collector."""
+    if Path(filename).name != filename or not filename.endswith(".prom"):
+        raise ValueError("Expected a Prometheus textfile name")
     receiver = f"""
 set -eu
 umask 022
@@ -86,7 +88,7 @@ trap 'rm -f "$incoming"' EXIT
 cat > "$incoming"
 test -s "$incoming"
 chmod 0644 "$incoming"
-mv -f "$incoming" knowledge_index_photo_stage_life_stage.prom
+mv -f "$incoming" {shlex.quote(filename)}
 """
     subprocess.run(
         ["/usr/bin/ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
