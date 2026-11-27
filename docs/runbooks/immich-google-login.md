@@ -69,14 +69,33 @@ Useful checks:
 
 ```bash
 bash scripts/immich-wifi/check-google-oauth-rollout.sh
+bash scripts/immich-wifi/inspect-live-users.sh
+bash scripts/immich-wifi/inspect-live-users.sh --sharing
 bash scripts/immich-wifi/reconcile-google-oauth.sh
 python3 scripts/immich-wifi/clean-google-oauth-downloads.py
 ```
 
 The reconciliation script requests controller reconciliation using annotations;
 it does not require a local Flux CLI or manually apply resource manifests.
-Google family account provisioning and physical iPhone testing remain separate
-from the verified administrator browser flow.
+Family accounts were provisioned during setup. A subsequent read-only database
+check confirmed three active users: the existing Google-linked administrator,
+a Google-linked ordinary family user with an iOS (`GSA`) session, and another
+ordinary family user without an OAuth link or session yet. The owner confirmed
+that the first family user signed in with her own Google account. Registration
+remains closed. The iOS browser session is not proof of native Immich app login.
+
+The earlier statement that family provisioning was still pending was stale.
+Use live user and session checks before reporting whether an account exists.
+The inspection script prints private account information for local diagnosis;
+never commit its output or include it in blog screenshots.
+
+The same live check confirmed one-way partner sharing from the owner to both
+ordinary family accounts. Timeline integration is disabled for both relationships.
+They can open the owner's shared library through Sharing. No individual album
+memberships were present for those accounts at inspection time. Partner sharing
+does not automatically include the owner's existing albums; opening named album
+links requires album membership or a separate shared link. See
+[Immich partner-sharing behavior](https://docs.immich.app/features/partner-sharing/).
 
 Verify browser login reaches the existing administrator account. Verify family
 members see the intended shared albums. Test the mobile callback on an actual

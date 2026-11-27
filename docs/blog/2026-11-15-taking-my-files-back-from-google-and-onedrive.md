@@ -247,8 +247,20 @@ The [sign-in runbook](../runbooks/immich-google-login.md) covers deployment and 
 
 On November 26, the Helm rollout completed, Google linked to the existing
 administrator, and a fresh sign-out/sign-in returned to that same library.
-The administrator role remained intact. This verifies the web flow from the
-setup laptop; the family phone and iPhone app still need their own device tests.
+The administrator role remained intact. Family accounts were also provisioned
+during setup. A subsequent live database check confirmed a separate non-admin
+family account linked to Google, with an iOS session, and the owner confirmed
+successful sign-in using that person's own Google account. Automatic registration
+remained disabled. The session identifies the Google app's iOS browser (`GSA`),
+so it verifies phone web access; the native Immich iPhone app still needs its own
+callback test. Personal email addresses and OAuth identifiers are omitted here.
+
+The follow-up check also confirmed partner sharing from the owner to both family
+accounts. That grants shared-library access through the Sharing page; timeline
+integration was disabled. Partner sharing does not automatically include existing
+named albums. Those need their own album membership or shared link, a distinction
+that matters when sending a direct album URL. The requested family experience was
+access to photos, not merely permission to sign into an empty account.
 
 ### 3. Verify backup and restoration before cloud reclamation
 
