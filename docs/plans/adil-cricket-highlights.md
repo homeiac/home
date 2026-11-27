@@ -4,7 +4,7 @@ Date: 2026-11-27
 
 Status: Implementation started; tracked in [#250](https://github.com/homeiac/home/issues/250)
 
-Completed PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
+Published PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
 [playback API #252](https://github.com/homeiac/home/pull/252), and
 [correction UI #253](https://github.com/homeiac/home/pull/253),
 [inventory #254](https://github.com/homeiac/home/pull/254),
@@ -12,11 +12,12 @@ Completed PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
 [inference #256](https://github.com/homeiac/home/pull/256), and
 [reconciliation #257](https://github.com/homeiac/home/pull/257),
 [pilot operations #258](https://github.com/homeiac/home/pull/258), and
-[corrected search #259](https://github.com/homeiac/home/pull/259). These are stacked
+[corrected search #259](https://github.com/homeiac/home/pull/259), and
+[live tuning #260](https://github.com/homeiac/home/pull/260). These are stacked
 review branches; publication of a PR does not imply production deployment.
 
 The private review/search UI is deployed. A follow-up isolates the evidence and
-worker tuning discovered during the live pilot; optional clip export remains a
+worker tuning discovered during the live pilot; optional clip export is a
 separate small PR. The experiment journal records failed classifier variants,
 both comparison orders, and the selected four-worker Mac configuration.
 

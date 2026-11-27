@@ -4,6 +4,7 @@ import mimetypes
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlencode
 
 from .ledger import Ledger, require_text
 
@@ -143,14 +144,44 @@ class CricketAPI:
             return {"jobs": jobs}
         if route == "/api/cricket/event":
             return public_event(self.ledger.get(self.owner, query["id"]))
+        if route == "/api/cricket/export":
+            from .exports import target
+
+            event = self.ledger.get(self.owner, query["id"])
+            if event["revision"] != int(query["revision"]):
+                raise ValueError("Highlight changed; export the current revision")
+            self.get(
+                "/api/cricket/media", {"album": event["album"], "asset": event["asset"]}
+            )
+            path = target(event, self.ledger.path.parent / "exports")
+            if not path.is_file():
+                raise FileNotFoundError("Export is not ready")
+            size = path.stat().st_size
+            start, length = byte_range(range_header, size)
+            return FileBody(path, start, length, size, bool(range_header), "video/mp4")
         if route == "/api/cricket/assets":
             with self.ledger.connect() as db:
                 rows = db.execute(
-                    "SELECT a.id,a.kind,a.duration FROM assets a JOIN members m "
+                    "SELECT a.id,a.kind,a.duration,a.locator FROM assets a JOIN members m "
                     "ON a.owner=m.owner AND a.id=m.asset WHERE m.owner=? AND m.album=? ORDER BY a.id",
                     (self.owner, query["album"]),
                 )
-                return {"assets": [dict(row) for row in rows]}
+                return {
+                    "assets": [
+                        {
+                            "id": row["id"],
+                            "kind": row["kind"],
+                            "duration": row["duration"],
+                            "name": Path(row["locator"]).name,
+                            "preview": (
+                                self.ledger.path.parent
+                                / "evidence"
+                                / (row["id"] + ".jpg")
+                            ).is_file(),
+                        }
+                        for row in rows
+                    ]
+                }
         if route == "/api/cricket/media":
             with self.ledger.connect() as db:
                 asset = self.ledger._asset(
@@ -173,7 +204,7 @@ class CricketAPI:
                 and asset["fingerprint"] != f"stat:{stat.st_size}:{stat.st_mtime_ns}"
             ):
                 raise ValueError("Original changed; refresh inventory before playback")
-            if query.get("preview") == "true" and asset["kind"] == "photo":
+            if query.get("preview") == "true":
                 previews = (self.ledger.path.parent / "evidence").resolve()
                 preview = (previews / (asset["id"] + ".jpg")).resolve()
                 if not preview.is_relative_to(previews):
@@ -192,6 +223,21 @@ class CricketAPI:
 
     def post(self, route: str, body: dict) -> dict:
         """Persist a correction using the owner fixed at server startup."""
+        if route == "/api/cricket/export":
+            from .exports import create
+            from .ledger import Conflict
+
+            event = self.ledger.get(self.owner, body["id"])
+            if event["revision"] != body["revision"]:
+                raise Conflict("Highlight changed; refresh before exporting")
+            original = self.get(
+                "/api/cricket/media", {"album": event["album"], "asset": event["asset"]}
+            )
+            create(event, original.path, self.ledger.path.parent / "exports")
+            return {
+                "url": "/api/cricket/export?"
+                + urlencode({"id": event["id"], "revision": event["revision"]})
+            }
         if route == "/api/cricket/create":
             event = self.ledger.create_event(
                 self.owner,
