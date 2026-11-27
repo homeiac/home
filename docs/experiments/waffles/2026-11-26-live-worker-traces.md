@@ -96,6 +96,46 @@ rate after moving to a different part of the library is operational evidence, no
 a matched-photo hardware speedup. Scanner rollout and outcomes will be appended
 to the JSONL journal; implementation is not itself a successful result.
 
+### Deployment observation
+
+Flux applied `e6901b3`; the independent Job started at 23:38:09 Pacific. It enrolled
+36,337 then-pending historical jobs. Its bounds are four concurrent requests,
+20 requests/second, ten-second HTTP timeouts, four confirmed 404s at least thirty
+seconds apart, and a three-hour Job deadline. An advisory lock prevents duplicate
+scanners. A separate `waffles.preview_checks` table records HTTP observations
+without inflating inference attempt counts. An atomic status/claim/attempt check
+protects workers racing the scanner. Transient/server errors remain unresolved
+after four checks; authentication errors stop the scanner.
+
+Unit and real-PostgreSQL scratch tests verified stream cancellation, confirmation,
+404-to-200 recovery, transient-error bounds, retry ordering/delay, and claim races.
+The 6,380,092-byte pre-change database backup was fully read by `pg_restore`.
+Existing baseline pod UIDs and the Mac supervisor PID were unchanged; Kubernetes
+baseline restart counts remained zero. The queue and extra-worker pods also
+retained their forty-minute age. At the first journal observation, 374 previews
+were available and no four-check exclusion had yet completed. This is startup
+evidence, not a claimed throughput improvement.
+
+At approximately 23:40:43, the scanner had confirmed 1,789 available previews
+and excluded 52 unavailable jobs using 208 HTTP checks. All 52 had exactly four
+404 observations and retained the expected failed-job state; the audit reported
+zero invalid evidence or unexpected states. It was still scanning the historical
+backlog. Ready process counts remained Mac 16, still-fawn four, PVE one and
+fun-bedbug one. No reduction in the inference floor was made.
+
+| Observation | Mac photos/min | still-fawn | PVE | fun-bedbug | Scanner exclusions |
+|---|---:|---:|---:|---:|---:|
+| First startup journal snapshot | 356 | 61 | 14 | 7 | 0 |
+| First verified exclusion snapshot | 425 | 65 | 18 | 8 | 52 |
+
+These are rolling sixty-second committed counts across different photos. They
+document ongoing work and verified queue exclusions, **not a causal speedup**.
+The early scanner snapshot is also already after deployment, rather than an
+untreated control; the pre-intervention minute buckets above remain the baseline
+incident evidence. Audit rows still marked pending may refer to jobs completed or
+failed by inference before the scanner reached them. `still_pending_inference`
+in the repeatable report distinguishes that case from remaining runnable work.
+
 ## Reproduction
 
 Use `diagnose-throughput-drop.py --output PRIVATE_REPORT.json` for aggregate

@@ -403,3 +403,22 @@ at its deadline. `summarize-live-traces.py PRIVATE_DIRECTORY --output SUMMARY.js
 parses native wall stacks, network deltas, Linux syscall waits and power samples.
 Keep raw captures private; record aggregate findings and failed captures in the
 [science journal](../experiments/waffles/2026-11-26-live-worker-traces.md).
+
+### Historical missing-preview scanner
+
+The separate GitOps Job `waffles-preview-preflight-v1` checks pending historical
+previews ahead of inference. Four GET responses of 404, separated by thirty
+seconds, mark a still-pending job failed. `waffles.preview_checks` retains the
+evidence and separate HTTP-attempt counts. It never deletes photos or job records;
+claimed jobs and racing inference attempts are fenced. Other HTTP/transport errors
+get at most four checks and remain unresolved for normal worker handling. A 200
+response cancels the response body without decoding an image.
+
+Run `python3 scripts/immich-pet-tagger/check-preview-preflight.py --journal` to
+inspect progress, verify exclusion invariants, and append aggregate rates and
+ready-worker counts to the science journal. Logs print startup and fifteen-second
+progress. The Job resumes from PostgreSQL after a pod failure, has a three-hour
+deadline, and is capped at four requests concurrently and twenty per second.
+It enrolls the pending historical backlog at startup; hourly upload discovery
+continues separately. Scanner code and its generated manifest are isolated from
+the queue/worker ConfigMap, so deploying it does not restart inference.

@@ -575,3 +575,10 @@ inference workers. The [science record](../experiments/waffles/2026-11-26-live-w
 retains the measurements, failed tracing attempts, and before/after plan. It also
 records what was not measured: the privileged Mac capture emitted no per-process
 GPU fields, so its 97% whole-host GPU activity cannot be attributed to Waffles.
+
+The scanner was then deployed as its own GitOps Job with a separate ConfigMap,
+so the queue and inference pods stayed up. Its first verified result excluded
+52 pending jobs after 208 confirmed 404 checks while retaining the original job
+records and a separate PostgreSQL audit. Mac stayed at sixteen processes and
+still-fawn at four. Those exclusions are verified; a throughput speedup is not
+yet established because the live library contains different work in each window.
