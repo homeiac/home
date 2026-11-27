@@ -471,11 +471,12 @@ def photo_processing_panels():
            f'and on(stage) (({age}) < 180)')
     panel_set = [
         row("Photo processing · progress and live tuning", 0),
-        stat("Photos complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}"),
-        stat("Photos queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
+        stat("Items complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}",
+             description="The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."),
+        stat("Items queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
         stat("Stage completion", f'({completed}) / ({scope} > 0)', 8, 1,
              unit="percentunit", decimals=1, legend="{{stage}}",
-             description="Complete and reused divided by the declared scope, including failed and withheld photos."),
+             description="Complete and reused divided by the declared scope, including failed and withheld items."),
         stat("Failed or withheld", counts("failed|withheld"), 12, 1, unit="locale", legend="{{stage}}"),
         stat("Time to drain queue", eta, 16, 1, unit="s", legend="{{stage}}",
              description="Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."),

@@ -73,7 +73,7 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
   const section = element('div', block);
   const claims = [...item.claims, ...item.individual];
   const solo = claims.length === 1 && item.faces[claims[0].subject];
-  element(journey ? 'strong' : 'h3', section, item.scene && !claims.length ? 'Scene description' :
+  if (!item.library || claims.length || item.scene) element(journey ? 'strong' : 'h3', section, item.library ? 'Face observations' : item.scene && !claims.length ? 'Scene description' :
     journey && solo ? 'What ' + solo.name + ' is doing' : 'What each person is doing');
   if (item.scene) {
     element('p', section, item.scene);

@@ -13100,7 +13100,7 @@ data:
         {
           "id": 248,
           "type": "stat",
-          "title": "Photos complete or reused",
+          "title": "Items complete or reused",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -13147,12 +13147,13 @@ data:
             },
             "colorMode": "value",
             "graphMode": "none"
-          }
+          },
+          "description": "The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."
         },
         {
           "id": 249,
           "type": "stat",
-          "title": "Photos queued or running",
+          "title": "Items queued or running",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -13253,7 +13254,7 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           },
-          "description": "Complete and reused divided by the declared scope, including failed and withheld photos."
+          "description": "Complete and reused divided by the declared scope, including failed and withheld items."
         },
         {
           "id": 251,

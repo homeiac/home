@@ -22,7 +22,7 @@ HELP = {
 }
 
 
-def render(database: Path, progress_log: Path) -> str:
+def render(database: Path, progress_log: Path, stage: str = STAGE) -> str:
     """Read a consistent SQLite snapshot and emit no asset or identity labels."""
     with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True, timeout=10)) as conn:
         conn.execute("BEGIN")
@@ -46,7 +46,7 @@ def render(database: Path, progress_log: Path) -> str:
         kind, help_text = HELP[name]
         lines.extend((f"# HELP {name} {help_text}", f"# TYPE {name} {kind}"))
         for labels, value in samples:
-            lines.append(f'{name}{{stage="{STAGE}"{labels}}} {value}')
+            lines.append(f'{name}{{stage="{stage}"{labels}}} {value}')
 
     metric("knowledge_index_photo_stage_items", [
         (f',state="{state}"', counts.get(state, 0)) for state in STATES
@@ -77,7 +77,7 @@ def write_textfile(metrics: str, out: Path) -> None:
 
 def publish_textfile(metrics: str, host: str, stage: str = STAGE) -> None:
     """Send only aggregate metrics to an existing Prometheus textfile collector."""
-    if stage not in (STAGE, "openlabel-pilot", "journey-group-actions", "immich-ocr-tags"):
+    if stage not in (STAGE, "openlabel-pilot", "journey-group-actions", "immich-ocr-tags", "library-face-observations", "library-ocr-tags"):
         raise ValueError("Unknown photo processing stage")
     receiver = f"""
 set -eu

@@ -124,6 +124,8 @@ The private `journey-face-actions.json` review is keyed by asset ID and native f
 
 To reproduce the two-person view, add `--together PERSON_UUID PERSON_UUID` to the publisher invocation below. It returns the private page filename. For the browser contract, pass `check_together_review.mjs` a private JSON expectation with `page` (absolute output path), `people` (requested person IDs) and `ids` (independently verified asset IDs in order), followed by the current source snapshot. Only aggregate counts belong in the issue.
 
+**Scale the private library.** Read one consistent inventory of the owner’s online timeline photos. Reuse the OCR projection and clickable regions across the library. Key visual jobs by native face occurrence, including unnamed faces, and preserve prior evidence only when the subject and region match. Run the Mac and RTX from one resumable queue using the measured settings. Record broad visual life stage and a separate marked-subject action observation. Keep prior human corrections authoritative. Verify repeat import, private browsing, per-backend saves, queue accounting and Grafana readback.
+
 **Import saved Immich OCR.** Start with the current album. Validate an embedded photo and a control with no recognized text, measure read and render costs, and expose source text through clickable tags. Map verified pet identities in a later slice. The 88-item pilot imported 78 regions on 27 assets with zero new model calls. All 78 highlights matched the source in the catalogue. Replaying the import created zero revisions. Grafana reported 88 checked and zero failed or withheld for the OCR stage.
 
 **Reconcile disputed captions.** When a reviewed photo contradicts a saved action, validate a replacement against the original caption and exact face before publishing. Keep the raw ledger and previous revision. Check all existing dispute notes in the reference album, rerender both views and the two-person journey, and test an on-screen subject as a negative for physical presence.
@@ -224,3 +226,5 @@ Pilot result on November 26. Two independent runs of local generation plus Sol t
 ## Platform sign-off
 
 Run the platform checker against all three live rollout bundles on the same release. Close the epic when that check passes. Keep captures, identifiers, captions, relationship facts and private baselines outside GitHub. Publish the journey, scope, release, gate result and failed field names as needed. The [executable contract](../../scripts/knowledge-index/memory-acceptance/check.py) defines the result.
+
+For a person’s activity album, intersect the existing Immich person label with saved descriptions, OCR and visual search. Review candidate images for the activity and remove repeated shots. Deliver a private chronological album and read back its exact membership and sharing status.
