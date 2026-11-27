@@ -28,4 +28,22 @@ the live SQLite file or run multiple schema upgrades concurrently.
 
 Identity assumptions never change native face recognition. A changed source
 fingerprint is rejected until the original/event mapping is explicitly reconciled.
-No worker, HTTP route, publication, or live inference is enabled by this PR.
+No worker, publication, or live inference is enabled by this module.
+
+## Playback and correction API
+
+Enable the existing `photo-enrich.py serve` command with both `--cricket-ledger`
+and `--cricket-owner`. The latter is the fixed owner for this private instance;
+query parameters and JSON cannot change it. The existing review app has no user
+login: retain its private gateway access control. Host, same-origin and CSRF checks
+apply to cricket too. Without these flags all cricket API routes remain disabled.
+
+GET routes under `/api/cricket/`: `albums`, `assets?album=...`,
+`events?album=...`, `event?id=...`, and `media?album=...&asset=...`.
+Media uses bounded file streaming and single HTTP byte ranges for seeking.
+POST `create` takes album, asset, and complete event data. POST `revise` takes
+id, expected revision, and either a patch or action (accept/dismiss/restore/undo).
+A stale editor receives HTTP 409. Reads and streaming bypass the photo database
+lock; each cricket read uses a separate short SQLite snapshot.
+
+Run API tests with `python3 -m unittest cricket.test_api`; they bind loopback.

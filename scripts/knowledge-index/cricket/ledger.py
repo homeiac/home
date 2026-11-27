@@ -93,13 +93,21 @@ def finite(value: Any) -> bool:
 
 def validate(payload: dict, asset: dict) -> None:
     """Validate the complete effective event against its original media."""
-    if set(payload) != FIELDS:
+    if not isinstance(payload, dict) or set(payload) != FIELDS:
         raise ValueError("Expected complete event fields")
     if payload["actor"] is not None:
         require_text(payload["actor"])
-    if payload["role"] not in ROLES or payload["outcome"] not in OUTCOMES:
+    if (
+        not isinstance(payload["role"], str)
+        or not isinstance(payload["outcome"], str)
+        or payload["role"] not in ROLES
+        or payload["outcome"] not in OUTCOMES
+    ):
         raise ValueError("Unknown role or outcome")
-    if payload["wicket_credit"] not in CREDITS:
+    if (
+        not isinstance(payload["wicket_credit"], str)
+        or payload["wicket_credit"] not in CREDITS
+    ):
         raise ValueError("Unknown wicket credit")
     if payload["wicket_credit"] == "bowler" and not (
         payload["role"] == "bowling" and payload["outcome"] == "dismissal"

@@ -26,6 +26,8 @@ def main() -> None:
     serve.add_argument("--bind", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--public-origin", help="Exact internal Traefik HTTPS origin when deployed")
+    serve.add_argument("--cricket-ledger", type=Path, help="Enable cricket review using this private ledger")
+    serve.add_argument("--cricket-owner", help="Fixed library owner for cricket access; never supplied by the browser")
     extract = commands.add_parser("extract")
     extract.add_argument("--limit", type=int, default=50)
     extract.add_argument("--date", help="Capture date YYYY-MM-DD or unknown; omit for a bounded library pass")
@@ -127,7 +129,14 @@ def main() -> None:
     try:
         store.refresh_metrics()
         if args.command == "serve":
-            server = make_server(store, models, args.bind, args.port, args.public_origin)
+            cricket = None
+            if bool(args.cricket_ledger) != bool(args.cricket_owner):
+                parser.error('--cricket-ledger and --cricket-owner must be supplied together')
+            if args.cricket_ledger:
+                from cricket.api import CricketAPI
+                from cricket.ledger import Ledger
+                cricket = CricketAPI(Ledger(args.cricket_ledger), args.cricket_owner, args.library)
+            server = make_server(store, models, args.bind, args.port, args.public_origin, cricket=cricket)
             logging.info("Photo enrichment: http://%s:%s", args.bind, server.server_port)
             import threading
             stop=threading.Event()
