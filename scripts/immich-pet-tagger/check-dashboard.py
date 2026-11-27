@@ -44,6 +44,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--queries-only', action='store_true')
+    parser.add_argument('--run', default='historical-waffles', help='Run whose live dashboard telemetry should be checked')
     parser.add_argument('--source', action='store_true', help='Inspect Prometheus discovery and scraping')
     args = parser.parse_args()
     if args.source:
@@ -77,7 +78,7 @@ def main() -> None:
     def query(item: tuple[str, str]) -> tuple[str, list]:
         title, expr = item
         path = '/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?'
-        result = kubectl('get', '--raw', path + urllib.parse.urlencode({'query': expr.replace('$run', 'historical-waffles')}))
+        result = kubectl('get', '--raw', path + urllib.parse.urlencode({'query': expr.replace('$run', args.run)}))
         assert result['status'] == 'success', title
         return title, result['data']['result']
 
