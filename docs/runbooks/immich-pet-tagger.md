@@ -7,6 +7,11 @@ The pet tagger runs alongside Immich in `immich-pilot`, managed by the
 Current status: deployed and healthy. Waffles has 23 references and 42 negative
 examples. Automatic scans run hourly with the validated confidence settings.
 
+The owner-approved historical backfill was started on November 26, 2026 for
+`1900-01-01` through `2026-11-26`. Check `manage.py status` for live progress;
+do not start a duplicate scan while that one is running. The manual scan runs
+inside the service and continues after the operator's terminal closes.
+
 ## Deployment
 
 - URL: <https://pets.app.home.panderosystems.com>

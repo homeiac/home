@@ -105,5 +105,11 @@ upload-time cursor starts at the current UTC day's midnight when absent; older
 photos need a separate manual historical scan. The scan panel exposes progress
 and can stop that backfill without deleting existing recognition metadata.
 
+On November 26, 2026, the owner explicitly approved the full historical backfill.
+It was started for January 1, 1900 through November 26, 2026 using the committed
+`manage.py scan` command. This is a background scan, not a claim that the historical
+library has finished processing. The deployment retains the same two-core CPU
+limit, 4 GiB memory limit, and conservative recognition thresholds.
+
 The reusable commands, permissions, operating controls, and recovery procedure are
 in the [runbook](../runbooks/immich-pet-tagger.md).
