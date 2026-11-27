@@ -49,3 +49,9 @@ ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS cpu_threads integer;
 INSERT INTO waffles.settings(key,value) VALUES('burst',
  '{"mac":{"slots":0,"mode":"production"},"pve":{"slots":0,"mode":"production"},"still-fawn":{"slots":0,"mode":"production"},"fun-bedbug":{"slots":0,"mode":"production"},"chief-horse":{"slots":0,"mode":"production"}}')
  ON CONFLICT(key) DO NOTHING;
+
+-- Schema v5: FIFO selection stops at the first ready row, not a backlog sort.
+CREATE INDEX IF NOT EXISTS waffles_ready_fifo ON waffles.jobs(run_id,ordinal,asset_id)
+ WHERE status='pending' AND attempts<4;
+CREATE INDEX IF NOT EXISTS waffles_expired_leases ON waffles.jobs(lease_until)
+ WHERE status='running';

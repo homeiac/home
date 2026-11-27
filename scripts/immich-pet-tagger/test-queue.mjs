@@ -1,7 +1,7 @@
 // Pure validation checks run locally; --postgres also exercises real concurrent claims.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {claim,finish,fail,applyFailure,validateResult,validateTuning,validateBurst} from './queue-core.mjs';
+import {claim,recoverExpired,READY_SQL,finish,fail,applyFailure,validateResult,validateTuning,validateBurst} from './queue-core.mjs';
 const value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};
 assert.equal(validateResult(value).seconds,1.2);
 assert.deepEqual(validateTuning('mac',1),{slots:1});
@@ -17,9 +17,9 @@ assert.throws(()=>validateBurst('still-fawn',1,'benchmark',1,'mps'));
 assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cuda'));
 for(const [worker,slots,mode] of [['mac',16,'benchmark'],['pve',2,'production'],['chief-horse',1,'production'],['mac',-1,'production'],['mac',1,'other']])assert.throws(()=>validateBurst(worker,slots,mode));
 const calls=[];
-const connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};
+const connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:sql.includes('AS available')?[{available:true}]:sql.includes('SELECT r.id')?[{id:'test'}]:[]};},release:()=>calls.push('release')};
 assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');
-assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');
+assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[5],'COMMIT');assert.equal(calls[6],'release');
 for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])
   assert.throws(()=>validateResult(bad));
 if(process.argv.includes('--postgres')) {
@@ -33,6 +33,7 @@ if(process.argv.includes('--postgres')) {
     await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base'`);
     await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS device text`);
     await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS apply_attempts integer NOT NULL DEFAULT 0`);
+    await db.query(`CREATE INDEX ON ${names.jobs}(run_id,ordinal,asset_id) WHERE status='pending' AND attempts<4`);
     await isolated.query("INSERT INTO waffles.settings VALUES('burst','{\"pve\":{\"slots\":2,\"mode\":\"benchmark\"}}')");
     for(const [id,mode] of [['bench','benchmark'],['prod','production']]) {
       await isolated.query("INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,$2,'running',ARRAY['pve'],'{}')",[id,mode]);
@@ -46,6 +47,7 @@ if(process.argv.includes('--postgres')) {
     const old=leased[0];
     await isolated.query("UPDATE waffles.jobs SET lease_until=now()-interval '1 second' WHERE run_id=$1 AND asset_id=$2",[old.run_id,old.asset_id]);
     assert.equal(await finish(isolated,old,value),false,'Expired claims cannot commit');
+    await recoverExpired(isolated);
     const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);
     assert.equal(await finish(isolated,old,value),false,'Old fencing token cannot commit');
     assert.equal(await finish(isolated,retry,value),true);
@@ -75,6 +77,22 @@ if(process.argv.includes('--postgres')) {
       }
     }
     assert.notEqual((await claim(isolated,'pve')).asset_id,missingId,'Exhausted thumbnail failure must not block the next asset');
+    // Large, isolated backlog: delayed oldest retries must not block ready FIFO.
+    await isolated.query("INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES('large','benchmark','running',ARRAY['mac'],'{}')");
+    await isolated.query(`INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)
+      SELECT 'large',md5(n::text)::uuid,'2020-01-01',n FROM generate_series(1,80000) n`);
+    await isolated.query("UPDATE waffles.jobs SET available_at=now()+interval '1 hour' WHERE run_id='large' AND ordinal=1");
+    await isolated.query('ANALYZE waffles.jobs');
+    const plan=(await isolated.query('EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) '+READY_SQL+' LIMIT 1',['large'])).rows[0]['QUERY PLAN'][0];
+    assert(!JSON.stringify(plan.Plan).includes('"Node Type":"Sort"'),'FIFO must not sort the backlog');
+    assert(JSON.stringify(plan.Plan).includes('Index'),'Ready queue uses its ordered index');
+    const first=await claim(isolated,'mac');assert.equal(first.ordinal,2,'Delayed retry cannot block oldest ready asset');
+    await isolated.query("UPDATE waffles.jobs SET attempts=4,lease_until=now()-interval '1 second' WHERE run_id=$1 AND asset_id=$2",[first.run_id,first.asset_id]);
+    await recoverExpired(isolated);
+    assert.equal(await finish(isolated,first,value),false,'Recovered exhausted lease remains fenced');
+    assert.equal((await isolated.query("SELECT status FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2",[first.run_id,first.asset_id])).rows[0].status,'failed');
+    assert.equal((await claim(isolated,'mac')).ordinal,3);
+    console.log('80,000-row FIFO candidate milliseconds:',plan['Execution Time']);
     console.log('404 failure retained after four attempts; next production asset continues; duplicate failures are fenced');
     console.log('Isolated PostgreSQL pool separation, concurrent caps, fencing and baseline continuity passed');
   } finally {

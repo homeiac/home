@@ -5,20 +5,36 @@ export const SLOT_LIMITS={mac:1,pve:1,'still-fawn':1,'fun-bedbug':1,'chief-horse
 export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};
 export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};
 export const THREAD_LIMITS={mac:16,pve:2,'still-fawn':2,'fun-bedbug':2,'chief-horse':2};
-export const CLAIM_SQL=`WITH candidate AS (
- SELECT j.run_id,j.asset_id FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id
- WHERE r.state='running' AND $1=ANY(r.workers)
- AND r.mode=CASE WHEN $3='base' THEN
-   CASE WHEN EXISTS(SELECT 1 FROM waffles.runs prod WHERE prod.mode='production' AND prod.state='running' AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END
-   ELSE coalesce((SELECT value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END
- AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND j.lease_until<now()))
- AND j.attempts<4
- AND (SELECT count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.pool=$3 AND active.status='running' AND active.lease_until>now())
-     < CASE WHEN $3='base' THEN 1 ELSE coalesce((SELECT (value->$1->>'slots')::int FROM waffles.settings WHERE key='burst'),0) END
- ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)
- UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,lease_until=now()+interval '90 seconds',attempts=attempts+1
+// The ready queue is physically ordered by a partial (run_id,ordinal,asset_id)
+// index. Resolve the small run list first; never sort the entire asset backlog.
+export const READY_SQL=`SELECT j.run_id,j.asset_id FROM waffles.jobs j
+ WHERE j.run_id=$1 AND j.status='pending' AND j.attempts<4 AND j.available_at<=now()
+ ORDER BY j.ordinal,j.asset_id`;
+export const CLAIM_SQL=`WITH candidate AS (${READY_SQL.replaceAll('$1','$5')}
+ FOR UPDATE OF j SKIP LOCKED LIMIT 1)
+ UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,
+ lease_until=now()+interval '90 seconds',attempts=attempts+1
  FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*,
  (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;
+export const ELIGIBLE_SQL=`SELECT r.id FROM waffles.runs r
+ WHERE r.state='running' AND $1=ANY(r.workers)
+ AND r.mode=CASE WHEN $2='base' THEN
+   CASE WHEN EXISTS(SELECT 1 FROM waffles.runs prod WHERE prod.mode='production'
+     AND prod.state='running' AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END
+ ELSE coalesce((SELECT value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END
+ ORDER BY r.created_at,r.id`;
+
+export async function recoverExpired(db) {
+  // Recovery is outside the dequeue hot path, every 15 seconds. Bound the batch
+  // and skip locked jobs; late heartbeats/results remain fenced by status/token.
+  return db.query(`WITH expired AS (SELECT run_id,asset_id FROM waffles.jobs
+    WHERE status='running' AND lease_until<now() ORDER BY lease_until
+    FOR UPDATE SKIP LOCKED LIMIT 1000)
+    UPDATE waffles.jobs j SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE 'pending' END,
+    available_at=now(),lease_until=NULL,
+    last_error=CASE WHEN attempts>=4 THEN 'lease_exhausted' ELSE last_error END
+    FROM expired e WHERE j.run_id=e.run_id AND j.asset_id=e.asset_id`);
+}
 
 export async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu') {
   if(!WORKERS.includes(worker))throw Error('Invalid worker');
@@ -27,10 +43,22 @@ export async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':
   const db=await pool.connect();
   try {
     await db.query('BEGIN');
-    // Separate statements ensure a fresh READ COMMITTED snapshot after waiting
-    // for the per-backend lock. Concurrent processes cannot exceed live slots.
-    await db.query("SELECT pg_advisory_xact_lock(244,hashtext($1))",[worker]);
-    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device])).rows[0]??null;
+    // Independent baseline/burst caps need independent locks. The cap query
+    // gets a fresh READ COMMITTED snapshot after acquiring this pool's lock.
+    await db.query("SELECT pg_advisory_xact_lock(244,hashtext($1))",[worker+':'+lane]);
+    const {rows:[capacity]}=await db.query(`SELECT
+      (SELECT count(*) FROM waffles.jobs WHERE worker=$1 AND pool=$2
+       AND status='running' AND lease_until>now()) <
+      CASE WHEN $2='base' THEN 1 ELSE coalesce((SELECT (value->$1->>'slots')::int
+       FROM waffles.settings WHERE key='burst'),0) END AS available`,[worker,lane]);
+    let job=null;
+    if(capacity.available) {
+      const runs=(await db.query(ELIGIBLE_SQL,[worker,lane])).rows;
+      for(const run of runs) {
+        job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device,run.id])).rows[0]??null;
+        if(job)break;
+      }
+    }
     await db.query('COMMIT');return job;
   }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
 }

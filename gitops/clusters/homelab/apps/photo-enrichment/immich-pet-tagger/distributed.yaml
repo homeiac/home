@@ -46,7 +46,11 @@ data:
     \ VALUES('burst',\n '{\"mac\":{\"slots\":0,\"mode\":\"production\"},\"pve\":{\"\
     slots\":0,\"mode\":\"production\"},\"still-fawn\":{\"slots\":0,\"mode\":\"production\"\
     },\"fun-bedbug\":{\"slots\":0,\"mode\":\"production\"},\"chief-horse\":{\"slots\"\
-    :0,\"mode\":\"production\"}}')\n ON CONFLICT(key) DO NOTHING;\n"
+    :0,\"mode\":\"production\"}}')\n ON CONFLICT(key) DO NOTHING;\n\n-- Schema v5:\
+    \ FIFO selection stops at the first ready row, not a backlog sort.\nCREATE INDEX\
+    \ IF NOT EXISTS waffles_ready_fifo ON waffles.jobs(run_id,ordinal,asset_id)\n\
+    \ WHERE status='pending' AND attempts<4;\nCREATE INDEX IF NOT EXISTS waffles_expired_leases\
+    \ ON waffles.jobs(lease_until)\n WHERE status='running';\n"
   bootstrap.mjs: "// Same scoped-role bootstrap pattern as immich_sync/bootstrap.mjs\
     \ (#217).\nimport {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
@@ -69,33 +73,48 @@ data:
     export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
     export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
     export const THREAD_LIMITS={mac:16,pve:2,'still-fawn':2,'fun-bedbug':2,'chief-horse':2};\n\
-    export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
-    \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
-    \ AND $1=ANY(r.workers)\n AND r.mode=CASE WHEN $3='base' THEN\n   CASE WHEN EXISTS(SELECT\
-    \ 1 FROM waffles.runs prod WHERE prod.mode='production' AND prod.state='running'\
-    \ AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END\n   ELSE coalesce((SELECT\
-    \ value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END\n\
-    \ AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND\
-    \ j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT count(*) FROM waffles.jobs\
-    \ active WHERE active.worker=$1 AND active.pool=$3 AND active.status='running'\
-    \ AND active.lease_until>now())\n     < CASE WHEN $3='base' THEN 1 ELSE coalesce((SELECT\
-    \ (value->$1->>'slots')::int FROM waffles.settings WHERE key='burst'),0) END\n\
-    \ ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE\
-    \ waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,lease_until=now()+interval\
-    \ '90 seconds',attempts=attempts+1\n FROM candidate c WHERE j.run_id=c.run_id\
-    \ AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT config FROM waffles.runs\
-    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu')\
-    \ {\n  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  if(!['base','burst'].includes(lane))throw\
-    \ Error('Invalid worker pool');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
+    // The ready queue is physically ordered by a partial (run_id,ordinal,asset_id)\n\
+    // index. Resolve the small run list first; never sort the entire asset backlog.\n\
+    export const READY_SQL=`SELECT j.run_id,j.asset_id FROM waffles.jobs j\n WHERE\
+    \ j.run_id=$1 AND j.status='pending' AND j.attempts<4 AND j.available_at<=now()\n\
+    \ ORDER BY j.ordinal,j.asset_id`;\nexport const CLAIM_SQL=`WITH candidate AS (${READY_SQL.replaceAll('$1','$5')}\n\
+    \ FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,\n\
+    \ lease_until=now()+interval '90 seconds',attempts=attempts+1\n FROM candidate\
+    \ c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT\
+    \ config FROM waffles.runs WHERE id=j.run_id) AS config`;\nexport const ELIGIBLE_SQL=`SELECT\
+    \ r.id FROM waffles.runs r\n WHERE r.state='running' AND $1=ANY(r.workers)\n AND\
+    \ r.mode=CASE WHEN $2='base' THEN\n   CASE WHEN EXISTS(SELECT 1 FROM waffles.runs\
+    \ prod WHERE prod.mode='production'\n     AND prod.state='running' AND $1=ANY(prod.workers))\
+    \ THEN 'production' ELSE 'benchmark' END\n ELSE coalesce((SELECT value->$1->>'mode'\
+    \ FROM waffles.settings WHERE key='burst'),'production') END\n ORDER BY r.created_at,r.id`;\n\
+    \nexport async function recoverExpired(db) {\n  // Recovery is outside the dequeue\
+    \ hot path, every 15 seconds. Bound the batch\n  // and skip locked jobs; late\
+    \ heartbeats/results remain fenced by status/token.\n  return db.query(`WITH expired\
+    \ AS (SELECT run_id,asset_id FROM waffles.jobs\n    WHERE status='running' AND\
+    \ lease_until<now() ORDER BY lease_until\n    FOR UPDATE SKIP LOCKED LIMIT 1000)\n\
+    \    UPDATE waffles.jobs j SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE\
+    \ 'pending' END,\n    available_at=now(),lease_until=NULL,\n    last_error=CASE\
+    \ WHEN attempts>=4 THEN 'lease_exhausted' ELSE last_error END\n    FROM expired\
+    \ e WHERE j.run_id=e.run_id AND j.asset_id=e.asset_id`);\n}\n\nexport async function\
+    \ claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu') {\n  if(!WORKERS.includes(worker))throw\
+    \ Error('Invalid worker');\n  if(!['base','burst'].includes(lane))throw Error('Invalid\
+    \ worker pool');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
     \ Error('Invalid device');\n  const db=await pool.connect();\n  try {\n    await\
-    \ db.query('BEGIN');\n    // Separate statements ensure a fresh READ COMMITTED\
-    \ snapshot after waiting\n    // for the per-backend lock. Concurrent processes\
-    \ cannot exceed live slots.\n    await db.query(\"SELECT pg_advisory_xact_lock(244,hashtext($1))\"\
-    ,[worker]);\n    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device])).rows[0]??null;\n\
-    \    await db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
-    \ e;}finally{db.release();}\n}\n\nexport function validateTuning(worker,slots)\
-    \ {\n  if(!WORKERS.includes(worker)||slots!==1)throw Error('Baseline workers must\
-    \ remain at one');\n  return {slots};\n}\n\nexport function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu',threads=2)\
+    \ db.query('BEGIN');\n    // Independent baseline/burst caps need independent\
+    \ locks. The cap query\n    // gets a fresh READ COMMITTED snapshot after acquiring\
+    \ this pool's lock.\n    await db.query(\"SELECT pg_advisory_xact_lock(244,hashtext($1))\"\
+    ,[worker+':'+lane]);\n    const {rows:[capacity]}=await db.query(`SELECT\n   \
+    \   (SELECT count(*) FROM waffles.jobs WHERE worker=$1 AND pool=$2\n       AND\
+    \ status='running' AND lease_until>now()) <\n      CASE WHEN $2='base' THEN 1\
+    \ ELSE coalesce((SELECT (value->$1->>'slots')::int\n       FROM waffles.settings\
+    \ WHERE key='burst'),0) END AS available`,[worker,lane]);\n    let job=null;\n\
+    \    if(capacity.available) {\n      const runs=(await db.query(ELIGIBLE_SQL,[worker,lane])).rows;\n\
+    \      for(const run of runs) {\n        job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device,run.id])).rows[0]??null;\n\
+    \        if(job)break;\n      }\n    }\n    await db.query('COMMIT');return job;\n\
+    \  }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}\n}\n\n\
+    export function validateTuning(worker,slots) {\n  if(!WORKERS.includes(worker)||slots!==1)throw\
+    \ Error('Baseline workers must remain at one');\n  return {slots};\n}\n\nexport\
+    \ function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu',threads=2)\
     \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>BURST_LIMITS[worker]||!['production','benchmark'].includes(mode))throw\
     \ Error('Invalid burst policy');\n  if(!Number.isInteger(cpu)||cpu<(BURST_CPU_LIMITS[worker]?1:0)||cpu>BURST_CPU_LIMITS[worker])throw\
     \ Error('Invalid burst CPU parallelism');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
@@ -137,7 +156,7 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst}\
+    \ {claim,recoverExpired,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
@@ -174,16 +193,15 @@ data:
     \ API response.\n      await applyFailure(db,job,added,Number.isInteger(e.status)?'apply_http_'+e.status:'apply_failed');\n\
     \      console.error('Immich apply retry:',/^Immich HTTP \\d+$/.test(e.message)?e.message:e.constructor.name);\n\
     \    }\n    return true;\n  });\n}\n\nasync function refresh() {\n  try {\n  \
-    \  await pool.query(\"UPDATE waffles.jobs SET status='failed',last_error='lease_exhausted'\
-    \ WHERE status='running' AND lease_until<now() AND attempts>=4\");\n    await\
-    \ pool.query(`UPDATE waffles.runs r SET state='complete',finished_at=now() WHERE\
-    \ r.state='running'\n      AND EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n\
-    \      AND NOT EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status\
-    \ IN ('pending','running','classified'))`);\n    const rows=(await pool.query(`SELECT\
-    \ r.id,r.mode,r.state,extract(epoch FROM r.started_at)::float8 started,\n    \
-    \  CASE WHEN r.state='complete' THEN (SELECT extract(epoch FROM max(done.completed_at))::float8\
-    \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
-    \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
+    \  await recoverExpired(pool);\n    await pool.query(`UPDATE waffles.runs r SET\
+    \ state='complete',finished_at=now() WHERE r.state='running'\n      AND EXISTS(SELECT\
+    \ 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n      AND NOT EXISTS(SELECT 1 FROM\
+    \ waffles.jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running','classified'))`);\n\
+    \    const rows=(await pool.query(`SELECT r.id,r.mode,r.state,extract(epoch FROM\
+    \ r.started_at)::float8 started,\n      CASE WHEN r.state='complete' THEN (SELECT\
+    \ extract(epoch FROM max(done.completed_at))::float8 FROM waffles.jobs done WHERE\
+    \ done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int count,\n\
+    \      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
     \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
     \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const devices=(await pool.query(\"\
     SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs\
@@ -686,7 +704,7 @@ data:
     \    except Exception:return False\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,fail,applyFailure,validateResult,validateTuning,validateBurst}\
+    \ from 'node:module';\nimport {claim,recoverExpired,READY_SQL,finish,fail,applyFailure,validateResult,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
     assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',1),{slots:1});\n\
     for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
@@ -698,9 +716,10 @@ data:
     assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cpu',17));\nassert.throws(()=>validateBurst('still-fawn',1,'benchmark',1,'mps'));\n\
     assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cuda'));\nfor(const [worker,slots,mode]\
     \ of [['mac',16,'benchmark'],['pve',2,'production'],['chief-horse',1,'production'],['mac',-1,'production'],['mac',1,'other']])assert.throws(()=>validateBurst(worker,slots,mode));\n\
-    const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};\n\
+    const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:sql.includes('AS\
+    \ available')?[{available:true}]:sql.includes('SELECT r.id')?[{id:'test'}]:[]};},release:()=>calls.push('release')};\n\
     assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');\n\
-    assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');\n\
+    assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[5],'COMMIT');assert.equal(calls[6],'release');\n\
     for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
     \  assert.throws(()=>validateResult(bad));\nif(process.argv.includes('--postgres'))\
     \ {\n  const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
@@ -713,12 +732,13 @@ data:
     \ TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base'`);\n\
     \    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS device\
     \ text`);\n    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS\
-    \ apply_attempts integer NOT NULL DEFAULT 0`);\n    await isolated.query(\"INSERT\
-    \ INTO waffles.settings VALUES('burst','{\\\"pve\\\":{\\\"slots\\\":2,\\\"mode\\\
-    \":\\\"benchmark\\\"}}')\");\n    for(const [id,mode] of [['bench','benchmark'],['prod','production']])\
-    \ {\n      await isolated.query(\"INSERT INTO waffles.runs(id,mode,state,workers,config)\
-    \ VALUES($1,$2,'running',ARRAY['pve'],'{}')\",[id,mode]);\n      for(let n=1;n<=3;n++)await\
-    \ isolated.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
+    \ apply_attempts integer NOT NULL DEFAULT 0`);\n    await db.query(`CREATE INDEX\
+    \ ON ${names.jobs}(run_id,ordinal,asset_id) WHERE status='pending' AND attempts<4`);\n\
+    \    await isolated.query(\"INSERT INTO waffles.settings VALUES('burst','{\\\"\
+    pve\\\":{\\\"slots\\\":2,\\\"mode\\\":\\\"benchmark\\\"}}')\");\n    for(const\
+    \ [id,mode] of [['bench','benchmark'],['prod','production']]) {\n      await isolated.query(\"\
+    INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,$2,'running',ARRAY['pve'],'{}')\"\
+    ,[id,mode]);\n      for(let n=1;n<=3;n++)await isolated.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
     \ VALUES($1,$2,'2020-01-01',$3)\",[id,'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),n]);\n\
     \    }\n    const [a,b,c]=await Promise.all([claim(isolated,'pve','burst'),claim(isolated,'pve','burst'),claim(isolated,'pve','burst')]);\n\
     \    const leased=[a,b,c].filter(Boolean);assert.equal(leased.length,2,'Concurrent\
@@ -729,7 +749,7 @@ data:
     \    await isolated.query(\"UPDATE waffles.jobs SET lease_until=now()-interval\
     \ '1 second' WHERE run_id=$1 AND asset_id=$2\",[old.run_id,old.asset_id]);\n \
     \   assert.equal(await finish(isolated,old,value),false,'Expired claims cannot\
-    \ commit');\n    const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);\n\
+    \ commit');\n    await recoverExpired(isolated);\n    const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);\n\
     \    assert.equal(await finish(isolated,old,value),false,'Old fencing token cannot\
     \ commit');\n    assert.equal(await finish(isolated,retry,value),true);\n    assert.equal(await\
     \ finish(isolated,retry,value),false,'Duplicate completion cannot commit twice');\n\
@@ -755,12 +775,31 @@ data:
     \ WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId]);\n        unavailable=await\
     \ claim(isolated,'pve');assert.equal(unavailable.asset_id,missingId);\n      }\n\
     \    }\n    assert.notEqual((await claim(isolated,'pve')).asset_id,missingId,'Exhausted\
-    \ thumbnail failure must not block the next asset');\n    console.log('404 failure\
-    \ retained after four attempts; next production asset continues; duplicate failures\
-    \ are fenced');\n    console.log('Isolated PostgreSQL pool separation, concurrent\
-    \ caps, fencing and baseline continuity passed');\n  } finally {\n    for(const\
-    \ name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF EXISTS ${names[name]}`);\n\
-    \    await db.end();\n  }\n}\nconsole.log('Result validation checks passed');\n"
+    \ thumbnail failure must not block the next asset');\n    // Large, isolated backlog:\
+    \ delayed oldest retries must not block ready FIFO.\n    await isolated.query(\"\
+    INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES('large','benchmark','running',ARRAY['mac'],'{}')\"\
+    );\n    await isolated.query(`INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\n\
+    \      SELECT 'large',md5(n::text)::uuid,'2020-01-01',n FROM generate_series(1,80000)\
+    \ n`);\n    await isolated.query(\"UPDATE waffles.jobs SET available_at=now()+interval\
+    \ '1 hour' WHERE run_id='large' AND ordinal=1\");\n    await isolated.query('ANALYZE\
+    \ waffles.jobs');\n    const plan=(await isolated.query('EXPLAIN (ANALYZE,BUFFERS,FORMAT\
+    \ JSON) '+READY_SQL+' LIMIT 1',['large'])).rows[0]['QUERY PLAN'][0];\n    assert(!JSON.stringify(plan.Plan).includes('\"\
+    Node Type\":\"Sort\"'),'FIFO must not sort the backlog');\n    assert(JSON.stringify(plan.Plan).includes('Index'),'Ready\
+    \ queue uses its ordered index');\n    const first=await claim(isolated,'mac');assert.equal(first.ordinal,2,'Delayed\
+    \ retry cannot block oldest ready asset');\n    await isolated.query(\"UPDATE\
+    \ waffles.jobs SET attempts=4,lease_until=now()-interval '1 second' WHERE run_id=$1\
+    \ AND asset_id=$2\",[first.run_id,first.asset_id]);\n    await recoverExpired(isolated);\n\
+    \    assert.equal(await finish(isolated,first,value),false,'Recovered exhausted\
+    \ lease remains fenced');\n    assert.equal((await isolated.query(\"SELECT status\
+    \ FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2\",[first.run_id,first.asset_id])).rows[0].status,'failed');\n\
+    \    assert.equal((await claim(isolated,'mac')).ordinal,3);\n    console.log('80,000-row\
+    \ FIFO candidate milliseconds:',plan['Execution Time']);\n    console.log('404\
+    \ failure retained after four attempts; next production asset continues; duplicate\
+    \ failures are fenced');\n    console.log('Isolated PostgreSQL pool separation,\
+    \ concurrent caps, fencing and baseline continuity passed');\n  } finally {\n\
+    \    for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF\
+    \ EXISTS ${names[name]}`);\n    await db.end();\n  }\n}\nconsole.log('Result validation\
+    \ checks passed');\n"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -810,7 +849,11 @@ data:
     \ VALUES('burst',\n '{\"mac\":{\"slots\":0,\"mode\":\"production\"},\"pve\":{\"\
     slots\":0,\"mode\":\"production\"},\"still-fawn\":{\"slots\":0,\"mode\":\"production\"\
     },\"fun-bedbug\":{\"slots\":0,\"mode\":\"production\"},\"chief-horse\":{\"slots\"\
-    :0,\"mode\":\"production\"}}')\n ON CONFLICT(key) DO NOTHING;\n"
+    :0,\"mode\":\"production\"}}')\n ON CONFLICT(key) DO NOTHING;\n\n-- Schema v5:\
+    \ FIFO selection stops at the first ready row, not a backlog sort.\nCREATE INDEX\
+    \ IF NOT EXISTS waffles_ready_fifo ON waffles.jobs(run_id,ordinal,asset_id)\n\
+    \ WHERE status='pending' AND attempts<4;\nCREATE INDEX IF NOT EXISTS waffles_expired_leases\
+    \ ON waffles.jobs(lease_until)\n WHERE status='running';\n"
   bootstrap.mjs: "// Same scoped-role bootstrap pattern as immich_sync/bootstrap.mjs\
     \ (#217).\nimport {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
@@ -833,33 +876,48 @@ data:
     export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
     export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
     export const THREAD_LIMITS={mac:16,pve:2,'still-fawn':2,'fun-bedbug':2,'chief-horse':2};\n\
-    export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
-    \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
-    \ AND $1=ANY(r.workers)\n AND r.mode=CASE WHEN $3='base' THEN\n   CASE WHEN EXISTS(SELECT\
-    \ 1 FROM waffles.runs prod WHERE prod.mode='production' AND prod.state='running'\
-    \ AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END\n   ELSE coalesce((SELECT\
-    \ value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END\n\
-    \ AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND\
-    \ j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT count(*) FROM waffles.jobs\
-    \ active WHERE active.worker=$1 AND active.pool=$3 AND active.status='running'\
-    \ AND active.lease_until>now())\n     < CASE WHEN $3='base' THEN 1 ELSE coalesce((SELECT\
-    \ (value->$1->>'slots')::int FROM waffles.settings WHERE key='burst'),0) END\n\
-    \ ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE\
-    \ waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,lease_until=now()+interval\
-    \ '90 seconds',attempts=attempts+1\n FROM candidate c WHERE j.run_id=c.run_id\
-    \ AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT config FROM waffles.runs\
-    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu')\
-    \ {\n  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  if(!['base','burst'].includes(lane))throw\
-    \ Error('Invalid worker pool');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
+    // The ready queue is physically ordered by a partial (run_id,ordinal,asset_id)\n\
+    // index. Resolve the small run list first; never sort the entire asset backlog.\n\
+    export const READY_SQL=`SELECT j.run_id,j.asset_id FROM waffles.jobs j\n WHERE\
+    \ j.run_id=$1 AND j.status='pending' AND j.attempts<4 AND j.available_at<=now()\n\
+    \ ORDER BY j.ordinal,j.asset_id`;\nexport const CLAIM_SQL=`WITH candidate AS (${READY_SQL.replaceAll('$1','$5')}\n\
+    \ FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,\n\
+    \ lease_until=now()+interval '90 seconds',attempts=attempts+1\n FROM candidate\
+    \ c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT\
+    \ config FROM waffles.runs WHERE id=j.run_id) AS config`;\nexport const ELIGIBLE_SQL=`SELECT\
+    \ r.id FROM waffles.runs r\n WHERE r.state='running' AND $1=ANY(r.workers)\n AND\
+    \ r.mode=CASE WHEN $2='base' THEN\n   CASE WHEN EXISTS(SELECT 1 FROM waffles.runs\
+    \ prod WHERE prod.mode='production'\n     AND prod.state='running' AND $1=ANY(prod.workers))\
+    \ THEN 'production' ELSE 'benchmark' END\n ELSE coalesce((SELECT value->$1->>'mode'\
+    \ FROM waffles.settings WHERE key='burst'),'production') END\n ORDER BY r.created_at,r.id`;\n\
+    \nexport async function recoverExpired(db) {\n  // Recovery is outside the dequeue\
+    \ hot path, every 15 seconds. Bound the batch\n  // and skip locked jobs; late\
+    \ heartbeats/results remain fenced by status/token.\n  return db.query(`WITH expired\
+    \ AS (SELECT run_id,asset_id FROM waffles.jobs\n    WHERE status='running' AND\
+    \ lease_until<now() ORDER BY lease_until\n    FOR UPDATE SKIP LOCKED LIMIT 1000)\n\
+    \    UPDATE waffles.jobs j SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE\
+    \ 'pending' END,\n    available_at=now(),lease_until=NULL,\n    last_error=CASE\
+    \ WHEN attempts>=4 THEN 'lease_exhausted' ELSE last_error END\n    FROM expired\
+    \ e WHERE j.run_id=e.run_id AND j.asset_id=e.asset_id`);\n}\n\nexport async function\
+    \ claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu') {\n  if(!WORKERS.includes(worker))throw\
+    \ Error('Invalid worker');\n  if(!['base','burst'].includes(lane))throw Error('Invalid\
+    \ worker pool');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
     \ Error('Invalid device');\n  const db=await pool.connect();\n  try {\n    await\
-    \ db.query('BEGIN');\n    // Separate statements ensure a fresh READ COMMITTED\
-    \ snapshot after waiting\n    // for the per-backend lock. Concurrent processes\
-    \ cannot exceed live slots.\n    await db.query(\"SELECT pg_advisory_xact_lock(244,hashtext($1))\"\
-    ,[worker]);\n    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device])).rows[0]??null;\n\
-    \    await db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
-    \ e;}finally{db.release();}\n}\n\nexport function validateTuning(worker,slots)\
-    \ {\n  if(!WORKERS.includes(worker)||slots!==1)throw Error('Baseline workers must\
-    \ remain at one');\n  return {slots};\n}\n\nexport function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu',threads=2)\
+    \ db.query('BEGIN');\n    // Independent baseline/burst caps need independent\
+    \ locks. The cap query\n    // gets a fresh READ COMMITTED snapshot after acquiring\
+    \ this pool's lock.\n    await db.query(\"SELECT pg_advisory_xact_lock(244,hashtext($1))\"\
+    ,[worker+':'+lane]);\n    const {rows:[capacity]}=await db.query(`SELECT\n   \
+    \   (SELECT count(*) FROM waffles.jobs WHERE worker=$1 AND pool=$2\n       AND\
+    \ status='running' AND lease_until>now()) <\n      CASE WHEN $2='base' THEN 1\
+    \ ELSE coalesce((SELECT (value->$1->>'slots')::int\n       FROM waffles.settings\
+    \ WHERE key='burst'),0) END AS available`,[worker,lane]);\n    let job=null;\n\
+    \    if(capacity.available) {\n      const runs=(await db.query(ELIGIBLE_SQL,[worker,lane])).rows;\n\
+    \      for(const run of runs) {\n        job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device,run.id])).rows[0]??null;\n\
+    \        if(job)break;\n      }\n    }\n    await db.query('COMMIT');return job;\n\
+    \  }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}\n}\n\n\
+    export function validateTuning(worker,slots) {\n  if(!WORKERS.includes(worker)||slots!==1)throw\
+    \ Error('Baseline workers must remain at one');\n  return {slots};\n}\n\nexport\
+    \ function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu',threads=2)\
     \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>BURST_LIMITS[worker]||!['production','benchmark'].includes(mode))throw\
     \ Error('Invalid burst policy');\n  if(!Number.isInteger(cpu)||cpu<(BURST_CPU_LIMITS[worker]?1:0)||cpu>BURST_CPU_LIMITS[worker])throw\
     \ Error('Invalid burst CPU parallelism');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
@@ -901,7 +959,7 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst}\
+    \ {claim,recoverExpired,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
@@ -938,16 +996,15 @@ data:
     \ API response.\n      await applyFailure(db,job,added,Number.isInteger(e.status)?'apply_http_'+e.status:'apply_failed');\n\
     \      console.error('Immich apply retry:',/^Immich HTTP \\d+$/.test(e.message)?e.message:e.constructor.name);\n\
     \    }\n    return true;\n  });\n}\n\nasync function refresh() {\n  try {\n  \
-    \  await pool.query(\"UPDATE waffles.jobs SET status='failed',last_error='lease_exhausted'\
-    \ WHERE status='running' AND lease_until<now() AND attempts>=4\");\n    await\
-    \ pool.query(`UPDATE waffles.runs r SET state='complete',finished_at=now() WHERE\
-    \ r.state='running'\n      AND EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n\
-    \      AND NOT EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status\
-    \ IN ('pending','running','classified'))`);\n    const rows=(await pool.query(`SELECT\
-    \ r.id,r.mode,r.state,extract(epoch FROM r.started_at)::float8 started,\n    \
-    \  CASE WHEN r.state='complete' THEN (SELECT extract(epoch FROM max(done.completed_at))::float8\
-    \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
-    \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
+    \  await recoverExpired(pool);\n    await pool.query(`UPDATE waffles.runs r SET\
+    \ state='complete',finished_at=now() WHERE r.state='running'\n      AND EXISTS(SELECT\
+    \ 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n      AND NOT EXISTS(SELECT 1 FROM\
+    \ waffles.jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running','classified'))`);\n\
+    \    const rows=(await pool.query(`SELECT r.id,r.mode,r.state,extract(epoch FROM\
+    \ r.started_at)::float8 started,\n      CASE WHEN r.state='complete' THEN (SELECT\
+    \ extract(epoch FROM max(done.completed_at))::float8 FROM waffles.jobs done WHERE\
+    \ done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int count,\n\
+    \      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
     \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
     \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const devices=(await pool.query(\"\
     SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs\
@@ -1450,7 +1507,7 @@ data:
     \    except Exception:return False\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,fail,applyFailure,validateResult,validateTuning,validateBurst}\
+    \ from 'node:module';\nimport {claim,recoverExpired,READY_SQL,finish,fail,applyFailure,validateResult,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
     assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',1),{slots:1});\n\
     for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
@@ -1462,9 +1519,10 @@ data:
     assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cpu',17));\nassert.throws(()=>validateBurst('still-fawn',1,'benchmark',1,'mps'));\n\
     assert.throws(()=>validateBurst('mac',1,'benchmark',0,'cuda'));\nfor(const [worker,slots,mode]\
     \ of [['mac',16,'benchmark'],['pve',2,'production'],['chief-horse',1,'production'],['mac',-1,'production'],['mac',1,'other']])assert.throws(()=>validateBurst(worker,slots,mode));\n\
-    const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};\n\
+    const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:sql.includes('AS\
+    \ available')?[{available:true}]:sql.includes('SELECT r.id')?[{id:'test'}]:[]};},release:()=>calls.push('release')};\n\
     assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');\n\
-    assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');\n\
+    assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[5],'COMMIT');assert.equal(calls[6],'release');\n\
     for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
     \  assert.throws(()=>validateResult(bad));\nif(process.argv.includes('--postgres'))\
     \ {\n  const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
@@ -1477,12 +1535,13 @@ data:
     \ TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base'`);\n\
     \    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS device\
     \ text`);\n    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS\
-    \ apply_attempts integer NOT NULL DEFAULT 0`);\n    await isolated.query(\"INSERT\
-    \ INTO waffles.settings VALUES('burst','{\\\"pve\\\":{\\\"slots\\\":2,\\\"mode\\\
-    \":\\\"benchmark\\\"}}')\");\n    for(const [id,mode] of [['bench','benchmark'],['prod','production']])\
-    \ {\n      await isolated.query(\"INSERT INTO waffles.runs(id,mode,state,workers,config)\
-    \ VALUES($1,$2,'running',ARRAY['pve'],'{}')\",[id,mode]);\n      for(let n=1;n<=3;n++)await\
-    \ isolated.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
+    \ apply_attempts integer NOT NULL DEFAULT 0`);\n    await db.query(`CREATE INDEX\
+    \ ON ${names.jobs}(run_id,ordinal,asset_id) WHERE status='pending' AND attempts<4`);\n\
+    \    await isolated.query(\"INSERT INTO waffles.settings VALUES('burst','{\\\"\
+    pve\\\":{\\\"slots\\\":2,\\\"mode\\\":\\\"benchmark\\\"}}')\");\n    for(const\
+    \ [id,mode] of [['bench','benchmark'],['prod','production']]) {\n      await isolated.query(\"\
+    INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,$2,'running',ARRAY['pve'],'{}')\"\
+    ,[id,mode]);\n      for(let n=1;n<=3;n++)await isolated.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
     \ VALUES($1,$2,'2020-01-01',$3)\",[id,'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),n]);\n\
     \    }\n    const [a,b,c]=await Promise.all([claim(isolated,'pve','burst'),claim(isolated,'pve','burst'),claim(isolated,'pve','burst')]);\n\
     \    const leased=[a,b,c].filter(Boolean);assert.equal(leased.length,2,'Concurrent\
@@ -1493,7 +1552,7 @@ data:
     \    await isolated.query(\"UPDATE waffles.jobs SET lease_until=now()-interval\
     \ '1 second' WHERE run_id=$1 AND asset_id=$2\",[old.run_id,old.asset_id]);\n \
     \   assert.equal(await finish(isolated,old,value),false,'Expired claims cannot\
-    \ commit');\n    const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);\n\
+    \ commit');\n    await recoverExpired(isolated);\n    const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);\n\
     \    assert.equal(await finish(isolated,old,value),false,'Old fencing token cannot\
     \ commit');\n    assert.equal(await finish(isolated,retry,value),true);\n    assert.equal(await\
     \ finish(isolated,retry,value),false,'Duplicate completion cannot commit twice');\n\
@@ -1519,17 +1578,36 @@ data:
     \ WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId]);\n        unavailable=await\
     \ claim(isolated,'pve');assert.equal(unavailable.asset_id,missingId);\n      }\n\
     \    }\n    assert.notEqual((await claim(isolated,'pve')).asset_id,missingId,'Exhausted\
-    \ thumbnail failure must not block the next asset');\n    console.log('404 failure\
-    \ retained after four attempts; next production asset continues; duplicate failures\
-    \ are fenced');\n    console.log('Isolated PostgreSQL pool separation, concurrent\
-    \ caps, fencing and baseline continuity passed');\n  } finally {\n    for(const\
-    \ name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF EXISTS ${names[name]}`);\n\
-    \    await db.end();\n  }\n}\nconsole.log('Result validation checks passed');\n"
+    \ thumbnail failure must not block the next asset');\n    // Large, isolated backlog:\
+    \ delayed oldest retries must not block ready FIFO.\n    await isolated.query(\"\
+    INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES('large','benchmark','running',ARRAY['mac'],'{}')\"\
+    );\n    await isolated.query(`INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\n\
+    \      SELECT 'large',md5(n::text)::uuid,'2020-01-01',n FROM generate_series(1,80000)\
+    \ n`);\n    await isolated.query(\"UPDATE waffles.jobs SET available_at=now()+interval\
+    \ '1 hour' WHERE run_id='large' AND ordinal=1\");\n    await isolated.query('ANALYZE\
+    \ waffles.jobs');\n    const plan=(await isolated.query('EXPLAIN (ANALYZE,BUFFERS,FORMAT\
+    \ JSON) '+READY_SQL+' LIMIT 1',['large'])).rows[0]['QUERY PLAN'][0];\n    assert(!JSON.stringify(plan.Plan).includes('\"\
+    Node Type\":\"Sort\"'),'FIFO must not sort the backlog');\n    assert(JSON.stringify(plan.Plan).includes('Index'),'Ready\
+    \ queue uses its ordered index');\n    const first=await claim(isolated,'mac');assert.equal(first.ordinal,2,'Delayed\
+    \ retry cannot block oldest ready asset');\n    await isolated.query(\"UPDATE\
+    \ waffles.jobs SET attempts=4,lease_until=now()-interval '1 second' WHERE run_id=$1\
+    \ AND asset_id=$2\",[first.run_id,first.asset_id]);\n    await recoverExpired(isolated);\n\
+    \    assert.equal(await finish(isolated,first,value),false,'Recovered exhausted\
+    \ lease remains fenced');\n    assert.equal((await isolated.query(\"SELECT status\
+    \ FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2\",[first.run_id,first.asset_id])).rows[0].status,'failed');\n\
+    \    assert.equal((await claim(isolated,'mac')).ordinal,3);\n    console.log('80,000-row\
+    \ FIFO candidate milliseconds:',plan['Execution Time']);\n    console.log('404\
+    \ failure retained after four attempts; next production asset continues; duplicate\
+    \ failures are fenced');\n    console.log('Isolated PostgreSQL pool separation,\
+    \ concurrent caps, fencing and baseline continuity passed');\n  } finally {\n\
+    \    for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF\
+    \ EXISTS ${names[name]}`);\n    await db.end();\n  }\n}\nconsole.log('Result validation\
+    \ checks passed');\n"
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: waffles-schema-v4
+  name: waffles-schema-v5
   namespace: database
 spec:
   backoffLimit: 3
@@ -1605,7 +1683,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: ab578d04104ebf9439a61f8307ca379e26d924800fbcb9a50d48b7d0a1cf1400
+        checksum/code: a45346d8b8187e00bb7b2016c98144794af0085ddc76393eeb03eb9f795c8543
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1764,7 +1842,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: ab578d04104ebf9439a61f8307ca379e26d924800fbcb9a50d48b7d0a1cf1400
+        checksum/code: a45346d8b8187e00bb7b2016c98144794af0085ddc76393eeb03eb9f795c8543
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1875,7 +1953,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: ab578d04104ebf9439a61f8307ca379e26d924800fbcb9a50d48b7d0a1cf1400
+        checksum/code: a45346d8b8187e00bb7b2016c98144794af0085ddc76393eeb03eb9f795c8543
     spec:
       automountServiceAccountToken: false
       securityContext:

@@ -3,7 +3,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
-import {claim,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst} from './queue-core.mjs';
+import {claim,recoverExpired,finish,fail,applyFailure,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,THREAD_LIMITS,validateTuning,validateBurst} from './queue-core.mjs';
 import {discover} from './discovery.mjs';
 const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');
 const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
@@ -63,7 +63,7 @@ async function writeOne() {
 
 async function refresh() {
   try {
-    await pool.query("UPDATE waffles.jobs SET status='failed',last_error='lease_exhausted' WHERE status='running' AND lease_until<now() AND attempts>=4");
+    await recoverExpired(pool);
     await pool.query(`UPDATE waffles.runs r SET state='complete',finished_at=now() WHERE r.state='running'
       AND EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running','classified'))`);
