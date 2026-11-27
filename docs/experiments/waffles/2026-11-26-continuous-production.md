@@ -1,0 +1,84 @@
+# Waffles tuning with continuous production
+
+This supersedes the operating conditions of the interrupted
+[isolated experiment](2026-11-26-live-tuning.md). The user requires a baseline
+production worker on every node throughout tuning. Earlier isolated results
+remain preliminary evidence and must not be pooled with this experiment.
+
+## Invariants
+
+- Keep one baseline production process on each admitted backend. Mac uses Metal;
+  still-fawn, PVE and the native Linux hosts use CPU. RTX remains unused.
+- Baseline services remain separate from additional worker services. Experiment
+  cleanup may drain extra workers and pause benchmark runs, never production.
+- Chief-horse remains a desired baseline on guarded standby until sufficient
+  memory is available and its quality evaluation passes. Do not silently relax
+  the guard or claim it is processing while it is not.
+- Freeze the same 122 photos and classifier snapshot. Retain the 26 reviewed
+  holdouts and compare every decision with the first valid one-process baseline.
+- Keep recognition thresholds fixed. Require at least 9/13 positive matches,
+  zero of 13 negative matches, unchanged binary decisions, no retries or worker
+  crashes. Failed trials and protocol deviations remain in the journal.
+
+## Questions
+
+1. How much additional throughput do 1, 3, 5 and 7 extra Mac processes deliver
+   while its baseline process continues production? Repeat in reverse order.
+2. On still-fawn, how much does additional CPU capacity help while its baseline
+   pod continues production? Evaluate a separate CPU worker pod so its allocation
+   adds to, rather than replaces, the existing two-core baseline limit.
+3. Where do memory pressure, accelerator saturation, shared-source I/O or CPU
+   contention make further processes ineffective?
+
+Record CPU utilization and Apple GPU utilization separately; a lightly used CPU
+does not establish that a Metal worker has spare accelerator capacity. Reuse the
+existing Mac experiment's `ioreg` GPU observation and macOS memory-pressure guard.
+Record per-process accelerator allocations, host swap and CPU/thermal conditions.
+
+## Interpretation
+
+The frozen benchmark measures additional-worker throughput under live production
+load. Production throughput is recorded separately because historical photos are
+not the same inputs in every window. Do not add repeated benchmark completions
+to historical-backfill progress. Report paired ranges and resource costs, and
+prefer fewer workers within 5% of the fastest eligible repeated configuration.
+Higher CPU allocations must have their own recorded settings and warm-up.
+
+## Preregistered schedule and resource gates
+
+The user explicitly approved comparing CPU-only and Metal extras. For each of
+1, 3, 5 and 7 extra Mac processes, test Metal then CPU, then repeat the entire
+sequence in reverse. Reverse photo order in the second half. A permanent Metal
+baseline continues production. Each process has two OpenMP/BLAS threads, matching
+the existing adapter. At most eight model processes run in this initial sweep;
+the 15-extra safety bound is not a tested recommendation.
+
+Drain Mac extras before the still-fawn sweep. Hold two extra processes fixed and
+test 1 → 2 → 3 → 3 → 2 → 1 CPU-affinity lanes within the extra pod's three-core
+ceiling. Baseline still-fawn retains its existing two-core ceiling throughout.
+Combined ABBA compares one extra Mac Metal process plus one extra still-fawn
+process on one lane against the selected repeated configurations. These results
+measure additional capacity under live production, not a baseline-only speedup.
+
+Warm each configuration on at least six photos (three per extra process), then
+measure all 122. Choose among configurations with two valid repetitions by pooled
+photos/minute, preferring fewer processes/CPU lanes within 5% of fastest. Report
+both repeat rates. No guarantee of increasing throughput is assumed.
+
+Sample resources at least every 15 seconds and at trial boundaries. Require all
+four admitted baseline workers ready. Stop extras if macOS memory pressure leaves
+normal (1), still-fawn host temperature reaches 68°C or thermal telemetry is
+missing, host available memory falls below 512 MiB, queue health fails, or a
+previously healthy still-fawn workload becomes unready/restarts. A preexisting
+unready Frigate IP webhook is recorded but is not attributed to this experiment.
+Guest memory was independently observed at 18.5 GiB available; hypervisor available
+memory alone excludes the VM's existing allocation. Record host PSI, CPU ticks,
+swap, Mac CPU/GPU utilization and production progress; do not hide resource costs.
+
+A convergence deadline of six minutes and a measured-run deadline of fifteen
+minutes bound each trial. A failed quality/resource gate aborts the experiment,
+restores original extra capacity, and retains failure evidence. No production
+state changes or baseline restarts are allowed in the runner or cleanup.
+
+These settings and code must be committed before execution. This preregistration
+does not claim that the new trials have run.

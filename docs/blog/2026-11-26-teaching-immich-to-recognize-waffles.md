@@ -230,26 +230,45 @@ counting fetched photos or adding crop outcomes from the original scanner.
 
 ### Treating tuning as an experiment
 
-"Try more workers" is a hypothesis, not a result. We added live concurrency
-controls so the Mac can run up to four inference processes and still-fawn up to
-two within its existing pod limits. PostgreSQL persists desired concurrency;
-supervisors start or drain processes without a deployment. The queue enforces
-the same limit when granting claims. Grafana exposes desired and active counts
-alongside completed photos, throughput and processing time.
+"Try more workers" is a hypothesis, not a result. Our first preregistered sweep
+paused production to measure isolated concurrency. That was the wrong operating
+condition for the owner's requirement: a baseline worker must keep processing on
+every available node. We interrupted the sweep, restored production, and retained
+its [partial results and failures](../experiments/waffles/2026-11-26-live-tuning-results.md).
+The final combined comparison did not run. We do not present a provisional peak
+as sustained production performance.
 
-Before measuring, we committed an
-[experiment protocol](../experiments/waffles/2026-11-26-live-tuning.md). It freezes
-122 photos, including all 26 reviewed holdouts, and records hashes of the sample
-and fitted classifier. Mac trials run 1 → 2 → 4 → 4 → 2 → 1 processes;
-still-fawn trials run 1 → 2 → 2 → 1. The second half reverses input order. Warm-up
-is excluded, production claims are paused, and a final combined ABBA comparison
-checks whether individual gains survive shared queue and thumbnail contention.
+The replacement design separates permanent baseline services from extra-worker
+services. PostgreSQL grants independent fenced claims to each pool. Baseline
+workers prioritize production; extras can process a frozen benchmark without
+writing faces. Extra-process count, CPU affinity and CPU/Metal selection are live
+settings. Changing them drains only extra workers. We preserved the existing
+Kubernetes pod templates and Mac LaunchAgent so deployment itself need not restart
+baseline models. This is additional work beyond translating Docker Compose YAML:
+resource ownership and control-plane semantics must preserve useful work.
 
-The journal records settings, timestamps, completed throughput, latency, backend
-contribution, resource snapshots, decision agreement, failed trials and rollbacks.
-A trial with a new false positive, changed decision, retry or unplanned restart
-cannot win. Configurations within 5% prefer fewer processes. Private photos and
-asset identifiers stay outside Git; aggregate evidence remains reviewable.
+The Mac was already using its Apple GPU through PyTorch MPS/Metal. Linux workers
+use CPU; the RTX remains unused. A capacity sample showed 4.1% CPU utilization
+while Apple GPU utilization was 100%, including other applications. Idle CPU alone
+does not prove inference is underutilizing the machine. At the owner's request,
+the new experiment explicitly compares CPU-only extras with Metal extras while
+the baseline remains on Metal. Grafana attributes completed photos to both backend
+and actual compute device, and shows CPU, GPU, memory pressure and system swap.
+
+still-fawn's original two-core limit was a conservative starting budget, not its
+hardware limit. Its host and Kubernetes VM expose four CPUs. The extra pod has a
+separate three-CPU ceiling and six GiB memory ceiling, with live one-, two- or
+three-lane CPU affinity. This permits measured increases without restarting the
+baseline; shared ceilings are not dedicated additional cores. VPA remains in
+recommendation mode and existing workload health is part of the experiment gate.
+
+The [replacement protocol](../experiments/waffles/2026-11-26-continuous-production.md)
+freezes the same 122 photos and classifier. It requires at least 9/13 reviewed
+Waffles matches, zero of 13 false positives, identical binary decisions, one
+attempt per job and no unplanned process exits. An append-only journal preserves
+settings, timestamps, throughput, latency, resource samples and unsuccessful trials.
+Production progress is recorded separately from repeated benchmark photos.
+Private photos and asset identifiers stay outside Git.
 
 ### Adding native hosts without moving their other workloads
 

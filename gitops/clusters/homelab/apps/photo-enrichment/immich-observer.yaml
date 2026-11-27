@@ -53,7 +53,7 @@ data:
     \ [method,suffix] of Object.values(states))batch[method](`immich_bull:${key}:${suffix}`);\n\
     \      lines.push(queueMetrics(await batch.exec()));queueUp=1;lastQueue=Date.now()/1000;\n\
     \    } catch {queueUp=0;}\n    try {\n      lines.push(recommendationMetrics(await\
-    \ Promise.all(['immich-server','immich-machine-learning','immich-pet-tagger','waffles-worker-pve','waffles-worker-still-fawn'].map(readVpa))));\n\
+    \ Promise.all(['immich-server','immich-machine-learning','immich-pet-tagger','waffles-worker-pve','waffles-worker-still-fawn','waffles-burst-pve','waffles-burst-still-fawn'].map(readVpa))));\n\
     \      vpaUp=1;lastVpa=Date.now()/1000;\n    } catch {vpaUp=0;}\n    lines.push('#\
     \ HELP immich_observer_source_up Whether the last collection succeeded.','# TYPE\
     \ immich_observer_source_up gauge',\n      `immich_observer_source_up{source=\"\
@@ -90,6 +90,8 @@ rules:
   - immich-pet-tagger
   - waffles-worker-pve
   - waffles-worker-still-fawn
+  - waffles-burst-pve
+  - waffles-burst-still-fawn
   verbs:
   - get
 ---
@@ -121,7 +123,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/config: 88734c787f6ba461601613e6a44a056e3afdaa1f84da4c0825ccc6f25e9b9ee2
+        checksum/config: a4dd1cfac0852df63d924352b3e7f3d32eb20f9bafb6c306fcfb4df54957eea8
     spec:
       serviceAccountName: immich-observer
       nodeSelector:

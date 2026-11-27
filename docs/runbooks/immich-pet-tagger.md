@@ -200,41 +200,55 @@ python3 scripts/immich-pet-tagger/check-backend-accuracy.py /private/holdout.jso
 python3 scripts/immich-pet-tagger/benchmark-report.py --holdout /private/holdout.json
 ```
 
-The live PostgreSQL concurrency test (`test-queue.mjs --postgres` inside the queue
-pod) was run before publishing the classifier. Do not rerun it while workers are
-claiming jobs: it inserts short-lived synthetic jobs with the real worker names.
+The current `test-postgres.py` runs the local queue implementation against unique
+scratch tables and a separate advisory-lock namespace. It verifies concurrent
+caps, fencing and baseline progress without changing production jobs or runs.
 
 ## Live tuning and experimental evidence
 
-Concurrency is a PostgreSQL setting, polled by lightweight supervisors every
-three seconds. Each inference process has an independent fenced claim and
-heartbeat. Decreasing concurrency sends a drain signal: finish the current photo,
-then unload models. Zero pauses that backend without changing run state. A
-per-backend database lock enforces the desired number of active claims even
-while processes are starting or draining. Routine tuning needs no redeployment.
+One permanent baseline process remains on every admitted backend: Mac uses
+Apple Metal; PVE, still-fawn and fun-bedbug use CPU. Chief-horse remains desired
+but guarded standby until memory headroom and its quality test permit admission.
+RTX remains unused. Baseline Kubernetes templates and the Mac LaunchAgent are
+preserved when deploying or tuning the separate extra-worker services.
+
+PostgreSQL stores extra capacity, compute device and CPU affinity. Supervisors
+poll every three seconds; decreases finish the current photo before unloading.
+Switching CPU/Metal drains only extra processes. Each pool has independent fenced
+claims; baseline processes prioritize production while extras can run benchmarks.
+Zero extra slots never stops the baseline. `tune WORKER N` means total desired
+processes, including the permanent one; N must be at least one.
 
 ```bash
 python3 scripts/immich-pet-tagger/distributed.py tuning
-python3 scripts/immich-pet-tagger/distributed.py tune mac 2 --note 'Measured concurrency trial'
-python3 scripts/immich-pet-tagger/distributed.py tune still-fawn 2 --note 'Measured concurrency trial'
-python3 scripts/immich-pet-tagger/distributed.py tune mac 0 --note 'Graceful backend pause'
+python3 scripts/immich-pet-tagger/distributed.py burst mac 3 --device cpu --mode benchmark --note 'CPU comparison'
+python3 scripts/immich-pet-tagger/distributed.py burst mac 3 --device mps --mode benchmark --note 'Metal comparison'
+python3 scripts/immich-pet-tagger/distributed.py burst still-fawn 2 --cpu-cores 3 --note 'Additional CPU lanes'
+python3 scripts/immich-pet-tagger/distributed.py burst mac 0 --note 'Drain extras; keep baseline'
+python3 scripts/immich-pet-tagger/test-postgres.py
 bash scripts/immich-pet-tagger/check-distributed.sh
 ```
 
-IaC bounds are Mac 0–4, still-fawn 0–2, and each other backend 0–1. These are
-experiment bounds, not claims that the maximum is fastest. Existing Kubernetes
-CPU/memory limits and native host guards still apply. The dashboard shows desired
-and active process counts separately; a guarded host can have desired 1, active 0.
+Safety bounds allow Mac 0–15 extras, still-fawn 0–3 and PVE 0–1. They are not
+measured optima. Mac model loading is staggered and refuses non-normal memory
+pressure. Extras drain on critical pressure or warning sustained for six seconds.
+still-fawn's extra pod has a separate 3-CPU/6-GiB ceiling; its baseline retains
+2 CPU/3 GiB. Those shared ceilings do not create five physical cores on its
+four-core host. Low CPU requests and nice priority favor existing workloads.
+Linux extra-worker affinity can change live across 1–3 CPU lanes without restarting
+the baseline. VPA stays in recommendation mode. Native-host capacity guards remain.
 
-The [preregistered protocol](../experiments/waffles/2026-11-26-live-tuning.md)
-defines the 122-photo sample, quality gates, counterbalanced order and selection
-rule. Its append-only JSONL journal records input hashes, UTC timestamps, settings,
-resource snapshots, failed trials and restoration. Run `experiment.py` with the
-private input directory to execute the bounded sweep. It pauses production,
-excludes warm-up, tests exact decisions and reviewed labels, and independently
-attempts every restoration before reporting an error. A killed machine cannot
-execute cleanup: inspect the journal's last production-pause entries and use
-`distributed.py state RUN running` if recovery is necessary.
+The [continuous-production protocol](../experiments/waffles/2026-11-26-continuous-production.md)
+compares CPU and Metal on the same 122 photos, with the 26 reviewed holdouts.
+`continuous-experiment.py PRIVATE_DIRECTORY` records settings, hashes, resource
+samples, production deltas, quality and every failure in an append-only journal.
+It never pauses production or changes baseline supervisors. Cleanup pauses only
+owned benchmark runs and restores extra-pool policy. On machine failure, drain
+extras with `burst WORKER 0`; production baseline workers remain independent.
+
+The earlier [isolated experiment](../experiments/waffles/2026-11-26-live-tuning-results.md)
+was interrupted when the continuous-baseline requirement was added. Its final
+combined comparison never ran; preliminary results are not a final speedup claim.
 
 ## Native hosts outside Kubernetes
 

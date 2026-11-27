@@ -76,6 +76,10 @@ def main() -> None:
     workers.add_argument('names', nargs='+', choices=['mac', 'pve', 'still-fawn', 'fun-bedbug', 'chief-horse'])
     tune=commands.add_parser('tune');tune.add_argument('worker',choices=['mac','pve','still-fawn','fun-bedbug','chief-horse'])
     tune.add_argument('slots',type=int);tune.add_argument('--note',default='Operator live tuning')
+    burst=commands.add_parser('burst');burst.add_argument('worker',choices=['mac','pve','still-fawn','fun-bedbug','chief-horse'])
+    burst.add_argument('slots',type=int);burst.add_argument('--mode',choices=['production','benchmark'],default='production');burst.add_argument('--note',default='Operator extra capacity')
+    burst.add_argument('--cpu-cores',type=int,help='Linux extra-worker CPU affinity count; baseline affinity is unchanged')
+    burst.add_argument('--device',choices=['cpu','mps'],help='Compute device for extra workers only; baseline device is unchanged')
     commands.add_parser('tuning')
     args = parser.parse_args()
     if args.command == 'export':
@@ -94,9 +98,12 @@ def main() -> None:
     elif args.command == 'workers':
         logging.info('%s', request('/admin/workers', {'id': args.id, 'workers': args.names}))
     elif args.command == 'tune':
-        logging.info('%s',request('/admin/tuning',{'worker':args.worker,'slots':args.slots,'note':args.note}))
+        if args.slots<1:raise ValueError('Keep one baseline worker; use burst WORKER 0 to drain extra workers')
+        logging.info('%s',request('/admin/burst',{'worker':args.worker,'slots':args.slots-1,'mode':'production','note':args.note}))
+    elif args.command == 'burst':
+        logging.info('%s',request('/admin/burst',{'worker':args.worker,'slots':args.slots,'mode':args.mode,'note':args.note,**({'cpu_cores':args.cpu_cores} if args.cpu_cores is not None else {}),**({'device':args.device} if args.device else {})}))
     elif args.command == 'tuning':
-        logging.info('%s',json.dumps(request('/api/tuning'),indent=2))
+        logging.info('%s',json.dumps({'baseline':request('/api/tuning'),'extra':request('/api/burst')},indent=2))
     else:
         data = request('/admin/status')
         if args.compact:

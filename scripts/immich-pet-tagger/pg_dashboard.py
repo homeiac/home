@@ -44,7 +44,7 @@ def dashboard():
     panel('Remaining',[(remaining,'Awaiting completion')],4,0)
     panel('Processed / total',[(f'100*({done})/({total})','Complete')],8,0,unit='percent')['fieldConfig']['defaults']['decimals']=2
     panel('Failed photos',[(jobs('failed'),'Exhausted retries')],12,0)
-    panel('Estimated time remaining',[(f'({remaining}) / (({rate()})/60 > 0)','At recent pace')],16,0,unit='s',description='Pending, in-flight and awaiting-write jobs divided by five-minute committed throughput. Unavailable until progress is measurable; not a deadline.')
+    panel('Estimated time remaining',[(f'(({remaining}) / (({rate()})/60 > 0)) and on() (max(waffles_run_state{{run="$run"}})==1)','At recent pace')],16,0,unit='s',description='Pending, in-flight and awaiting-write jobs divided by five-minute committed throughput. Unavailable while paused or until progress is measurable; not a deadline.')
     panel('Queue report age', [('time()-max(waffles_queue_report_timestamp_seconds)','Telemetry age')],20,0,unit='s')
     for x,worker in enumerate(WORKERS):
         panel(worker+' · processed',[(jobs('complete',worker),'Photos'),(f'100*({jobs("complete",worker)})/clamp_min(({done}),1)','Share (%)')],x*4,4,w=4)
@@ -52,7 +52,7 @@ def dashboard():
 
     workers = WORKERS
     nodes = [('queue','PostgreSQL','Durable job queue',total,average()),
-             *[(w,{'mac':'Mac · Metal','pve':'PVE · CPU','still-fawn':'still-fawn · CPU','fun-bedbug':'fun-bedbug · native','chief-horse':'chief-horse · native'}[w],'Processed photos',jobs('complete',w),average(w)) for w in workers],
+             *[(w,{'mac':'Mac · Apple Silicon','pve':'PVE · CPU','still-fawn':'still-fawn · CPU','fun-bedbug':'fun-bedbug · native','chief-horse':'chief-horse · native'}[w],'Processed photos',jobs('complete',w),average(w)) for w in workers],
              ('committed','Committed results','Processed photos',done,average())]
     queries = {
         'nodes': ' or '.join(label(f'({value}) or vector(0/0)',id=key,title=title,subtitle=subtitle) for key,title,subtitle,value,_ in nodes),
@@ -81,10 +81,10 @@ def dashboard():
     panel('Active / desired processes',[(live(f'max(waffles_worker_{kind}_instances{{worker="{w}"}})'),w+' '+kind) for w in workers for kind in ['active','desired']],0,36,w=8)
     panel('Waffles face assignments added',[(live('sum(waffles_assignments{run="$run"}) or vector(0)'),'New assignments')],8,36,w=8)
     panel('Awaiting Immich writes',[(jobs('classified'),'Classified photos')],16,36,w=8)
-    panel('Kubernetes worker CPU', [('sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilot",container="worker",pod=~"waffles-worker-.*"}[5m]))','{{pod}}')],0,40,w=12,h=7,kind='timeseries',unit='cores')['fieldConfig']['defaults']['decimals']=2
+    panel('Kubernetes worker CPU', [('sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilot",container="worker",pod=~"waffles-(worker|burst)-.*"}[5m]))','{{pod}}')],0,40,w=12,h=7,kind='timeseries',unit='cores')['fieldConfig']['defaults']['decimals']=2
     panel('Worker memory · process high-water mark', [('waffles_worker_rss_bytes','{{worker}}')],12,40,w=12,h=7,kind='timeseries',unit='bytes',description='Process peak resident memory, not current working set. Mac accelerator allocations may not all be included.')
     for x,resource,unit in [(0,'cpu','cores'),(12,'memory','bytes')]:
-        panel('VPA recommended '+resource,[('immich_vpa_recommendation{workload=~"waffles-worker-.*",bound="target",resource="'+resource+'"}','{{workload}}')],x,47,w=12,h=7,kind='timeseries',unit=unit,description='Recommendation mode (Off). VPA does not resize or evict backfill workers. Mac is a native worker and has no VPA.')
+        panel('VPA recommended '+resource,[('immich_vpa_recommendation{workload=~"waffles-(worker|burst)-.*",bound="target",resource="'+resource+'"}','{{workload}}')],x,47,w=12,h=7,kind='timeseries',unit=unit,description='Recommendation mode (Off). VPA does not resize or evict backfill workers. Mac is a native worker and has no VPA.')
     for x,profile in [(0,'before'),(12,'after')]:
         expr=f'60 * sum by(run)(waffles_jobs{{run=~"{profile}-[12]",state="complete"}}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{{run=~"{profile}-[12]"}})-max by(run)(waffles_run_started_timestamp_seconds{{run=~"{profile}-[12]"}}))'
         panel(profile.title()+' · matched sample photos/min',[(expr,'{{run}}')],x,54,w=12,description='Same 96 photos, ABBA order, reversed second pass. Before: still-fawn alone. After: Mac + PVE + still-fawn. Model warmup excluded. Benchmark mode never writes faces.')['fieldConfig']['defaults']['decimals']=2
@@ -95,9 +95,17 @@ def dashboard():
     for p in panels:
         if p['gridPos']['y']>=22:p['gridPos']['y']+=6
     for x,profile in [(0,'before'),(12,'after')]:
-        pattern=f'tune-.*-pool-{profile}-[ab]'
+        pattern=f'burst-.*-pool-{profile}-[ab]'
         expr=f'60 * sum by(run)(waffles_jobs{{run=~"{pattern}",state="complete"}}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{{run=~"{pattern}"}})-max by(run)(waffles_run_started_timestamp_seconds{{run=~"{pattern}"}}))'
-        panel('Live tuning '+profile+' · photos/min',[(expr,'{{run}}')],x,72,w=12,h=5,description='Preregistered concurrency experiment. Same frozen chronological sample plus reviewed holdouts; ABBA order. Before: one process on each of Mac, PVE and still-fawn. After: measured winning concurrency. See the experiment journal for quality gates and failed trials.')['fieldConfig']['defaults']['decimals']=2
+        panel('Extra capacity '+profile+' · photos/min',[(expr,'{{run}}')],x,72,w=12,h=5,description='Continuous-production experiment on the same frozen sample plus reviewed holdouts. Baseline workers keep processing real jobs. Before: one extra Mac and still-fawn worker. After: selected extra capacity. No result is shown until that comparison actually completes. See the journal for quality gates and failed trials.')['fieldConfig']['defaults']['decimals']=2
+    panel('Baseline production processes',[(live(f'max(waffles_pool_active_instances{{worker="{w}",pool="base"}})'),w) for w in workers],0,77,w=12,h=5,description='Permanent production workers. Tuning affects the separate extra-worker pool. Chief-horse remains guarded standby until capacity and quality validation permit admission.')
+    panel('Extra processes · active / desired',[(live(f'max(waffles_pool_{kind}_instances{{worker="{w}",pool="burst"}})'),w+' '+kind) for w in workers[:3] for kind in ['active','desired']],12,77,w=12,h=5)
+    panel('Mac host CPU and Apple GPU utilization',[(live('max(waffles_mac_'+name+'_percent) and on() (time()-max(waffles_mac_report_timestamp_seconds)<60)'),name.upper()) for name in ['cpu','gpu']],0,82,w=12,h=7,kind='timeseries',unit='percent',description='Whole-Mac utilization, including other applications. Model inference uses Metal; CPU utilization alone does not measure accelerator load.')
+    panel('Extra Mac workers · accelerator allocations',[('sum(waffles_instance_accelerator_bytes{worker="mac"})','Metal driver allocations')],12,82,w=12,h=7,kind='timeseries',unit='bytes',description='Sum of reported MPS driver allocations for extra workers only. May overlap RSS; do not add it to RSS as total physical memory.')
+    panel('Mac memory pressure',[(live('max(waffles_mac_pressure) and on() (time()-max(waffles_mac_report_timestamp_seconds)<60)'),'OS pressure level')],0,89,w=12,description='1 normal, 2 warning, 4 critical. Extra workers refuse startup outside normal pressure and drain on sustained warning or critical pressure.')
+    panel('Mac system swap used',[(live('max(waffles_mac_swap_bytes) and on() (time()-max(waffles_mac_report_timestamp_seconds)<60)'),'All applications')],12,89,w=12,unit='bytes')
+    panel('Mac processed photos · CPU versus Metal',[(live(f'sum(waffles_device_jobs{{run="$run",worker="mac",device="{device}"}}) or vector(0)'),name) for device,name in [('cpu','CPU'),('mps','Metal')]],0,93,w=12,h=5,description='Committed results for the selected run, attributed to the actual inference device. Baseline remains Metal; extra workers can use CPU or Metal.')
+    panel('Processed photos · baseline versus extra',[(live('sum by(worker,pool)(waffles_device_jobs{run="$run"})'),'{{worker}} · {{pool}}')],12,93,w=12,h=5)
     return {'uid':'immich-waffles','title':'Waffles · Immich Pet Tagger','schemaVersion':39,'version':2,'editable':False,'tags':['immich','waffles','pets','gitops'],
             'timezone':'utc','refresh':'15s','time':{'from':'now-1h','to':'now'},
             'templating':{'list':[{'name':'run','label':'Run','type':'query','datasource':DS,'query':'label_values(waffles_run_state, run)','refresh':1,'sort':1,'current':{'text':'historical-waffles','value':'historical-waffles'}}]},

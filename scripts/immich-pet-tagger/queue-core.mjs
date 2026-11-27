@@ -1,35 +1,49 @@
 // Fenced claims adapted from photo_enrichment/postgres.py; inference is outside transactions.
 import crypto from 'node:crypto';
 export const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];
-export const SLOT_LIMITS={mac:4,pve:1,'still-fawn':2,'fun-bedbug':1,'chief-horse':1};
+export const SLOT_LIMITS={mac:1,pve:1,'still-fawn':1,'fun-bedbug':1,'chief-horse':1};
+export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};
+export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};
 export const CLAIM_SQL=`WITH candidate AS (
  SELECT j.run_id,j.asset_id FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id
  WHERE r.state='running' AND $1=ANY(r.workers)
+ AND r.mode=CASE WHEN $3='base' THEN
+   CASE WHEN EXISTS(SELECT 1 FROM waffles.runs prod WHERE prod.mode='production' AND prod.state='running' AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END
+   ELSE coalesce((SELECT value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END
  AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND j.lease_until<now()))
  AND j.attempts<4
- AND (SELECT count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.status='running' AND active.lease_until>now())
-     < coalesce((SELECT (value->$1->>'slots')::int FROM waffles.settings WHERE key='tuning'),1)
+ AND (SELECT count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.pool=$3 AND active.status='running' AND active.lease_until>now())
+     < CASE WHEN $3='base' THEN 1 ELSE coalesce((SELECT (value->$1->>'slots')::int FROM waffles.settings WHERE key='burst'),0) END
  ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)
- UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1
+ UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,lease_until=now()+interval '90 seconds',attempts=attempts+1
  FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*,
  (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;
 
-export async function claim(pool,worker) {
+export async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu') {
   if(!WORKERS.includes(worker))throw Error('Invalid worker');
+  if(!['base','burst'].includes(lane))throw Error('Invalid worker pool');
+  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw Error('Invalid device');
   const db=await pool.connect();
   try {
     await db.query('BEGIN');
     // Separate statements ensure a fresh READ COMMITTED snapshot after waiting
     // for the per-backend lock. Concurrent processes cannot exceed live slots.
     await db.query("SELECT pg_advisory_xact_lock(244,hashtext($1))",[worker]);
-    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;
+    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device])).rows[0]??null;
     await db.query('COMMIT');return job;
   }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
 }
 
 export function validateTuning(worker,slots) {
-  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>SLOT_LIMITS[worker])throw Error('Invalid worker slot limit');
+  if(!WORKERS.includes(worker)||slots!==1)throw Error('Baseline workers must remain at one');
   return {slots};
+}
+
+export function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu') {
+  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>BURST_LIMITS[worker]||!['production','benchmark'].includes(mode))throw Error('Invalid burst policy');
+  if(!Number.isInteger(cpu)||cpu<(BURST_CPU_LIMITS[worker]?1:0)||cpu>BURST_CPU_LIMITS[worker])throw Error('Invalid burst CPU parallelism');
+  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw Error('Invalid burst compute device');
+  return {slots,mode,cpu_cores:cpu,device};
 }
 
 export function validateResult(value) {

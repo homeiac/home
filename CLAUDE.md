@@ -383,6 +383,11 @@ concurrency, pause/drain controls, persisted runtime policy, hard resource bound
 and desired-versus-active telemetry. Routine tuning must not require redeployment
 or lose in-flight work. Keep defaults and safety bounds in IaC.
 
+Maintain a baseline production worker on every eligible node while tuning extra
+capacity. Baseline and extra-worker lifecycles must be separate. Experiments may
+drain extra workers but must not pause the whole production queue. Record guarded
+standby honestly when a node lacks resources or has not passed quality validation.
+
 Optimize by pushing measured throughput while preserving quality. Before trials,
 record hypotheses, fixed input hashes, settings, acceptance criteria, and resource
 conditions in a timestamped experiment journal. Record every change, raw aggregate

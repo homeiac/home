@@ -8,3 +8,4 @@ resources:
 - dashboard.yaml
 - queue-credentials.sops.yaml
 - distributed.yaml
+- baseline.yaml

@@ -21,7 +21,7 @@ def obj(kind, name, namespace='immich-pilot', api='v1', **values):
 
 
 def resources():
-    files = {name: (HERE / name).read_text() for name in ['schema.sql', 'bootstrap.mjs', 'queue-core.mjs', 'coordinator.mjs', 'discovery.mjs', 'distributed-worker.py', 'supervisor.py', 'test-queue.mjs']}
+    files = {name: (HERE / name).read_text() for name in ['schema.sql', 'bootstrap.mjs', 'queue-core.mjs', 'coordinator.mjs', 'discovery.mjs', 'distributed-worker.py', 'supervisor.py', 'burst-worker.py', 'burst-supervisor.py', 'burst_guard.py', 'test-queue.mjs']}
     digest = hashlib.sha256(''.join(files.values()).encode()).hexdigest()
     for namespace in ('database', 'immich-pilot'):
         yield obj('ConfigMap', 'waffles-code', namespace, data=files)
@@ -31,7 +31,7 @@ def resources():
     container = {'name': 'queue', 'image': NODE_IMAGE, 'securityContext': CONTAINER_SECURITY,
                  'volumeMounts': [{'name': 'code', 'mountPath': '/code', 'readOnly': True}],
                  'resources': {'requests': {'cpu': '25m', 'memory': '64Mi'}, 'limits': {'cpu': '500m', 'memory': '256Mi'}}}
-    yield obj('Job', 'waffles-schema-v2', 'database', api='batch/v1', spec={'backoffLimit': 3, 'template': {'spec': {
+    yield obj('Job', 'waffles-schema-v3', 'database', api='batch/v1', spec={'backoffLimit': 3, 'template': {'spec': {
         **base, 'restartPolicy': 'Never', 'containers': [{**container, 'command': ['node', '/code/bootstrap.mjs'],
          'env': pg + [env('PGUSER', 'postgres'), env('PGPASSWORD', secret='postgres-credentials', key='postgres-password'), env('ROLE_PASSWORD', secret='waffles-queue', key='password')]}]}}})
     app = {'app': 'waffles-queue'}
@@ -54,9 +54,11 @@ def resources():
     yield obj('IngressRoute', 'waffles-queue', api='traefik.io/v1alpha1', spec={'entryPoints': ['websecure'], 'routes': [{
         'match': 'Host(`pets-queue.app.home.panderosystems.com`)', 'kind': 'Rule', 'middlewares': [{'name': 'private'}],
         'services': [{'name': 'waffles-queue', 'port': 9200}]}], 'tls': {}})
-    for worker, cpu, memory in [('still-fawn', '2', '3Gi'), ('pve', '1', '1536Mi')]:
-        name = 'waffles-worker-' + worker
-        labels = {'app': name, 'waffles-worker': worker}
+    # Baseline pods are preserved verbatim in baseline.yaml. Only additional
+    # capacity rolls when this generated burst controller changes.
+    for worker, cpu, memory in [('still-fawn', '3', '6Gi'), ('pve', '1', '1536Mi')]:
+        name = 'waffles-burst-' + worker
+        labels = {'app': name, 'waffles-worker': worker, 'waffles-pool': 'burst'}
         pvc = obj('PersistentVolumeClaim', name, spec={'accessModes': ['ReadWriteOnce'], 'storageClassName': 'local-path', 'resources': {'requests': {'storage': '3Gi'}}})
         pvc['metadata']['annotations'] = {'kustomize.toolkit.fluxcd.io/prune': 'disabled'}
         yield pvc
@@ -64,18 +66,18 @@ def resources():
             'template': {'metadata': {'labels': labels, 'annotations': {'checksum/code': digest}}, 'spec': {**base,
                 'nodeSelector': {'kubernetes.io/hostname': 'k3s-vm-' + worker},
                 'terminationGracePeriodSeconds': 90,
-                'containers': [{'name': 'worker', 'image': CPU_IMAGE, 'command': ['python', '-B', '/code/supervisor.py'],
+                'containers': [{'name': 'worker', 'image': CPU_IMAGE, 'command': ['python', '-B', '/code/burst-supervisor.py'],
                     'env': [env('QUEUE_URL', 'http://waffles-queue.immich-pilot.svc.cluster.local:9200'), env('WORKER_NAME', worker),
                             env('WORKER_TOKEN_FILE', '/credentials/worker-token'), env('MODEL_WORKERS', '1'), env('SCAN_WORKERS', '1'),
-                            env('OMP_NUM_THREADS', cpu), env('MKL_NUM_THREADS', cpu), env('OPENBLAS_NUM_THREADS', cpu)],
-                    'resources': {'requests': {'cpu': '500m', 'memory': '1Gi'}, 'limits': {'cpu': cpu, 'memory': memory}},
+                            env('OMP_NUM_THREADS', '2'), env('MKL_NUM_THREADS', '2'), env('OPENBLAS_NUM_THREADS', '2')],
+                    'resources': {'requests': {'cpu': '100m', 'memory': '512Mi'}, 'limits': {'cpu': cpu, 'memory': memory}},
                     'securityContext': CONTAINER_SECURITY,
                     'volumeMounts': [{'name': 'code', 'mountPath': '/code', 'readOnly': True}, {'name': 'data', 'mountPath': '/data'},
                                      {'name': 'credentials', 'mountPath': '/credentials', 'readOnly': True}, {'name': 'tmp', 'mountPath': '/tmp'}]}],
                 'volumes': base['volumes'] + [{'name': 'data', 'persistentVolumeClaim': {'claimName': name}},
                                             {'name': 'credentials', 'secret': {'secretName': 'waffles-queue', 'items': [{'key': 'worker-token', 'path': 'worker-token'}]}},
                                             {'name': 'tmp', 'emptyDir': {'sizeLimit': '256Mi'}}]}}})
-    for name, container_name, cpu, memory in [('immich-pet-tagger', 'tagger', '2', '4Gi'), ('waffles-worker-still-fawn', 'worker', '2', '3Gi'), ('waffles-worker-pve', 'worker', '1', '1536Mi')]:
+    for name, container_name, cpu, memory in [('immich-pet-tagger', 'tagger', '2', '4Gi'), ('waffles-burst-still-fawn', 'worker', '3', '6Gi'), ('waffles-burst-pve', 'worker', '1', '1536Mi')]:
         yield obj('VerticalPodAutoscaler', name, api='autoscaling.k8s.io/v1', spec={
             'targetRef': {'apiVersion': 'apps/v1', 'kind': 'Deployment', 'name': name},
             'updatePolicy': {'updateMode': 'Off'}, 'resourcePolicy': {'containerPolicies': [{

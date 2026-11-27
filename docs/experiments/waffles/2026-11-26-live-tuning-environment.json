@@ -1,0 +1,93 @@
+{
+  "observed_at": "2026-11-27T05:06:46.967739+00:00",
+  "mac": {
+    "machdep.cpu.brand_string": "Apple M5 Pro",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18",
+    "hw.memsize": "51539607552",
+    "os_version": "27.2.1",
+    "runtime": {
+      "python": "3.12.14",
+      "torch": "2.7.0",
+      "ultralytics": "8.4.118",
+      "scikit-learn": "1.5.2",
+      "open_clip_torch": "2.26.1",
+      "numpy": "2.5.4"
+    }
+  },
+  "hypervisors": {
+    "still-fawn": {
+      "cpu_model": "Intel(R) Core(TM) i5-4460  CPU @ 3.20GHz",
+      "logical_cpus": 4,
+      "memory_bytes": 33493409792,
+      "kernel": "6.8.12-9-pve"
+    },
+    "pve": {
+      "observation_error": "SSH observation unavailable",
+      "exit_code": 255
+    },
+    "fun-bedbug": {
+      "cpu_model": "AMD A9-9400 RADEON R5, 5 COMPUTE CORES 2C+3G",
+      "logical_cpus": 2,
+      "memory_bytes": 7750885376,
+      "kernel": "6.8.12-10-pve"
+    },
+    "chief-horse": {
+      "cpu_model": "Intel(R) Core(TM) i3-4010U CPU @ 1.70GHz",
+      "logical_cpus": 4,
+      "memory_bytes": 8221466624,
+      "kernel": "6.8.12-8-pve"
+    }
+  },
+  "kubernetes_nodes": {
+    "k3s-vm-pve": {
+      "capacity": {
+        "cpu": "2",
+        "ephemeral-storage": "49691512Ki",
+        "hugepages-1Gi": "0",
+        "hugepages-2Mi": "0",
+        "memory": "4009852Ki",
+        "pods": "110"
+      },
+      "allocatable": {
+        "cpu": "2",
+        "ephemeral-storage": "48339902836",
+        "hugepages-1Gi": "0",
+        "hugepages-2Mi": "0",
+        "memory": "4009852Ki",
+        "pods": "110"
+      },
+      "runtime": {
+        "architecture": "amd64",
+        "kernelVersion": "6.8.0-136-generic",
+        "kubeletVersion": "v1.35.0+k3s1",
+        "containerRuntimeVersion": "containerd://2.1.5-k3s1"
+      }
+    },
+    "k3s-vm-still-fawn": {
+      "capacity": {
+        "cpu": "4",
+        "ephemeral-storage": "709919972Ki",
+        "hugepages-1Gi": "0",
+        "hugepages-2Mi": "0",
+        "memory": "25642144Ki",
+        "pods": "110"
+      },
+      "allocatable": {
+        "cpu": "4",
+        "ephemeral-storage": "690610148220",
+        "hugepages-1Gi": "0",
+        "hugepages-2Mi": "0",
+        "memory": "25642144Ki",
+        "pods": "110"
+      },
+      "runtime": {
+        "architecture": "amd64",
+        "kernelVersion": "6.8.0-136-generic",
+        "kubeletVersion": "v1.35.0+k3s1",
+        "containerRuntimeVersion": "containerd://2.1.5-k3s1"
+      }
+    }
+  },
+  "note": "Read-only provenance observation captured during the experiment. Resource envelopes were fixed by the preregistered protocol; this observation made no configuration changes."
+}

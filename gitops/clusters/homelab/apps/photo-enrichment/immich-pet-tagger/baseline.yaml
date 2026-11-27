@@ -1,0 +1,271 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: waffles-worker-still-fawn
+  namespace: immich-pilot
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: waffles-worker-still-fawn
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: &id001
+      app: waffles-worker-still-fawn
+      waffles-worker: still-fawn
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - name: code
+        configMap:
+          name: waffles-code
+      - name: data
+        persistentVolumeClaim:
+          claimName: waffles-worker-still-fawn
+      - name: credentials
+        secret:
+          secretName: waffles-queue
+          items:
+          - key: worker-token
+            path: worker-token
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      terminationGracePeriodSeconds: 90
+      containers:
+      - name: worker
+        image: ghcr.io/tedornitier/immich-pet-tagger:v1.10.0-cpu@sha256:535b4664511db709b1069a7eac789339af05264585511feeea24f68430edf7e6
+        command:
+        - python
+        - -B
+        - /code/supervisor.py
+        env:
+        - name: QUEUE_URL
+          value: http://waffles-queue.immich-pilot.svc.cluster.local:9200
+        - name: WORKER_NAME
+          value: still-fawn
+        - name: WORKER_TOKEN_FILE
+          value: /credentials/worker-token
+        - name: MODEL_WORKERS
+          value: '1'
+        - name: SCAN_WORKERS
+          value: '1'
+        - name: OMP_NUM_THREADS
+          value: '2'
+        - name: MKL_NUM_THREADS
+          value: '2'
+        - name: OPENBLAS_NUM_THREADS
+          value: '2'
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: '2'
+            memory: 3Gi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: code
+          mountPath: /code
+          readOnly: true
+        - name: data
+          mountPath: /data
+        - name: credentials
+          mountPath: /credentials
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: waffles-worker-pve
+  namespace: immich-pilot
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: waffles-worker-pve
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: &id001
+      app: waffles-worker-pve
+      waffles-worker: pve
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - name: code
+        configMap:
+          name: waffles-code
+      - name: data
+        persistentVolumeClaim:
+          claimName: waffles-worker-pve
+      - name: credentials
+        secret:
+          secretName: waffles-queue
+          items:
+          - key: worker-token
+            path: worker-token
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-pve
+      terminationGracePeriodSeconds: 90
+      containers:
+      - name: worker
+        image: ghcr.io/tedornitier/immich-pet-tagger:v1.10.0-cpu@sha256:535b4664511db709b1069a7eac789339af05264585511feeea24f68430edf7e6
+        command:
+        - python
+        - -B
+        - /code/supervisor.py
+        env:
+        - name: QUEUE_URL
+          value: http://waffles-queue.immich-pilot.svc.cluster.local:9200
+        - name: WORKER_NAME
+          value: pve
+        - name: WORKER_TOKEN_FILE
+          value: /credentials/worker-token
+        - name: MODEL_WORKERS
+          value: '1'
+        - name: SCAN_WORKERS
+          value: '1'
+        - name: OMP_NUM_THREADS
+          value: '1'
+        - name: MKL_NUM_THREADS
+          value: '1'
+        - name: OPENBLAS_NUM_THREADS
+          value: '1'
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: '1'
+            memory: 1536Mi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: code
+          mountPath: /code
+          readOnly: true
+        - name: data
+          mountPath: /data
+        - name: credentials
+          mountPath: /credentials
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: waffles-worker-still-fawn
+  namespace: immich-pilot
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: waffles-worker-still-fawn
+  updatePolicy:
+    updateMode: 'Off'
+  resourcePolicy:
+    containerPolicies:
+    - containerName: worker
+      controlledResources:
+      - cpu
+      - memory
+      controlledValues: RequestsOnly
+      minAllowed:
+        cpu: 100m
+        memory: 256Mi
+      maxAllowed:
+        cpu: '2'
+        memory: 3Gi
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: waffles-worker-pve
+  namespace: immich-pilot
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: waffles-worker-pve
+  updatePolicy:
+    updateMode: 'Off'
+  resourcePolicy:
+    containerPolicies:
+    - containerName: worker
+      controlledResources:
+      - cpu
+      - memory
+      controlledValues: RequestsOnly
+      minAllowed:
+        cpu: 100m
+        memory: 256Mi
+      maxAllowed:
+        cpu: '1'
+        memory: 1536Mi

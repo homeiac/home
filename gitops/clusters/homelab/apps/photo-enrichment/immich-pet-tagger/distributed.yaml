@@ -31,7 +31,20 @@ data:
     \ NOT NULL DEFAULT ''\n);\nINSERT INTO waffles.settings(key,value) VALUES('tuning',\n\
     \ '{\"mac\":{\"slots\":1},\"pve\":{\"slots\":1},\"still-fawn\":{\"slots\":1},\"\
     fun-bedbug\":{\"slots\":1},\"chief-horse\":{\"slots\":1}}')\n ON CONFLICT(key)\
-    \ DO NOTHING;\n"
+    \ DO NOTHING;\nALTER TABLE waffles.jobs ADD COLUMN IF NOT EXISTS pool text NOT\
+    \ NULL DEFAULT 'base';\nALTER TABLE waffles.jobs ADD COLUMN IF NOT EXISTS device\
+    \ text;\nUPDATE waffles.jobs SET device=CASE WHEN worker='mac' THEN 'mps' ELSE\
+    \ 'cpu' END WHERE worker IS NOT NULL AND device IS NULL;\nCREATE INDEX IF NOT\
+    \ EXISTS waffles_active_pool ON waffles.jobs(worker,pool) WHERE status='running';\n\
+    ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT\
+    \ 'base';\nALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS cpu_seconds\
+    \ double precision NOT NULL DEFAULT 0;\nALTER TABLE waffles.instances ADD COLUMN\
+    \ IF NOT EXISTS accelerator_bytes bigint NOT NULL DEFAULT 0;\nALTER TABLE waffles.instances\
+    \ ADD COLUMN IF NOT EXISTS cpu_affinity integer;\nINSERT INTO waffles.settings(key,value)\
+    \ VALUES('burst',\n '{\"mac\":{\"slots\":0,\"mode\":\"production\"},\"pve\":{\"\
+    slots\":0,\"mode\":\"production\"},\"still-fawn\":{\"slots\":0,\"mode\":\"production\"\
+    },\"fun-bedbug\":{\"slots\":0,\"mode\":\"production\"},\"chief-horse\":{\"slots\"\
+    :0,\"mode\":\"production\"}}')\n ON CONFLICT(key) DO NOTHING;\n"
   bootstrap.mjs: "// Same scoped-role bootstrap pattern as immich_sync/bootstrap.mjs\
     \ (#217).\nimport {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
@@ -50,32 +63,44 @@ data:
     } finally {await db.end();}\n"
   queue-core.mjs: "// Fenced claims adapted from photo_enrichment/postgres.py; inference\
     \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];\n\
-    export const SLOT_LIMITS={mac:4,pve:1,'still-fawn':2,'fun-bedbug':1,'chief-horse':1};\n\
+    export const SLOT_LIMITS={mac:1,pve:1,'still-fawn':1,'fun-bedbug':1,'chief-horse':1};\n\
+    export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
+    export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
     export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
     \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
-    \ AND $1=ANY(r.workers)\n AND ((j.status='pending' AND j.available_at<=now())\
-    \ OR (j.status='running' AND j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT\
-    \ count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.status='running'\
-    \ AND active.lease_until>now())\n     < coalesce((SELECT (value->$1->>'slots')::int\
-    \ FROM waffles.settings WHERE key='tuning'),1)\n ORDER BY r.created_at,j.ordinal\
-    \ FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval\
+    \ AND $1=ANY(r.workers)\n AND r.mode=CASE WHEN $3='base' THEN\n   CASE WHEN EXISTS(SELECT\
+    \ 1 FROM waffles.runs prod WHERE prod.mode='production' AND prod.state='running'\
+    \ AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END\n   ELSE coalesce((SELECT\
+    \ value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END\n\
+    \ AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND\
+    \ j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT count(*) FROM waffles.jobs\
+    \ active WHERE active.worker=$1 AND active.pool=$3 AND active.status='running'\
+    \ AND active.lease_until>now())\n     < CASE WHEN $3='base' THEN 1 ELSE coalesce((SELECT\
+    \ (value->$1->>'slots')::int FROM waffles.settings WHERE key='burst'),0) END\n\
+    \ ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE\
+    \ waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,lease_until=now()+interval\
     \ '90 seconds',attempts=attempts+1\n FROM candidate c WHERE j.run_id=c.run_id\
     \ AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT config FROM waffles.runs\
-    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker) {\n\
-    \  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  const db=await\
-    \ pool.connect();\n  try {\n    await db.query('BEGIN');\n    // Separate statements\
-    \ ensure a fresh READ COMMITTED snapshot after waiting\n    // for the per-backend\
-    \ lock. Concurrent processes cannot exceed live slots.\n    await db.query(\"\
-    SELECT pg_advisory_xact_lock(244,hashtext($1))\",[worker]);\n    const job=(await\
-    \ db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n    await\
-    \ db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
+    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu')\
+    \ {\n  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  if(!['base','burst'].includes(lane))throw\
+    \ Error('Invalid worker pool');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
+    \ Error('Invalid device');\n  const db=await pool.connect();\n  try {\n    await\
+    \ db.query('BEGIN');\n    // Separate statements ensure a fresh READ COMMITTED\
+    \ snapshot after waiting\n    // for the per-backend lock. Concurrent processes\
+    \ cannot exceed live slots.\n    await db.query(\"SELECT pg_advisory_xact_lock(244,hashtext($1))\"\
+    ,[worker]);\n    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device])).rows[0]??null;\n\
+    \    await db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
     \ e;}finally{db.release();}\n}\n\nexport function validateTuning(worker,slots)\
-    \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>SLOT_LIMITS[worker])throw\
-    \ Error('Invalid worker slot limit');\n  return {slots};\n}\n\nexport function\
-    \ validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds) || value.seconds<0\
-    \ || value.seconds>3600)throw Error('Invalid duration');\n  if(!Array.isArray(value.matches)\
-    \ || value.matches.length>100)throw Error('Invalid matches');\n  if(!Array.isArray(value.size)\
-    \ || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
+    \ {\n  if(!WORKERS.includes(worker)||slots!==1)throw Error('Baseline workers must\
+    \ remain at one');\n  return {slots};\n}\n\nexport function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu')\
+    \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>BURST_LIMITS[worker]||!['production','benchmark'].includes(mode))throw\
+    \ Error('Invalid burst policy');\n  if(!Number.isInteger(cpu)||cpu<(BURST_CPU_LIMITS[worker]?1:0)||cpu>BURST_CPU_LIMITS[worker])throw\
+    \ Error('Invalid burst CPU parallelism');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
+    \ Error('Invalid burst compute device');\n  return {slots,mode,cpu_cores:cpu,device};\n\
+    }\n\nexport function validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds)\
+    \ || value.seconds<0 || value.seconds>3600)throw Error('Invalid duration');\n\
+    \  if(!Array.isArray(value.matches) || value.matches.length>100)throw Error('Invalid\
+    \ matches');\n  if(!Array.isArray(value.size) || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
     \ Error('Invalid size');\n  for(const match of value.matches) {\n    if(!Number.isFinite(match.probability)||match.probability<0.9||match.probability>1)throw\
     \ Error('Invalid confidence');\n    const b=match.box;\n    if(!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)||v<0||v>1)||b[0]>=b[2]||b[1]>=b[3])throw\
     \ Error('Invalid box');\n  }\n  for(const key of ['unknown','low_confidence','out_of_range'])\n\
@@ -93,8 +118,8 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS,SLOT_LIMITS,validateTuning} from './queue-core.mjs';\n\
-    import {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
+    \ {claim,finish,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst}\
+    \ from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
     const workerToken=process.env.WORKER_TOKEN,adminToken=process.env.ADMIN_TOKEN;\n\
@@ -142,13 +167,19 @@ data:
     \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
     \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
     \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
-    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const instances=(await pool.query(\"\
-    SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.instances\
-    \ WHERE reported_at>now()-interval '60 seconds'\")).rows;\n    const tuning=(await\
-    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='tuning'\")).rows[0]?.value??{};\n\
-    \    await pool.query(\"DELETE FROM waffles.instances WHERE reported_at<now()-interval\
-    \ '7 days'\");\n    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
+    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const devices=(await pool.query(\"\
+    SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs\
+    \ FROM waffles.jobs WHERE status='complete' GROUP BY run_id,worker,pool,device\"\
+    )).rows;\n    const instances=(await pool.query(\"SELECT *,extract(epoch FROM\
+    \ reported_at)::float8 reported FROM waffles.instances WHERE reported_at>now()-interval\
+    \ '60 seconds'\")).rows;\n    const burst=(await pool.query(\"SELECT value FROM\
+    \ waffles.settings WHERE key='burst'\")).rows[0]?.value??{};\n    await pool.query(\"\
+    DELETE FROM waffles.instances WHERE reported_at<now()-interval '7 days'\");\n\
+    \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
+    \    for(const row of devices)lines.push(metric('device_jobs',row.jobs,{run:row.run_id,worker:row.worker,pool:row.pool,device:row.device}));\n\
+    \    const mac=(await pool.query(\"SELECT value FROM waffles.settings WHERE key='mac-observation'\"\
+    )).rows[0]?.value;\n    if(mac)for(const [name,value] of Object.entries(mac))lines.push(metric('mac_'+name,value));\n\
     \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
     \ key='discovery'\")).rows[0]?.value;\n    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));\n\
     \    if(discovery?.last_success)lines.push(metric('discovery_last_success_timestamp_seconds',Date.parse(discovery.last_success)/1000));\n\
@@ -160,8 +191,14 @@ data:
     \        lines.push(metric('jobs',row.count,label),metric('processing_seconds',row.seconds,label),metric('assignments',row.applied,label));\n\
     \      }\n    }\n    for(const name of WORKERS) {\n      const group=instances.filter(w=>w.worker===name),active=group.filter(w=>w.ready&&!w.draining).length;\n\
     \      lines.push(metric('worker_ready',Number(active>0),{worker:name}),metric('worker_active_instances',active,{worker:name}),\n\
-    \        metric('worker_desired_instances',tuning[name]?.slots??1,{worker:name}),metric('worker_slot_limit',SLOT_LIMITS[name],{worker:name}));\n\
-    \      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),\n\
+    \        metric('worker_desired_instances',1+(burst[name]?.slots??0),{worker:name}),metric('worker_slot_limit',1+BURST_LIMITS[name],{worker:name}));\n\
+    \      for(const lane of ['base','burst']) {\n        lines.push(metric('pool_active_instances',group.filter(w=>w.ready&&!w.draining&&w.pool===lane).length,{worker:name,pool:lane}),\n\
+    \          metric('pool_desired_instances',lane==='base'?1:(burst[name]?.slots??0),{worker:name,pool:lane}));\n\
+    \      }\n      lines.push(metric('burst_cpu_cores',burst[name]?.cpu_cores??BURST_CPU_LIMITS[name],{worker:name}));\n\
+    \      lines.push(metric('burst_device',(burst[name]?.device??(name==='mac'?'mps':'cpu'))==='mps'?1:0,{worker:name}));\n\
+    \      for(const instance of group.filter(w=>w.pool==='burst')) {\n        lines.push(metric('instance_cpu_seconds_total',instance.cpu_seconds,{worker:name,instance:instance.id}),\n\
+    \          metric('instance_accelerator_bytes',instance.accelerator_bytes,{worker:name,instance:instance.id}));\n\
+    \      }\n      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),\n\
     \        metric('worker_rss_bytes',group.reduce((total,w)=>total+Number(w.rss_bytes??0),0),{worker:name}));\n\
     \    }\n    report=lines.join('\\n')+'\\n';healthy=true;\n  }catch{healthy=false;report='waffles_queue_up{}\
     \ 0\\n';}\n}\n\nhttp.createServer(async(req,res)=>{\n  try {\n    const url=new\
@@ -174,8 +211,10 @@ data:
     \    if(req.method==='GET'&&url.pathname==='/api/config') {\n      const row=(await\
     \ pool.query(\"SELECT value FROM waffles.settings WHERE key='config'\")).rows[0];\n\
     \      respond(res,row?.value??{},row?200:503);return;\n    }\n    if(req.method==='GET'&&url.pathname==='/api/tuning')\
-    \ {\n      const stored=(await pool.query(\"SELECT value FROM waffles.settings\
-    \ WHERE key='tuning'\")).rows[0]?.value??{};\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,stored[w]??{slots:1}])),limits:SLOT_LIMITS});return;\n\
+    \ {\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,{slots:1}])),limits:SLOT_LIMITS});return;\n\
+    \    }\n    if(req.method==='GET'&&url.pathname==='/api/burst') {\n      const\
+    \ stored=(await pool.query(\"SELECT value FROM waffles.settings WHERE key='burst'\"\
+    )).rows[0]?.value??{};\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,{slots:0,mode:'production',cpu_cores:BURST_CPU_LIMITS[w],device:w==='mac'?'mps':'cpu',...stored[w]}])),limits:BURST_LIMITS,cpu_limits:BURST_CPU_LIMITS});return;\n\
     \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
     /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
     \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
@@ -184,9 +223,17 @@ data:
     \ r.arrayBuffer()));return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
     \ {\n      if(!WORKERS.includes(body.worker))throw Error('Invalid worker');\n\
     \      const instance=body.instance??body.worker;\n      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw\
-    \ Error('Invalid instance');\n      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code)\
-    \ VALUES($1,$2,$3,$4,$5,$6,$7)\n        ON CONFLICT(id) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code)`,\n\
-    \        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null]);\n\
+    \ Error('Invalid instance');\n      const lane=body.pool??'base';if(!['base','burst'].includes(lane))throw\
+    \ Error('Invalid pool');\n      if(body.worker==='mac'&&body.role==='supervisor'&&lane==='burst'&&body.host_observation)\
+    \ {\n        const source=body.host_observation,observation={report_timestamp_seconds:Date.now()/1000};\n\
+    \        for(const key of ['cpu_percent','gpu_percent','pressure','swap_bytes'])if(Number.isFinite(source[key])&&source[key]>=0)observation[key]=source[key];\n\
+    \        await pool.query(\"INSERT INTO waffles.settings(key,value) VALUES('mac-observation',$1)\
+    \ ON CONFLICT(key) DO UPDATE SET value=excluded.value\",[observation]);\n    \
+    \  }\n      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code,pool,cpu_seconds,accelerator_bytes,cpu_affinity)\
+    \ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)\n        ON CONFLICT(id) DO UPDATE\
+    \ SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code),pool=excluded.pool,\n\
+    \        cpu_seconds=greatest(excluded.cpu_seconds,waffles.instances.cpu_seconds),accelerator_bytes=excluded.accelerator_bytes,cpu_affinity=excluded.cpu_affinity`,\n\
+    \        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null,lane,Number(body.cpu_seconds)||0,Number(body.accelerator_bytes)||0,Number.isInteger(body.cpu_affinity)?body.cpu_affinity:null]);\n\
     \      await pool.query(`INSERT INTO waffles.workers(name,device,ready,rss_bytes)\
     \ VALUES($1,$2,$3,$4)\n        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes\
     \ WHERE $5<> 'supervisor'`,\n        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0,body.role??'inference']);\n\
@@ -194,8 +241,9 @@ data:
     \ '90 seconds' WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND worker=$4 AND\
     \ status='running' AND lease_until>now()\",[body.run_id,body.asset_id,body.claim,body.worker]);\n\
     \      respond(res,{ok:true});return;\n    }\n    if(req.method==='POST'&&url.pathname==='/api/claim')\
-    \ {respond(res,await claim(pool,body.worker));return;}\n    if(req.method==='POST'&&url.pathname==='/api/finish')\
-    \ {respond(res,{accepted:await finish(pool,body,body.result)});return;}\n    if(req.method==='POST'&&url.pathname==='/api/fail')\
+    \ {respond(res,await claim(pool,body.worker,body.pool??'base',body.device??(body.worker==='mac'?'mps':'cpu')));return;}\n\
+    \    if(req.method==='POST'&&url.pathname==='/api/finish') {respond(res,{accepted:await\
+    \ finish(pool,body,body.result)});return;}\n    if(req.method==='POST'&&url.pathname==='/api/fail')\
     \ {\n      await pool.query(`UPDATE waffles.jobs SET status=CASE WHEN attempts>=4\
     \ THEN 'failed' ELSE 'pending' END,\n        available_at=now()+interval '30 seconds',last_error='inference_failed',lease_until=NULL\n\
     \        WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND\
@@ -232,22 +280,38 @@ data:
     \ UPDATE SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)\"\
     ,[body.worker,value]);\n        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note)\
     \ VALUES($1,$2,$3)',[body.worker,body.slots,String(body.note??'').slice(0,200)]);\n\
-    \      });respond(res,{worker:body.worker,...value});return;\n    }\n    if(req.method==='GET'&&url.pathname==='/admin/status')\
-    \ {\n      const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
+    \      });respond(res,{worker:body.worker,...value});return;\n    }\n    if(req.method==='POST'&&url.pathname==='/admin/burst')\
+    \ {\n      const stored=(await pool.query(\"SELECT value FROM waffles.settings\
+    \ WHERE key='burst'\")).rows[0]?.value??{};\n      const value=validateBurst(body.worker,body.slots,body.mode,body.cpu_cores??stored[body.worker]?.cpu_cores??BURST_CPU_LIMITS[body.worker],body.device??stored[body.worker]?.device??(body.worker==='mac'?'mps':'cpu'));\n\
+    \      await transaction(async db=>{\n        await db.query(\"INSERT INTO waffles.settings(key,value)\
+    \ VALUES('burst',jsonb_build_object($1::text,$2::jsonb)) ON CONFLICT(key) DO UPDATE\
+    \ SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)\"\
+    ,[body.worker,value]);\n        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note)\
+    \ VALUES($1,$2,$3)',[body.worker,body.slots,`burst ${value.mode} ${value.device}\
+    \ cpu=${value.cpu_cores}: `+String(body.note??'').slice(0,150)]);\n      });respond(res,{worker:body.worker,...value});return;\n\
+    \    }\n    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const\
+    \ runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
-    \    const workers=(await pool.query(`SELECT w.name,w.device,max(i.reported_at)\
-    \ reported_at,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int\
-    \ active_instances,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)>0\
-    \ AS ready,\n        coalesce(sum(i.rss_bytes),0)::bigint rss_bytes,\n       \
-    \ (SELECT count(*)::int FROM waffles.instances dead WHERE dead.worker=w.name AND\
-    \ dead.exit_code<>0 AND NOT dead.draining) unexpected_exits\n        FROM waffles.workers\
-    \ w LEFT JOIN waffles.instances i ON i.worker=w.name AND i.reported_at>now()-interval\
-    \ '60 seconds'\n        GROUP BY w.name,w.device`)).rows;\n      respond(res,{runs,workers,discovery:(await\
-    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n\
-    \    }\n    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue\
-    \ request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
+    \    const workers=(await pool.query(`SELECT w.name,coalesce(max(i.device) FILTER(WHERE\
+    \ i.ready AND NOT i.draining),w.device) device,max(i.reported_at) reported_at,\n\
+    \        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int active_instances,\n\
+    \        count(i.id) FILTER(WHERE i.ready AND NOT i.draining AND i.pool='base')::int\
+    \ base_instances,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining\
+    \ AND i.pool='burst')::int burst_instances,\n        array_agg(DISTINCT i.cpu_affinity)\
+    \ FILTER(WHERE i.ready AND NOT i.draining AND i.pool='burst') burst_cpu_affinity,\n\
+    \        array_agg(DISTINCT i.device) FILTER(WHERE i.ready AND NOT i.draining\
+    \ AND i.pool='burst') burst_devices,\n        count(i.id) FILTER(WHERE i.ready\
+    \ AND NOT i.draining)>0 AS ready,\n        coalesce(sum(i.rss_bytes),0)::bigint\
+    \ rss_bytes,\n        (SELECT count(*)::int FROM waffles.instances dead WHERE\
+    \ dead.worker=w.name AND dead.exit_code<>0 AND NOT dead.draining) unexpected_exits\n\
+    \        FROM waffles.workers w LEFT JOIN waffles.instances i ON i.worker=w.name\
+    \ AND i.reported_at>now()-interval '60 seconds'\n        GROUP BY w.name,w.device`)).rows;\n\
+    \      respond(res,{runs,workers,discovery:(await pool.query(\"SELECT value FROM\
+    \ waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n    }\n\
+    \    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue request\
+    \ failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
     }).listen(9200,'0.0.0.0');\nawait refresh();setInterval(refresh,15000);\nsetInterval(()=>discover(pool,api),60000);\n\
     for(;;){try{if(!await writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await\
     \ new Promise(r=>setTimeout(r,5000));}}\n"
@@ -411,39 +475,231 @@ data:
     \ is None:item['process'].terminate()\n        deadline=time.monotonic()+60\n\
     \        for item in children:\n            try:item['process'].wait(timeout=max(0.1,deadline-time.monotonic()))\n\
     \            except subprocess.TimeoutExpired:item['process'].kill()\n\n\nif __name__=='__main__':main()\n"
+  burst-worker.py: "#!/usr/bin/env python3\n\"\"\"Run unchanged upstream detection/embedding/classification\
+    \ with fenced PG jobs.\n\nThe coordinator proxies thumbnails and owns all Immich\
+    \ writes. This worker gets\nno Immich API credential, does not enroll pets, and\
+    \ never writes face metadata.\n\"\"\"\nimport json\nimport logging\nimport os\n\
+    from pathlib import Path\nimport resource\nimport signal\nimport sys\nimport threading\n\
+    import time\nimport urllib.request\n\n\ndef main() -> None:\n    \"\"\"Maintain\
+    \ a heartbeat while processing one independently claimed photo.\"\"\"\n    logging.basicConfig(level=logging.INFO,\
+    \ format='%(asctime)s %(levelname)s %(message)s')\n    base = os.environ['QUEUE_URL'].rstrip('/')\n\
+    \    token = Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    worker\
+    \ = os.environ['WORKER_NAME']\n    directory = Path(os.environ.get('DATA_DIR',\
+    \ '/data'))\n    directory.mkdir(parents=True, exist_ok=True)\n    cores=int(os.environ.get('BURST_CPU_CORES','0'))\n\
+    \    if cores and hasattr(os,'sched_setaffinity'):\n        os.sched_setaffinity(0,sorted(os.sched_getaffinity(0))[:cores])\n\
+    \    os.chdir(directory)\n    # This key authenticates only the restricted thumbnail\
+    \ proxy, not Immich.\n    os.environ['IMMICH_URL'] = base + '/immich'\n    os.environ['IMMICH_API_KEY']\
+    \ = token\n    os.environ.setdefault('HOME', str(directory))\n    os.environ.setdefault('TORCH_HOME',\
+    \ str(directory / '.cache/torch'))\n    os.environ.setdefault('HF_HOME', str(directory\
+    \ / '.cache/huggingface'))\n    os.environ.setdefault('YOLO_CONFIG_DIR', str(directory\
+    \ / '.ultralytics'))\n    sys.path.insert(0, os.environ.get('UPSTREAM_APP', '/app'))\n\
+    \    state = dict(worker=worker, instance=os.environ.get('WAFFLES_INSTANCE',worker),\
+    \ pool='burst', ready=False, device='loading', draining=False)\n    draining =\
+    \ threading.Event()\n    def drain(*_):\n        state['draining'] = True\n  \
+    \      draining.set()\n    signal.signal(signal.SIGTERM, drain)\n    signal.signal(signal.SIGINT,\
+    \ drain)\n\n    def request(path: str, body=None):\n        req = urllib.request.Request(base\
+    \ + path, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},\n\
+    \                                     data=None if body is None else json.dumps(body).encode())\n\
+    \        with urllib.request.urlopen(req, timeout=40) as response:\n         \
+    \   return json.load(response)\n\n    def heartbeat() -> None:\n        while\
+    \ True:\n            try:\n                usage = resource.getrusage(resource.RUSAGE_SELF)\n\
+    \                rss = usage.ru_maxrss\n                state['cpu_seconds'] =\
+    \ usage.ru_utime + usage.ru_stime\n                state['cpu_affinity'] = len(os.sched_getaffinity(0))\
+    \ if hasattr(os,'sched_getaffinity') else 0\n                torch = sys.modules.get('torch')\n\
+    \                state['accelerator_bytes'] = torch.mps.driver_allocated_memory()\
+    \ if torch and state.get('device') == 'mps' and state['ready'] else 0\n      \
+    \          request('/api/heartbeat', {**state, 'rss_bytes': rss if sys.platform\
+    \ == 'darwin' else rss * 1024})\n            except Exception:\n             \
+    \   logging.warning('Queue heartbeat unavailable')\n            time.sleep(15)\n\
+    \n    threading.Thread(target=heartbeat, daemon=True).start()\n    while True:\n\
+    \        try:\n            config = request('/api/config')\n            break\n\
+    \        except Exception:\n            time.sleep(10)\n    from burst_guard import\
+    \ can_run\n    if not can_run(starting=True):\n        return\n    import numpy\
+    \ as np\n    from sklearn.linear_model import LogisticRegression\n    from sklearn.preprocessing\
+    \ import StandardScaler\n    # Override the shared selector before any inference\
+    \ modules import it.\n    # Model weights, preprocessing and classifier thresholds\
+    \ remain identical.\n    import device as compute_device\n    forced=os.environ.get('BURST_DEVICE','')\n\
+    \    if forced:\n        if forced not in ('cpu','mps'):\n            raise ValueError('Unsupported\
+    \ burst compute device')\n        if forced=='mps' and compute_device.pick_device()!='mps':\n\
+    \            raise RuntimeError('Requested Metal is unavailable')\n        compute_device.pick_device=lambda:forced\n\
+    \    import classifier\n    import embedder\n    import inference\n    from device\
+    \ import pick_device\n    scaler = StandardScaler()\n    for name, value in config['scaler'].items():\n\
+    \        setattr(scaler, name, np.asarray(value) if isinstance(value, list) else\
+    \ value)\n    model = LogisticRegression()\n    for name, value in config['model'].items():\n\
+    \        setattr(model, name, np.asarray(value) if isinstance(value, list) else\
+    \ value)\n    # Prevent per-asset debug logs from exposing IDs in normal pod logs.\n\
+    \    for name in ('embedder', 'detector', 'immich'):\n        logging.getLogger(name).setLevel(logging.ERROR)\n\
+    \    with inference.inference_session():\n        state.update(ready=True, device=pick_device())\n\
+    \        ready_path = Path(os.environ['BURST_READY_DIR']) / state['instance']\n\
+    \        ready_path.parent.mkdir(parents=True, exist_ok=True)\n        ready_path.touch()\n\
+    \        logging.info('Burst worker %s ready on %s', worker, state['device'])\n\
+    \        while not draining.is_set():\n            job = None\n            try:\n\
+    \                if not can_run():\n                    state['ready'] = False\n\
+    \                    request('/api/heartbeat', state)\n                    logging.info('Burst\
+    \ memory guard: draining extra capacity; baseline remains running')\n        \
+    \            return\n                if os.environ.get('NATIVE_CAPACITY_GUARD')\
+    \ == 'true':\n                    from native_guard import can_run\n         \
+    \           if not can_run():\n                        state['ready'] = False\n\
+    \                        request('/api/heartbeat', state)\n                  \
+    \      logging.info('Native capacity guard: unloading models and returning to\
+    \ standby')\n                        return\n                job = request('/api/claim',\
+    \ {'worker': worker, 'pool': 'burst', 'device': state['device']})\n          \
+    \      if not job:\n                    time.sleep(2)\n                    continue\n\
+    \                # Runs retain their classifier snapshot across future enrollment\n\
+    \                # changes; never classify an old run with a newer global model.\n\
+    \                if job.get('config') and job['config'] != config:\n         \
+    \           config = job['config']\n                    for obj, values in [(scaler,\
+    \ config['scaler']), (model, config['model'])]:\n                        for name,\
+    \ value in values.items():\n                            setattr(obj, name, np.asarray(value)\
+    \ if isinstance(value, list) else value)\n                state.update({key: job[key]\
+    \ for key in ('run_id', 'asset_id', 'claim')})\n                started = time.monotonic()\n\
+    \                errors = inference.model_error_count()\n                image\
+    \ = embedder.fetch_thumbnail(job['asset_id'])\n                if image is None:\n\
+    \                    raise RuntimeError('Thumbnail unavailable')\n           \
+    \     crops = embedder.crop_animals(image, conf=0.25) or [(None, image)]\n   \
+    \             result = dict(size=list(image.size), matches=[], unknown=0, low_confidence=0,\
+    \ out_of_range=0)\n                for box, crop in crops:\n                 \
+    \   vector = embedder.embed_image(crop)\n                    if vector is None\
+    \ or inference.model_error_count() != errors:\n                        raise RuntimeError('Model\
+    \ inference failed')\n                    name, probability = classifier.classify(vector,\
+    \ config['names'], model, scaler)\n                    if name != 'Waffles':\n\
+    \                        result['unknown'] += 1\n                    elif box\
+    \ is None or probability < 0.90:\n                        result['low_confidence']\
+    \ += 1\n                    else:\n                        result['matches'].append({'box':\
+    \ [float(x) for x in box], 'probability': float(probability)})\n             \
+    \   result['seconds'] = time.monotonic() - started\n                accepted =\
+    \ request('/api/finish', {**{k: job[k] for k in ('run_id', 'asset_id', 'claim')},\
+    \ 'result': result})\n                if not accepted['accepted']:\n         \
+    \           logging.warning('Discarded expired claim result')\n            except\
+    \ Exception as exc:\n                logging.warning('Job or queue request failed:\
+    \ %s', type(exc).__name__)\n                if job:\n                    try:\n\
+    \                        request('/api/fail', {k: job[k] for k in ('run_id', 'asset_id',\
+    \ 'claim')})\n                    except Exception:\n                        pass\
+    \  # The lease will expire; stale results cannot commit.\n                time.sleep(5)\n\
+    \            finally:\n                for key in ('run_id', 'asset_id', 'claim'):\n\
+    \                    state.pop(key, None)\n        state['ready'] = False\n  \
+    \      request('/api/heartbeat', state)\n\n\nif __name__ == '__main__':\n    main()\n"
+  burst-supervisor.py: "#!/usr/bin/env python3\n\"\"\"Manage only extra workers; baseline\
+    \ supervisors and processes stay untouched.\"\"\"\nimport json\nimport logging\n\
+    import os\nfrom pathlib import Path\nimport signal\nimport socket\nimport subprocess\n\
+    import sys\nimport time\nimport urllib.request\nimport uuid\nfrom burst_guard\
+    \ import can_run\n\ndef main():\n    logging.basicConfig(level=logging.INFO,format='%(asctime)s\
+    \ %(levelname)s %(message)s')\n    base=os.environ['QUEUE_URL'].rstrip('/');worker=os.environ['WORKER_NAME']\n\
+    \    token=Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    ready=Path(os.environ.get('BURST_READY_DIR','/tmp/waffles-burst-ready'));ready.mkdir(parents=True,exist_ok=True)\n\
+    \    children=[];stopping=False;target=0;last_heartbeat=0;cores=0;device='mps'\
+    \ if sys.platform=='darwin' else 'cpu'\n    allowed=sorted(os.sched_getaffinity(0))\
+    \ if hasattr(os,'sched_getaffinity') else []\n    def stop(*_):\n        nonlocal\
+    \ stopping\n        stopping=True\n    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)\n\
+    \    def request(path,body=None):\n        req=urllib.request.Request(base+path,headers={'Authorization':'Bearer\
+    \ '+token,'Content-Type':'application/json'},data=None if body is None else json.dumps(body).encode())\n\
+    \        with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)\n\
+    \    try:\n        while not stopping:\n            for item in children:\n  \
+    \              code=item['process'].poll()\n                if code is not None:\n\
+    \                    (ready/item['instance']).unlink(missing_ok=True)\n      \
+    \              logging.info('Burst process exited: code=%s drain=%s',code,item['draining'])\n\
+    \                    try:request('/api/heartbeat',{'worker':worker,'pool':'burst','instance':item['instance'],'device':'stopped','ready':False,'draining':item['draining'],'exit_code':code})\n\
+    \                    except Exception:pass\n            children=[item for item\
+    \ in children if item['process'].poll() is None]\n            try:\n         \
+    \       tuning=request('/api/burst');value=int(tuning['workers'][worker]['slots'])\n\
+    \                if not 0<=value<=int(tuning['limits'][worker]):raise ValueError('Invalid\
+    \ burst target')\n                requested_cores=int(tuning['workers'][worker].get('cpu_cores',0))\n\
+    \                if allowed and not 1<=requested_cores<=len(allowed):raise ValueError('Invalid\
+    \ CPU affinity count')\n                requested_device=tuning['workers'][worker].get('device',device)\n\
+    \                if requested_device not in ('cpu','mps'):raise ValueError('Invalid\
+    \ compute device')\n                target=value;cores=requested_cores;device=requested_device\n\
+    \            except Exception:logging.warning('Burst policy unavailable; retaining\
+    \ target')\n            for item in children:\n                if item['device']!=device\
+    \ and not item['draining']:\n                    item['draining']=True;item['process'].terminate()\n\
+    \            if allowed and cores:\n                for item in children:\n  \
+    \                  for task in Path('/proc/'+str(item['process'].pid)+'/task').glob('*'):\n\
+    \                        try:os.sched_setaffinity(int(task.name),allowed[:cores])\n\
+    \                        except ProcessLookupError:pass\n            active=[item\
+    \ for item in children if not item['draining']]\n            for item in active[target:]:\n\
+    \                item['draining']=True;item['process'].terminate()\n         \
+    \   # Load one model process at a time. A large target must not bypass\n     \
+    \       # pressure guards by launching all allocations before they appear.\n \
+    \           if len(children)<target and all((ready/i['instance']).exists() for\
+    \ i in children) and can_run(starting=True):\n                instance=worker+'-burst-'+uuid.uuid4().hex[:12]\n\
+    \                process=subprocess.Popen([sys.executable,'-B',str(Path(__file__).with_name('burst-worker.py'))],env={**os.environ,'WAFFLES_INSTANCE':instance,'BURST_READY_DIR':str(ready),'BURST_CPU_CORES':str(cores),'BURST_DEVICE':device},preexec_fn=lambda:os.nice(10))\n\
+    \                children.append({'process':process,'draining':False,'instance':instance,'device':device})\n\
+    \                logging.info('Started extra %s process; target=%d',worker,target)\n\
+    \            if time.monotonic()-last_heartbeat>=15:\n                body={'worker':worker,'pool':'burst','instance':worker+'-burst-supervisor-'+socket.gethostname(),'role':'supervisor','device':'standby','ready':False}\n\
+    \                if sys.platform=='darwin':\n                    try:\n      \
+    \                  from mac_observation import observe\n                     \
+    \   body['host_observation']=observe()\n                    except Exception:logging.warning('Mac\
+    \ host observation unavailable')\n                try:request('/api/heartbeat',body)\n\
+    \                except Exception:pass\n                last_heartbeat=time.monotonic()\n\
+    \            time.sleep(3)\n    finally:\n        for item in children:\n    \
+    \        if item['process'].poll() is None:item['process'].terminate()\n     \
+    \   deadline=time.monotonic()+60\n        for item in children:\n            try:item['process'].wait(timeout=max(.1,deadline-time.monotonic()))\n\
+    \            except subprocess.TimeoutExpired:item['process'].kill()\n\nif __name__=='__main__':main()\n"
+  burst_guard.py: "\"\"\"Protect the permanent baseline by refusing extra workers\
+    \ under memory pressure.\"\"\"\nfrom pathlib import Path\nimport subprocess\n\
+    import sys\nimport time\n\nwarning_since=None\n\ndef can_run(starting=False):\n\
+    \    global warning_since\n    if sys.platform=='darwin':\n        try:level=int(subprocess.check_output(['sysctl','-n','kern.memorystatus_vm_pressure_level'],text=True))\n\
+    \        except Exception:return False\n        if level==1:warning_since=None;return\
+    \ True\n        if starting or level>=4:return False\n        if warning_since\
+    \ is None:warning_since=time.monotonic()\n        return time.monotonic()-warning_since<6\n\
+    \    try:\n        memory=dict(line.split(':',1) for line in Path('/proc/meminfo').read_text().splitlines())\n\
+    \        if int(memory['MemAvailable'].split()[0])<(1800 if starting else 512)*1024:return\
+    \ False\n        limit=Path('/sys/fs/cgroup/memory.max').read_text().strip()\n\
+    \        current=int(Path('/sys/fs/cgroup/memory.current').read_text())\n    \
+    \    return limit=='max' or int(limit)-current>(1500 if starting else 128)*1024**2\n\
+    \    except Exception:return False\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning} from\
-    \ './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
-    assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',4),{slots:4});\n\
-    assert.deepEqual(validateTuning('still-fawn',0),{slots:0});\nfor(const [worker,slots]\
-    \ of [['mac',5],['pve',2],['still-fawn',-1],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
+    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning,validateBurst}\
+    \ from './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
+    assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',1),{slots:1});\n\
+    for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
+    assert.deepEqual(validateBurst('mac',15,'benchmark'),{slots:15,mode:'benchmark',cpu_cores:0,device:'mps'});\n\
+    assert.deepEqual(validateBurst('still-fawn',0,'production'),{slots:0,mode:'production',cpu_cores:3,device:'cpu'});\n\
+    assert.deepEqual(validateBurst('still-fawn',2,'benchmark',1),{slots:2,mode:'benchmark',cpu_cores:1,device:'cpu'});\n\
+    assert.throws(()=>validateBurst('still-fawn',2,'benchmark',4));\nassert.equal(validateBurst('mac',1,'benchmark',0,'cpu').device,'cpu');\n\
+    assert.throws(()=>validateBurst('still-fawn',1,'benchmark',1,'mps'));\nassert.throws(()=>validateBurst('mac',1,'benchmark',0,'cuda'));\n\
+    for(const [worker,slots,mode] of [['mac',16,'benchmark'],['pve',2,'production'],['chief-horse',1,'production'],['mac',-1,'production'],['mac',1,'other']])assert.throws(()=>validateBurst(worker,slots,mode));\n\
     const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};\n\
     assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');\n\
     assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');\n\
     for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
     \  assert.throws(()=>validateResult(bad));\nif(process.argv.includes('--postgres'))\
     \ {\n  const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
-    \  const db=new Pool({max:3});const id='queue-test-'+Date.now();\n  try {\n  \
-    \  await db.query(\"INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,'benchmark','running',ARRAY['pve','still-fawn'],'{}')\"\
-    ,[id]);\n    for(let n=1;n<=2;n++)await db.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
+    \  const db=new Pool({max:4});const suffix=String(Date.now());\n  const names=Object.fromEntries(['jobs','runs','settings'].map(n=>[n,'waffles.test_'+n+'_'+suffix]));\n\
+    \  const rewrite=sql=>Object.entries(names).reduce((s,[name,table])=>s.replaceAll('waffles.'+name,table),sql).replaceAll('pg_advisory_xact_lock(244,','pg_advisory_xact_lock(1244,');\n\
+    \  const isolated={query:(sql,args)=>db.query(rewrite(sql),args),connect:async()=>{const\
+    \ connection=await db.connect();return {query:(sql,args)=>connection.query(rewrite(sql),args),release:()=>connection.release()};}};\n\
+    \  try {\n    for(const name of ['runs','jobs','settings'])await db.query(`CREATE\
+    \ TABLE ${names[name]} (LIKE waffles.${name} INCLUDING ALL)`);\n    await db.query(`ALTER\
+    \ TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base'`);\n\
+    \    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS device\
+    \ text`);\n    await isolated.query(\"INSERT INTO waffles.settings VALUES('burst','{\\\
+    \"pve\\\":{\\\"slots\\\":2,\\\"mode\\\":\\\"benchmark\\\"}}')\");\n    for(const\
+    \ [id,mode] of [['bench','benchmark'],['prod','production']]) {\n      await isolated.query(\"\
+    INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,$2,'running',ARRAY['pve'],'{}')\"\
+    ,[id,mode]);\n      for(let n=1;n<=3;n++)await isolated.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
     \ VALUES($1,$2,'2020-01-01',$3)\",[id,'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),n]);\n\
-    \    const [a,b]=await Promise.all([claim(db,'pve'),claim(db,'still-fawn')]);\n\
-    \    assert(a&&b&&a.asset_id!==b.asset_id,'Workers must receive distinct assets');\n\
-    \    await db.query(\"UPDATE waffles.jobs SET lease_until=now()-interval '1 second'\
-    \ WHERE run_id=$1 AND asset_id=$2\",[id,a.asset_id]);\n    assert.equal(await\
-    \ finish(db,a,value),false,'Expired claims cannot commit');\n    const retry=await\
-    \ claim(db,'pve');assert.equal(retry.asset_id,a.asset_id);assert.notEqual(retry.claim,a.claim);\n\
-    \    assert.equal(await finish(db,a,value),false,'Old fencing token cannot commit');\n\
-    \    assert.equal(await finish(db,retry,value),true);\n    assert.equal(await\
-    \ finish(db,retry,value),false,'Duplicate completion cannot commit twice');\n\
-    \    assert.equal(await finish(db,b,value),true);\n    assert.equal((await db.query(\"\
-    SELECT count(*)::int n FROM waffles.jobs WHERE run_id=$1 AND status='complete'\"\
-    ,[id])).rows[0].n,2);\n    console.log('PostgreSQL concurrency, lease expiry,\
-    \ fencing and duplicate completion tests passed');\n  } finally {\n    await db.query('DELETE\
-    \ FROM waffles.jobs WHERE run_id=$1',[id]);\n    await db.query('DELETE FROM waffles.runs\
-    \ WHERE id=$1',[id]);await db.end();\n  }\n}\nconsole.log('Result validation checks\
-    \ passed');\n"
+    \    }\n    const [a,b,c]=await Promise.all([claim(isolated,'pve','burst'),claim(isolated,'pve','burst'),claim(isolated,'pve','burst')]);\n\
+    \    const leased=[a,b,c].filter(Boolean);assert.equal(leased.length,2,'Concurrent\
+    \ claims cannot exceed burst slots');\n    assert.notEqual(leased[0].asset_id,leased[1].asset_id);\n\
+    \    const baseline=await claim(isolated,'pve');assert.equal(baseline.run_id,'prod','Baseline\
+    \ keeps serving production while burst slots are occupied');\n    assert.equal(await\
+    \ claim(isolated,'pve'),null,'Baseline cap remains one');\n    const old=leased[0];\n\
+    \    await isolated.query(\"UPDATE waffles.jobs SET lease_until=now()-interval\
+    \ '1 second' WHERE run_id=$1 AND asset_id=$2\",[old.run_id,old.asset_id]);\n \
+    \   assert.equal(await finish(isolated,old,value),false,'Expired claims cannot\
+    \ commit');\n    const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);\n\
+    \    assert.equal(await finish(isolated,old,value),false,'Old fencing token cannot\
+    \ commit');\n    assert.equal(await finish(isolated,retry,value),true);\n    assert.equal(await\
+    \ finish(isolated,retry,value),false,'Duplicate completion cannot commit twice');\n\
+    \    await isolated.query(\"UPDATE waffles.settings SET value='{\\\"pve\\\":{\\\
+    \"slots\\\":0,\\\"mode\\\":\\\"benchmark\\\"}}' WHERE key='burst'\");\n    assert.equal(await\
+    \ claim(isolated,'pve','burst'),null);\n    assert.equal(await finish(isolated,baseline,value),true);\n\
+    \    assert.equal((await claim(isolated,'pve')).run_id,'prod','Zero burst slots\
+    \ must not stop baseline work');\n    console.log('Isolated PostgreSQL pool separation,\
+    \ concurrent caps, fencing and baseline continuity passed');\n  } finally {\n\
+    \    for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF\
+    \ EXISTS ${names[name]}`);\n    await db.end();\n  }\n}\nconsole.log('Result validation\
+    \ checks passed');\n"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -478,7 +734,20 @@ data:
     \ NOT NULL DEFAULT ''\n);\nINSERT INTO waffles.settings(key,value) VALUES('tuning',\n\
     \ '{\"mac\":{\"slots\":1},\"pve\":{\"slots\":1},\"still-fawn\":{\"slots\":1},\"\
     fun-bedbug\":{\"slots\":1},\"chief-horse\":{\"slots\":1}}')\n ON CONFLICT(key)\
-    \ DO NOTHING;\n"
+    \ DO NOTHING;\nALTER TABLE waffles.jobs ADD COLUMN IF NOT EXISTS pool text NOT\
+    \ NULL DEFAULT 'base';\nALTER TABLE waffles.jobs ADD COLUMN IF NOT EXISTS device\
+    \ text;\nUPDATE waffles.jobs SET device=CASE WHEN worker='mac' THEN 'mps' ELSE\
+    \ 'cpu' END WHERE worker IS NOT NULL AND device IS NULL;\nCREATE INDEX IF NOT\
+    \ EXISTS waffles_active_pool ON waffles.jobs(worker,pool) WHERE status='running';\n\
+    ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT\
+    \ 'base';\nALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS cpu_seconds\
+    \ double precision NOT NULL DEFAULT 0;\nALTER TABLE waffles.instances ADD COLUMN\
+    \ IF NOT EXISTS accelerator_bytes bigint NOT NULL DEFAULT 0;\nALTER TABLE waffles.instances\
+    \ ADD COLUMN IF NOT EXISTS cpu_affinity integer;\nINSERT INTO waffles.settings(key,value)\
+    \ VALUES('burst',\n '{\"mac\":{\"slots\":0,\"mode\":\"production\"},\"pve\":{\"\
+    slots\":0,\"mode\":\"production\"},\"still-fawn\":{\"slots\":0,\"mode\":\"production\"\
+    },\"fun-bedbug\":{\"slots\":0,\"mode\":\"production\"},\"chief-horse\":{\"slots\"\
+    :0,\"mode\":\"production\"}}')\n ON CONFLICT(key) DO NOTHING;\n"
   bootstrap.mjs: "// Same scoped-role bootstrap pattern as immich_sync/bootstrap.mjs\
     \ (#217).\nimport {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
@@ -497,32 +766,44 @@ data:
     } finally {await db.end();}\n"
   queue-core.mjs: "// Fenced claims adapted from photo_enrichment/postgres.py; inference\
     \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];\n\
-    export const SLOT_LIMITS={mac:4,pve:1,'still-fawn':2,'fun-bedbug':1,'chief-horse':1};\n\
+    export const SLOT_LIMITS={mac:1,pve:1,'still-fawn':1,'fun-bedbug':1,'chief-horse':1};\n\
+    export const BURST_LIMITS={mac:15,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
+    export const BURST_CPU_LIMITS={mac:0,pve:1,'still-fawn':3,'fun-bedbug':0,'chief-horse':0};\n\
     export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
     \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
-    \ AND $1=ANY(r.workers)\n AND ((j.status='pending' AND j.available_at<=now())\
-    \ OR (j.status='running' AND j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT\
-    \ count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.status='running'\
-    \ AND active.lease_until>now())\n     < coalesce((SELECT (value->$1->>'slots')::int\
-    \ FROM waffles.settings WHERE key='tuning'),1)\n ORDER BY r.created_at,j.ordinal\
-    \ FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval\
+    \ AND $1=ANY(r.workers)\n AND r.mode=CASE WHEN $3='base' THEN\n   CASE WHEN EXISTS(SELECT\
+    \ 1 FROM waffles.runs prod WHERE prod.mode='production' AND prod.state='running'\
+    \ AND $1=ANY(prod.workers)) THEN 'production' ELSE 'benchmark' END\n   ELSE coalesce((SELECT\
+    \ value->$1->>'mode' FROM waffles.settings WHERE key='burst'),'production') END\n\
+    \ AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND\
+    \ j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT count(*) FROM waffles.jobs\
+    \ active WHERE active.worker=$1 AND active.pool=$3 AND active.status='running'\
+    \ AND active.lease_until>now())\n     < CASE WHEN $3='base' THEN 1 ELSE coalesce((SELECT\
+    \ (value->$1->>'slots')::int FROM waffles.settings WHERE key='burst'),0) END\n\
+    \ ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE\
+    \ waffles.jobs j SET status='running',claim=$2,worker=$1,pool=$3,device=$4,lease_until=now()+interval\
     \ '90 seconds',attempts=attempts+1\n FROM candidate c WHERE j.run_id=c.run_id\
     \ AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT config FROM waffles.runs\
-    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker) {\n\
-    \  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  const db=await\
-    \ pool.connect();\n  try {\n    await db.query('BEGIN');\n    // Separate statements\
-    \ ensure a fresh READ COMMITTED snapshot after waiting\n    // for the per-backend\
-    \ lock. Concurrent processes cannot exceed live slots.\n    await db.query(\"\
-    SELECT pg_advisory_xact_lock(244,hashtext($1))\",[worker]);\n    const job=(await\
-    \ db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n    await\
-    \ db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
+    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker,lane='base',device=worker==='mac'?'mps':'cpu')\
+    \ {\n  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  if(!['base','burst'].includes(lane))throw\
+    \ Error('Invalid worker pool');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
+    \ Error('Invalid device');\n  const db=await pool.connect();\n  try {\n    await\
+    \ db.query('BEGIN');\n    // Separate statements ensure a fresh READ COMMITTED\
+    \ snapshot after waiting\n    // for the per-backend lock. Concurrent processes\
+    \ cannot exceed live slots.\n    await db.query(\"SELECT pg_advisory_xact_lock(244,hashtext($1))\"\
+    ,[worker]);\n    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID(),lane,device])).rows[0]??null;\n\
+    \    await db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
     \ e;}finally{db.release();}\n}\n\nexport function validateTuning(worker,slots)\
-    \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>SLOT_LIMITS[worker])throw\
-    \ Error('Invalid worker slot limit');\n  return {slots};\n}\n\nexport function\
-    \ validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds) || value.seconds<0\
-    \ || value.seconds>3600)throw Error('Invalid duration');\n  if(!Array.isArray(value.matches)\
-    \ || value.matches.length>100)throw Error('Invalid matches');\n  if(!Array.isArray(value.size)\
-    \ || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
+    \ {\n  if(!WORKERS.includes(worker)||slots!==1)throw Error('Baseline workers must\
+    \ remain at one');\n  return {slots};\n}\n\nexport function validateBurst(worker,slots,mode,cpu=BURST_CPU_LIMITS[worker],device=worker==='mac'?'mps':'cpu')\
+    \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>BURST_LIMITS[worker]||!['production','benchmark'].includes(mode))throw\
+    \ Error('Invalid burst policy');\n  if(!Number.isInteger(cpu)||cpu<(BURST_CPU_LIMITS[worker]?1:0)||cpu>BURST_CPU_LIMITS[worker])throw\
+    \ Error('Invalid burst CPU parallelism');\n  if(!['cpu','mps'].includes(device)||(worker!=='mac'&&device!=='cpu'))throw\
+    \ Error('Invalid burst compute device');\n  return {slots,mode,cpu_cores:cpu,device};\n\
+    }\n\nexport function validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds)\
+    \ || value.seconds<0 || value.seconds>3600)throw Error('Invalid duration');\n\
+    \  if(!Array.isArray(value.matches) || value.matches.length>100)throw Error('Invalid\
+    \ matches');\n  if(!Array.isArray(value.size) || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
     \ Error('Invalid size');\n  for(const match of value.matches) {\n    if(!Number.isFinite(match.probability)||match.probability<0.9||match.probability>1)throw\
     \ Error('Invalid confidence');\n    const b=match.box;\n    if(!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)||v<0||v>1)||b[0]>=b[2]||b[1]>=b[3])throw\
     \ Error('Invalid box');\n  }\n  for(const key of ['unknown','low_confidence','out_of_range'])\n\
@@ -540,8 +821,8 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS,SLOT_LIMITS,validateTuning} from './queue-core.mjs';\n\
-    import {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
+    \ {claim,finish,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst}\
+    \ from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
     const workerToken=process.env.WORKER_TOKEN,adminToken=process.env.ADMIN_TOKEN;\n\
@@ -589,13 +870,19 @@ data:
     \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
     \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
     \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
-    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const instances=(await pool.query(\"\
-    SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.instances\
-    \ WHERE reported_at>now()-interval '60 seconds'\")).rows;\n    const tuning=(await\
-    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='tuning'\")).rows[0]?.value??{};\n\
-    \    await pool.query(\"DELETE FROM waffles.instances WHERE reported_at<now()-interval\
-    \ '7 days'\");\n    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
+    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const devices=(await pool.query(\"\
+    SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs\
+    \ FROM waffles.jobs WHERE status='complete' GROUP BY run_id,worker,pool,device\"\
+    )).rows;\n    const instances=(await pool.query(\"SELECT *,extract(epoch FROM\
+    \ reported_at)::float8 reported FROM waffles.instances WHERE reported_at>now()-interval\
+    \ '60 seconds'\")).rows;\n    const burst=(await pool.query(\"SELECT value FROM\
+    \ waffles.settings WHERE key='burst'\")).rows[0]?.value??{};\n    await pool.query(\"\
+    DELETE FROM waffles.instances WHERE reported_at<now()-interval '7 days'\");\n\
+    \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
+    \    for(const row of devices)lines.push(metric('device_jobs',row.jobs,{run:row.run_id,worker:row.worker,pool:row.pool,device:row.device}));\n\
+    \    const mac=(await pool.query(\"SELECT value FROM waffles.settings WHERE key='mac-observation'\"\
+    )).rows[0]?.value;\n    if(mac)for(const [name,value] of Object.entries(mac))lines.push(metric('mac_'+name,value));\n\
     \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
     \ key='discovery'\")).rows[0]?.value;\n    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));\n\
     \    if(discovery?.last_success)lines.push(metric('discovery_last_success_timestamp_seconds',Date.parse(discovery.last_success)/1000));\n\
@@ -607,8 +894,14 @@ data:
     \        lines.push(metric('jobs',row.count,label),metric('processing_seconds',row.seconds,label),metric('assignments',row.applied,label));\n\
     \      }\n    }\n    for(const name of WORKERS) {\n      const group=instances.filter(w=>w.worker===name),active=group.filter(w=>w.ready&&!w.draining).length;\n\
     \      lines.push(metric('worker_ready',Number(active>0),{worker:name}),metric('worker_active_instances',active,{worker:name}),\n\
-    \        metric('worker_desired_instances',tuning[name]?.slots??1,{worker:name}),metric('worker_slot_limit',SLOT_LIMITS[name],{worker:name}));\n\
-    \      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),\n\
+    \        metric('worker_desired_instances',1+(burst[name]?.slots??0),{worker:name}),metric('worker_slot_limit',1+BURST_LIMITS[name],{worker:name}));\n\
+    \      for(const lane of ['base','burst']) {\n        lines.push(metric('pool_active_instances',group.filter(w=>w.ready&&!w.draining&&w.pool===lane).length,{worker:name,pool:lane}),\n\
+    \          metric('pool_desired_instances',lane==='base'?1:(burst[name]?.slots??0),{worker:name,pool:lane}));\n\
+    \      }\n      lines.push(metric('burst_cpu_cores',burst[name]?.cpu_cores??BURST_CPU_LIMITS[name],{worker:name}));\n\
+    \      lines.push(metric('burst_device',(burst[name]?.device??(name==='mac'?'mps':'cpu'))==='mps'?1:0,{worker:name}));\n\
+    \      for(const instance of group.filter(w=>w.pool==='burst')) {\n        lines.push(metric('instance_cpu_seconds_total',instance.cpu_seconds,{worker:name,instance:instance.id}),\n\
+    \          metric('instance_accelerator_bytes',instance.accelerator_bytes,{worker:name,instance:instance.id}));\n\
+    \      }\n      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),\n\
     \        metric('worker_rss_bytes',group.reduce((total,w)=>total+Number(w.rss_bytes??0),0),{worker:name}));\n\
     \    }\n    report=lines.join('\\n')+'\\n';healthy=true;\n  }catch{healthy=false;report='waffles_queue_up{}\
     \ 0\\n';}\n}\n\nhttp.createServer(async(req,res)=>{\n  try {\n    const url=new\
@@ -621,8 +914,10 @@ data:
     \    if(req.method==='GET'&&url.pathname==='/api/config') {\n      const row=(await\
     \ pool.query(\"SELECT value FROM waffles.settings WHERE key='config'\")).rows[0];\n\
     \      respond(res,row?.value??{},row?200:503);return;\n    }\n    if(req.method==='GET'&&url.pathname==='/api/tuning')\
-    \ {\n      const stored=(await pool.query(\"SELECT value FROM waffles.settings\
-    \ WHERE key='tuning'\")).rows[0]?.value??{};\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,stored[w]??{slots:1}])),limits:SLOT_LIMITS});return;\n\
+    \ {\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,{slots:1}])),limits:SLOT_LIMITS});return;\n\
+    \    }\n    if(req.method==='GET'&&url.pathname==='/api/burst') {\n      const\
+    \ stored=(await pool.query(\"SELECT value FROM waffles.settings WHERE key='burst'\"\
+    )).rows[0]?.value??{};\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,{slots:0,mode:'production',cpu_cores:BURST_CPU_LIMITS[w],device:w==='mac'?'mps':'cpu',...stored[w]}])),limits:BURST_LIMITS,cpu_limits:BURST_CPU_LIMITS});return;\n\
     \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
     /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
     \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
@@ -631,9 +926,17 @@ data:
     \ r.arrayBuffer()));return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
     \ {\n      if(!WORKERS.includes(body.worker))throw Error('Invalid worker');\n\
     \      const instance=body.instance??body.worker;\n      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw\
-    \ Error('Invalid instance');\n      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code)\
-    \ VALUES($1,$2,$3,$4,$5,$6,$7)\n        ON CONFLICT(id) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code)`,\n\
-    \        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null]);\n\
+    \ Error('Invalid instance');\n      const lane=body.pool??'base';if(!['base','burst'].includes(lane))throw\
+    \ Error('Invalid pool');\n      if(body.worker==='mac'&&body.role==='supervisor'&&lane==='burst'&&body.host_observation)\
+    \ {\n        const source=body.host_observation,observation={report_timestamp_seconds:Date.now()/1000};\n\
+    \        for(const key of ['cpu_percent','gpu_percent','pressure','swap_bytes'])if(Number.isFinite(source[key])&&source[key]>=0)observation[key]=source[key];\n\
+    \        await pool.query(\"INSERT INTO waffles.settings(key,value) VALUES('mac-observation',$1)\
+    \ ON CONFLICT(key) DO UPDATE SET value=excluded.value\",[observation]);\n    \
+    \  }\n      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code,pool,cpu_seconds,accelerator_bytes,cpu_affinity)\
+    \ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)\n        ON CONFLICT(id) DO UPDATE\
+    \ SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code),pool=excluded.pool,\n\
+    \        cpu_seconds=greatest(excluded.cpu_seconds,waffles.instances.cpu_seconds),accelerator_bytes=excluded.accelerator_bytes,cpu_affinity=excluded.cpu_affinity`,\n\
+    \        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null,lane,Number(body.cpu_seconds)||0,Number(body.accelerator_bytes)||0,Number.isInteger(body.cpu_affinity)?body.cpu_affinity:null]);\n\
     \      await pool.query(`INSERT INTO waffles.workers(name,device,ready,rss_bytes)\
     \ VALUES($1,$2,$3,$4)\n        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes\
     \ WHERE $5<> 'supervisor'`,\n        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0,body.role??'inference']);\n\
@@ -641,8 +944,9 @@ data:
     \ '90 seconds' WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND worker=$4 AND\
     \ status='running' AND lease_until>now()\",[body.run_id,body.asset_id,body.claim,body.worker]);\n\
     \      respond(res,{ok:true});return;\n    }\n    if(req.method==='POST'&&url.pathname==='/api/claim')\
-    \ {respond(res,await claim(pool,body.worker));return;}\n    if(req.method==='POST'&&url.pathname==='/api/finish')\
-    \ {respond(res,{accepted:await finish(pool,body,body.result)});return;}\n    if(req.method==='POST'&&url.pathname==='/api/fail')\
+    \ {respond(res,await claim(pool,body.worker,body.pool??'base',body.device??(body.worker==='mac'?'mps':'cpu')));return;}\n\
+    \    if(req.method==='POST'&&url.pathname==='/api/finish') {respond(res,{accepted:await\
+    \ finish(pool,body,body.result)});return;}\n    if(req.method==='POST'&&url.pathname==='/api/fail')\
     \ {\n      await pool.query(`UPDATE waffles.jobs SET status=CASE WHEN attempts>=4\
     \ THEN 'failed' ELSE 'pending' END,\n        available_at=now()+interval '30 seconds',last_error='inference_failed',lease_until=NULL\n\
     \        WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND\
@@ -679,22 +983,38 @@ data:
     \ UPDATE SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)\"\
     ,[body.worker,value]);\n        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note)\
     \ VALUES($1,$2,$3)',[body.worker,body.slots,String(body.note??'').slice(0,200)]);\n\
-    \      });respond(res,{worker:body.worker,...value});return;\n    }\n    if(req.method==='GET'&&url.pathname==='/admin/status')\
-    \ {\n      const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
+    \      });respond(res,{worker:body.worker,...value});return;\n    }\n    if(req.method==='POST'&&url.pathname==='/admin/burst')\
+    \ {\n      const stored=(await pool.query(\"SELECT value FROM waffles.settings\
+    \ WHERE key='burst'\")).rows[0]?.value??{};\n      const value=validateBurst(body.worker,body.slots,body.mode,body.cpu_cores??stored[body.worker]?.cpu_cores??BURST_CPU_LIMITS[body.worker],body.device??stored[body.worker]?.device??(body.worker==='mac'?'mps':'cpu'));\n\
+    \      await transaction(async db=>{\n        await db.query(\"INSERT INTO waffles.settings(key,value)\
+    \ VALUES('burst',jsonb_build_object($1::text,$2::jsonb)) ON CONFLICT(key) DO UPDATE\
+    \ SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)\"\
+    ,[body.worker,value]);\n        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note)\
+    \ VALUES($1,$2,$3)',[body.worker,body.slots,`burst ${value.mode} ${value.device}\
+    \ cpu=${value.cpu_cores}: `+String(body.note??'').slice(0,150)]);\n      });respond(res,{worker:body.worker,...value});return;\n\
+    \    }\n    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const\
+    \ runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
-    \    const workers=(await pool.query(`SELECT w.name,w.device,max(i.reported_at)\
-    \ reported_at,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int\
-    \ active_instances,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)>0\
-    \ AS ready,\n        coalesce(sum(i.rss_bytes),0)::bigint rss_bytes,\n       \
-    \ (SELECT count(*)::int FROM waffles.instances dead WHERE dead.worker=w.name AND\
-    \ dead.exit_code<>0 AND NOT dead.draining) unexpected_exits\n        FROM waffles.workers\
-    \ w LEFT JOIN waffles.instances i ON i.worker=w.name AND i.reported_at>now()-interval\
-    \ '60 seconds'\n        GROUP BY w.name,w.device`)).rows;\n      respond(res,{runs,workers,discovery:(await\
-    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n\
-    \    }\n    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue\
-    \ request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
+    \    const workers=(await pool.query(`SELECT w.name,coalesce(max(i.device) FILTER(WHERE\
+    \ i.ready AND NOT i.draining),w.device) device,max(i.reported_at) reported_at,\n\
+    \        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int active_instances,\n\
+    \        count(i.id) FILTER(WHERE i.ready AND NOT i.draining AND i.pool='base')::int\
+    \ base_instances,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining\
+    \ AND i.pool='burst')::int burst_instances,\n        array_agg(DISTINCT i.cpu_affinity)\
+    \ FILTER(WHERE i.ready AND NOT i.draining AND i.pool='burst') burst_cpu_affinity,\n\
+    \        array_agg(DISTINCT i.device) FILTER(WHERE i.ready AND NOT i.draining\
+    \ AND i.pool='burst') burst_devices,\n        count(i.id) FILTER(WHERE i.ready\
+    \ AND NOT i.draining)>0 AS ready,\n        coalesce(sum(i.rss_bytes),0)::bigint\
+    \ rss_bytes,\n        (SELECT count(*)::int FROM waffles.instances dead WHERE\
+    \ dead.worker=w.name AND dead.exit_code<>0 AND NOT dead.draining) unexpected_exits\n\
+    \        FROM waffles.workers w LEFT JOIN waffles.instances i ON i.worker=w.name\
+    \ AND i.reported_at>now()-interval '60 seconds'\n        GROUP BY w.name,w.device`)).rows;\n\
+    \      respond(res,{runs,workers,discovery:(await pool.query(\"SELECT value FROM\
+    \ waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n    }\n\
+    \    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue request\
+    \ failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
     }).listen(9200,'0.0.0.0');\nawait refresh();setInterval(refresh,15000);\nsetInterval(()=>discover(pool,api),60000);\n\
     for(;;){try{if(!await writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await\
     \ new Promise(r=>setTimeout(r,5000));}}\n"
@@ -858,44 +1178,236 @@ data:
     \ is None:item['process'].terminate()\n        deadline=time.monotonic()+60\n\
     \        for item in children:\n            try:item['process'].wait(timeout=max(0.1,deadline-time.monotonic()))\n\
     \            except subprocess.TimeoutExpired:item['process'].kill()\n\n\nif __name__=='__main__':main()\n"
+  burst-worker.py: "#!/usr/bin/env python3\n\"\"\"Run unchanged upstream detection/embedding/classification\
+    \ with fenced PG jobs.\n\nThe coordinator proxies thumbnails and owns all Immich\
+    \ writes. This worker gets\nno Immich API credential, does not enroll pets, and\
+    \ never writes face metadata.\n\"\"\"\nimport json\nimport logging\nimport os\n\
+    from pathlib import Path\nimport resource\nimport signal\nimport sys\nimport threading\n\
+    import time\nimport urllib.request\n\n\ndef main() -> None:\n    \"\"\"Maintain\
+    \ a heartbeat while processing one independently claimed photo.\"\"\"\n    logging.basicConfig(level=logging.INFO,\
+    \ format='%(asctime)s %(levelname)s %(message)s')\n    base = os.environ['QUEUE_URL'].rstrip('/')\n\
+    \    token = Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    worker\
+    \ = os.environ['WORKER_NAME']\n    directory = Path(os.environ.get('DATA_DIR',\
+    \ '/data'))\n    directory.mkdir(parents=True, exist_ok=True)\n    cores=int(os.environ.get('BURST_CPU_CORES','0'))\n\
+    \    if cores and hasattr(os,'sched_setaffinity'):\n        os.sched_setaffinity(0,sorted(os.sched_getaffinity(0))[:cores])\n\
+    \    os.chdir(directory)\n    # This key authenticates only the restricted thumbnail\
+    \ proxy, not Immich.\n    os.environ['IMMICH_URL'] = base + '/immich'\n    os.environ['IMMICH_API_KEY']\
+    \ = token\n    os.environ.setdefault('HOME', str(directory))\n    os.environ.setdefault('TORCH_HOME',\
+    \ str(directory / '.cache/torch'))\n    os.environ.setdefault('HF_HOME', str(directory\
+    \ / '.cache/huggingface'))\n    os.environ.setdefault('YOLO_CONFIG_DIR', str(directory\
+    \ / '.ultralytics'))\n    sys.path.insert(0, os.environ.get('UPSTREAM_APP', '/app'))\n\
+    \    state = dict(worker=worker, instance=os.environ.get('WAFFLES_INSTANCE',worker),\
+    \ pool='burst', ready=False, device='loading', draining=False)\n    draining =\
+    \ threading.Event()\n    def drain(*_):\n        state['draining'] = True\n  \
+    \      draining.set()\n    signal.signal(signal.SIGTERM, drain)\n    signal.signal(signal.SIGINT,\
+    \ drain)\n\n    def request(path: str, body=None):\n        req = urllib.request.Request(base\
+    \ + path, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},\n\
+    \                                     data=None if body is None else json.dumps(body).encode())\n\
+    \        with urllib.request.urlopen(req, timeout=40) as response:\n         \
+    \   return json.load(response)\n\n    def heartbeat() -> None:\n        while\
+    \ True:\n            try:\n                usage = resource.getrusage(resource.RUSAGE_SELF)\n\
+    \                rss = usage.ru_maxrss\n                state['cpu_seconds'] =\
+    \ usage.ru_utime + usage.ru_stime\n                state['cpu_affinity'] = len(os.sched_getaffinity(0))\
+    \ if hasattr(os,'sched_getaffinity') else 0\n                torch = sys.modules.get('torch')\n\
+    \                state['accelerator_bytes'] = torch.mps.driver_allocated_memory()\
+    \ if torch and state.get('device') == 'mps' and state['ready'] else 0\n      \
+    \          request('/api/heartbeat', {**state, 'rss_bytes': rss if sys.platform\
+    \ == 'darwin' else rss * 1024})\n            except Exception:\n             \
+    \   logging.warning('Queue heartbeat unavailable')\n            time.sleep(15)\n\
+    \n    threading.Thread(target=heartbeat, daemon=True).start()\n    while True:\n\
+    \        try:\n            config = request('/api/config')\n            break\n\
+    \        except Exception:\n            time.sleep(10)\n    from burst_guard import\
+    \ can_run\n    if not can_run(starting=True):\n        return\n    import numpy\
+    \ as np\n    from sklearn.linear_model import LogisticRegression\n    from sklearn.preprocessing\
+    \ import StandardScaler\n    # Override the shared selector before any inference\
+    \ modules import it.\n    # Model weights, preprocessing and classifier thresholds\
+    \ remain identical.\n    import device as compute_device\n    forced=os.environ.get('BURST_DEVICE','')\n\
+    \    if forced:\n        if forced not in ('cpu','mps'):\n            raise ValueError('Unsupported\
+    \ burst compute device')\n        if forced=='mps' and compute_device.pick_device()!='mps':\n\
+    \            raise RuntimeError('Requested Metal is unavailable')\n        compute_device.pick_device=lambda:forced\n\
+    \    import classifier\n    import embedder\n    import inference\n    from device\
+    \ import pick_device\n    scaler = StandardScaler()\n    for name, value in config['scaler'].items():\n\
+    \        setattr(scaler, name, np.asarray(value) if isinstance(value, list) else\
+    \ value)\n    model = LogisticRegression()\n    for name, value in config['model'].items():\n\
+    \        setattr(model, name, np.asarray(value) if isinstance(value, list) else\
+    \ value)\n    # Prevent per-asset debug logs from exposing IDs in normal pod logs.\n\
+    \    for name in ('embedder', 'detector', 'immich'):\n        logging.getLogger(name).setLevel(logging.ERROR)\n\
+    \    with inference.inference_session():\n        state.update(ready=True, device=pick_device())\n\
+    \        ready_path = Path(os.environ['BURST_READY_DIR']) / state['instance']\n\
+    \        ready_path.parent.mkdir(parents=True, exist_ok=True)\n        ready_path.touch()\n\
+    \        logging.info('Burst worker %s ready on %s', worker, state['device'])\n\
+    \        while not draining.is_set():\n            job = None\n            try:\n\
+    \                if not can_run():\n                    state['ready'] = False\n\
+    \                    request('/api/heartbeat', state)\n                    logging.info('Burst\
+    \ memory guard: draining extra capacity; baseline remains running')\n        \
+    \            return\n                if os.environ.get('NATIVE_CAPACITY_GUARD')\
+    \ == 'true':\n                    from native_guard import can_run\n         \
+    \           if not can_run():\n                        state['ready'] = False\n\
+    \                        request('/api/heartbeat', state)\n                  \
+    \      logging.info('Native capacity guard: unloading models and returning to\
+    \ standby')\n                        return\n                job = request('/api/claim',\
+    \ {'worker': worker, 'pool': 'burst', 'device': state['device']})\n          \
+    \      if not job:\n                    time.sleep(2)\n                    continue\n\
+    \                # Runs retain their classifier snapshot across future enrollment\n\
+    \                # changes; never classify an old run with a newer global model.\n\
+    \                if job.get('config') and job['config'] != config:\n         \
+    \           config = job['config']\n                    for obj, values in [(scaler,\
+    \ config['scaler']), (model, config['model'])]:\n                        for name,\
+    \ value in values.items():\n                            setattr(obj, name, np.asarray(value)\
+    \ if isinstance(value, list) else value)\n                state.update({key: job[key]\
+    \ for key in ('run_id', 'asset_id', 'claim')})\n                started = time.monotonic()\n\
+    \                errors = inference.model_error_count()\n                image\
+    \ = embedder.fetch_thumbnail(job['asset_id'])\n                if image is None:\n\
+    \                    raise RuntimeError('Thumbnail unavailable')\n           \
+    \     crops = embedder.crop_animals(image, conf=0.25) or [(None, image)]\n   \
+    \             result = dict(size=list(image.size), matches=[], unknown=0, low_confidence=0,\
+    \ out_of_range=0)\n                for box, crop in crops:\n                 \
+    \   vector = embedder.embed_image(crop)\n                    if vector is None\
+    \ or inference.model_error_count() != errors:\n                        raise RuntimeError('Model\
+    \ inference failed')\n                    name, probability = classifier.classify(vector,\
+    \ config['names'], model, scaler)\n                    if name != 'Waffles':\n\
+    \                        result['unknown'] += 1\n                    elif box\
+    \ is None or probability < 0.90:\n                        result['low_confidence']\
+    \ += 1\n                    else:\n                        result['matches'].append({'box':\
+    \ [float(x) for x in box], 'probability': float(probability)})\n             \
+    \   result['seconds'] = time.monotonic() - started\n                accepted =\
+    \ request('/api/finish', {**{k: job[k] for k in ('run_id', 'asset_id', 'claim')},\
+    \ 'result': result})\n                if not accepted['accepted']:\n         \
+    \           logging.warning('Discarded expired claim result')\n            except\
+    \ Exception as exc:\n                logging.warning('Job or queue request failed:\
+    \ %s', type(exc).__name__)\n                if job:\n                    try:\n\
+    \                        request('/api/fail', {k: job[k] for k in ('run_id', 'asset_id',\
+    \ 'claim')})\n                    except Exception:\n                        pass\
+    \  # The lease will expire; stale results cannot commit.\n                time.sleep(5)\n\
+    \            finally:\n                for key in ('run_id', 'asset_id', 'claim'):\n\
+    \                    state.pop(key, None)\n        state['ready'] = False\n  \
+    \      request('/api/heartbeat', state)\n\n\nif __name__ == '__main__':\n    main()\n"
+  burst-supervisor.py: "#!/usr/bin/env python3\n\"\"\"Manage only extra workers; baseline\
+    \ supervisors and processes stay untouched.\"\"\"\nimport json\nimport logging\n\
+    import os\nfrom pathlib import Path\nimport signal\nimport socket\nimport subprocess\n\
+    import sys\nimport time\nimport urllib.request\nimport uuid\nfrom burst_guard\
+    \ import can_run\n\ndef main():\n    logging.basicConfig(level=logging.INFO,format='%(asctime)s\
+    \ %(levelname)s %(message)s')\n    base=os.environ['QUEUE_URL'].rstrip('/');worker=os.environ['WORKER_NAME']\n\
+    \    token=Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    ready=Path(os.environ.get('BURST_READY_DIR','/tmp/waffles-burst-ready'));ready.mkdir(parents=True,exist_ok=True)\n\
+    \    children=[];stopping=False;target=0;last_heartbeat=0;cores=0;device='mps'\
+    \ if sys.platform=='darwin' else 'cpu'\n    allowed=sorted(os.sched_getaffinity(0))\
+    \ if hasattr(os,'sched_getaffinity') else []\n    def stop(*_):\n        nonlocal\
+    \ stopping\n        stopping=True\n    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)\n\
+    \    def request(path,body=None):\n        req=urllib.request.Request(base+path,headers={'Authorization':'Bearer\
+    \ '+token,'Content-Type':'application/json'},data=None if body is None else json.dumps(body).encode())\n\
+    \        with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)\n\
+    \    try:\n        while not stopping:\n            for item in children:\n  \
+    \              code=item['process'].poll()\n                if code is not None:\n\
+    \                    (ready/item['instance']).unlink(missing_ok=True)\n      \
+    \              logging.info('Burst process exited: code=%s drain=%s',code,item['draining'])\n\
+    \                    try:request('/api/heartbeat',{'worker':worker,'pool':'burst','instance':item['instance'],'device':'stopped','ready':False,'draining':item['draining'],'exit_code':code})\n\
+    \                    except Exception:pass\n            children=[item for item\
+    \ in children if item['process'].poll() is None]\n            try:\n         \
+    \       tuning=request('/api/burst');value=int(tuning['workers'][worker]['slots'])\n\
+    \                if not 0<=value<=int(tuning['limits'][worker]):raise ValueError('Invalid\
+    \ burst target')\n                requested_cores=int(tuning['workers'][worker].get('cpu_cores',0))\n\
+    \                if allowed and not 1<=requested_cores<=len(allowed):raise ValueError('Invalid\
+    \ CPU affinity count')\n                requested_device=tuning['workers'][worker].get('device',device)\n\
+    \                if requested_device not in ('cpu','mps'):raise ValueError('Invalid\
+    \ compute device')\n                target=value;cores=requested_cores;device=requested_device\n\
+    \            except Exception:logging.warning('Burst policy unavailable; retaining\
+    \ target')\n            for item in children:\n                if item['device']!=device\
+    \ and not item['draining']:\n                    item['draining']=True;item['process'].terminate()\n\
+    \            if allowed and cores:\n                for item in children:\n  \
+    \                  for task in Path('/proc/'+str(item['process'].pid)+'/task').glob('*'):\n\
+    \                        try:os.sched_setaffinity(int(task.name),allowed[:cores])\n\
+    \                        except ProcessLookupError:pass\n            active=[item\
+    \ for item in children if not item['draining']]\n            for item in active[target:]:\n\
+    \                item['draining']=True;item['process'].terminate()\n         \
+    \   # Load one model process at a time. A large target must not bypass\n     \
+    \       # pressure guards by launching all allocations before they appear.\n \
+    \           if len(children)<target and all((ready/i['instance']).exists() for\
+    \ i in children) and can_run(starting=True):\n                instance=worker+'-burst-'+uuid.uuid4().hex[:12]\n\
+    \                process=subprocess.Popen([sys.executable,'-B',str(Path(__file__).with_name('burst-worker.py'))],env={**os.environ,'WAFFLES_INSTANCE':instance,'BURST_READY_DIR':str(ready),'BURST_CPU_CORES':str(cores),'BURST_DEVICE':device},preexec_fn=lambda:os.nice(10))\n\
+    \                children.append({'process':process,'draining':False,'instance':instance,'device':device})\n\
+    \                logging.info('Started extra %s process; target=%d',worker,target)\n\
+    \            if time.monotonic()-last_heartbeat>=15:\n                body={'worker':worker,'pool':'burst','instance':worker+'-burst-supervisor-'+socket.gethostname(),'role':'supervisor','device':'standby','ready':False}\n\
+    \                if sys.platform=='darwin':\n                    try:\n      \
+    \                  from mac_observation import observe\n                     \
+    \   body['host_observation']=observe()\n                    except Exception:logging.warning('Mac\
+    \ host observation unavailable')\n                try:request('/api/heartbeat',body)\n\
+    \                except Exception:pass\n                last_heartbeat=time.monotonic()\n\
+    \            time.sleep(3)\n    finally:\n        for item in children:\n    \
+    \        if item['process'].poll() is None:item['process'].terminate()\n     \
+    \   deadline=time.monotonic()+60\n        for item in children:\n            try:item['process'].wait(timeout=max(.1,deadline-time.monotonic()))\n\
+    \            except subprocess.TimeoutExpired:item['process'].kill()\n\nif __name__=='__main__':main()\n"
+  burst_guard.py: "\"\"\"Protect the permanent baseline by refusing extra workers\
+    \ under memory pressure.\"\"\"\nfrom pathlib import Path\nimport subprocess\n\
+    import sys\nimport time\n\nwarning_since=None\n\ndef can_run(starting=False):\n\
+    \    global warning_since\n    if sys.platform=='darwin':\n        try:level=int(subprocess.check_output(['sysctl','-n','kern.memorystatus_vm_pressure_level'],text=True))\n\
+    \        except Exception:return False\n        if level==1:warning_since=None;return\
+    \ True\n        if starting or level>=4:return False\n        if warning_since\
+    \ is None:warning_since=time.monotonic()\n        return time.monotonic()-warning_since<6\n\
+    \    try:\n        memory=dict(line.split(':',1) for line in Path('/proc/meminfo').read_text().splitlines())\n\
+    \        if int(memory['MemAvailable'].split()[0])<(1800 if starting else 512)*1024:return\
+    \ False\n        limit=Path('/sys/fs/cgroup/memory.max').read_text().strip()\n\
+    \        current=int(Path('/sys/fs/cgroup/memory.current').read_text())\n    \
+    \    return limit=='max' or int(limit)-current>(1500 if starting else 128)*1024**2\n\
+    \    except Exception:return False\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning} from\
-    \ './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
-    assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',4),{slots:4});\n\
-    assert.deepEqual(validateTuning('still-fawn',0),{slots:0});\nfor(const [worker,slots]\
-    \ of [['mac',5],['pve',2],['still-fawn',-1],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
+    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning,validateBurst}\
+    \ from './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
+    assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',1),{slots:1});\n\
+    for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
+    assert.deepEqual(validateBurst('mac',15,'benchmark'),{slots:15,mode:'benchmark',cpu_cores:0,device:'mps'});\n\
+    assert.deepEqual(validateBurst('still-fawn',0,'production'),{slots:0,mode:'production',cpu_cores:3,device:'cpu'});\n\
+    assert.deepEqual(validateBurst('still-fawn',2,'benchmark',1),{slots:2,mode:'benchmark',cpu_cores:1,device:'cpu'});\n\
+    assert.throws(()=>validateBurst('still-fawn',2,'benchmark',4));\nassert.equal(validateBurst('mac',1,'benchmark',0,'cpu').device,'cpu');\n\
+    assert.throws(()=>validateBurst('still-fawn',1,'benchmark',1,'mps'));\nassert.throws(()=>validateBurst('mac',1,'benchmark',0,'cuda'));\n\
+    for(const [worker,slots,mode] of [['mac',16,'benchmark'],['pve',2,'production'],['chief-horse',1,'production'],['mac',-1,'production'],['mac',1,'other']])assert.throws(()=>validateBurst(worker,slots,mode));\n\
     const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};\n\
     assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');\n\
     assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');\n\
     for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
     \  assert.throws(()=>validateResult(bad));\nif(process.argv.includes('--postgres'))\
     \ {\n  const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
-    \  const db=new Pool({max:3});const id='queue-test-'+Date.now();\n  try {\n  \
-    \  await db.query(\"INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,'benchmark','running',ARRAY['pve','still-fawn'],'{}')\"\
-    ,[id]);\n    for(let n=1;n<=2;n++)await db.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
+    \  const db=new Pool({max:4});const suffix=String(Date.now());\n  const names=Object.fromEntries(['jobs','runs','settings'].map(n=>[n,'waffles.test_'+n+'_'+suffix]));\n\
+    \  const rewrite=sql=>Object.entries(names).reduce((s,[name,table])=>s.replaceAll('waffles.'+name,table),sql).replaceAll('pg_advisory_xact_lock(244,','pg_advisory_xact_lock(1244,');\n\
+    \  const isolated={query:(sql,args)=>db.query(rewrite(sql),args),connect:async()=>{const\
+    \ connection=await db.connect();return {query:(sql,args)=>connection.query(rewrite(sql),args),release:()=>connection.release()};}};\n\
+    \  try {\n    for(const name of ['runs','jobs','settings'])await db.query(`CREATE\
+    \ TABLE ${names[name]} (LIKE waffles.${name} INCLUDING ALL)`);\n    await db.query(`ALTER\
+    \ TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base'`);\n\
+    \    await db.query(`ALTER TABLE ${names.jobs} ADD COLUMN IF NOT EXISTS device\
+    \ text`);\n    await isolated.query(\"INSERT INTO waffles.settings VALUES('burst','{\\\
+    \"pve\\\":{\\\"slots\\\":2,\\\"mode\\\":\\\"benchmark\\\"}}')\");\n    for(const\
+    \ [id,mode] of [['bench','benchmark'],['prod','production']]) {\n      await isolated.query(\"\
+    INSERT INTO waffles.runs(id,mode,state,workers,config) VALUES($1,$2,'running',ARRAY['pve'],'{}')\"\
+    ,[id,mode]);\n      for(let n=1;n<=3;n++)await isolated.query(\"INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\
     \ VALUES($1,$2,'2020-01-01',$3)\",[id,'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),n]);\n\
-    \    const [a,b]=await Promise.all([claim(db,'pve'),claim(db,'still-fawn')]);\n\
-    \    assert(a&&b&&a.asset_id!==b.asset_id,'Workers must receive distinct assets');\n\
-    \    await db.query(\"UPDATE waffles.jobs SET lease_until=now()-interval '1 second'\
-    \ WHERE run_id=$1 AND asset_id=$2\",[id,a.asset_id]);\n    assert.equal(await\
-    \ finish(db,a,value),false,'Expired claims cannot commit');\n    const retry=await\
-    \ claim(db,'pve');assert.equal(retry.asset_id,a.asset_id);assert.notEqual(retry.claim,a.claim);\n\
-    \    assert.equal(await finish(db,a,value),false,'Old fencing token cannot commit');\n\
-    \    assert.equal(await finish(db,retry,value),true);\n    assert.equal(await\
-    \ finish(db,retry,value),false,'Duplicate completion cannot commit twice');\n\
-    \    assert.equal(await finish(db,b,value),true);\n    assert.equal((await db.query(\"\
-    SELECT count(*)::int n FROM waffles.jobs WHERE run_id=$1 AND status='complete'\"\
-    ,[id])).rows[0].n,2);\n    console.log('PostgreSQL concurrency, lease expiry,\
-    \ fencing and duplicate completion tests passed');\n  } finally {\n    await db.query('DELETE\
-    \ FROM waffles.jobs WHERE run_id=$1',[id]);\n    await db.query('DELETE FROM waffles.runs\
-    \ WHERE id=$1',[id]);await db.end();\n  }\n}\nconsole.log('Result validation checks\
-    \ passed');\n"
+    \    }\n    const [a,b,c]=await Promise.all([claim(isolated,'pve','burst'),claim(isolated,'pve','burst'),claim(isolated,'pve','burst')]);\n\
+    \    const leased=[a,b,c].filter(Boolean);assert.equal(leased.length,2,'Concurrent\
+    \ claims cannot exceed burst slots');\n    assert.notEqual(leased[0].asset_id,leased[1].asset_id);\n\
+    \    const baseline=await claim(isolated,'pve');assert.equal(baseline.run_id,'prod','Baseline\
+    \ keeps serving production while burst slots are occupied');\n    assert.equal(await\
+    \ claim(isolated,'pve'),null,'Baseline cap remains one');\n    const old=leased[0];\n\
+    \    await isolated.query(\"UPDATE waffles.jobs SET lease_until=now()-interval\
+    \ '1 second' WHERE run_id=$1 AND asset_id=$2\",[old.run_id,old.asset_id]);\n \
+    \   assert.equal(await finish(isolated,old,value),false,'Expired claims cannot\
+    \ commit');\n    const retry=await claim(isolated,'pve','burst');assert.equal(retry.asset_id,old.asset_id);assert.notEqual(retry.claim,old.claim);\n\
+    \    assert.equal(await finish(isolated,old,value),false,'Old fencing token cannot\
+    \ commit');\n    assert.equal(await finish(isolated,retry,value),true);\n    assert.equal(await\
+    \ finish(isolated,retry,value),false,'Duplicate completion cannot commit twice');\n\
+    \    await isolated.query(\"UPDATE waffles.settings SET value='{\\\"pve\\\":{\\\
+    \"slots\\\":0,\\\"mode\\\":\\\"benchmark\\\"}}' WHERE key='burst'\");\n    assert.equal(await\
+    \ claim(isolated,'pve','burst'),null);\n    assert.equal(await finish(isolated,baseline,value),true);\n\
+    \    assert.equal((await claim(isolated,'pve')).run_id,'prod','Zero burst slots\
+    \ must not stop baseline work');\n    console.log('Isolated PostgreSQL pool separation,\
+    \ concurrent caps, fencing and baseline continuity passed');\n  } finally {\n\
+    \    for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF\
+    \ EXISTS ${names[name]}`);\n    await db.end();\n  }\n}\nconsole.log('Result validation\
+    \ checks passed');\n"
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: waffles-schema-v2
+  name: waffles-schema-v3
   namespace: database
 spec:
   backoffLimit: 3
@@ -971,7 +1483,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
+        checksum/code: 9c9b8ff19a9a5ca8a3f9782aa90c863e8c2d6984638e7c5c74eeec1e7f99a1d0
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1100,7 +1612,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: waffles-worker-still-fawn
+  name: waffles-burst-still-fawn
   namespace: immich-pilot
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
@@ -1115,7 +1627,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: waffles-worker-still-fawn
+  name: waffles-burst-still-fawn
   namespace: immich-pilot
 spec:
   replicas: 1
@@ -1123,13 +1635,14 @@ spec:
     type: Recreate
   selector:
     matchLabels: &id001
-      app: waffles-worker-still-fawn
+      app: waffles-burst-still-fawn
       waffles-worker: still-fawn
+      waffles-pool: burst
   template:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
+        checksum/code: 9c9b8ff19a9a5ca8a3f9782aa90c863e8c2d6984638e7c5c74eeec1e7f99a1d0
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1145,7 +1658,7 @@ spec:
           name: waffles-code
       - name: data
         persistentVolumeClaim:
-          claimName: waffles-worker-still-fawn
+          claimName: waffles-burst-still-fawn
       - name: credentials
         secret:
           secretName: waffles-queue
@@ -1164,7 +1677,7 @@ spec:
         command:
         - python
         - -B
-        - /code/supervisor.py
+        - /code/burst-supervisor.py
         env:
         - name: QUEUE_URL
           value: http://waffles-queue.immich-pilot.svc.cluster.local:9200
@@ -1184,11 +1697,11 @@ spec:
           value: '2'
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 100m
+            memory: 512Mi
           limits:
-            cpu: '2'
-            memory: 3Gi
+            cpu: '3'
+            memory: 6Gi
         securityContext:
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
@@ -1210,7 +1723,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: waffles-worker-pve
+  name: waffles-burst-pve
   namespace: immich-pilot
   annotations:
     kustomize.toolkit.fluxcd.io/prune: disabled
@@ -1225,7 +1738,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: waffles-worker-pve
+  name: waffles-burst-pve
   namespace: immich-pilot
 spec:
   replicas: 1
@@ -1233,13 +1746,14 @@ spec:
     type: Recreate
   selector:
     matchLabels: &id001
-      app: waffles-worker-pve
+      app: waffles-burst-pve
       waffles-worker: pve
+      waffles-pool: burst
   template:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
+        checksum/code: 9c9b8ff19a9a5ca8a3f9782aa90c863e8c2d6984638e7c5c74eeec1e7f99a1d0
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1255,7 +1769,7 @@ spec:
           name: waffles-code
       - name: data
         persistentVolumeClaim:
-          claimName: waffles-worker-pve
+          claimName: waffles-burst-pve
       - name: credentials
         secret:
           secretName: waffles-queue
@@ -1274,7 +1788,7 @@ spec:
         command:
         - python
         - -B
-        - /code/supervisor.py
+        - /code/burst-supervisor.py
         env:
         - name: QUEUE_URL
           value: http://waffles-queue.immich-pilot.svc.cluster.local:9200
@@ -1287,15 +1801,15 @@ spec:
         - name: SCAN_WORKERS
           value: '1'
         - name: OMP_NUM_THREADS
-          value: '1'
+          value: '2'
         - name: MKL_NUM_THREADS
-          value: '1'
+          value: '2'
         - name: OPENBLAS_NUM_THREADS
-          value: '1'
+          value: '2'
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 100m
+            memory: 512Mi
           limits:
             cpu: '1'
             memory: 1536Mi
@@ -1346,13 +1860,13 @@ spec:
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: waffles-worker-still-fawn
+  name: waffles-burst-still-fawn
   namespace: immich-pilot
 spec:
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: waffles-worker-still-fawn
+    name: waffles-burst-still-fawn
   updatePolicy:
     updateMode: 'Off'
   resourcePolicy:
@@ -1366,19 +1880,19 @@ spec:
         cpu: 100m
         memory: 256Mi
       maxAllowed:
-        cpu: '2'
-        memory: 3Gi
+        cpu: '3'
+        memory: 6Gi
 ---
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: waffles-worker-pve
+  name: waffles-burst-pve
   namespace: immich-pilot
 spec:
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: waffles-worker-pve
+    name: waffles-burst-pve
   updatePolicy:
     updateMode: 'Off'
   resourcePolicy:

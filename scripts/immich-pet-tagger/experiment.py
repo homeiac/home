@@ -133,6 +133,8 @@ def main():
     args=parser.parse_args();private=args.private_directory
     if args.note:
         record('operator_note',note=args.note);return
+    if not args.prepare_only:
+        raise RuntimeError('The isolated protocol is retired: preserve baseline production and use the continuous-production experiment')
     def interrupted(*_):raise KeyboardInterrupt('Experiment interrupted')
     signal.signal(signal.SIGTERM,interrupted)
     truth=json.loads((private/'owner-confirmed-holdout.json').read_text())

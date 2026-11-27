@@ -36,3 +36,14 @@ CREATE TABLE IF NOT EXISTS waffles.tuning_events (
 INSERT INTO waffles.settings(key,value) VALUES('tuning',
  '{"mac":{"slots":1},"pve":{"slots":1},"still-fawn":{"slots":1},"fun-bedbug":{"slots":1},"chief-horse":{"slots":1}}')
  ON CONFLICT(key) DO NOTHING;
+ALTER TABLE waffles.jobs ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base';
+ALTER TABLE waffles.jobs ADD COLUMN IF NOT EXISTS device text;
+UPDATE waffles.jobs SET device=CASE WHEN worker='mac' THEN 'mps' ELSE 'cpu' END WHERE worker IS NOT NULL AND device IS NULL;
+CREATE INDEX IF NOT EXISTS waffles_active_pool ON waffles.jobs(worker,pool) WHERE status='running';
+ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS pool text NOT NULL DEFAULT 'base';
+ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS cpu_seconds double precision NOT NULL DEFAULT 0;
+ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS accelerator_bytes bigint NOT NULL DEFAULT 0;
+ALTER TABLE waffles.instances ADD COLUMN IF NOT EXISTS cpu_affinity integer;
+INSERT INTO waffles.settings(key,value) VALUES('burst',
+ '{"mac":{"slots":0,"mode":"production"},"pve":{"slots":0,"mode":"production"},"still-fawn":{"slots":0,"mode":"production"},"fun-bedbug":{"slots":0,"mode":"production"},"chief-horse":{"slots":0,"mode":"production"}}')
+ ON CONFLICT(key) DO NOTHING;
