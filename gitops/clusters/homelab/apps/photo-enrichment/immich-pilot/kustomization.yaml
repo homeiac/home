@@ -14,3 +14,8 @@ configMapGenerator:
   - name: immich-family-viewer-script
     namespace: immich-pilot
     files: [family-viewers.mjs]
+  - name: immich-album-grid-v1
+    namespace: immich-pilot
+    options:
+      disableNameSuffixHash: true
+    files: [album-grid.cjs]

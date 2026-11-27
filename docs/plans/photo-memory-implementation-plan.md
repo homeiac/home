@@ -102,3 +102,11 @@ Run the platform checker against all three live rollout bundles on the same rele
    to owner-created albums. Deliver this through Flux with encrypted configuration.
 3. Verify the new album’s exact assets and both roles, then check a second pass
    leaves the memberships intact.
+
+### Growing-up album navigation and People access (#243)
+
+Verify the two family invitations and the distinction between album viewers and
+People roles. After recipients join the recognition group, grant read access to
+all owner People records. For the web Albums list, opt individual albums into
+Immich's existing oldest-first search grid. Verify both album cards and a
+regular album after rollout.

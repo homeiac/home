@@ -117,3 +117,16 @@ Revoking the Google client is separate and must not affect the rclone client.
 Sources: [Immich OAuth](https://docs.immich.app/administration/oauth/),
 [v3.4.2 linking implementation](https://github.com/immich-app/immich/blob/v3.4.2/server/src/services/auth.service.ts#L300),
 [Google authorization-code flow](https://developers.google.com/identity/protocols/oauth2/web-server).
+
+### Album display on the web
+
+To open an album from **Albums** as a continuous grid, add `Layout: photo grid`
+on its own line in the album description. The link uses Immich’s album-filtered
+search with the album’s display order. Opening the original album URL gives the
+owner its usual editing and sharing controls. Remove the line to restore the
+usual Albums link. The native mobile app has its own layout.
+
+The web init container checks the pinned upstream route helper before preparing
+the grid links. After an Immich upgrade, check its log for `Album grid links
+enabled` and verify an opted-in card, a table row and a regular album link.
+An unrecognized build uses the upstream links.

@@ -56,6 +56,26 @@ spec:
       defaultPodOptions:
         runtimeClassName: nvidia
       persistence:
+        album-grid-script:
+          enabled: true
+          type: configMap
+          name: immich-album-grid-v1
+          advancedMounts:
+            main:
+              prepare-album-grid:
+                - {path: /layout, readOnly: true}
+        album-grid-output:
+          enabled: true
+          type: emptyDir
+          advancedMounts:
+            main:
+              prepare-album-grid:
+                - {path: /output}
+              main:
+                - {path: /build/www/index.html, subPath: index.html, readOnly: true}
+                - {path: /build/www/index.html.gz, subPath: index.html.gz, readOnly: true}
+                - {path: /build/www/index.html.br, subPath: index.html.br, readOnly: true}
+                - {path: /build/www/_app/immutable/chunks/DEHf2nXs.album-grid-v1.js, subPath: grid.js, readOnly: true}
         originals:
           enabled: true
           type: hostPath
@@ -72,6 +92,16 @@ spec:
         main:
           replicas: 1
           strategy: Recreate
+          initContainers:
+            prepare-album-grid:
+              image:
+                repository: ghcr.io/immich-app/immich-server
+                tag: v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+              command: [node, /layout/album-grid.cjs]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
           containers:
             main:
               image:
