@@ -440,8 +440,13 @@ def panels():
     audio = audio_story_panels()
     processing = photo_processing_panels()
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
-    processing_height = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
     all_panels += shift(life_stage_tuning_panels(), bottom)
+    # Allocate the backend charts last to keep all existing dashboard links stable.
+    charts_at = next(i for i, panel in enumerate(processing) if panel["type"] == "timeseries")
+    backend_charts = photo_backend_panels(processing[charts_at]["gridPos"]["y"])
+    shift(processing[charts_at:], backend_charts[0]["gridPos"]["h"])
+    processing[charts_at:charts_at] = backend_charts
+    processing_height = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
     # Move the shared progress row after allocating IDs so existing panel links still work.
     remaining = (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
                  + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
@@ -498,6 +503,22 @@ def photo_processing_panels():
             panel["targets"][0].update(instant=True, range=False)
             panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting telemetry"
     return panel_set
+
+
+def photo_backend_panels(y):
+    """Show committed inference results from each backend for the chosen stages."""
+    saved = 'knowledge_index_photo_stage_backend_completed{instance=~"$instance",stage=~"$photo_stage"}'
+    window = f'{saved}[15m]'
+    pace = (f'max by(stage,backend) (clamp_min(deriv({window}), 0) '
+            f'and (resets({window}) == 0)) * 60')
+    legend = "{{stage}} · {{backend}}"
+    return [
+        series("Results per minute by backend", [(pace, legend)], 0, y, 12, 7, decimals=1,
+               description="New successful results per minute on each backend, measured over 15 minutes. For the library face stage, each result is one face occurrence."),
+        series("Results saved by backend", [(f'max by(stage,backend) ({saved})', legend)],
+               12, y, 12, 7, unit="locale",
+               description="New successful results committed by each backend. Previously saved observations reused from another run are excluded."),
+    ]
 
 
 def tuning_story(content):
