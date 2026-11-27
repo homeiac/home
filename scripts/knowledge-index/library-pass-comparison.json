@@ -1,0 +1,99 @@
+{
+  "date": "2026-11-26",
+  "method": "Each GPU processed the same 12 marked faces four times per method. The two blocks reversed method order, and each block reversed face order. Rates count completed faces per wall-clock minute in this benchmark. Ten faces had a reviewed life stage (40 readings). Exact life stage is scored independently of action. Supported actions count completed readings whose entire phrase fits the marked subject, out of all 48 attempts. Review hid the backend and method. Both correct requires a supported action and an exact reviewed life stage in the same reading.",
+  "backends": {
+    "Mac Metal": {
+      "two_pass": {
+        "lanes": 4,
+        "attempts": 48,
+        "successful": 48,
+        "per_min": 9.62,
+        "pass_rates": [
+          7.68,
+          7.45,
+          11.54,
+          15.44
+        ],
+        "reviewed_stage_exact": 21,
+        "reviewed_attempts": 40,
+        "median_seconds": {
+          "preview_seconds": 0.05,
+          "age_seconds": 14.53,
+          "action_seconds": 13.52
+        },
+        "supported_actions": 35,
+        "both_correct": 16,
+        "inference_calls": 96
+      },
+      "one_pass": {
+        "lanes": 4,
+        "attempts": 48,
+        "successful": 45,
+        "per_min": 15.14,
+        "pass_rates": [
+          12.18,
+          40.01,
+          11.82,
+          13.88
+        ],
+        "reviewed_stage_exact": 16,
+        "reviewed_attempts": 40,
+        "median_seconds": {
+          "preview_seconds": 0.06,
+          "joint_seconds": 16.58
+        },
+        "supported_actions": 34,
+        "both_correct": 13,
+        "inference_calls": 48
+      },
+      "decision": "Retained two calls. One call reduced exact life-stage matches, visually supported actions, jointly correct readings, completed readings."
+    },
+    "RTX 3070": {
+      "two_pass": {
+        "lanes": 3,
+        "attempts": 48,
+        "successful": 48,
+        "per_min": 14.04,
+        "pass_rates": [
+          12.03,
+          13.63,
+          14.44,
+          16.89
+        ],
+        "reviewed_stage_exact": 20,
+        "reviewed_attempts": 40,
+        "median_seconds": {
+          "preview_seconds": 0.06,
+          "age_seconds": 5.82,
+          "action_seconds": 6.13
+        },
+        "supported_actions": 34,
+        "both_correct": 17,
+        "inference_calls": 96
+      },
+      "one_pass": {
+        "lanes": 3,
+        "attempts": 48,
+        "successful": 48,
+        "per_min": 21.53,
+        "pass_rates": [
+          16.95,
+          30.75,
+          21.48,
+          20.96
+        ],
+        "reviewed_stage_exact": 24,
+        "reviewed_attempts": 40,
+        "median_seconds": {
+          "preview_seconds": 0.07,
+          "joint_seconds": 8.59
+        },
+        "supported_actions": 40,
+        "both_correct": 24,
+        "inference_calls": 48
+      },
+      "decision": "Selected one call. It was faster and improved both aggregate quality measures on this sample. One edge-of-frame gaze remained unreliable."
+    }
+  },
+  "decision": "Mac Metal \u2014 Retained two calls. One call reduced exact life-stage matches, visually supported actions, jointly correct readings, completed readings. RTX 3070 \u2014 Selected one call. It was faster and improved both aggregate quality measures on this sample. One edge-of-frame gaze remained unreliable."
+}

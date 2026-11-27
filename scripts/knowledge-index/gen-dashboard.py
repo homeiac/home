@@ -541,6 +541,24 @@ def photo_backend_panels(y):
         panels.append(tuning_comparison(
             f'Library backfill · {backend} before and after', rates, x * 12, y + 7, 12, 7,
             "suffix: faces/min", result["decision"] + evidence + timing + " " + trial["method"]))
+    paired = json.loads((Path(__file__).parent / "library-pass-comparison.json").read_text())
+    quality = ["| Backend | Model calls per face | Completed | Exact life stage | Saved with supported action | Both correct |",
+               "|---|---:|---:|---:|---:|---:|"]
+    for x, (backend, result) in enumerate(paired["backends"].items()):
+        rates = []
+        for calls, arm in ((2, result["two_pass"]), (1, result["one_pass"])):
+            rates.append((f'vector({arm["per_min"]})', f'{calls} {"call" if calls == 1 else "calls"} per face'))
+            total = arm["attempts"]
+            reviewed = arm["reviewed_attempts"]
+            quality.append(f'| {backend} | {calls} | {arm["successful"]}/{total} | '
+                           f'{arm["reviewed_stage_exact"]}/{reviewed} | {arm["supported_actions"]}/{total} | '
+                           f'{arm["both_correct"]}/{reviewed} |')
+        panels.append(tuning_comparison(
+            f'Age and action · {backend} · two calls vs one', rates, x * 12, y + 14, 12, 6,
+            "suffix: faces/min", paired["method"] + " " + result["decision"]))
+    quality.extend(["", paired["method"], "", paired["decision"]])
+    panels.append(_panel("text", "Age and action · quality on the same faces", [], 0, y + 20, 24, 8,
+                         extra={"options": {"mode": "markdown", "content": "\n".join(quality)}}))
     return panels
 
 
