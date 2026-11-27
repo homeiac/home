@@ -5,7 +5,8 @@
 The album has 633 videos (245.6 minutes) and 867 photos. Existing audio analysis
 matches 632 videos. The duration-stratified preparation completed 31 of 32 videos
 in 115.37 seconds with four low-priority single-thread decoders; the 0.72-second
-clip requires a smaller frame count and is being retried. Prepared evidence and
+clip needed a smaller frame count. After that fix, the retry reused 31 cached
+results and prepared the remaining clip in 0.74 seconds. Prepared evidence and
 all per-asset records stay private.
 
 The reviewed sample includes unrelated scenery. The classifier must be able to

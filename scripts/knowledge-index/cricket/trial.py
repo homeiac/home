@@ -134,6 +134,7 @@ def main() -> None:
             KeyError,
             TypeError,
             subprocess.SubprocessError,
+            RuntimeError,
         ) as error:
             result = {"ok": False, "error": type(error).__name__}
         save_private(args.output / f"{i:03}.json", result)
