@@ -853,7 +853,7 @@ data:
           },
           "options": {
             "nodes": {
-              "mainStatUnit": "photos",
+              "mainStatUnit": "",
               "secondaryStatUnit": "s/photo"
             },
             "edges": {
@@ -1019,21 +1019,6 @@ data:
                   "Value": true,
                   "Value #edges": true
                 }
-              }
-            },
-            {
-              "id": "convertFieldType",
-              "filter": {
-                "id": "byRefId",
-                "options": "nodes"
-              },
-              "options": {
-                "conversions": [
-                  {
-                    "targetField": "mainstat",
-                    "destinationType": "string"
-                  }
-                ]
               }
             },
             {

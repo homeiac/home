@@ -62,7 +62,7 @@ def dashboard():
         'edges': ' or '.join(label(rate(w),id=a+'_'+b,source=a,target=b) for w in workers for a,b in [('queue',w),(w,'committed')])}
     graph = panel('Job distribution · processed photos by backend',[],0,8,w=24,h=20,kind='nodeGraph',description='Node: committed photo count and mean processing seconds/photo. Edge: recent photos/minute. Hover a backend for in-flight jobs and throughput. Means cover completed jobs in this run; timings include thumbnail fetch, detection and classification. RTX is excluded.')
     graph['targets']=[dict(refId=ref,expr=expr,format='table',instant=True,range=False) for ref,expr in queries.items()]
-    graph['options']={'nodes':{'mainStatUnit':'photos','secondaryStatUnit':'s/photo'},'edges':{'mainStatUnit':'photos/min'}}
+    graph['options']={'nodes':{'mainStatUnit':'','secondaryStatUnit':'s/photo'},'edges':{'mainStatUnit':'photos/min'}}
     graph['fieldConfig']['overrides']=[{'matcher':{'id':'byName','options':'mainstat'},'properties':[{'id':'displayName','value':'Processed photos'}]}, {'matcher':{'id':'byName','options':'secondarystat'},'properties':[{'id':'displayName','value':'Mean seconds/photo'}]}]
     graph['fieldConfig']['defaults']['decimals']=1
     graph['fieldConfig']['defaults']['mappings']=[{'type':'special','options':{'match':'nan','result':{'text':'—','color':'gray'}}}]
@@ -72,9 +72,6 @@ def dashboard():
         transforms += [{'id':'calculateField','filter':filt,'options':{'mode':'reduceRow','reduce':{'reducer':'lastNotNull','include':['Value','Value #'+ref]},'alias':name}},
                        {'id':'organize','filter':filt,'options':{'excludeByName':{'Time':True,'Value':True,'Value #'+ref:True}}}]
     transforms.append({'id':'joinByField','filter':{'id':'byRefId','options':'/^(nodes|timing|inflight|pace)$/'},'options':{'byField':'id','mode':'outerTabular'}})
-    # Grafana's node stat formatter uses `decimals || 2`; text preserves exact
-    # integer counts and avoids clipping long "1694.00 photos" labels.
-    transforms.insert(-1,{'id':'convertFieldType','filter':{'id':'byRefId','options':'nodes'},'options':{'conversions':[{'targetField':'mainstat','destinationType':'string'}]}})
     graph['transformations']=transforms
 
     panel('Processed photos by backend',[(jobs('complete',w),w) for w in workers],0,22,w=12,h=7,kind='timeseries')
