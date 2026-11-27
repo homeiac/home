@@ -84,7 +84,7 @@ async function main() {
       lines.push(queueMetrics(await batch.exec()));queueUp=1;lastQueue=Date.now()/1000;
     } catch {queueUp=0;}
     try {
-      lines.push(recommendationMetrics(await Promise.all(['immich-server','immich-machine-learning'].map(readVpa))));
+      lines.push(recommendationMetrics(await Promise.all(['immich-server','immich-machine-learning','immich-pet-tagger','waffles-worker-pve','waffles-worker-still-fawn'].map(readVpa))));
       vpaUp=1;lastVpa=Date.now()/1000;
     } catch {vpaUp=0;}
     lines.push('# HELP immich_observer_source_up Whether the last collection succeeded.','# TYPE immich_observer_source_up gauge',

@@ -31,6 +31,13 @@ key = yaml.safe_load(decoded.stdout)['stringData']['api-key']
 assert len(key) >= 24 and key not in rendered
 diff = subprocess.check_output(['git', '-C', str(root), 'diff', '--cached'], text=True)
 assert key not in diff
+queue_secret = directory/'queue-credentials.sops.yaml'
+if queue_secret.exists():
+    recovered = subprocess.run(['sops', '-d', str(queue_secret)], capture_output=True, text=True, env=environment)
+    assert recovered.returncode == 0, 'Queue secret recovery failed'
+    for document in yaml.safe_load_all(recovered.stdout):
+        for value in document['stringData'].values():
+            assert len(value) >= 32 and value not in rendered and value not in diff
 subprocess.run(['kubectl', 'kustomize', str(directory.parent)], check=True,
                stdout=subprocess.DEVNULL)
 subprocess.run(['git', '-C', str(root), 'diff', '--check'], check=True)

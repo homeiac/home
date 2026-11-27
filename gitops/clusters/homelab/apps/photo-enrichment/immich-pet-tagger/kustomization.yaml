@@ -6,3 +6,5 @@ resources:
 - credentials.sops.yaml
 - metrics.yaml
 - dashboard.yaml
+- queue-credentials.sops.yaml
+- distributed.yaml

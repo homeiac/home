@@ -53,8 +53,8 @@ data:
     \ [method,suffix] of Object.values(states))batch[method](`immich_bull:${key}:${suffix}`);\n\
     \      lines.push(queueMetrics(await batch.exec()));queueUp=1;lastQueue=Date.now()/1000;\n\
     \    } catch {queueUp=0;}\n    try {\n      lines.push(recommendationMetrics(await\
-    \ Promise.all(['immich-server','immich-machine-learning'].map(readVpa))));\n \
-    \     vpaUp=1;lastVpa=Date.now()/1000;\n    } catch {vpaUp=0;}\n    lines.push('#\
+    \ Promise.all(['immich-server','immich-machine-learning','immich-pet-tagger','waffles-worker-pve','waffles-worker-still-fawn'].map(readVpa))));\n\
+    \      vpaUp=1;lastVpa=Date.now()/1000;\n    } catch {vpaUp=0;}\n    lines.push('#\
     \ HELP immich_observer_source_up Whether the last collection succeeded.','# TYPE\
     \ immich_observer_source_up gauge',\n      `immich_observer_source_up{source=\"\
     queues\"} ${queueUp}`,`immich_observer_source_up{source=\"vpa\"} ${vpaUp}`,\n\
@@ -87,6 +87,9 @@ rules:
   resourceNames:
   - immich-server
   - immich-machine-learning
+  - immich-pet-tagger
+  - waffles-worker-pve
+  - waffles-worker-still-fawn
   verbs:
   - get
 ---
@@ -118,7 +121,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/config: 8822002218f16473c86f256e365e1d14902194476c43d1afc9fdccf70df5064b
+        checksum/config: 88734c787f6ba461601613e6a44a056e3afdaa1f84da4c0825ccc6f25e9b9ee2
     spec:
       serviceAccountName: immich-observer
       nodeSelector:
@@ -210,8 +213,9 @@ spec:
     rules:
     - alert: ImmichThumbnailQueueStalled
       expr: (sum(immich_queue_jobs{queue="thumbnail_generation",state=~"waiting|delayed|prioritized|paused"})
-        > 0) and (sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m]))
-        == 0)
+        > 0) and (((sum(rate(immich_jobs_asset_generate_thumbnails_success_total{namespace="immich-pilot",endpoint="metrics-ms"}[5m])))
+        or (sum(immich_queue_jobs{queue="thumbnail_generation",state=~"waiting|delayed|prioritized|paused"})
+        == 0)) == 0)
       for: 10m
       labels:
         severity: warning

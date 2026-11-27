@@ -23,7 +23,7 @@ def resources():
     yield obj('v1', 'ServiceAccount')
     yield obj('rbac.authorization.k8s.io/v1', 'Role', rules=[{
         'apiGroups': ['autoscaling.k8s.io'], 'resources': ['verticalpodautoscalers'],
-        'resourceNames': ['immich-server', 'immich-machine-learning'], 'verbs': ['get']}])
+        'resourceNames': ['immich-server', 'immich-machine-learning', 'immich-pet-tagger', 'waffles-worker-pve', 'waffles-worker-still-fawn'], 'verbs': ['get']}])
     yield obj('rbac.authorization.k8s.io/v1', 'RoleBinding',
               roleRef={'apiGroup': 'rbac.authorization.k8s.io', 'kind': 'Role', 'name': NAME},
               subjects=[{'kind': 'ServiceAccount', 'name': NAME, 'namespace': NS}])
