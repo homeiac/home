@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-27T17:32:39.109886+00:00",
+  "protocol_version": 3,
+  "reference_images": 6,
+  "eligible_models": [
+    "sol"
+  ],
+  "models": {
+    "sol": {
+      "evaluated": 26,
+      "complete": true,
+      "true_positive": 11,
+      "false_positive": 0,
+      "false_negative": 2,
+      "true_negative": 13,
+      "additional_local_misses_recovered": 4,
+      "eligible_for_fallback": true,
+      "model": "gpt-6.2-sol",
+      "protocol_sha256": "b4dc995a004bfc28dfb5762ed84991fcf03d9d229065032449793e2fa15e5409",
+      "input_tokens": 586635,
+      "output_tokens": 2048
+    }
+  },
+  "limits": "13 negative controls; high confidence is categorical, not a calibrated probability. All proposed recoveries require independent visual review."
+}

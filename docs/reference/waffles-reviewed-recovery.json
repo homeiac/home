@@ -1,0 +1,20 @@
+{
+  "at": "2026-11-27T17:48:02.383381+00:00",
+  "run": "waffles-reviewed-recovery-20261127",
+  "state": "complete",
+  "statuses": {
+    "complete": 1060
+  },
+  "recovery_candidates": 164,
+  "verified_unique_assignments": 164,
+  "new_faces_added": 164,
+  "recovered_by_media": {
+    "IMAGE": 130,
+    "VIDEO": 34
+  },
+  "duplicate_waffles_faces": 0,
+  "missing_or_failed_readback": 0,
+  "original_nine_recovered": 7,
+  "union_with_previous_833": 997,
+  "scope_note": "Recovery cohort excluded the previous 833 model-positive assets. Readback confirms current assignment, not population recall."
+}

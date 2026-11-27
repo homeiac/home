@@ -1,0 +1,55 @@
+{
+  "luna": {
+    "settled_batches": 48,
+    "evaluated": 192,
+    "production_valid": false,
+    "protocol_note": "Invalidated batched protocol; never use these decisions for tagging",
+    "errors": 0,
+    "decisions": {
+      "different_dog/high": 45,
+      "same_dog/high": 33,
+      "uncertain/low": 37,
+      "different_dog/medium": 10,
+      "same_dog/medium": 26,
+      "same_dog/low": 3,
+      "no_dog/high": 34,
+      "uncertain/medium": 3,
+      "uncertain/high": 1
+    },
+    "original_nine": {
+      "no_dog/high": 1,
+      "same_dog/high": 1
+    }
+  },
+  "sol": {
+    "settled_batches": 0,
+    "evaluated": 0,
+    "production_valid": false,
+    "protocol_note": "Invalidated batched protocol; never use these decisions for tagging",
+    "errors": 0,
+    "decisions": {},
+    "original_nine": {}
+  },
+  "sol-single": {
+    "settled_batches": 1060,
+    "evaluated": 1060,
+    "production_valid": true,
+    "protocol_note": "Single target per request; visual verification required",
+    "errors": 0,
+    "decisions": {
+      "different_dog/high": 251,
+      "same_dog/high": 261,
+      "uncertain/high": 82,
+      "uncertain/medium": 98,
+      "same_dog/medium": 210,
+      "no_dog/medium": 3,
+      "uncertain/low": 16,
+      "no_dog/high": 118,
+      "different_dog/medium": 21
+    },
+    "original_nine": {
+      "same_dog/high": 7,
+      "same_dog/medium": 2
+    }
+  }
+}

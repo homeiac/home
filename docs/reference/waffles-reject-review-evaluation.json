@@ -1,0 +1,39 @@
+{
+  "at": "2026-11-27T17:29:27.512180+00:00",
+  "protocol_version": 2,
+  "reference_images": 6,
+  "eligible_models": [],
+  "models": {
+    "luna": {
+      "evaluated": 26,
+      "complete": true,
+      "true_positive": 9,
+      "false_positive": 0,
+      "false_negative": 4,
+      "true_negative": 13,
+      "additional_local_misses_recovered": 3,
+      "eligible_for_fallback": true,
+      "model": "gpt-6-luna",
+      "protocol_sha256": "9d44688b00505814b3d1093f6ab35c1420d31ed0283d7372d8c4747a6f513ede",
+      "input_tokens": 203072,
+      "output_tokens": 2507
+    },
+    "sol": {
+      "evaluated": 26,
+      "complete": true,
+      "true_positive": 11,
+      "false_positive": 0,
+      "false_negative": 2,
+      "true_negative": 13,
+      "additional_local_misses_recovered": 4,
+      "eligible_for_fallback": true,
+      "model": "gpt-6.2-sol",
+      "protocol_sha256": "df98a2016719d4302672c287552cf22453aab761008314c7044ad9308dead2cd",
+      "input_tokens": 217846,
+      "output_tokens": 1571
+    }
+  },
+  "limits": "13 negative controls; high confidence is categorical, not a calibrated probability. All proposed recoveries require independent visual review.",
+  "production_valid": false,
+  "superseded_reason": "Subsequent visual audit found cross-target answer association in Luna batches. Only single-target v3 Sol results authorize production recovery."
+}

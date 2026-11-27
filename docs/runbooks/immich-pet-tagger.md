@@ -422,3 +422,35 @@ deadline, and is capped at four requests concurrently and twenty per second.
 It enrolls the pending historical backlog at startup; hourly upload discovery
 continues separately. Scanner code and its generated manifest are isolated from
 the queue/worker ConfigMap, so deploying it does not restart inference.
+
+### Evaluate and review dog-described classifier rejects
+
+Use the frozen private study directory described in the
+[reject-review journal](../experiments/waffles/2026-11-27-reject-review.md).
+Personal media and per-asset decisions must stay outside Git. The completed
+study has explicit owner approval for its six reference views and review cohort;
+that approval does not establish an ongoing cloud upload service.
+
+The reusable workflow is:
+
+1. `frontier-review.py eval PRIVATE_DIRECTORY --model sol --stage v3-single`
+2. `gate-reject-review.py PRIVATE_DIRECTORY --stage v3-single --models sol --output PUBLIC_AGGREGATE.json`
+3. `frontier-review.py review PRIVATE_DIRECTORY --model sol --stage v3-single --workers 12`
+4. Use `visual-review-candidates.py` to inspect and record each nomination, then
+   `detect-reviewed-candidates.py` (or the installed CPU fallback
+   `detect-reviewed-local.py`), `review-animal-boxes.py` and
+   `render-reviewed-crops.py` for ambiguous placement. Every accepted box must
+   refer to the reviewed bytes; manual crops require a recorded visual check.
+5. `prepare-reviewed-recovery.py PRIVATE_DIRECTORY` previews and freezes the
+   plan. Only after visual decisions, exact-byte box checks and verified backups
+   exist, use the same command with `--apply` to enqueue the approved recovery.
+6. `verify-reviewed-recovery.py PRIVATE_DIRECTORY --output PUBLIC_AGGREGATE.json`
+   checks actual Immich faces. Wait for all jobs to complete and confirm no
+   missing or duplicate assignments before reporting the final total.
+
+Run these Python scripts from `scripts/immich-pet-tagger/` or provide that prefix.
+These operations preserve native worker capacity and classifier thresholds.
+The model runner stores submission intent before each call, bounds concurrency
+and deadlines, and does not retry ambiguous submissions automatically. Resuming
+settled work reuses its frozen records. Batched production review is disabled
+because visually detected cross-target misassociation invalidated that trial.

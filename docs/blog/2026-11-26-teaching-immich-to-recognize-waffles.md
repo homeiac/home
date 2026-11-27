@@ -612,3 +612,38 @@ recognizable embedded stream. The remaining PNG had a readable header but broken
 compressed pixels. A tolerant decoder produced a damaged image, so it failed the
 quality gate. The [residual recovery journal](../experiments/waffles/2026-11-27-residual-media-recovery.md)
 records the successful retries, rejected reconstruction, and source-copy checks.
+
+## Evaluate the fallback, then verify what it proposes
+
+Descriptions also exposed classifier false negatives: nine visibly plausible
+Waffles photos among dog-labelled rejects. Five had a low-confidence rejection
+and four had only negative-class predictions. A CPU replay found detection gaps,
+weak identity scores and one result that now passed; without historical byte
+hashes and per-crop scores, it could not explain every original numeric decision.
+
+The fallback experiment used six approved Waffles reference views and 26 frozen
+holdouts, including 13 other-dog controls. Batched Luna/Sol calls looked promising
+on evaluation, but production visual inspection caught descriptions associated
+with the wrong input photos. Valid JSON keys did not ensure correct image
+association. We stopped that trial, preserved its results and evaluated a new
+one-target-per-request Sol protocol. It accepted 11/13 Waffles holdouts, none of
+the 13 controls, and recovered all four local-classifier misses in the holdout.
+That small test justified a visually checked review, not unattended tagging.
+
+Sol then reviewed all 1,060 dog-labelled rejects, nominating 261 at high confidence.
+Independent visual checks accepted 164 and deferred 97. Every accepted image
+received a checked tag box; 62 needed explicit placement and inspection of the
+resulting crop because local animal detection was absent or ambiguous. After
+verified database backups, the existing PostgreSQL coordinator applied those
+recoveries with its idempotent writer and bounded retries. Model answers and
+visual decisions remain separate from the original classifier history, and
+categorical confidence is never disguised as a numeric classifier probability.
+
+Immich readback verified all 164 additions: 130 images and 34 videos, with no
+duplicate or missing assignments. The known total rose from 833 to **997 unique
+Waffles assets**. Seven of the original nine were recovered; the railing-obscured
+and flower-obscured views remain untagged. The original thumbnail fix's 61 Waffles
+videos are already in the 833 baseline and are not counted again. Medium-confidence
+and deferred cases remain unresolved, so this does not establish complete recall.
+The [experiment journal](../experiments/waffles/2026-11-27-reject-review.md) keeps
+the failed batch trial, unchanged quality gates, final counts and readback evidence.
