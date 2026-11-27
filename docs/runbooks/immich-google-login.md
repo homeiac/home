@@ -101,8 +101,7 @@ intact. These are application-data permissions; the OAuth and network deployment
 remain managed by Flux. The Flux-managed `immich-family-viewers` CronJob checks every two minutes.
 It adds missing household viewers to albums owned by the configured account.
 After checking an album it records its ID on a persistent volume so subsequent
-manual changes to sharing are respected. The job uses an owner key scoped to
-`album.read` and `albumUser.create`. The key and account IDs live in SOPS.
+manual changes to sharing are respected. The job uses a dedicated owner key for album reads, viewer grants, group membership reads and People sharing. The key and account IDs live in SOPS.
 Inspect the latest job log for the number of new viewer grants. See
 [Immich partner-sharing behavior](https://docs.immich.app/features/partner-sharing/).
 
@@ -130,3 +129,14 @@ The web init container checks the pinned upstream route helper before preparing
 the grid links. After an Immich upgrade, check its log for `Album grid links
 enabled` and verify an opted-in card, a table row and a regular album link.
 An unrecognized build uses the upstream links.
+
+### Household People access
+
+Each recipient accepts the owner's invitation in **Account Settings → Sharing →
+People cluster group**. The household job checks membership on its two-minute
+schedule and sends one bulk `read` grant for the owner's existing People records
+to each recipient after acceptance. The count includes unnamed people. A saved
+checkpoint preserves later manual sharing decisions. Inspect the job log fields
+`peopleRecipientsPending` and `peopleRecipientsGranted`. The service key needs
+`clusterGroup.read` and `person.update` for this operation. Recipients get the
+`read` role. After both grants finish, these two service permissions can be removed.
