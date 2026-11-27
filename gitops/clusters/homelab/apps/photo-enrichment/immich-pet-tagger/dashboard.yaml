@@ -1022,6 +1022,21 @@ data:
               }
             },
             {
+              "id": "convertFieldType",
+              "filter": {
+                "id": "byRefId",
+                "options": "nodes"
+              },
+              "options": {
+                "conversions": [
+                  {
+                    "targetField": "mainstat",
+                    "destinationType": "string"
+                  }
+                ]
+              }
+            },
+            {
               "id": "joinByField",
               "filter": {
                 "id": "byRefId",

@@ -31,9 +31,11 @@ def record(event, **values):
 def database(operation, identifier=''):
     code='''import {createRequire} from 'node:module';
 const {Client}=createRequire('/usr/src/app/server/package.json')('pg');const db=new Client();await db.connect();
-const sql=process.argv[2]==='runs'?'SELECT id,mode,state,workers FROM waffles.runs':
+const sql=process.argv[2]==='runs'?'SELECT id,mode,state,workers FROM waffles.runs':process.argv[2]==='leases'?
+ `SELECT count(*) FILTER(WHERE j.lease_until>now())::int active,count(*) FILTER(WHERE j.lease_until<=now())::int expired
+ FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id WHERE r.mode='production' AND j.status='running'`:
  `SELECT j.asset_id,j.worker,j.status,j.result,j.processing_seconds,j.attempts,j.completed_at,r.started_at FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id WHERE j.run_id=$1 ORDER BY j.ordinal`;
-console.log(JSON.stringify((await db.query(sql,process.argv[2]==='runs'?[]:[process.argv[3]])).rows));await db.end();'''
+console.log(JSON.stringify((await db.query(sql,['runs','leases'].includes(process.argv[2])?[]:[process.argv[3]])).rows));await db.end();'''
     output=subprocess.run(KUBE+['-n','immich-pilot','exec','-i','deployment/waffles-queue','--','node','--input-type=module','-',operation,identifier],input=code,text=True,capture_output=True,check=True)
     return json.loads(output.stdout)
 
@@ -49,7 +51,10 @@ def snapshot():
         path='/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?'+urllib.parse.urlencode({'query':query})
         raw=json.loads(subprocess.check_output(KUBE+['get','--raw',path],text=True))
         metrics[name]=[{'labels':r['metric'],'value':r['value'][1]} for r in raw['data']['result']]
-    return {'workers':data['workers'],'metrics':metrics,'tuning':request('/api/tuning')['workers']}
+    mac={'load_average':os.getloadavg(),
+         'memory_pressure':subprocess.check_output(['memory_pressure','-Q'],text=True).strip(),
+         'swap':subprocess.check_output(['sysctl','-n','vm.swapusage'],text=True).strip()}
+    return {'workers':data['workers'],'metrics':metrics,'mac_host':mac,'tuning':request('/api/tuning')['workers']}
 
 
 def tune(worker,slots,note):
@@ -124,7 +129,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('private_directory',type=Path)
     parser.add_argument('--prepare-only',action='store_true')
+    parser.add_argument('--note',help='Append an operator observation without running trials')
     args=parser.parse_args();private=args.private_directory
+    if args.note:
+        record('operator_note',note=args.note);return
     def interrupted(*_):raise KeyboardInterrupt('Experiment interrupted')
     signal.signal(signal.SIGTERM,interrupted)
     truth=json.loads((private/'owner-confirmed-holdout.json').read_text())
@@ -136,6 +144,7 @@ def main():
     session=datetime.now(timezone.utc).strftime('%m%d%H%M%S')
     digest=hashlib.sha256('\n'.join(sorted(a['id'] for a in assets)).encode()).hexdigest()
     record('protocol',sample_count=len(assets),sample_sha256=digest,
+           runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
            classifier_sha256=hashlib.sha256((private/'distributed/classifier.json').read_bytes()).hexdigest(),
            plan={'mac':[1,2,4,4,2,1],'still-fawn':[1,2,2,1]},quality_gate='same decisions; at least 9/13 positive; 0/13 false positive; one attempt per job; no unplanned exits or restarts',selection_tolerance_percent=5,
            phase='preparation' if args.prepare_only else 'execution',git_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip())
@@ -148,9 +157,10 @@ def main():
         for run in runs:
             request('/admin/state',{'id':run['id'],'state':'paused'});record('production_paused',run=run['id'])
         deadline=time.monotonic()+120
-        while any(r['status']=='running' and r['mode']=='production' for r in request('/admin/status')['runs']):
+        while database('leases')[0]['active']:
             if time.monotonic()>deadline:raise RuntimeError('Production claims did not drain')
             time.sleep(3)
+        record('production_drained',**database('leases')[0])
         for worker,plan in [('mac',[1,2,4,4,2,1]),('still-fawn',[1,2,2,1])]:
             invalid=set()
             for index,slots in enumerate(plan):
@@ -203,6 +213,9 @@ def main():
             results.append({'run':name,**summary})
             if not summary['valid']:raise RuntimeError('Combined quality gate failed')
         success=True
+    except BaseException as error:
+        record('experiment_failed',error_type=type(error).__name__,reason=str(error))
+        raise
     finally:
         actions=[('/admin/state',{'id':run,'state':'paused'},'trial_cleanup') for run in sorted(OWNED_RUNS)]
         for worker in selected:

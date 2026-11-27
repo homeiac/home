@@ -204,6 +204,38 @@ The live PostgreSQL concurrency test (`test-queue.mjs --postgres` inside the que
 pod) was run before publishing the classifier. Do not rerun it while workers are
 claiming jobs: it inserts short-lived synthetic jobs with the real worker names.
 
+## Live tuning and experimental evidence
+
+Concurrency is a PostgreSQL setting, polled by lightweight supervisors every
+three seconds. Each inference process has an independent fenced claim and
+heartbeat. Decreasing concurrency sends a drain signal: finish the current photo,
+then unload models. Zero pauses that backend without changing run state. A
+per-backend database lock enforces the desired number of active claims even
+while processes are starting or draining. Routine tuning needs no redeployment.
+
+```bash
+python3 scripts/immich-pet-tagger/distributed.py tuning
+python3 scripts/immich-pet-tagger/distributed.py tune mac 2 --note 'Measured concurrency trial'
+python3 scripts/immich-pet-tagger/distributed.py tune still-fawn 2 --note 'Measured concurrency trial'
+python3 scripts/immich-pet-tagger/distributed.py tune mac 0 --note 'Graceful backend pause'
+bash scripts/immich-pet-tagger/check-distributed.sh
+```
+
+IaC bounds are Mac 0–4, still-fawn 0–2, and each other backend 0–1. These are
+experiment bounds, not claims that the maximum is fastest. Existing Kubernetes
+CPU/memory limits and native host guards still apply. The dashboard shows desired
+and active process counts separately; a guarded host can have desired 1, active 0.
+
+The [preregistered protocol](../experiments/waffles/2026-11-26-live-tuning.md)
+defines the 122-photo sample, quality gates, counterbalanced order and selection
+rule. Its append-only JSONL journal records input hashes, UTC timestamps, settings,
+resource snapshots, failed trials and restoration. Run `experiment.py` with the
+private input directory to execute the bounded sweep. It pauses production,
+excludes warm-up, tests exact decisions and reviewed labels, and independently
+attempts every restoration before reporting an error. A killed machine cannot
+execute cleanup: inspect the journal's last production-pause entries and use
+`distributed.py state RUN running` if recovery is necessary.
+
 ## Native hosts outside Kubernetes
 
 `install-native.py` manages `waffles-worker.service` and its capacity recheck timer

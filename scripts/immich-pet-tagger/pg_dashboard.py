@@ -72,6 +72,9 @@ def dashboard():
         transforms += [{'id':'calculateField','filter':filt,'options':{'mode':'reduceRow','reduce':{'reducer':'lastNotNull','include':['Value','Value #'+ref]},'alias':name}},
                        {'id':'organize','filter':filt,'options':{'excludeByName':{'Time':True,'Value':True,'Value #'+ref:True}}}]
     transforms.append({'id':'joinByField','filter':{'id':'byRefId','options':'/^(nodes|timing|inflight|pace)$/'},'options':{'byField':'id','mode':'outerTabular'}})
+    # Grafana's node stat formatter uses `decimals || 2`; text preserves exact
+    # integer counts and avoids clipping long "1694.00 photos" labels.
+    transforms.insert(-1,{'id':'convertFieldType','filter':{'id':'byRefId','options':'nodes'},'options':{'conversions':[{'targetField':'mainstat','destinationType':'string'}]}})
     graph['transformations']=transforms
 
     panel('Processed photos by backend',[(jobs('complete',w),w) for w in workers],0,22,w=12,h=7,kind='timeseries')

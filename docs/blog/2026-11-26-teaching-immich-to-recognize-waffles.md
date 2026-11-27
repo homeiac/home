@@ -228,6 +228,29 @@ It does not mean that the photo was tagged as Waffles. Backend totals sum to the
 completed total for the selected run. This is the important difference from
 counting fetched photos or adding crop outcomes from the original scanner.
 
+### Treating tuning as an experiment
+
+"Try more workers" is a hypothesis, not a result. We added live concurrency
+controls so the Mac can run up to four inference processes and still-fawn up to
+two within its existing pod limits. PostgreSQL persists desired concurrency;
+supervisors start or drain processes without a deployment. The queue enforces
+the same limit when granting claims. Grafana exposes desired and active counts
+alongside completed photos, throughput and processing time.
+
+Before measuring, we committed an
+[experiment protocol](../experiments/waffles/2026-11-26-live-tuning.md). It freezes
+122 photos, including all 26 reviewed holdouts, and records hashes of the sample
+and fitted classifier. Mac trials run 1 → 2 → 4 → 4 → 2 → 1 processes;
+still-fawn trials run 1 → 2 → 2 → 1. The second half reverses input order. Warm-up
+is excluded, production claims are paused, and a final combined ABBA comparison
+checks whether individual gains survive shared queue and thumbnail contention.
+
+The journal records settings, timestamps, completed throughput, latency, backend
+contribution, resource snapshots, decision agreement, failed trials and rollbacks.
+A trial with a new false positive, changed decision, retry or unplanned restart
+cannot win. Configurations within 5% prefer fewer processes. Private photos and
+asset identifiers stay outside Git; aggregate evidence remains reviewable.
+
 ### Adding native hosts without moving their other workloads
 
 fun-bedbug and chief-horse were also available outside Kubernetes. Live checks
