@@ -91,10 +91,15 @@ never commit its output or include it in blog screenshots.
 
 The same live check confirmed one-way partner sharing from the owner to both
 ordinary family accounts. Timeline integration is disabled for both relationships.
-They can open the owner's shared library through Sharing. No individual album
-memberships were present for those accounts at inspection time. Partner sharing
-does not automatically include the owner's existing albums; opening named album
-links requires album membership or a separate shared link. See
+They can open the owner's shared library through Sharing. The initial inspection
+found no individual album memberships, explaining why the phone could sign in
+and access the partner library without seeing the owner's albums. Both family
+users were subsequently added as **viewers to all four existing albums** through
+the owner's authenticated Immich UI. A read-only database check verified all
+eight viewer memberships. Existing partner sharing and owner permissions remain
+intact. These are application-data permissions; the OAuth and network deployment
+remain managed by Flux. New albums still require explicit membership or a shared
+link; no automatic future-album sharing rule was installed. See
 [Immich partner-sharing behavior](https://docs.immich.app/features/partner-sharing/).
 
 Verify browser login reaches the existing administrator account. Verify family

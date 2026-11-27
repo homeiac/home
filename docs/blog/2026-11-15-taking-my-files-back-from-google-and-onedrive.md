@@ -262,6 +262,12 @@ named albums. Those need their own album membership or shared link, a distinctio
 that matters when sending a direct album URL. The requested family experience was
 access to photos, not merely permission to sign into an empty account.
 
+The phone test exposed the missing album memberships: partner-library access was
+working, but the named albums did not appear. The fix was to add both family users
+as viewers to all four existing albums. A live read-only check verified all eight
+memberships. After refreshing Immich, the same signed-in accounts can use the
+direct album URLs. Future albums need their own sharing configuration.
+
 ### 3. Verify backup and restoration before cloud reclamation
 
 Inspect the mirror targets before using `cloud-backup-install-mirror.sh`; check `cloud-backup-status.sh` and mirror reports. The current USB SSD policy copies Drive/OneDrive plus only the Photos quota-candidate subset because the full photo library does not fit. The additional HDD target excludes Photos. Thus this setup does **not** establish two complete copies of every photo. Expand destination capacity and coverage if that is the requirement; verify every proposed reclaim item independently. Verify selected files and metadata against **both** physical destinations, including hashes where available and restore/open tests. A successful mirror exit code alone is not that proof.
