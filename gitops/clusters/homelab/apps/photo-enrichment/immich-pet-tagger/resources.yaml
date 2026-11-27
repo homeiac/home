@@ -56,7 +56,7 @@ spec:
             - name: TAG_NAME
               value: Pets/Review
             - name: AUTOMATIC_SCANS
-              value: "true"
+              value: "false"
             - name: POLL_INTERVAL
               value: "3600"
             - name: THRESHOLD

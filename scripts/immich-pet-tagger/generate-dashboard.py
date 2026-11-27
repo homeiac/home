@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import yaml
+from pg_dashboard import dashboard
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -25,7 +26,7 @@ def count(outcome: str) -> str:
     return live(f'max({M}scan_items{{scope="manual",outcome="{outcome}"}})')
 
 
-def dashboard() -> dict:
+def legacy_dashboard() -> dict:
     """Build an overview inspired by Knowledge Index, followed by scoped details."""
     panels = []
 

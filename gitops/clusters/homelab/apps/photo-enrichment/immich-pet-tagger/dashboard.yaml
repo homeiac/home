@@ -13,7 +13,7 @@ data:
       "uid": "immich-waffles",
       "title": "Waffles \u00b7 Immich Pet Tagger",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "editable": false,
       "tags": [
         "immich",
@@ -22,21 +22,35 @@ data:
         "gitops"
       ],
       "timezone": "utc",
-      "refresh": "30s",
+      "refresh": "15s",
       "time": {
-        "from": "now-6h",
+        "from": "now-1h",
         "to": "now"
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "run",
+            "label": "Run",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": "label_values(waffles_run_state, run)",
+            "refresh": 1,
+            "sort": 1,
+            "current": {
+              "text": "historical-waffles",
+              "value": "historical-waffles"
+            }
+          }
+        ]
       },
       "links": [
         {
-          "title": "Pet Tagger \u00b7 scan and review",
+          "title": "Pet Tagger \u00b7 references",
           "url": "https://pets.app.home.panderosystems.com",
-          "type": "link",
-          "targetBlank": true
-        },
-        {
-          "title": "Immich",
-          "url": "https://immich.app.home.panderosystems.com",
           "type": "link",
           "targetBlank": true
         },
@@ -49,8 +63,8 @@ data:
       "panels": [
         {
           "id": 1,
+          "title": "Photos processed",
           "type": "stat",
-          "title": "Historical scan",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -61,12 +75,12 @@ data:
             "w": 4,
             "h": 4
           },
-          "description": "Latest manual scan result. Independent of the automatic hourly cycle. Missing or stale telemetry is never reported as complete.",
+          "description": "Distinct assets with committed results in this run. Includes non-Waffles photos. Benchmark runs finish after classification and never write to Immich.",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_state{scope=\"manual\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Committed results",
               "instant": true,
               "range": false
             }
@@ -74,51 +88,11 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
-                "mode": "thresholds"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "No manual scan",
-                      "color": "gray"
-                    },
-                    "1": {
-                      "text": "Running",
-                      "color": "blue"
-                    },
-                    "2": {
-                      "text": "Complete",
-                      "color": "green"
-                    },
-                    "3": {
-                      "text": "Stopped",
-                      "color": "orange"
-                    },
-                    "4": {
-                      "text": "Error",
-                      "color": "red"
-                    },
-                    "5": {
-                      "text": "Unknown",
-                      "color": "orange"
-                    }
-                  }
-                }
-              ]
+                "mode": "palette-classic"
+              }
             },
             "overrides": []
           },
@@ -129,14 +103,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 2,
+          "title": "Remaining",
           "type": "stat",
-          "title": "Assets fetched",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -147,12 +128,12 @@ data:
             "w": 4,
             "h": 4
           },
-          "description": "Assets enumerated for the current manual date window, not assets processed or remaining.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"fetched\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"pending|running|classified\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Awaiting completion",
               "instant": true,
               "range": false
             }
@@ -160,19 +141,10 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -184,14 +156,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 3,
+          "title": "Processed / total",
           "type": "stat",
-          "title": "Waffles tags added",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -202,32 +181,23 @@ data:
             "w": 4,
             "h": 4
           },
-          "description": "New face assignments in this manual scan. Waffles is the only enrolled pet. Excludes the initial reference tags and earlier scans.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/(((sum(waffles_jobs{run=\"$run\",state=~\".*\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))",
+              "legendFormat": "Complete",
               "instant": true,
               "range": false
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
+              "unit": "percent",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -239,14 +209,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 4,
+          "title": "Failed photos",
           "type": "stat",
-          "title": "Failures reported",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -257,12 +234,12 @@ data:
             "w": 4,
             "h": 4
           },
-          "description": "Upstream failed outcome count; can include inference, thumbnail processing or face-write failures. Not an error percentage.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"failed\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Exhausted retries",
               "instant": true,
               "range": false
             }
@@ -270,23 +247,10 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
-                "mode": "thresholds"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 1
-                  }
-                ]
+                "mode": "palette-classic"
               }
             },
             "overrides": []
@@ -298,14 +262,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 5,
+          "title": "Estimated time remaining",
           "type": "stat",
-          "title": "Scan elapsed",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -316,12 +287,12 @@ data:
             "w": 4,
             "h": 4
           },
-          "description": "Wall time since the running manual scan started, including model preparation. Not an ETA.",
+          "description": "Pending, in-flight and awaiting-write jobs divided by five-minute committed throughput. Unavailable until progress is measurable; not a deadline.",
           "targets": [
             {
               "refId": "A",
-              "expr": "((time() - max(immich_pet_tagger_scan_started_at_timestamp_seconds{scope=\"manual\"})) and on() (max(immich_pet_tagger_scan_state{scope=\"manual\"}) == 1)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "(((sum(waffles_jobs{run=\"$run\",state=~\"pending|running|classified\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) / (((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/60 > 0)",
+              "legendFormat": "At recent pace",
               "instant": true,
               "range": false
             }
@@ -329,19 +300,10 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -353,14 +315,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 6,
+          "title": "Queue report age",
           "type": "stat",
-          "title": "Last successful report",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -371,12 +340,12 @@ data:
             "w": 4,
             "h": 4
           },
-          "description": "Age of the last successful status collection. Observer polls every 15 seconds. Measures telemetry freshness, not inference progress.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "time() - max(immich_pet_tagger_last_success_timestamp_seconds > 0)",
-              "legendFormat": "",
+              "expr": "time()-max(waffles_queue_report_timestamp_seconds)",
+              "legendFormat": "Telemetry age",
               "instant": true,
               "range": false
             }
@@ -384,27 +353,10 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "s",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
-                "mode": "thresholds"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 60
-                  },
-                  {
-                    "color": "red",
-                    "value": 180
-                  }
-                ]
+                "mode": "palette-classic"
               }
             },
             "overrides": []
@@ -416,14 +368,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 7,
+          "title": "mac \u00b7 processed",
           "type": "stat",
-          "title": "Current photo date (UTC)",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -434,32 +393,30 @@ data:
             "w": 6,
             "h": 4
           },
-          "description": "Taken date of the most recently started photo. Concurrent workers can move this backward; it is not a completed-through watermark.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_photo_date_timestamp_seconds{scope=\"manual\"}) * 1000) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Photos",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "legendFormat": "Share (%)",
               "instant": true,
               "range": false
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "dateTimeAsIso",
-              "noValue": "Awaiting telemetry",
+              "unit": "locale",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -471,14 +428,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 8,
+          "title": "pve \u00b7 processed",
           "type": "stat",
-          "title": "Already tagged matches",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -489,12 +453,19 @@ data:
             "w": 6,
             "h": 4
           },
-          "description": "Matching crops skipped because the person was already assigned, including duplicate matches within one photo. Not distinct photos.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"already_tagged\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Photos",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "legendFormat": "Share (%)",
               "instant": true,
               "range": false
             }
@@ -502,19 +473,10 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -526,14 +488,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 9,
+          "title": "still-fawn \u00b7 processed",
           "type": "stat",
-          "title": "Missing thumbnails",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -544,12 +513,19 @@ data:
             "w": 6,
             "h": 4
           },
-          "description": "Assets where the upstream thumbnail fetch returned no image.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"no_thumb\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Photos",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "B",
+              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "legendFormat": "Share (%)",
               "instant": true,
               "range": false
             }
@@ -557,19 +533,10 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -581,14 +548,21 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 10,
+          "title": "Run state",
           "type": "stat",
-          "title": "Review assets after completion",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -599,11 +573,11 @@ data:
             "w": 6,
             "h": 4
           },
-          "description": "Available only after the manual scan completes. v1.10.0 overwrites live low-confidence counts with an unpopulated review list during a scan; do not interpret that as zero.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_review_assets)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "expr": "(max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "",
               "instant": true,
               "range": false
@@ -612,20 +586,30 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Available after scan",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
               },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Paused",
+                      "color": "orange"
+                    },
+                    "1": {
+                      "text": "Running",
+                      "color": "blue"
+                    },
+                    "2": {
+                      "text": "Finished",
+                      "color": "green"
+                    }
                   }
-                ]
-              }
+                }
+              ]
             },
             "overrides": []
           },
@@ -636,81 +620,84 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 11,
-          "type": "text",
-          "title": "Reading this scan",
-          "gridPos": {
-            "x": 0,
-            "y": 8,
-            "w": 24,
-            "h": 4
-          },
-          "options": {
-            "mode": "markdown",
-            "content": "**Waffles only \u00b7 CPU inference \u00b7 private homelab**  \nImmich photos \u2192 animal detection \u2192 embedding + Waffles classifier \u2192 Immich People and `Pets/Review`. **Fetched is the scan scope, not completed work.** Outcomes mix crops and assets; they cannot be summed into a completion percentage or ETA. A low match rate is expected in a whole-library scan. Model accuracy requires reviewed photos, not dashboard counts."
-          }
-        },
-        {
-          "id": 12,
+          "title": "Job distribution \u00b7 processed photos by backend",
           "type": "nodeGraph",
-          "title": "Waffles recognition pipeline",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
             "x": 0,
-            "y": 12,
+            "y": 8,
             "w": 24,
             "h": 14
           },
-          "description": "Logical flow, not measured transfer rates or phase timings. Detection/classifier value is scan state: 1 running, 2 completed. Other nodes show their named counts; crops and assets are different units.",
+          "description": "Node: committed photo count and mean processing seconds/photo. Edge: recent photos/minute. Hover a backend for in-flight jobs and throughput. Means cover completed jobs in this run; timings include thumbnail fetch, detection and classification. RTX is excluded.",
           "targets": [
             {
               "refId": "nodes",
-              "expr": "label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"fetched\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"photos\", \"\", \"\")), \"title\", \"Photos fetched\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_references)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"references\", \"\", \"\")), \"title\", \"Waffles references\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_negatives)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"negatives\", \"\", \"\")), \"title\", \"Negative examples\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_state{scope=\"manual\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"scan\", \"\", \"\")), \"title\", \"Detection + classifier\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"tags\", \"\", \"\")), \"title\", \"New face assignments\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"unknown\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"unknown\", \"\", \"\")), \"title\", \"Unknown crops\", \"\", \"\") or label_replace((label_replace((((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))) or vector(0/0)), \"id\", \"failed\", \"\", \"\")), \"title\", \"Failed outcomes\", \"\", \"\")",
+              "expr": "label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\".*\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"queue\", \"\", \"\")), \"title\", \"PostgreSQL\", \"\", \"\")), \"subtitle\", \"Durable job queue\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"mac\", \"\", \"\")), \"title\", \"Mac \u00b7 Metal\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"pve\", \"\", \"\")), \"title\", \"PVE \u00b7 CPU\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"still-fawn\", \"\", \"\")), \"title\", \"still-fawn \u00b7 CPU\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"committed\", \"\", \"\")), \"title\", \"Committed results\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "timing",
+              "expr": "label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\".*\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"queue\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"mac\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"mac\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"pve\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"pve\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"still-fawn\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\".*\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"committed\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "inflight",
+              "expr": "label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac\", \"\", \"\") or label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve\", \"\", \"\") or label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "pace",
+              "expr": "label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
             },
             {
               "refId": "edges",
-              "expr": "label_replace((label_replace((label_replace((vector(1)), \"id\", \"photos_scan\", \"\", \"\")), \"source\", \"photos\", \"\", \"\")), \"target\", \"scan\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"references_scan\", \"\", \"\")), \"source\", \"references\", \"\", \"\")), \"target\", \"scan\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"negatives_scan\", \"\", \"\")), \"source\", \"negatives\", \"\", \"\")), \"target\", \"scan\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"scan_tags\", \"\", \"\")), \"source\", \"scan\", \"\", \"\")), \"target\", \"tags\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"scan_unknown\", \"\", \"\")), \"source\", \"scan\", \"\", \"\")), \"target\", \"unknown\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"scan_failed\", \"\", \"\")), \"source\", \"scan\", \"\", \"\")), \"target\", \"failed\", \"\", \"\")",
+              "expr": "label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_mac\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"mac\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac_committed\", \"\", \"\")), \"source\", \"mac\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_pve\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"pve\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve_committed\", \"\", \"\")), \"source\", \"pve\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_still-fawn\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"still-fawn\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn_committed\", \"\", \"\")), \"source\", \"still-fawn\", \"\", \"\")), \"target\", \"committed\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
             }
           ],
-          "options": {
-            "nodes": {
-              "mainStatUnit": ""
-            }
-          },
           "fieldConfig": {
             "defaults": {
-              "decimals": 0,
+              "unit": "locale",
+              "decimals": 1,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              },
               "mappings": [
                 {
                   "type": "special",
                   "options": {
                     "match": "nan",
                     "result": {
-                      "text": "Unavailable",
-                      "color": "gray"
-                    }
-                  }
-                },
-                {
-                  "type": "special",
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "text": "Unavailable",
+                      "text": "\u2014",
                       "color": "gray"
                     }
                   }
@@ -718,6 +705,15 @@ data:
               ]
             },
             "overrides": []
+          },
+          "options": {
+            "nodes": {
+              "mainStatUnit": "photos",
+              "secondaryStatUnit": "s/photo"
+            },
+            "edges": {
+              "mainStatUnit": "photos/min"
+            }
           },
           "transformations": [
             {
@@ -753,6 +749,120 @@ data:
               }
             },
             {
+              "id": "calculateField",
+              "filter": {
+                "id": "byRefId",
+                "options": "timing"
+              },
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "lastNotNull",
+                  "include": [
+                    "Value",
+                    "Value #timing"
+                  ]
+                },
+                "alias": "secondarystat"
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "timing"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #timing": true
+                }
+              }
+            },
+            {
+              "id": "calculateField",
+              "filter": {
+                "id": "byRefId",
+                "options": "inflight"
+              },
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "lastNotNull",
+                  "include": [
+                    "Value",
+                    "Value #inflight"
+                  ]
+                },
+                "alias": "detail__in_flight"
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "inflight"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #inflight": true
+                }
+              }
+            },
+            {
+              "id": "calculateField",
+              "filter": {
+                "id": "byRefId",
+                "options": "pace"
+              },
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "lastNotNull",
+                  "include": [
+                    "Value",
+                    "Value #pace"
+                  ]
+                },
+                "alias": "detail__photos_per_minute"
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "pace"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #pace": true
+                }
+              }
+            },
+            {
+              "id": "calculateField",
+              "filter": {
+                "id": "byRefId",
+                "options": "edges"
+              },
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "lastNotNull",
+                  "include": [
+                    "Value",
+                    "Value #edges"
+                  ]
+                },
+                "alias": "mainstat"
+              }
+            },
+            {
               "id": "organize",
               "filter": {
                 "id": "byRefId",
@@ -765,29 +875,54 @@ data:
                   "Value #edges": true
                 }
               }
+            },
+            {
+              "id": "joinByField",
+              "filter": {
+                "id": "byRefId",
+                "options": "/^(nodes|timing|inflight|pace)$/"
+              },
+              "options": {
+                "byField": "id",
+                "mode": "outerTabular"
+              }
             }
           ]
         },
         {
-          "id": 13,
+          "id": 12,
+          "title": "Processed photos by backend",
           "type": "timeseries",
-          "title": "New Waffles assignments / minute",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
             "x": 0,
-            "y": 26,
+            "y": 22,
             "w": 12,
             "h": 7
           },
-          "description": "Five-minute slope of the per-scan added gauge. Suppressed across observed scan-start changes, outside running scans and when telemetry is stale. Measures tag writes, not photo processing speed.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "((max(clamp_min(deriv(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"}[5m]), 0) and on(job,instance,scope) (changes(immich_pet_tagger_scan_started_at_timestamp_seconds{scope=\"manual\"}[5m]) == 0)) * 60) and on() (max(immich_pet_tagger_scan_state{scope=\"manual\"}) == 1)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "Assignments/min",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "C",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             }
@@ -795,24 +930,90 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 2,
+              "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 13,
+          "title": "Throughput by backend \u00b7 photos/min",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 22,
+            "w": 12,
+            "h": 7
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "C",
+              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 2,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -824,77 +1025,62 @@ data:
         },
         {
           "id": 14,
+          "title": "Mean processing time by backend",
           "type": "timeseries",
-          "title": "Manual scan outcomes",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 12,
-            "y": 26,
+            "x": 0,
+            "y": 29,
             "w": 12,
             "h": 7
           },
-          "description": "Independent per-scan gauges; reset on new scans. Not a stacked or mutually exclusive count of photos.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "Added assignments",
+              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"mac\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac",
               "instant": false,
               "range": true
             },
             {
               "refId": "B",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"already_tagged\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "Already tagged crops",
+              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"pve\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve",
               "instant": false,
               "range": true
             },
             {
               "refId": "C",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"unknown\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "Unknown crops",
-              "instant": false,
-              "range": true
-            },
-            {
-              "refId": "D",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "Failed outcomes",
-              "instant": false,
-              "range": true
-            },
-            {
-              "refId": "E",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"no_thumb\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "Missing thumbnail assets",
+              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
+              "unit": "s",
+              "decimals": 2,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -906,15 +1092,15 @@ data:
         },
         {
           "id": 15,
+          "title": "In-flight jobs by backend",
           "type": "timeseries",
-          "title": "Tagger CPU \u00b7 usage and limit",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 0,
-            "y": 33,
+            "x": 12,
+            "y": 29,
             "w": 12,
             "h": 7
           },
@@ -922,40 +1108,46 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"}[5m]))",
-              "legendFormat": "CPU used",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac",
               "instant": false,
               "range": true
             },
             {
               "refId": "B",
-              "expr": "sum(kube_pod_container_resource_limits{namespace=\"immich-pilot\",container=\"tagger\",resource=\"cpu\"})",
-              "legendFormat": "CPU limit",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "C",
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "cores",
-              "noValue": "Awaiting telemetry",
-              "decimals": 2,
+              "unit": "locale",
+              "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -967,56 +1159,62 @@ data:
         },
         {
           "id": 16,
-          "type": "timeseries",
-          "title": "Tagger memory \u00b7 working set and limit",
+          "title": "Worker ready",
+          "type": "stat",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 12,
-            "y": 33,
-            "w": 12,
-            "h": 7
+            "x": 0,
+            "y": 36,
+            "w": 8,
+            "h": 4
           },
           "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"})",
-              "legendFormat": "Working set",
-              "instant": false,
-              "range": true
+              "expr": "(max(waffles_worker_ready{worker=\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac",
+              "instant": true,
+              "range": false
             },
             {
               "refId": "B",
-              "expr": "sum(kube_pod_container_resource_limits{namespace=\"immich-pilot\",container=\"tagger\",resource=\"memory\"})",
-              "legendFormat": "Memory limit",
-              "instant": false,
-              "range": true
+              "expr": "(max(waffles_worker_ready{worker=\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "C",
+              "expr": "(max(waffles_worker_ready{worker=\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn",
+              "instant": true,
+              "range": false
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
-              "noValue": "Awaiting telemetry",
+              "unit": "locale",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -1028,49 +1226,48 @@ data:
         },
         {
           "id": 17,
-          "type": "timeseries",
-          "title": "CPU throttled scheduling periods",
+          "title": "Waffles face assignments added",
+          "type": "stat",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 0,
-            "y": 40,
+            "x": 8,
+            "y": 36,
             "w": 8,
-            "h": 7
+            "h": 4
           },
-          "description": "Fraction of scheduling periods throttled, not CPU utilization. Correlate with usage and recognition progress.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "100 * sum(rate(container_cpu_cfs_throttled_periods_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"}[5m])) / sum(rate(container_cpu_cfs_periods_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"}[5m]))",
-              "legendFormat": "Throttled periods",
-              "instant": false,
-              "range": true
+              "expr": "(sum(waffles_assignments{run=\"$run\"}) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "New assignments",
+              "instant": true,
+              "range": false
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "percent",
-              "noValue": "Awaiting telemetry",
+              "unit": "locale",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -1082,49 +1279,48 @@ data:
         },
         {
           "id": 18,
-          "type": "timeseries",
-          "title": "Tagger restarts",
+          "title": "Awaiting Immich writes",
+          "type": "stat",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 8,
-            "y": 40,
+            "x": 16,
+            "y": 36,
             "w": 8,
-            "h": 7
+            "h": 4
           },
-          "description": "A restart interrupts the in-memory manual backfill. A no-manual-scan state after restart does not prove completion.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "max(kube_pod_container_status_restarts_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"})",
-              "legendFormat": "Restarts",
-              "instant": false,
-              "range": true
+              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"classified\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Classified photos",
+              "instant": true,
+              "range": false
             }
           ],
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -1136,56 +1332,48 @@ data:
         },
         {
           "id": 19,
+          "title": "Kubernetes worker CPU",
           "type": "timeseries",
-          "title": "Storage \u00b7 backing filesystem",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 16,
+            "x": 0,
             "y": 40,
-            "w": 8,
+            "w": 12,
             "h": 7
           },
-          "description": "Kubelet reports the entire backing filesystem for this local-path PVC. These are not tagger-directory bytes or an enforced 5 GiB quota. Absence means unreported, not empty.",
+          "description": "",
           "targets": [
             {
               "refId": "A",
-              "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"immich-pilot\",persistentvolumeclaim=\"immich-pet-tagger\"})",
-              "legendFormat": "Used",
-              "instant": false,
-              "range": true
-            },
-            {
-              "refId": "B",
-              "expr": "max(kubelet_volume_stats_capacity_bytes{namespace=\"immich-pilot\",persistentvolumeclaim=\"immich-pet-tagger\"})",
-              "legendFormat": "Capacity",
+              "expr": "sum by(pod)(rate(container_cpu_usage_seconds_total{namespace=\"immich-pilot\",container=\"worker\",pod=~\"waffles-worker-.*\"}[5m]))",
+              "legendFormat": "{{pod}}",
               "instant": false,
               "range": true
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
+              "unit": "cores",
+              "decimals": 2,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
           },
           "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
             "legend": {
               "displayMode": "list",
               "placement": "bottom"
@@ -1197,60 +1385,36 @@ data:
         },
         {
           "id": 20,
-          "type": "stat",
-          "title": "Status collector",
+          "title": "Worker memory \u00b7 process high-water mark",
+          "type": "timeseries",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 0,
-            "y": 47,
-            "w": 6,
-            "h": 4
+            "x": 12,
+            "y": 40,
+            "w": 12,
+            "h": 7
           },
-          "description": "",
+          "description": "Process peak resident memory, not current working set. Mac accelerator allocations may not all be included.",
           "targets": [
             {
               "refId": "A",
-              "expr": "max(immich_pet_tagger_source_up) and on() (time() - max(immich_pet_tagger_collection_timestamp_seconds) < 60)",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
+              "expr": "waffles_worker_rss_bytes",
+              "legendFormat": "{{worker}}",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
+              "unit": "bytes",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
-                "mode": "thresholds"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "Unavailable",
-                      "color": "red"
-                    },
-                    "1": {
-                      "text": "Healthy",
-                      "color": "green"
-                    }
-                  }
-                }
-              ]
+                "mode": "palette-classic"
+              }
             },
             "overrides": []
           },
@@ -1261,301 +1425,48 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
           "id": 21,
-          "type": "stat",
-          "title": "Tagger available replicas",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "x": 6,
-            "y": 47,
-            "w": 6,
-            "h": 4
-          },
-          "description": "",
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "max(kube_deployment_status_replicas_available{namespace=\"immich-pilot\",deployment=\"immich-pet-tagger\"})",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
-              "color": {
-                "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "graphMode": "none",
-            "colorMode": "value",
-            "textMode": "value"
-          }
-        },
-        {
-          "id": 22,
-          "type": "stat",
-          "title": "Waffles references",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 47,
-            "w": 6,
-            "h": 4
-          },
-          "description": "",
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "(max(immich_pet_tagger_references)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
-              "color": {
-                "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "graphMode": "none",
-            "colorMode": "value",
-            "textMode": "value"
-          }
-        },
-        {
-          "id": 23,
-          "type": "stat",
-          "title": "Negative examples",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "x": 18,
-            "y": 47,
-            "w": 6,
-            "h": 4
-          },
-          "description": "",
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "(max(immich_pet_tagger_negatives)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
-              "color": {
-                "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "graphMode": "none",
-            "colorMode": "value",
-            "textMode": "value"
-          }
-        },
-        {
-          "id": 24,
-          "type": "stat",
-          "title": "Latest cycle state",
+          "title": "VPA recommended cpu",
+          "type": "timeseries",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
             "x": 0,
-            "y": 51,
-            "w": 6,
-            "h": 4
+            "y": 47,
+            "w": 12,
+            "h": 7
           },
-          "description": "Shared upstream poll status includes manual and automatic scans. Running does not mean two scans are executing; they share a lock.",
+          "description": "Recommendation mode (Off). VPA does not resize or evict backfill workers. Mac is a native worker and has no VPA.",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_state{scope=\"latest_cycle\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
+              "expr": "immich_vpa_recommendation{workload=~\"waffles-worker-.*\",bound=\"target\",resource=\"cpu\"}",
+              "legendFormat": "{{workload}}",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
+              "unit": "cores",
               "decimals": 0,
-              "color": {
-                "mode": "thresholds"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "No cycle",
-                      "color": "gray"
-                    },
-                    "1": {
-                      "text": "Running",
-                      "color": "blue"
-                    },
-                    "2": {
-                      "text": "Idle",
-                      "color": "green"
-                    },
-                    "3": {
-                      "text": "Stopped",
-                      "color": "orange"
-                    },
-                    "4": {
-                      "text": "Error",
-                      "color": "red"
-                    },
-                    "5": {
-                      "text": "Unknown",
-                      "color": "orange"
-                    }
-                  }
-                }
-              ]
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "graphMode": "none",
-            "colorMode": "value",
-            "textMode": "value"
-          }
-        },
-        {
-          "id": 25,
-          "type": "stat",
-          "title": "Latest cycle assignments",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "x": 6,
-            "y": 51,
-            "w": 6,
-            "h": 4
-          },
-          "description": "Final count from the latest completed cycle. Not a lifetime total; can overlap the manual scan. Upstream omits it while running.",
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_items{scope=\"latest_cycle\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -1567,50 +1478,48 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
-          "id": 26,
-          "type": "stat",
-          "title": "Latest cycle final report",
+          "id": 22,
+          "title": "VPA recommended memory",
+          "type": "timeseries",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
             "x": 12,
-            "y": 51,
-            "w": 6,
-            "h": 4
+            "y": 47,
+            "w": 12,
+            "h": 7
           },
-          "description": "",
+          "description": "Recommendation mode (Off). VPA does not resize or evict backfill workers. Mac is a native worker and has no VPA.",
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(immich_pet_tagger_scan_ran_at_timestamp_seconds{scope=\"latest_cycle\"}) * 1000) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
-              "legendFormat": "",
-              "instant": true,
-              "range": false
+              "expr": "immich_vpa_recommendation{workload=~\"waffles-worker-.*\",bound=\"target\",resource=\"memory\"}",
+              "legendFormat": "{{workload}}",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "dateTimeAsIso",
-              "noValue": "Awaiting telemetry",
+              "unit": "bytes",
               "decimals": 0,
+              "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
               }
             },
             "overrides": []
@@ -1622,30 +1531,37 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         },
         {
-          "id": 27,
+          "id": 23,
+          "title": "Before \u00b7 matched sample photos/min",
           "type": "stat",
-          "title": "Prometheus scrape",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
           "gridPos": {
-            "x": 18,
-            "y": 51,
-            "w": 6,
+            "x": 0,
+            "y": 54,
+            "w": 12,
             "h": 4
           },
-          "description": "",
+          "description": "Same 96 photos, ABBA order, reversed second pass. Before: still-fawn alone. After: Mac + PVE + still-fawn. Model warmup excluded. Benchmark mode never writes faces.",
           "targets": [
             {
               "refId": "A",
-              "expr": "max(up{namespace=\"immich-pilot\",service=\"immich-pet-tagger-metrics\"})",
-              "legendFormat": "",
+              "expr": "60 * sum by(run)(waffles_jobs{run=~\"before-[12]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"before-[12]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"before-[12]\"}))",
+              "legendFormat": "{{run}}",
               "instant": true,
               "range": false
             }
@@ -1653,35 +1569,11 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "locale",
-              "noValue": "Awaiting telemetry",
-              "decimals": 0,
+              "decimals": 2,
+              "noValue": "No data yet",
               "color": {
-                "mode": "thresholds"
-              },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "mappings": [
-                {
-                  "type": "value",
-                  "options": {
-                    "0": {
-                      "text": "Unavailable",
-                      "color": "red"
-                    },
-                    "1": {
-                      "text": "Healthy",
-                      "color": "green"
-                    }
-                  }
-                }
-              ]
+                "mode": "palette-classic"
+              }
             },
             "overrides": []
           },
@@ -1692,8 +1584,83 @@ data:
               ]
             },
             "graphMode": "none",
+            "textMode": "value_and_name",
             "colorMode": "value",
-            "textMode": "value"
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 24,
+          "title": "After \u00b7 matched sample photos/min",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 54,
+            "w": 12,
+            "h": 4
+          },
+          "description": "Same 96 photos, ABBA order, reversed second pass. Before: still-fawn alone. After: Mac + PVE + still-fawn. Model warmup excluded. Benchmark mode never writes faces.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "60 * sum by(run)(waffles_jobs{run=~\"after-[12]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"after-[12]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"after-[12]\"}))",
+              "legendFormat": "{{run}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 2,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 25,
+          "title": "How to read this dashboard",
+          "type": "text",
+          "gridPos": {
+            "x": 0,
+            "y": 58,
+            "w": 24,
+            "h": 4
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; edges show photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich."
           }
         }
       ]

@@ -77,15 +77,14 @@ def main() -> None:
     def query(item: tuple[str, str]) -> tuple[str, list]:
         title, expr = item
         path = '/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?'
-        result = kubectl('get', '--raw', path + urllib.parse.urlencode({'query': expr}))
+        result = kubectl('get', '--raw', path + urllib.parse.urlencode({'query': expr.replace('$run', 'historical-waffles')}))
         assert result['status'] == 'success', title
         return title, result['data']['result']
 
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(query, queries))
-    essential = {'Historical scan', 'Assets fetched', 'Waffles tags added', 'Failures reported',
-                 'Last successful report', 'Status collector', 'Waffles references', 'Negative examples',
-                 'Tagger available replicas', 'Prometheus scrape'}
+    essential = {'Photos processed', 'Remaining', 'Processed / total', 'Failed photos',
+                 'Queue report age', 'Run state', 'Worker ready'}
     for title, rows in results:
         if not args.queries_only and title in essential:
             assert rows, 'Missing telemetry: ' + title
