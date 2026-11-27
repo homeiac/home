@@ -10,6 +10,7 @@ import plistlib
 import shutil
 import subprocess
 import tarfile
+import time
 import urllib.request
 from distributed import secret
 
@@ -69,6 +70,13 @@ def main() -> None:
     if PLIST.exists():
         shutil.copy2(PLIST, ROOT / 'previous.plist')
         subprocess.run(['launchctl', 'bootout', identity], capture_output=True)
+        # bootout can return before launchd has removed the service. An
+        # immediate bootstrap then fails with EIO even though the plist is valid.
+        deadline = time.monotonic() + 30
+        while subprocess.run(['launchctl', 'print', identity], capture_output=True).returncode == 0:
+            if time.monotonic() > deadline:
+                raise RuntimeError('Previous Waffles agent is still stopping')
+            time.sleep(0.25)
     PLIST.write_bytes(plistlib.dumps(config))
     subprocess.run(['launchctl', 'bootstrap', f'gui/{os.getuid()}', str(PLIST)], check=True)
     logging.info('Started isolated Waffles Mac worker; existing Mac/RTX workers unchanged')

@@ -41,7 +41,7 @@ def dashboard():
     done, remaining, total = jobs('complete'), jobs('pending|running|classified'), jobs()
     panel('Photos processed', [(done,'Committed results')],0,0,description='Distinct assets with committed results in this run. Includes non-Waffles photos. Benchmark runs finish after classification and never write to Immich.')
     panel('Remaining',[(remaining,'Awaiting completion')],4,0)
-    panel('Processed / total',[(f'100*({done})/({total})','Complete')],8,0,unit='percent')
+    panel('Processed / total',[(f'100*({done})/({total})','Complete')],8,0,unit='percent')['fieldConfig']['defaults']['decimals']=2
     panel('Failed photos',[(jobs('failed'),'Exhausted retries')],12,0)
     panel('Estimated time remaining',[(f'({remaining}) / (({rate()})/60 > 0)','At recent pace')],16,0,unit='s',description='Pending, in-flight and awaiting-write jobs divided by five-minute committed throughput. Unavailable until progress is measurable; not a deadline.')
     panel('Queue report age', [('time()-max(waffles_queue_report_timestamp_seconds)','Telemetry age')],20,0,unit='s')

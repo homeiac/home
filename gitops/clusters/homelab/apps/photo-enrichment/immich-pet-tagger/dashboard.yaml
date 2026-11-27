@@ -194,7 +194,7 @@ data:
           "fieldConfig": {
             "defaults": {
               "unit": "percent",
-              "decimals": 0,
+              "decimals": 2,
               "noValue": "No data yet",
               "color": {
                 "mode": "palette-classic"

@@ -148,7 +148,7 @@ is handled by lease expiry. Existing Mac/RTX caption workers remain unchanged.
 # Native Mac worker; setup and settings are versioned, local tokens are private.
 python3 scripts/immich-pet-tagger/install-mac.py prepare
 python3 scripts/immich-pet-tagger/install-mac.py start
-python3 scripts/immich-pet-tagger/distributed.py status
+python3 scripts/immich-pet-tagger/distributed.py status --compact
 python3 scripts/immich-pet-tagger/distributed.py state historical-waffles paused
 python3 scripts/immich-pet-tagger/distributed.py state historical-waffles running
 ```
@@ -187,6 +187,9 @@ and writes no Immich metadata. Before is this adapter on still-fawn alone; after
 is Mac + PVE + still-fawn. It is not a benchmark against upstream Docker Compose.
 The two before passes averaged 105.4 photos/minute; the two after passes averaged
 324.9 photos/minute, a 3.08x gain. All 96 decisions agreed across passes.
+The current 26-photo holdout found 9/13 Waffles and rejected 13/13 non-Waffles on
+each backend. An additional CPU check reproduced the one-photo difference from
+the earlier evaluation; the 0.90 threshold was kept unchanged.
 See [aggregate measurements](../reference/waffles-backend-benchmark.json).
 
 ```bash

@@ -69,7 +69,7 @@ def main() -> None:
     run.add_argument('--workers', nargs='+', required=True, choices=['mac', 'pve', 'still-fawn'])
     run.add_argument('--reverse', action='store_true')
     state = commands.add_parser('state'); state.add_argument('id'); state.add_argument('state', choices=['paused', 'running'])
-    commands.add_parser('status')
+    status = commands.add_parser('status'); status.add_argument('--compact', action='store_true')
     discovery = commands.add_parser('discovery'); discovery.add_argument('--since', required=True)
     discovery.add_argument('--disabled', action='store_true')
     args = parser.parse_args()
@@ -87,7 +87,18 @@ def main() -> None:
     elif args.command == 'discovery':
         logging.info('%s', request('/admin/discovery', {'enabled': not args.disabled, 'since': args.since}))
     else:
-        logging.info('%s', json.dumps(request('/admin/status'), indent=2))
+        data = request('/admin/status')
+        if args.compact:
+            grouped = {}
+            for row in data['runs']:
+                if row['mode'] != 'production':
+                    continue
+                item = grouped.setdefault(row['id'], {'state': row['state'], 'statuses': {}, 'processed_by_backend': {}})
+                item['statuses'][row['status']] = item['statuses'].get(row['status'], 0) + row['jobs']
+                if row['status'] == 'complete':
+                    item['processed_by_backend'][row['worker']] = row['jobs']
+            data = {'runs': grouped, 'workers': [{k: w[k] for k in ('name', 'ready', 'device')} for w in data['workers']], 'discovery': data.get('discovery')}
+        logging.info('%s', json.dumps(data, indent=2))
 
 
 if __name__ == '__main__':
