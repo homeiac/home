@@ -27,8 +27,6 @@ def save_private(path: Path, value: dict) -> None:
 
 def save_preview(folder: Path, asset: dict, prepared: dict) -> None:
     """Supply browser-readable previews for HEIC and other original photo formats."""
-    if asset["kind"] != "photo":
-        return
     target = folder / (asset["id"] + ".jpg")
     with tempfile.NamedTemporaryFile(dir=folder, delete=False) as output:
         output.write(
@@ -77,6 +75,7 @@ def prepare(asset: dict, *, host: str, folder: Path, audio: dict | None) -> dict
     result = json.loads(response.stdout)
     for window in result["windows"]:
         window["audio"] = audio_evidence(audio, window["start"], window["end"])
+        window["context_summary"] = (audio or {}).get("visual_summary") or ""
     result.update(asset=asset["id"], cache_key=key, seconds=time.monotonic() - started)
     save_private(target, result)
     save_preview(folder, asset, result)

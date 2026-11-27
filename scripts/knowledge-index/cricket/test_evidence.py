@@ -1,11 +1,16 @@
 """Temporal evidence covers whole clips and does not conflate silence with failure."""
 
+import base64
+import io
 import json
 import tempfile
 import unittest
 from itertools import pairwise
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from PIL import Image
 
 from cricket.evidence import (
     audio_evidence,
@@ -16,9 +21,24 @@ from cricket.evidence import (
     windows,
 )
 from cricket.prepare import prepare
+from cricket.prepare_photos import prepared_photo
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_existing_photo_preview_is_bounded_and_records_provenance(self) -> None:
+        source = io.BytesIO()
+        Image.new("RGB", (1600, 800)).save(source, "PNG")
+        asset = {"id": "photo", "kind": "photo", "fingerprint": "original"}
+        result = prepared_photo(asset, None, source.getvalue())
+        self.assertEqual(result["source"], "immich-existing-preview")
+        self.assertEqual(
+            result["cache_key"], fingerprint({"asset": asset, "audio": None})
+        )
+        with Image.open(
+            io.BytesIO(base64.b64decode(result["windows"][0]["frames"][0]))
+        ) as preview:
+            self.assertEqual(preview.size, (768, 384))
+
     def test_preparation_cache_is_resumable_and_tracks_audio_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
@@ -133,6 +153,14 @@ class EvidenceTests(unittest.TestCase):
                 self.assertEqual(len(result["windows"]), 2)
                 self.assertEqual(run.call_count, 16)
                 self.assertIn("-threads", run.call_args.args[0])
+                run.side_effect = [
+                    SimpleNamespace(stdout=b""),
+                    SimpleNamespace(stdout=b"jpeg"),
+                ]
+                short = extract({**packet, "duration": 0.25})["windows"][0]
+                self.assertEqual(short["positions"], [0.0])
+                self.assertEqual(short["missing_frames"], 1)
+                run.side_effect = None
                 run.return_value.stdout = b""
                 with self.assertRaises(ValueError):
                     extract(packet)

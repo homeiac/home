@@ -8,15 +8,24 @@ survive reanalysis. Original photos and videos are never modified.
 
 - Host: pumped-piglet, resolved from `proxmox/inventory.txt` before SSH.
 - State: `/local-3TB-backup/photo-enrichment/cricket`.
-- Authority: `ledger.sqlite3`; cached frames: `evidence`; model checkpoints:
+- Authority: `/var/lib/photo-enrichment/cricket/ledger.sqlite3` on the host NVMe
+  filesystem, linked from the stable state directory; cached frames: `evidence`; model checkpoints:
   `worker/answers`; effective snapshots: `worker/effective`.
-- Runtime: `cricket-highlights.service`; policy: `policy.json` under state.
+- Runtime: `cricket-highlights-ssd.service`; policy: `policy.json` under state.
+  The original ZFS worker unit is disabled. `worker` links to the NVMe checkpoint directory.
 - Private UI uses the existing `photo-enrichment-gui.service` and Traefik route.
 
 Do not copy a laptop bootstrap ledger over this directory after deployment.
 The deployer refuses to overwrite an existing ledger or operator policy. Inspect
 the current deployed release before each rollout; source hashes prevent racing
 another deployment. Resolve any three-way merge conflict before applying.
+
+The SSD cutover retains online ledger backups, old worker caches, and old units.
+`cricket.inspect_worker --host "$CRICKET_HOST"` reports kernel waits and storage
+health. `cricket.move_ledger` is a one-time, guarded migration for the observed ZFS
+commit stall, not a general retry command. Export opens the ledger read-only and
+does not perform migrations. Never reactivate the original worker alongside the
+SSD worker or restore the old ZFS ledger over newer corrections.
 
 ## Live controls
 
@@ -30,6 +39,8 @@ python3 -m cricket.remote --host "$CRICKET_HOST" workers --backend mac --workers
 python3 -m cricket.remote --host "$CRICKET_HOST" workers --backend rtx --workers 0
 python3 -m cricket.remote --host "$CRICKET_HOST" resume
 python3 -m cricket.remote --host "$CRICKET_HOST" retry
+python3 -m cricket.remote --host "$CRICKET_HOST" scope --scope-file /private/path/pilot.json
+python3 -m cricket.remote --host "$CRICKET_HOST" scope
 ```
 
 Worker counts reload every two seconds. A lower count or pause drains in-flight
@@ -37,6 +48,11 @@ requests; it does not discard answers. Host memory below 512 MiB pauses dispatch
 for at least 60 seconds. Do not change baseline caption/audio services to improve
 a cricket benchmark. Start trials at measured serving bounds and decrease; keep
 input hashes, errors and unsuccessful settings in the experiment journal.
+
+`scope --scope-file` restricts new claims to a private JSON array of source IDs;
+`scope` without the file allows the imported album. Neither command resets jobs
+or corrections. Videos are dispatched before photos. The current measured setting
+is four Mac requests and zero RTX requests; the latter failed its recovery probe.
 
 Jobs have renewable leases and three attempts. A crashed worker's stale lease
 cannot commit over its successor. Successful window answers are reused after a

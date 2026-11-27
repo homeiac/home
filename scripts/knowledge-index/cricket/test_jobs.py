@@ -35,6 +35,23 @@ class JobTests(unittest.TestCase):
     def claim(self, now: float = 100) -> dict | None:
         return claim(self.ledger, "o", "a", "v1", self.root / "evidence", now)
 
+    def test_pilot_scope_leaves_other_work_queued(self) -> None:
+        self.assertIsNone(
+            claim(
+                self.ledger, "o", "a", "v1", self.root / "evidence", 100, allowed=set()
+            )
+        )
+        with self.ledger.connect() as db:
+            self.assertEqual(
+                db.execute("SELECT state FROM jobs").fetchone()[0], "queued"
+            )
+        self.assertEqual(
+            claim(
+                self.ledger, "o", "a", "v1", self.root / "evidence", 100, allowed={"v"}
+            )["asset"],
+            "v",
+        )
+
     def test_only_one_dispatcher_can_claim_a_job_and_stale_workers_are_fenced(
         self,
     ) -> None:

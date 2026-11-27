@@ -26,6 +26,25 @@ def delivery(**changes: object) -> dict:
 
 
 class LedgerTests(unittest.TestCase):
+    def test_read_only_snapshot_sees_wal_and_rejects_writes(self) -> None:
+        with self.db.connect() as held:
+            held.execute("SELECT count(*) FROM events").fetchone()
+            self.revise(patch={"outcome": "six"})
+            reader = Ledger(self.path, read_only=True)
+            self.assertEqual(reader.get("owner", self.event)["data"]["outcome"], "six")
+            with self.assertRaises(PermissionError):
+                reader.add_album("owner", "new")
+            with reader.connect() as db, self.assertRaises(sqlite3.OperationalError):
+                db.execute("DELETE FROM albums")
+        with self.assertRaises(sqlite3.OperationalError):
+            Ledger(self.path.parent / "absent.sqlite3", read_only=True)
+        self.assertFalse((self.path.parent / "absent.sqlite3").exists())
+        invalid = self.path.parent / "invalid.sqlite3"
+        with sqlite3.connect(invalid):
+            pass
+        with self.assertRaises(ValueError):
+            Ledger(invalid, read_only=True)
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

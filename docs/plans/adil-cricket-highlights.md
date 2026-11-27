@@ -10,8 +10,15 @@ Completed PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
 [inventory #254](https://github.com/homeiac/home/pull/254),
 [evidence #255](https://github.com/homeiac/home/pull/255),
 [inference #256](https://github.com/homeiac/home/pull/256), and
-[reconciliation #257](https://github.com/homeiac/home/pull/257). These are stacked
+[reconciliation #257](https://github.com/homeiac/home/pull/257),
+[pilot operations #258](https://github.com/homeiac/home/pull/258), and
+[corrected search #259](https://github.com/homeiac/home/pull/259). These are stacked
 review branches; publication of a PR does not imply production deployment.
+
+The private review/search UI is deployed. A follow-up isolates the evidence and
+worker tuning discovered during the live pilot; optional clip export remains a
+separate small PR. The experiment journal records failed classifier variants,
+both comparison orders, and the selected four-worker Mac configuration.
 
 Live inventory on November 27: **1,500 original assets: 633 videos and 867 photos**
 in “All cricket videos.” Videos total approximately 245.6 minutes; the longest is

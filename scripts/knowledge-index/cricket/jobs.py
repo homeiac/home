@@ -15,6 +15,7 @@ def claim(
     version: str,
     evidence: Path,
     now: float | None = None,
+    allowed: set[str] | None = None,
 ) -> dict | None:
     """Claim one prepared original with a finite lease and bounded retries."""
     now = time.time() if now is None else now
@@ -22,11 +23,13 @@ def claim(
         rows = db.execute(
             "SELECT j.*,a.kind,a.duration,a.fingerprint,a.locator FROM jobs j JOIN assets a ON a.owner=j.owner AND a.id=j.asset "
             "JOIN members m ON m.owner=j.owner AND m.asset=j.asset WHERE m.owner=? AND m.album=? AND j.version=? AND j.stage='analyze' "
-            "AND j.state IN ('queued','running') ORDER BY a.duration,j.asset",
+            "AND j.state IN ('queued','running') ORDER BY CASE a.kind WHEN 'video' THEN 0 ELSE 1 END,a.duration,j.asset",
             (owner, album, version),
         ).fetchall()
         for row in rows:
             row = dict(row)
+            if allowed is not None and row["asset"] not in allowed:
+                continue
             checkpoint = json.loads(row["checkpoint"])
             if checkpoint.get("retry_at", 0) > now or (
                 row["state"] == "running" and checkpoint.get("lease_until", 0) > now
