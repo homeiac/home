@@ -9,11 +9,13 @@ import urllib.parse
 
 from .faces import FaceEngine, frigate_candidate
 from .telemetry import get_telemetry
+from cricket.api import FileBody, RangeError
+from cricket.ledger import Conflict
 
 STATIC = Path(__file__).parent / "static"
 
 
-def make_server(store, models: Path, bind: str, port: int, public_origin: str | None = None):
+def make_server(store, models: Path, bind: str, port: int, public_origin: str | None = None, *, cricket=None):
     """Serve previews and annotation commands without arbitrary filesystem or SQL access."""
     token = secrets.token_urlsafe(32)
     engine = None
@@ -29,7 +31,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             logging.info("HTTP %s", args[1] if len(args) > 1 else "request")
 
         def send(self, body, status=200, content_type="application/json"):
-            if not isinstance(body, bytes):
+            if not isinstance(body, (bytes, FileBody)):
                 body = json.dumps(body, default=str).encode()
             # Prepare under the DB lock, but never hold it while writing a socket.
             self.pending_response=(body,status,content_type)
@@ -38,7 +40,13 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             body,status,content_type=self.pending_response
             self.send_response(status)
             self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Length", str(body.length if isinstance(body, FileBody) else len(body)))
+            if isinstance(body, FileBody):
+                self.send_header("Accept-Ranges", "bytes")
+                if body.partial:
+                    self.send_header("Content-Range", f"bytes {body.start}-{body.start + body.length - 1}/{body.size}")
+            if status == 416:
+                self.send_header("Content-Range", f"bytes */{self.range_size}")
             self.send_header('X-Trace-ID',self.request_record['trace_id'])
             self.send_header("Cache-Control", "no-store")
             if status==503:self.send_header('Retry-After','3')
@@ -46,7 +54,18 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
             self.end_headers()
-            self.wfile.write(body)
+            if isinstance(body, FileBody):
+                with body.path.open('rb') as original:
+                    original.seek(body.start)
+                    remaining = body.length
+                    while remaining:
+                        chunk = original.read(min(remaining, 256 * 1024))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+            else:
+                self.wfile.write(body)
 
         def safe_host(self):
             host = self.headers.get("Host", "")
@@ -62,7 +81,14 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             self.safe_host()
             parsed = urllib.parse.urlsplit(self.path)
             query = {k: values[0] for k, values in urllib.parse.parse_qs(parsed.query).items()}
+            if parsed.path.startswith('/api/cricket/') and cricket is None:
+                return self.send({'error':'Cricket highlights are not enabled'},404)
             if self.command == "GET":
+                if parsed.path.startswith('/api/cricket/'):
+                    result = cricket.get(parsed.path, query, self.headers.get('Range'))
+                    if isinstance(result, FileBody):
+                        return self.send(result,206 if result.partial else 200,result.content_type)
+                    return self.send(result)
                 if parsed.path == '/healthz':
                     return self.send({'status':'alive'})
                 if parsed.path == '/api/diagnostics':
@@ -74,7 +100,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     import os
                     priority=store.priority_review() if hasattr(store,'priority_review') else {}
                     return self.send({"csrf": token, "frigate": bool(os.environ.get("PHOTO_FRIGATE_URL")), "background_only": getattr(store,"background_only",False), "auto_accept": hasattr(store,'auto_accept_pass'), "search_index": hasattr(store,'search'),
-                        "priority_review": bool(priority.get('people')), "priority_pet_searches": priority.get('pets',[])})
+                        "priority_review": bool(priority.get('people')), "priority_pet_searches": priority.get('pets',[]), "cricket": cricket is not None})
                 if parsed.path == "/api/auto-accept":
                     return self.send(store.auto_accept_settings())
                 if parsed.path == "/api/status":
@@ -120,6 +146,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Expected JSON object")
+            if parsed.path.startswith('/api/cricket/'):
+                return self.send(cricket.post(parsed.path,body))
             if parsed.path == '/api/group-suggestions':
                 return self.send(store.group_suggestions(body.get('paths'),body.get('timezone','UTC')))
             if parsed.path == "/api/groups/save":
@@ -160,7 +188,9 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
         def dispatch_safely(self):
             try:
                 route=urllib.parse.urlsplit(self.path).path
-                if route.startswith('/api/') and route != '/api/diagnostics' and hasattr(store,'request_session'):
+                if route.startswith('/api/cricket/'):
+                    self.dispatch()
+                elif route.startswith('/api/') and route != '/api/diagnostics' and hasattr(store,'request_session'):
                     with store.request_session(readonly=self.command=='GET' or route=='/api/group-suggestions') as reader:
                         self.request_store=reader
                         self.dispatch()
@@ -175,6 +205,11 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                             raise TimeoutError('Photo database is busy; retry shortly')
                     try:self.dispatch()
                     finally:store.lock.release()
+            except RangeError as exc:
+                self.range_size=exc.size
+                self.send({'error':str(exc)},416)
+            except Conflict as exc:
+                self.send({'error':str(exc)},409)
             except TimeoutError as exc:
                 self.send({'error':str(exc)},503)
             except PermissionError as exc:
