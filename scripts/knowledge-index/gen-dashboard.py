@@ -453,7 +453,8 @@ def panels():
                  + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
                  + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
     recovery = caption_recovery_panels()
-    return recovery + shift(processing + shift(remaining, processing_height), 12)
+    recovery_height = max(p['gridPos']['y'] + p['gridPos']['h'] for p in recovery)
+    return recovery + shift(processing + shift(remaining, processing_height), recovery_height)
 
 
 def caption_recovery_panels():
@@ -473,10 +474,22 @@ def caption_recovery_panels():
         series("Basic-caption recovery by state", [(f'max by(state) ({base})' + fresh, '{{state}}')], 0, 5, w=12,h=7,
                description="One disposition per original asset in the frozen recovery ledger."),
         series("Recovery captions saved per minute by backend",
-               [('max by(backend) (knowledge_index_caption_recovery_saved_per_minute)' + fresh, '{{backend}}')],
+               [(f'max(knowledge_index_caption_recovery_saved_per_minute{{backend="{backend}"}})' + fresh, backend)
+                for backend in ('RTX 3070','Mac Metal')],
                12, 5, w=12, h=7,
                description="Ledger answers saved in the last 15 minutes divided by 15. Includes reused answers with their original model timestamp."),
     ]
+    # Dispatch alternates between backends, so the two live rates often coincide.
+    panels[-1]["fieldConfig"]["overrides"] = [
+        {"matcher":{"id":"byName","options":"RTX 3070"}, "properties":[
+            {"id":"color","value":{"mode":"fixed","fixedColor":"orange"}},{"id":"custom.lineWidth","value":3}]},
+        {"matcher":{"id":"byName","options":"Mac Metal"}, "properties":[
+            {"id":"color","value":{"mode":"fixed","fixedColor":"blue"}},
+            {"id":"custom.lineStyle","value":{"fill":"dash","dash":[8,8]}}]},
+    ]
+    tuning_notes = Path(__file__).with_name('caption-recovery') / 'tuning-results.md'
+    panels.append(_panel('text', 'Basic-caption recovery · matched backend trials', [], 0, 12, 24, 7,
+                         extra={'options': {'mode': 'markdown', 'content': tuning_notes.read_text().strip()}}))
     for panel in panels:
         if panel["type"] == "stat":
             panel["targets"][0].update(instant=True, range=False)

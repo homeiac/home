@@ -184,6 +184,22 @@ have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked agai
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 have.update(runpy.run_path(here + "/audio-story/worker.py")["HELP"])
 have.update(runpy.run_path(here + "/photo-stage-metrics.py")["HELP"])
+# Exercise the recovery publisher against a tiny frozen ledger, then register its actual metric names.
+import sqlite3
+fixture = pathlib.Path(w) / "caption-recovery.sqlite3"
+with sqlite3.connect(fixture) as db:
+    db.executescript("""
+        CREATE TABLE cohort(id TEXT PRIMARY KEY, cohort TEXT);
+        CREATE TABLE work(id TEXT PRIMARY KEY, state TEXT, answer TEXT);
+        INSERT INTO cohort VALUES ('one','caption'),('two','caption'),('external','other');
+        INSERT INTO work VALUES ('one','verified',json_object('model','bonsai-27b','created',datetime('now')));
+        INSERT INTO work VALUES ('external','verified',NULL);
+    """)
+recovery_text = runpy.run_path(here + "/caption-recovery/metrics.py")["render"](fixture)
+assert 'assets{state="verified"} 1' in recovery_text and 'assets{state="pending"} 1' in recovery_text
+assert 'saved_per_minute{backend="Mac Metal"} 0' in recovery_text
+assert f'saved_per_minute{{backend="RTX 3070"}} {1/15}' in recovery_text
+have.update(re.findall(r"^# TYPE (\w+) gauge$", recovery_text, re.M))
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
 external.update(re.findall(r"f'((?:knowledge_index_luna_)[a-z_]+)(?: |\{)", pathlib.Path(here + "/luna-backfill/host.py").read_text()))
 external.update(re.findall(r"# TYPE (knowledge_index_reconciliation_[a-z_]+) ", pathlib.Path(here + "/luna-backfill/reconciliation.py").read_text()))

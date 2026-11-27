@@ -106,6 +106,14 @@ At 06:10 Pacific, 92 captions had been generated. Immich returned the exact save
 
 - 2026-11-27T06:12-08:00 · 70 read back from Immich, 34 submitted, 0 independently filled, 2,088 pending, 0 unresolved.
 
+#### Basic-caption recovery throughput · 27 November 2026
+
+The [live per-backend graph](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&viewPanel=287) counts saved answers per minute over 15 minutes. The state graph beside it counts exact Immich assets. From 09:14 to 09:30 Pacific, inference cleared 120 pending items while Immich readback confirmed 84. The number awaiting readback rose from 409 to 445. More inference alone would grow that queue during this interval.
+
+The [matched benchmark results](../../../scripts/knowledge-index/caption-recovery/tuning-results.md) use one previously verified photo from each of six original file-size buckets. The [replay tool and selection query](../../../scripts/knowledge-index/caption-recovery/benchmark.py) keep the previews and answers local. The Mac ran three, six, then three concurrent requests against the same six images. We compared the RTX and still-fawn on the same first three images, with one request in flight on each backend. All requests used the production basic scene prompt and 768-pixel preview preparation. These are photo-only measurements on shared machines, and they exclude Immich publication.
+
+The [CPU trial](../../../scripts/knowledge-index/caption-recovery/still-fawn-cpu-canary.sh) ran inside still-fawn's K3s VM with three CPU threads, one model slot and no GPU. It used the pinned Bonsai 27B Q1_0 weights and Q8_0 vision projector. On the first photo, prompt and image processing took 192 seconds of the 232-second request. The actual caption took 38 seconds to generate. The trial kept its results outside the production ledger.
+
 #### Canon RAW importer verification plan
 
 Classify mixed-case CR2 extensions on import and check older catalog rows. Use the existing Immich asset and its saved caption when available. Otherwise try the Immich preview before developing the original into a temporary JPEG. Exercise both image paths on the same private sample, repeat the lookup, and check asset and caption counts. Keep identifiers and image bytes out of Git.
@@ -137,3 +145,29 @@ The first production batch exposed 551 external CR2 assets already in Immich's t
 All **111** album candidates matched their year-folder originals byte-for-byte. The catalog accounts for 2,782 paths as 2,120 active originals, 551 trashed originals and 111 copies. Four album captions were written during rollout before the new exclusion. Two matched active originals in the recovery cohort and were submitted through the normal publisher for reuse. The other two matched paths outside the recovery cohort. The first 20 successful CR2 Parquet rows had zero repeated source/path/size/enricher keys.
 
 A production batch also exposed a missing telemetry counter for saved-caption reuse. Parquet had already committed the batch when the counter raised an exception. The counter and canary now cover the full persistence step. Reused text is counted separately from model inference.
+
+- 2026-11-27T06:42-08:00 · 206 read back from Immich, 92 submitted, 0 independently filled, 1,894 pending, 0 unresolved.
+
+- 2026-11-27T06:57-08:00 · 286 read back from Immich, 132 submitted, 0 independently filled, 1,774 pending, 0 unresolved.
+
+- 2026-11-27T07:12-08:00 · 366 read back from Immich, 167 submitted, 0 independently filled, 1,655 pending, 4 unresolved.
+
+- 2026-11-27T07:26-08:00 · 450 read back from Immich, 203 submitted, 0 independently filled, 1,535 pending, 4 unresolved.
+
+- 2026-11-27T07:41-08:00 · 534 read back from Immich, 239 submitted, 0 independently filled, 1,415 pending, 4 unresolved.
+
+- 2026-11-27T07:56-08:00 · 630 read back from Immich, 263 submitted, 0 independently filled, 1,295 pending, 4 unresolved.
+
+- 2026-11-27T08:12-08:00 · 714 read back from Immich, 297 submitted, 0 independently filled, 1,176 pending, 5 unresolved.
+
+- 2026-11-27T08:27-08:00 · 794 read back from Immich, 337 submitted, 0 independently filled, 1,056 pending, 5 unresolved.
+
+- 2026-11-27T08:43-08:00 · 891 read back from Immich, 360 submitted, 0 independently filled, 936 pending, 5 unresolved.
+
+- 2026-11-27T08:58-08:00 · 986 read back from Immich, 385 submitted, 0 independently filled, 816 pending, 5 unresolved.
+
+- 2026-11-27T09:14-08:00 · 1,082 read back from Immich, 409 submitted, 0 independently filled, 696 pending, 5 unresolved.
+
+- 2026-11-27T09:30-08:00 · 1,166 read back from Immich, 445 submitted, 0 independently filled, 576 pending, 5 unresolved.
+
+- 2026-11-27T09:50-08:00 · 1,226 read back from Immich, 505 submitted, 0 independently filled, 456 pending, 5 unresolved.
