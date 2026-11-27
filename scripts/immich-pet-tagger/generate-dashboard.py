@@ -29,7 +29,7 @@ def dashboard() -> dict:
     """Build an overview inspired by Knowledge Index, followed by scoped details."""
     panels = []
 
-    def panel(title, exprs, x, y, w=4, h=4, kind='stat', unit='short', description='', mappings=None):
+    def panel(title, exprs, x, y, w=4, h=4, kind='stat', unit='locale', description='', mappings=None):
         targets = [{'refId': chr(65 + i), 'expr': expr, 'legendFormat': label,
                     'instant': kind == 'stat', 'range': kind != 'stat'}
                    for i, (expr, label) in enumerate(exprs)]
@@ -104,9 +104,12 @@ def dashboard() -> dict:
                          {'refId': 'edges', 'expr': ' or '.join(label('vector(1)', [('id', a+'_'+b), ('source', a), ('target', b)]) for a, b in edges),
                           'format': 'table', 'instant': True, 'range': False}],
              'options': {'nodes': {'mainStatUnit': 'short'}},
-             'fieldConfig': {'defaults': {'mappings': [{'type': 'special', 'options': {'match': 'nan', 'result': {'text': 'Unavailable', 'color': 'gray'}}}]}, 'overrides': []},
+             'fieldConfig': {'defaults': {'mappings': [{'type': 'special', 'options': {'match': kind, 'result': {'text': 'Unavailable', 'color': 'gray'}}} for kind in ('nan', 'null')]}, 'overrides': []},
              'transformations': [
-                 {'id': 'organize', 'filter': {'id': 'byRefId', 'options': 'nodes'}, 'options': {'excludeByName': {'Time': True}, 'renameByName': {'Value': 'mainstat', 'Value #nodes': 'mainstat'}}},
+                 # Organize only changes the display name. NodeGraph needs a
+                 # real field named mainstat; copy the numeric sample into one.
+                 {'id': 'calculateField', 'filter': {'id': 'byRefId', 'options': 'nodes'}, 'options': {'mode': 'reduceRow', 'reduce': {'reducer': 'lastNotNull', 'include': ['Value', 'Value #nodes']}, 'alias': 'mainstat'}},
+                 {'id': 'organize', 'filter': {'id': 'byRefId', 'options': 'nodes'}, 'options': {'excludeByName': {'Time': True, 'Value': True, 'Value #nodes': True}}},
                  {'id': 'organize', 'filter': {'id': 'byRefId', 'options': 'edges'}, 'options': {'excludeByName': {'Time': True, 'Value': True, 'Value #edges': True}}}]}
     panels.append(graph)
     pace = live(f'(max(clamp_min(deriv({M}scan_items{{scope="manual",outcome="added"}}[5m]), 0) '
