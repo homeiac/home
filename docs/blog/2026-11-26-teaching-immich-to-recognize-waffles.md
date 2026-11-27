@@ -9,12 +9,20 @@ I supplied a reference photo: a tan dog with upright ears, a pale chest and muzz
 and darker markings around the face. The photo is a visual reference, not a reason
 to assume that every similar dog is the same animal.
 
+The completed study identified **999 unique Waffles assets: 879 photos and 120
+videos**. The original 78,900-asset inventory reached 78,895 processed assets;
+five damaged source assets remain unresolved. All Waffles workers are now off,
+with results, references and the dashboard retained. Recognition recall and the
+per-worker Mac-versus-i5 performance investigation remain incomplete. The final
+results and lessons below distinguish those open questions from completed work.
+
 ## The add-on
 
 [immich-pet-tagger](https://github.com/tedornitier/immich-pet-tagger) runs alongside
 Immich. YOLO finds animals, CLIP turns their crops into visual embeddings, and a
 small local classifier compares those embeddings with selected examples. Matches
-appear in Immich's People section. Photos and inference stay on the homelab.
+appear in Immich's People section. The main classifier runs on the homelab; the
+later, explicitly approved reject review used Enterprise Sol with selected images.
 
 This deployment targets Immich v3.4.2 and pins the tagger's v1.10.0 CPU image by
 digest. The published image was checked for an AMD64 manifest before it was added
@@ -654,3 +662,115 @@ one photo and one video. The known total is now **999: 879 photos and 120 videos
 and all nine sampled misses are recovered. The journal preserves the original
 uncertain model decisions alongside this new owner evidence; neither the model
 threshold nor the evaluation labels were changed.
+
+
+## What the still-fawn comparison established—and what remains open
+
+The per-worker analysis is **incomplete**. The i5's competitiveness cannot be
+explained solely from total backend throughput, and the eventual Mac lead does
+not settle that question. A backend combines several processes: the final active
+configuration had one Metal and fifteen CPU workers on the Mac, versus four CPU
+workers on still-fawn. Calling the Mac line “GPU throughput” would be misleading.
+Dividing each total by its configured worker count would also mix idle time,
+retries, different photos and changing effective concurrency.
+
+The closest available comparison follows the actual baseline worker on each
+machine, before and after the queue intervention:
+
+| Production capture | Mac Metal processing / completion interval | still-fawn CPU processing / completion interval |
+| --- | --- | --- |
+| Before indexed FIFO | 0.378 / 2.598 s | 0.679 / 2.786 s |
+| After indexed FIFO | 0.449 / 0.724 s | 0.820 / 0.948 s |
+
+Here, “processing” includes thumbnail download, preprocessing and inference;
+“completion interval” includes pipeline effects and the independent writer.
+These are different production photos, not isolated inference measurements.
+In the first capture, Mac processing was about 1.8 times faster while completed
+results arrived at nearly the same pace. That supports a concrete explanation
+for **part** of the apparent parity: queue and dispatch overhead consumed much
+of the wall time outside useful processing. The indexed selection and independent
+claim locks substantially reduced that overhead on both machines. The
+[before/after report](../experiments/waffles/2026-11-26-fifo-before-after.md)
+preserves the raw aggregate timings and their definitions.
+
+There is also evidence of waiting after that fix. Actual Metal main-thread samples
+spent 24.85% in TLS handshakes, 39.71% in HTTPS reads and 30.68% in condition waits.
+Source inspection found a new HTTP client connection per request and a synchronous
+one-photo adapter that prevents useful cross-photo batching. still-fawn reaches
+the queue over in-cluster HTTP; the Mac uses HTTPS through the gateway. These
+observations identify plausible contributors, but **we did not measure their
+individual causal effects through controlled changes**. Condition waits can include
+asynchronous model execution. HTTPS reads include server work. Neither stack
+samples nor the small control-request latency difference establish network
+bandwidth saturation.
+
+Resource attribution is unfinished too. The privileged capture reported heavy
+thermal pressure and roughly 97% whole-host GPU activity, but emitted no per-task
+GPU fields and overlapped another GPU workload. It cannot tell us Waffles' GPU
+occupancy or how much thermal/shared-resource contention affected its speed.
+Later preview failures introduced yet another delay: a live still-fawn trace
+caught fifteen seconds of error-backoff sleep in a twenty-second window.
+A comparison across that interval would measure error handling as much as compute.
+
+The Mac ultimately committed 571 photos in 60.6 seconds with nine processes,
+versus 162 for still-fawn in that window. That is useful capacity evidence, not a
+per-worker hardware verdict. The defensible lesson is that the original chart
+mixed hardware, transport, queue design, concurrency and work selection. We
+removed a measured queue bottleneck; **we have not fully explained the remaining
+per-worker competitiveness of still-fawn**.
+
+A completed follow-up needs the same immutable photo bytes and classifier on each
+backend, separate Mac CPU and Metal workers, recorded actual worker counts, and
+stage timings for claim, fetch, decode, detection, embedding and result commit.
+It should compare connection reuse and batching as separate interventions, repeat
+runs in reversed order, verify unchanged identity decisions, and attribute GPU
+and thermal behavior to the worker. The repeatable bottleneck calculator and
+live-trace scripts are starting points; they do not replace that experiment.
+Workers remain shut down until such a follow-up is deliberately started.
+
+## Final results and lessons to carry forward
+
+| Result | Verified outcome |
+| --- | --- |
+| Original inventory processing | 78,895 of 78,900; five damaged assets unresolved |
+| Waffles identified before reject review | 833, including 61 recovered through the thumbnail/video fix |
+| Evaluated Sol plus independent visual review | 164 additional assets |
+| Explicit owner confirmation | Two additional assets; all nine sampled misses recovered |
+| Final known Waffles collection | **999: 879 photos and 120 videos** |
+| Operating state | All Waffles inference workers and new-upload discovery off; database, UI and dashboard retained |
+
+These numbers describe known assignments, not complete recognition recall. The
+remaining ambiguous dog-labelled cases were left unresolved, and video recovery
+used a first frame that may not contain a dog visible later. The 13 negative
+holdouts are useful controls, not proof of population-wide precision.
+
+Several lessons changed the implementation:
+
+- **Use existing descriptions to prioritize work early.** The retrospective query
+  selected a much smaller candidate set while retaining most known matches.
+  Include missing descriptions and audit exclusions; text filtering is not a
+  guarantee that every dog photo survives.
+- **A missing preview does not mean missing media.** Probe readable source media,
+  validate decoding, and bound retries. Separate recovery and preflight work from
+  inference so failures do not consume every worker through repeated sleeps.
+- **Measure real progress by backend and by worker.** Preserve processed counts,
+  in-flight work, device/pool identity and timing definitions. Verify chart math
+  against committed database rows before interpreting spikes or drops.
+- **Make live tuning part of the design.** During backfill, raise production
+  capacity before experimenting above it; retain a running baseline and reduce
+  only on negative evidence. Record actual process counts, memory pressure,
+  failures and interrupted trials. Completion is a separate reason to stop the
+  fleet, as we did here through Flux and disabled native services.
+- **Evaluate the exact fallback protocol.** A batched model can return valid JSON
+  while assigning descriptions to the wrong image. Single-target evaluation,
+  independent visual review, checked tag placement and owner confirmation all
+  contributed evidence that model confidence alone could not supply.
+- **Keep a scientific record, including failed ideas.** Immutable input hashes,
+  preserved historical results, backups, bounded retries and API readback made
+  corrections auditable. Record an unresolved explanation as unresolved rather
+  than turning a plausible bottleneck into a hardware conclusion.
+
+The [final review journal](../experiments/waffles/2026-11-27-reject-review.md)
+links the assignment and shutdown verification. The reusable scripts and GitOps
+configuration preserve the ability to resume without keeping idle model workers
+resident in memory.
