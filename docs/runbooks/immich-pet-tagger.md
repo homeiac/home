@@ -370,3 +370,36 @@ Metal baseline and all other admitted baseline workers continue; memory warnings
 are observed, critical pressure rejects that configuration. On failure the
 controller restores the pre-experiment Mac extra policy. The protocol and journal
 are under `docs/experiments/waffles/2026-11-26-fifo-capacity*`.
+
+### Standing production-first policy
+
+Keep the highest accepted production capacity working. Raise capacity first, then
+measure real backfill work. Do not lower or divert the production floor to make
+room for a benchmark. Reduce only after negative throughput, stability, critical
+pressure, or quality evidence; memory warnings are observations.
+
+`production-capacity.py --levels 12 15` implements this policy for Mac CPU extras
+using the unchanged two-thread model configuration. It records two production
+windows at each level, preserves capacity on interruption or diagnostic failure,
+and journals any evidence-based rollback. The previous canary-diversion controller
+is retired. `production-rate.py --seconds 60` reads committed per-backend rates
+without changing any work. The Grafana throughput graph uses a five-minute window,
+so it responds more slowly than this one-minute database count.
+
+### Diagnose actual production workers
+
+`diagnose-throughput-drop.py --output /private/tmp/waffles-throughput-drop.json`
+correlates twenty minutes of completed jobs, exhausted preview failures, actual
+ready processes and coordinator CPU/throttling. It is read-only and prints start
+and completion. Check failed attempts as well as completed-photo timing: each
+worker currently sleeps five seconds after an error, so bursts of unavailable
+previews depress every backend without reducing process counts.
+
+`diagnose-mac.py PRIVATE_DIRECTORY`, `trace-live-network.py PRIVATE_DIRECTORY` and
+`trace-live-linux.py PRIVATE_DIRECTORY` sample existing workers without new
+inference jobs. The owner can run `sudo bash scripts/immich-pet-tagger/trace-live-mac-sudo.sh`
+for a visible, bounded privileged capture. Only profiler children are terminated
+at its deadline. `summarize-live-traces.py PRIVATE_DIRECTORY --output SUMMARY.json`
+parses native wall stacks, network deltas, Linux syscall waits and power samples.
+Keep raw captures private; record aggregate findings and failed captures in the
+[science journal](../experiments/waffles/2026-11-26-live-worker-traces.md).

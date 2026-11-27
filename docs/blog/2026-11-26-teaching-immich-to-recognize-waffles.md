@@ -375,6 +375,28 @@ these are observed operational changes, not a controlled hardware speedup claim.
 The [generated comparison](../experiments/waffles/2026-11-26-fifo-before-after.md)
 retains the measurements and caveats.
 
+### Production is the floor, not the leftover capacity
+
+The next CPU sweep preserved all 122 binary decisions in both passes at two,
+four and eight extras. Eight extras achieved 390.0 and 499.2 photos/minute on the
+canary. But diverting the extras into tests made the historical dashboard look
+slow again. The owner stopped that protocol: increase production capacity first,
+then experiment above it, and reduce only when results are negative.
+
+Eight CPU extras and the permanent Metal process were returned to production.
+A live observation then recorded 571 committed Mac photos in 60.6 seconds—565.3
+photos/minute—while still-fawn committed 162. No Mac process crashed and the
+permanent baseline identities stayed unchanged. The dashboard's five-minute
+window lagged the immediate production gain.
+
+The replacement `production-capacity.py` keeps every tested process on real
+backfill work, raises the target before measuring, and retains capacity on a
+measurement interruption. Two throughput windows, process stability and critical
+memory pressure determine whether a step is accepted or reduced. Warning pressure
+does not stop work. The old canary-diversion controller is retired, while its
+results remain in the journal. This operational sweep changes concurrency only;
+it does not pretend to provide new labeled accuracy results at every higher count.
+
 ### Auditing an apparent throughput cliff
 
 The dashboard briefly showed a simultaneous backend throughput drop around
@@ -524,3 +546,32 @@ spot check must not be presented as the current result. The threshold remains
 
 The reusable commands, permissions, operating controls, and recovery procedure are
 in the [runbook](../runbooks/immich-pet-tagger.md).
+
+## Trace the worker, including the time it does no useful work
+
+An old i5 staying competitive with a much newer GPU-backed Mac warranted tracing
+the actual production processes. After the indexed-FIFO fix, the Metal worker's
+main thread still spent 24.85% of sampled wall time in TLS handshakes and 39.71%
+in HTTPS reads. Those reads include waiting for the remote application; they do
+not prove the network link is saturated. The adapter also submits one photo at
+a time, preventing the upstream batch queues from gathering concurrent photos.
+Fast inference hardware cannot accelerate time spent establishing connections,
+waiting for responses, or waiting for the next input.
+
+A later simultaneous throughput drop had a different, directly observed cause.
+Between 23:27 and 23:31 Pacific, exhausted preview 404s rose from 80 to 333 while
+all 16 Mac and four still-fawn processes remained active. An eBPF trace of the
+real still-fawn worker caught three five-second error-backoff sleeps in twenty
+seconds. The queue coordinator had spare CPU and no measured throttling in that
+interval. Missing previews were tying up inference capacity through retries and
+sleep, even though successful-photo processing times looked healthy.
+
+The resulting intervention is a separate, bounded preview scanner ahead of
+inference. Confirmed missing previews should leave the runnable queue with an
+audit record, without deleting photos or interfering with claimed jobs. This
+belongs in the Kubernetes adaptation just as much as persistent storage and
+resource limits: API validation and retry delays should not occupy expensive
+inference workers. The [science record](../experiments/waffles/2026-11-26-live-worker-traces.md)
+retains the measurements, failed tracing attempts, and before/after plan. It also
+records what was not measured: the privileged Mac capture emitted no per-process
+GPU fields, so its 97% whole-host GPU activity cannot be attributed to Waffles.

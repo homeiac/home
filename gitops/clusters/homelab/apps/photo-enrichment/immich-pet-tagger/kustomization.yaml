@@ -9,3 +9,4 @@ resources:
 - queue-credentials.sops.yaml
 - distributed.yaml
 - baseline.yaml
+- preview-preflight.yaml

@@ -26,6 +26,7 @@ c.memory_warning_policy='observe'
 c.required_baselines=('mac','pve','still-fawn')
 
 def main():
+    raise RuntimeError('Canary-diversion sweep retired by owner: use production-capacity.py; raise production first and reduce only on negative evidence')
     logging.basicConfig(level=logging.INFO,format='%(message)s')
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('private_directory',type=Path);args=p.parse_args()
     def interrupted(*_):raise KeyboardInterrupt('Mac capacity experiment interrupted')

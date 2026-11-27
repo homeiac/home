@@ -108,3 +108,15 @@ continuous and thread journals remain historical evidence.
 `bottleneck-report.py capture LABEL --directory PRIVATE_DIR` is the reusable
 read-only calculator; `compare BEFORE.json AFTER.json` reports identical before
 and after measures. Optional native samples stay in the private directory.
+
+The owner subsequently superseded canary diversion with **production-first**
+experiments. `production-capacity.py` is the active controller: raise production
+capacity, measure real work, retain it unless negative evidence appears. The
+canary controller is retired; its valid 2/4/8-extra results and interrupted sweep
+remain in the journal. `mac-capacity-report.py --write` combines both phases.
+
+The [actual-worker traces and missing-preview incident](2026-11-26-live-worker-traces.md)
+record TLS/HTTPS waiting on the Metal worker, eBPF-observed retry sleeps on
+still-fawn, the fleet-wide throughput drop, unsuccessful diagnostic attempts,
+and the registered background-preview scanner intervention. Per-process GPU
+occupancy was not obtained; whole-host GPU utilization is not attributed to Waffles.

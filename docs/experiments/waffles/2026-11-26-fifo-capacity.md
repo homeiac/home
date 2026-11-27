@@ -29,3 +29,22 @@ Only Mac unexpected exits invalidate Mac process stability; native guard cycles
 are recorded separately. No claim of uninterrupted processing on a guarded native
 host is made. The stable diagnostic window similarly requires the three main
 backends and unchanged extra policies.
+
+## Production-first supersedes canary diversion
+
+The owner stopped the sweep after repeated valid 2-, 4-, and 8-extra CPU trials.
+Eight CPU extras plus the permanent Metal process became the production floor.
+The controller completed no 12-extra measurement and no new Metal-extra trial.
+The original interrupted journal is retained. `mac-capacity-experiment.py` is now
+retired for execution because it diverted working production capacity to canaries.
+
+`production-capacity.py` raises production extras to 12, then 15, and measures two
+real-work windows at each level. It never changes a run to benchmark mode or pauses
+production. A fresh recorded production observation may supply the starting rate.
+Raised capacity remains in place when measurement is interrupted or a diagnostic
+fails; reduction requires negative evidence (both windows below 90% of the prior
+accepted rate, a process crash, critical pressure, or lost worker). Warning pressure
+is recorded and does not trigger reduction. The CPU device, two-thread setting,
+classifier and thresholds are unchanged. Higher concurrency gets operational
+validation, not a fabricated new labeled-accuracy result. Native host guards remain
+independent and all other worker policies are untouched.
