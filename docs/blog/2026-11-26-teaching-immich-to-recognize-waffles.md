@@ -39,6 +39,93 @@ Git. Its permissions cover reading photos and adding recognition metadata. It
 cannot delete photos, people, or faces. This also means the add-on's destructive
 reset operations are intentionally unavailable with this key.
 
+## From Docker Compose to Kubernetes
+
+The upstream [v1.10.0 Compose file](https://github.com/tedornitier/immich-pet-tagger/blob/v1.10.0/docker-compose.yml)
+is the starting point: one container joins Immich's Docker network, publishes
+port 8000 on the host's loopback port 2287, and bind-mounts `./data` at `/data`.
+Moving that into this cluster required explicit decisions about state, access,
+resource sharing, and what happens when Kubernetes restarts the process.
+The application still runs from the published upstream image; there is no custom
+image build or fork of its recognition code.
+
+| Compose setup | Kubernetes deployment |
+| --- | --- |
+| Floating `:cpu` image tag | Versioned CPU image pinned by SHA256 digest |
+| External `immich_default` Docker network | Immich's in-cluster Service DNS name |
+| Loopback host port | ClusterIP Service and private Traefik IngressRoute |
+| Local `./data` bind mount | 5 GiB ReadWriteOnce persistent volume claim |
+| API key in the environment configuration | SOPS-encrypted Secret, injected with `secretKeyRef` |
+| `restart: unless-stopped` | Deployment controller plus startup, readiness, and liveness probes |
+| Background poller starts with the application | ConfigMap-mounted wrapper with an explicit enrollment gate |
+
+### Preserve state and keep one writer
+
+The PVC holds references, negative examples, model downloads, embedding caches,
+and the automatic scanner's cursor. Losing it would lose the tagger's local
+learning state even though recognition metadata already written to Immich would
+remain there. The claim has Flux pruning disabled so removing the workload from
+Git does not automatically remove the claim. That protection is not a backup.
+
+This uses the cluster's `local-path` storage, so the deployment is pinned to
+`k3s-vm-still-fawn`. It is a single-node stateful service, not a highly available
+one. A single replica and `Recreate` update strategy avoid overlapping old and
+new application instances during a rollout. ReadWriteOnce alone would not stop
+two pods on the same node from accessing the volume. Updates cause a brief outage
+and can interrupt an active manual backfill, so deployments should be planned
+around long scans.
+
+The upstream [Dockerfile](https://github.com/tedornitier/immich-pet-tagger/blob/v1.10.0/Dockerfile)
+already sets its home, cache paths, and working directory under `/data` to support
+a read-only root filesystem. We used that existing support, mounting the PVC
+there and providing a separate 256 MiB `emptyDir` at `/tmp`. The Compose file's
+additional `/root/.cache` volume was not carried over. Kubernetes runs the process
+as UID/GID 1000 with `fsGroup: 1000` for volume access, drops all Linux capabilities,
+blocks privilege escalation, and disables the service-account token mount.
+
+### Separate internal connectivity from browser access
+
+`IMMICH_URL` points to `immich-server.immich-pilot.svc.cluster.local:2283`, while
+`IMMICH_EXTERNAL_URL` uses Immich's existing HTTPS address for browser links.
+The tagger itself gets a Service on port 8000 and an IngressRoute at
+`pets.app.home.panderosystems.com`, using the existing wildcard TLS certificate
+and private-network middleware. No host port or new public endpoint is needed.
+This boundary matters because the upstream administration UI has no login.
+
+The dedicated API key becomes a Kubernetes Secret through Flux's SOPS decryption;
+the Deployment references its `api-key` field. Only ciphertext enters Git.
+The application needs Immich API access, not Kubernetes API access, which is why
+it gets no service-account credential.
+
+### Bound resource use and control startup
+
+The pod requests 250 millicores and 1 GiB of memory, with limits of two CPU cores
+and 4 GiB. One model worker, two image-fetch workers, and two OpenMP/MKL threads
+keep inference concurrency bounded on a shared node. The existing `/health`
+endpoint drives all three probes; the startup probe allows roughly five minutes
+before failure. That endpoint confirms HTTP responsiveness, not classifier
+accuracy or successful scan progress. Those need separate checks.
+
+One application-specific adjustment was necessary for the rollout. The upstream
+FastAPI lifespan starts its polling loop immediately; increasing `POLL_INTERVAL`
+would only delay subsequent scans. Our small `startup.py` wrapper imports the
+upstream application and substitutes an idle loop when `AUTOMATIC_SCANS` is not
+`true`. Enrollment, the UI, and manual scans remain available. With the flag
+enabled, the original poller runs unchanged.
+
+The wrapper is mounted from a versioned ConfigMap and selected as the container
+command. It depends on an upstream Python entry point, so it needs review when
+upgrading the image. Its three tests cover disabled, enabled, and invalid flag
+values. A generator keeps the ConfigMap synchronized with the readable script.
+
+Finally, Kustomize includes the workload, startup ConfigMap, and encrypted Secret
+in the photo stack. Changes reach the cluster through its existing Flux source.
+Validation checks the rendered stack, pinned image, security settings, wrapper
+parity, and secret recovery; a server-side dry run checks Kubernetes acceptance.
+Live checks then verify the pod and private HTTPS endpoint. This makes the
+deployment reproducible, while keeping recognition quality a separate validation
+step.
+
 ## Teaching it what Waffles is—and what Waffles is not
 
 Search results are candidates, not training labels. Numbered contact sheets let
