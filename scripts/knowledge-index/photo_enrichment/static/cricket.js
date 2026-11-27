@@ -1,0 +1,105 @@
+'use strict';
+const $ = id => document.getElementById(id);
+const state = {csrf:'', albums:[], people:[], assets:[], events:[], editing:null, busy:false};
+const labels = {four:'Four',six:'Six',boundary_unclear:'Boundary unclear',dismissal:'Dismissal',run_out:'Run-out',other:'Other',unknown:'Result unclear'};
+const node = (tag,text) => {const el=document.createElement(tag);if(text!==undefined)el.textContent=text;return el;};
+const option = (value,text) => {const el=node('option',text);el.value=value;return el;};
+const name = id => state.people.find(p=>p.id===id)?.name || 'Person unclear';
+const album = () => state.albums.find(a=>a.id===$('album').value);
+const media = asset => '/api/cricket/media?'+new URLSearchParams({album:$('album').value,asset});
+const seconds = value => Number(value).toFixed(1)+'s';
+async function api(route,body){
+  const response=await fetch('/api/cricket/'+route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Photo-Token':state.csrf},body:JSON.stringify(body)});
+  const data=await response.json();if(!response.ok)throw Error(data.error||'Could not save');return data;
+}
+function notify(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
+function action(text,fn){const el=node('button',text);el.type='button';el.onclick=async()=>{el.disabled=true;try{await fn();}catch(error){notify(error.message,true);}finally{el.disabled=false;}};return el;}
+function matches(event){
+  const filter=$('filter').value,d=event.data;
+  if(event.dismissed&&!$('show-dismissed').checked)return false;
+  if(filter==='all')return true;
+  if(album()?.default_batter && d.actor!==album().default_batter)return false;
+  if(filter==='batting'||filter==='bowling')return d.role===filter;
+  if(filter==='batting_out')return d.role==='batting'&&['dismissal','run_out'].includes(d.outcome);
+  if(filter==='bowling_wicket')return d.role==='bowling'&&['dismissal','run_out'].includes(d.outcome);
+  return d.role==='batting'&&d.outcome===filter;
+}
+async function change(event,operation){
+  const updated=await api('revise',{id:event.id,revision:event.revision,...operation});
+  state.events=state.events.map(e=>e.id===updated.id?updated:e);render();
+  notify('Saved.');
+  $('status').append(' ',action('Undo',async()=>change(updated,{action:'undo'})));
+}
+function render(){
+  const visible=state.events.filter(matches);$('cards').replaceChildren();
+  for(const event of visible){
+    const card=node('article');card.className='card';card.dataset.event=event.id;
+    const asset=state.assets.find(a=>a.id===event.asset),d=event.data;
+    const preview=node(asset?.kind==='photo'?'img':'video');
+    if(asset?.kind==='photo'){preview.src=media(event.asset);preview.alt='Cricket activity';}
+    else{
+      preview.controls=true;preview.preload='metadata';preview.src=media(event.asset)+'#t='+d.start+','+d.end;
+      preview.addEventListener('loadedmetadata',()=>{preview.currentTime=d.start;});
+      preview.addEventListener('play',()=>{if(preview.currentTime<d.start||preview.currentTime>=d.end)preview.currentTime=d.start;});
+      preview.addEventListener('timeupdate',()=>{if(preview.currentTime>=d.end)preview.pause();});
+    }
+    const title=node('h2',name(d.actor)+' · '+(d.role==='unknown'?'Activity unclear':d.role)+' · '+labels[d.outcome]);
+    const badge=node('span',event.dismissed?'Dismissed':event.review_state==='suggested'?'Suggested':event.review_state==='confirmed'?'Confirmed':'Corrected');badge.className='badge';
+    const details=node('p',asset?.kind==='video'?seconds(d.start)+' – '+seconds(d.end):'Photo');details.className='details';
+    const reason=node('p',event.evidence.reason||event.evidence.confidence||'Best effort — easy to correct.');reason.className='details';
+    const controls=node('div');controls.className='actions';
+    controls.append(action('Correct',()=>edit(event)),action(event.dismissed?'Restore':'Dismiss',()=>change(event,{action:event.dismissed?'restore':'dismiss'})));
+    if(!event.dismissed)controls.append(action('Confirm',()=>change(event,{action:'accept'})));
+    const original=node('a',asset?.kind==='video'?'Play full video':'View original');original.href=media(event.asset);original.target='_blank';original.rel='noopener';controls.append(original);
+    card.append(preview,title,badge,details,reason,controls);$('cards').append(card);
+  }
+  if(!visible.length)$('cards').append(node('p','No moments in this view yet. Try another filter or add one below.'));
+  notify(visible.length+' moments · suggestions are included');
+}
+async function load(){
+  if(!album()){notify('No cricket album has been imported yet.');return;}
+  const q=new URLSearchParams({album:$('album').value,dismissed:'true'});
+  const [events,assets]=await Promise.all([api('events?'+q),api('assets?'+q)]);
+  state.events=events.events;state.assets=assets.assets;
+  $('original').replaceChildren(...state.assets.map((a,i)=>option(a.id,(a.kind==='video'?'Video ':'Photo ')+(i+1)+(a.duration?' · '+Math.round(a.duration)+' seconds':''))));
+  $('add').disabled=!state.assets.length;render();
+}
+function edit(event){
+  const asset=state.assets.find(a=>a.id===event.asset);if(!asset)throw Error('Original is no longer in this album');
+  state.editing=structuredClone(event);const d=event.data,video=asset.kind==='video';
+  $('person').replaceChildren(option('','Person unclear'),...state.people.map(p=>option(p.id,p.name)));
+  if(d.actor&&!state.people.some(p=>p.id===d.actor))$('person').append(option(d.actor,'Unresolved person'));
+  $('person').value=d.actor||'';$('role').value=d.role;$('outcome').value=d.outcome;$('credit').value=d.wicket_credit;
+  $('start').value=d.start??0;$('end').value=d.end??0;$('start').max=asset.duration;$('end').max=asset.duration;
+  $('timing').hidden=!video;$('start').required=video;$('end').required=video;$('outcome').disabled=!video;$('credit').disabled=!video;
+  $('edit-video').hidden=!video;$('edit-image').hidden=video;
+  if(video){$('edit-video').src=media(event.asset);$('edit-video').onloadedmetadata=()=>{$('edit-video').currentTime=d.start||0;};}
+  else $('edit-image').src=media(event.asset);
+  $('edit-title').textContent=event.id?'Correct highlight':'Add highlight';$('save').textContent=event.id?'Save correction':'Add highlight';$('save-status').textContent='';$('editor').showModal();
+}
+function closeEditor(){$('edit-video').pause();$('editor').close();}
+$('cancel').onclick=closeEditor;$('editor').addEventListener('close',()=>$('edit-video').pause());
+$('start-now').onclick=()=>{$('start').value=$('edit-video').currentTime.toFixed(1);};
+$('end-now').onclick=()=>{$('end').value=$('edit-video').currentTime.toFixed(1);};
+$('outcome').onchange=()=>{if($('outcome').value==='run_out')$('credit').value='run_out';else if($('outcome').value!=='dismissal')$('credit').value='unknown';};
+$('role').onchange=()=>{if($('role').value!=='bowling'&&$('credit').value==='bowler')$('credit').value='unknown';};
+$('edit-form').onsubmit=async event=>{
+  event.preventDefault();if(state.busy)return;state.busy=true;$('save').disabled=true;
+  try{
+    const current=state.editing,asset=state.assets.find(a=>a.id===current.asset),video=asset.kind==='video';
+    const data={...current.data,actor:$('person').value||null,role:$('role').value,outcome:video?$('outcome').value:'unknown',wicket_credit:video?$('credit').value:'unknown',start:video?Number($('start').value):null,end:video?Number($('end').value):null};
+    const patch=Object.fromEntries(Object.entries(data).filter(([key,value])=>value!==current.data[key]));
+    if(current.id){if(!Object.keys(patch).length){closeEditor();return;}await change(current,{patch});}
+    else{const saved=await api('create',{album:$('album').value,asset:current.asset,data});state.events.push(saved);render();notify('Highlight added.');}
+    closeEditor();
+  }catch(error){$('save-status').textContent='Not saved: '+error.message;$('save-status').className='error';}
+  finally{state.busy=false;$('save').disabled=false;}
+};
+$('add').onclick=()=>{const asset=state.assets.find(a=>a.id===$('original').value);if(!asset)return;edit({asset:asset.id,data:{actor:album()?.default_batter||null,role:'batting',outcome:'unknown',wicket_credit:'unknown',start:asset.kind==='video'?0:null,end:asset.kind==='video'?Math.min(30,asset.duration):null,delivery_start:null,outcome_end:null}});};
+$('filter').onchange=render;$('show-dismissed').onchange=render;
+$('album').onchange=()=>load().catch(e=>notify(e.message,true));$('refresh').onclick=()=>load().catch(e=>notify(e.message,true));
+(async()=>{const response=await fetch('/api/config');const config=await response.json();state.csrf=config.csrf;
+  const [albums,people]=await Promise.all([api('albums'),api('people')]);state.albums=albums.albums;state.people=people.people;
+  $('album').replaceChildren(...state.albums.map((a,i)=>option(a.id,name(a.default_batter)+' · Cricket'+(state.albums.length>1?' '+(i+1):''))));
+  await load();
+})().catch(error=>notify(error.message,true));

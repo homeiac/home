@@ -1,0 +1,57 @@
+// Real browser journey against the isolated demo; no user media or sign-ins.
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const [ready, screenshot] = process.argv.slice(2);
+(async()=>{
+  const browser=await chromium.launch({channel:'chrome',headless:true});
+  try{
+    const page=await browser.newPage({viewport:{width:1200,height:900}});
+    const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(JSON.parse(fs.readFileSync(ready)).url);
+    await page.getByRole('heading',{name:'Test batter · batting · Four',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Correct',exact:true}).click();
+    await page.locator('#person').selectOption('person-b');
+    await page.locator('#outcome').selectOption('six');
+    await page.locator('#start').fill('0.5');await page.locator('#end').fill('4');
+    await page.getByRole('button',{name:'Save correction',exact:true}).click();
+    await page.getByRole('heading',{name:'Other player · batting · Six',exact:true}).waitFor();
+    await page.reload();
+    await page.getByRole('heading',{name:'Other player · batting · Six',exact:true}).waitFor();
+    assert.match(await page.locator('.details').first().textContent(),/0.5s.*4.0s/);
+    const video=page.locator('.card video').first();
+    await video.evaluate(async el=>{await el.play();el.currentTime=3.9;});
+    await page.waitForFunction(()=>document.querySelector('.card video').paused,{},{timeout:5000});
+    await page.getByRole('button',{name:'Dismiss',exact:true}).click();
+    await page.getByText('No moments in this view yet.',{exact:false}).waitFor();
+    await page.getByRole('button',{name:'Undo',exact:true}).click();
+    await page.getByRole('heading',{name:'Other player · batting · Six',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Correct',exact:true}).click();
+    await page.locator('#person').selectOption('person-a');
+    await page.getByRole('button',{name:'Save correction',exact:true}).click();
+    await page.locator('#filter').selectOption('six');
+    await page.getByRole('heading',{name:'Test batter · batting · Six',exact:true}).waitFor();
+    await page.locator('#filter').selectOption('four');
+    await page.getByText('No moments in this view yet.',{exact:false}).waitFor();
+    await page.locator('#filter').selectOption('all');
+    await page.locator('#add').click();
+    await page.locator('#outcome').selectOption('dismissal');
+    await page.locator('#role').selectOption('bowling');await page.locator('#credit').selectOption('bowler');
+    await page.locator('#start').fill('2');await page.locator('#end').fill('7');
+    await page.locator('#save').click();
+    await page.getByRole('heading',{name:'Test batter · bowling · Dismissal',exact:true}).waitFor();
+    await page.reload();await page.getByRole('heading',{name:'Test batter · bowling · Dismissal',exact:true}).waitFor();
+    await page.locator('#filter').selectOption('bowling_wicket');
+    assert.equal(await page.locator('.card').count(),1);
+    await page.getByRole('button',{name:'Correct',exact:true}).click();
+    await page.locator('#start').fill('7');await page.locator('#end').fill('2');
+    await page.locator('#save').click();await page.getByText('Not saved:',{exact:false}).waitFor();
+    assert.ok(await page.locator('#editor').isVisible());
+    await page.getByRole('button',{name:'Close',exact:true}).click();
+    if(screenshot)await page.screenshot({path:screenshot,fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+    assert.deepEqual(errors,[]);
+    console.log('PASS: labels, person, interval playback, refresh, dismiss/undo, filters, missed moment, failed save, mobile layout');
+  }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

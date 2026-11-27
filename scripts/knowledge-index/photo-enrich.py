@@ -28,6 +28,7 @@ def main() -> None:
     serve.add_argument("--public-origin", help="Exact internal Traefik HTTPS origin when deployed")
     serve.add_argument("--cricket-ledger", type=Path, help="Enable cricket review using this private ledger")
     serve.add_argument("--cricket-owner", help="Fixed library owner for cricket access; never supplied by the browser")
+    serve.add_argument("--cricket-people", type=Path, help="Private owner-scoped person ID to display name mapping")
     extract = commands.add_parser("extract")
     extract.add_argument("--limit", type=int, default=50)
     extract.add_argument("--date", help="Capture date YYYY-MM-DD or unknown; omit for a bounded library pass")
@@ -135,7 +136,8 @@ def main() -> None:
             if args.cricket_ledger:
                 from cricket.api import CricketAPI
                 from cricket.ledger import Ledger
-                cricket = CricketAPI(Ledger(args.cricket_ledger), args.cricket_owner, args.library)
+                people = json.loads(args.cricket_people.read_text()) if args.cricket_people else {}
+                cricket = CricketAPI(Ledger(args.cricket_ledger), args.cricket_owner, args.library, people)
             server = make_server(store, models, args.bind, args.port, args.public_origin, cricket=cricket)
             logging.info("Photo enrichment: http://%s:%s", args.bind, server.server_port)
             import threading

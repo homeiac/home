@@ -47,3 +47,22 @@ A stale editor receives HTTP 409. Reads and streaming bypass the photo database
 lock; each cricket read uses a separate short SQLite snapshot.
 
 Run API tests with `python3 -m unittest cricket.test_api`; they bind loopback.
+
+## Correction UI
+
+The enabled review application links to `/cricket`. Pass `--cricket-people` with
+a private JSON mapping of person IDs to display names from the same owner.
+The user chooses a name, edits labels and times, or dismisses/undoes a suggestion.
+Unknown identities remain explicitly unclear. Failed saves keep the editor open.
+Filters for batting outcomes and bowling wickets use the album's default person.
+
+Browser verification uses generated media in a new private temporary directory:
+
+```sh
+python3 -m cricket.demo --state /private/tmp/cricket-ui-demo
+node cricket/check_ui.cjs /private/tmp/cricket-ui-demo/ready.json /private/tmp/cricket-ui.png
+```
+
+The check requires Playwright and Chrome and launches a fresh headless profile.
+Set `PLAYWRIGHT_MODULE` to an isolated installation when not on Node's module path.
+Use a new state directory for each check so the starting fixture is unchanged.
