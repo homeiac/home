@@ -182,17 +182,23 @@ def parse_answer(text):
     return summary, tags
 
 
-def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m", metrics=None, kind="photo", headers=None):
+def ask_model(endpoint, model, prompt, jpegs, timeout=600, extra=None, api="openai", num_ctx=8192, keep_alive="30m", metrics=None, kind="photo", headers=None, images_first=False):
     """One chat request with all images. api="ollama" uses Ollama's native /api/chat: it honors `think: false`
     (the OpenAI-compatible /v1 endpoint did not on 2026-11-16: reasoning models then spent ~500 hidden tokens, 18-45 s/item instead of ~2-5 s)."""
     b64 = [base64.b64encode(j).decode() for j in jpegs]
     if api == "ollama":
         body = {"model": model, "stream": False, "keep_alive": keep_alive, "options": {"num_ctx": num_ctx, "temperature": 0.2},
                 "messages": [{"role": "user", "content": prompt, "images": b64}]}
+        if images_first:
+            # Give independent questions about the same images a common visual prefix.
+            body["messages"] = [{"role": "user", "content": "", "images": b64},
+                                {"role": "user", "content": prompt}]
         body.update(extra or {})
         url = endpoint.rstrip("/") + "/api/chat"
     else:
         content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + x}} for x in b64]
+        if images_first:
+            content = content[1:] + content[:1]
         body = {"model": model, "messages": [{"role": "user", "content": content}], "temperature": 0.2, **(extra or {})}
         url = endpoint.rstrip("/") + "/v1/chat/completions"
     req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json", **(headers or {})})

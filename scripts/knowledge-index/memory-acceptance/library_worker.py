@@ -7,6 +7,7 @@ import fcntl
 from io import BytesIO
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import time
@@ -21,6 +22,9 @@ from library_backfill import HERE, claims, connect, status
 
 sys.path.insert(0, str(HERE.parent / "enrichers"))
 from media_summary import ask_model
+
+DEFAULT_MAC_LANES = 4
+DEFAULT_RTX_LANES = 3
 
 STAGES = (
     "baby_toddler",
@@ -108,7 +112,7 @@ def decode(answer):
     return value
 
 
-def observe(backend, endpoint, pictures, prompt, schema):
+def observe(backend, endpoint, pictures, prompt, schema, *, images_first=False):
     if backend == "rtx3070":
         extra = {
             "think": False,
@@ -123,6 +127,7 @@ def observe(backend, endpoint, pictures, prompt, schema):
                 pictures,
                 timeout=150,
                 api="ollama",
+                images_first=images_first,
                 extra=extra,
             )
         )
@@ -145,9 +150,56 @@ def observe(backend, endpoint, pictures, prompt, schema):
             pictures,
             timeout=100,
             headers={"Authorization": "Bearer " + key},
+            images_first=images_first,
             extra=extra,
         )
     )
+
+
+def normalized_action(action):
+    """Join complementary fields without changing the model’s actor, verb or object."""
+    verb, text = action["verb"], action["action"]
+    # Native Ollama sometimes separates the selected verb from its prepositional detail.
+    if (
+        verb in VERBS
+        and isinstance(text, str)
+        and text.split(" ", 1)[0]
+        in {
+            "at",
+            "toward",
+            "towards",
+            "with",
+            "in",
+            "on",
+            "beside",
+            "near",
+            "under",
+            "over",
+            "into",
+            "from",
+            "behind",
+            "to",
+            "down",
+            "up",
+        }
+    ):
+        text = verb + " " + text
+    # Some responses put an article and a single object noun in the second field.
+    # Keep longer clauses on the validation path; their subject can be ambiguous.
+    if (
+        verb in {"holds", "hugs", "kisses"}
+        and isinstance(text, str)
+        and re.fullmatch(r"(?:a|an|the) [A-Za-z]+[.]?", text)
+    ):
+        text = verb + " " + text
+    if (verb, text) != (None, None) and (
+        verb not in VERBS
+        or not isinstance(text, str)
+        or text.split(" ", 1)[0].rstrip(".") != verb
+        or len(text) > 450
+    ):
+        raise ValueError("Invalid action")
+    return verb, text
 
 
 def infer(row, backend, endpoint, saved, checkpoint):
@@ -170,39 +222,7 @@ def infer(row, backend, endpoint, saved, checkpoint):
         checkpoint(saved)
     if not saved.get("reviewed_action"):
         action = observe(backend, endpoint, pics, ACTION_PROMPT, ACTION_SCHEMA)
-        verb, text = action["verb"], action["action"]
-        # Native Ollama sometimes separates the selected verb from its prepositional detail.
-        if (
-            verb in VERBS
-            and isinstance(text, str)
-            and text.split(" ", 1)[0]
-            in {
-                "at",
-                "toward",
-                "towards",
-                "with",
-                "in",
-                "on",
-                "beside",
-                "near",
-                "under",
-                "over",
-                "into",
-                "from",
-                "behind",
-                "to",
-                "down",
-                "up",
-            }
-        ):
-            text = verb + " " + text
-        if (verb, text) != (None, None) and (
-            verb not in VERBS
-            or not isinstance(text, str)
-            or text.split(" ", 1)[0].rstrip(".") != verb
-            or len(text) > 450
-        ):
-            raise ValueError("Invalid action")
+        verb, text = normalized_action(action)
         saved.update(verb=verb, action=text, code=VERBS.get(verb))
     saved.update(
         backend=backend,
@@ -301,8 +321,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("root", type=Path)
     p.add_argument("--rtx", required=True)
-    p.add_argument("--mac-slots", type=int, default=4)
-    p.add_argument("--rtx-slots", type=int, default=3)
+    p.add_argument("--mac-slots", type=int, default=DEFAULT_MAC_LANES)
+    p.add_argument("--rtx-slots", type=int, default=DEFAULT_RTX_LANES)
     p.add_argument("--limit-per-lane", type=int, default=0)
     args = p.parse_args()
     os.umask(0o077)
