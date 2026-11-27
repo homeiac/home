@@ -1,0 +1,143 @@
+{
+  "observed_at": "2026-11-27T17:13:51.718933+00:00",
+  "population": 78900,
+  "complete": 78895,
+  "unresolved": 5,
+  "unique_waffles_assets": 833,
+  "waffles_by_media": {
+    "IMAGE": 748,
+    "VIDEO": 85
+  },
+  "by_run": {
+    "historical-waffles": {
+      "waffles_assets": 772,
+      "media": {
+        "IMAGE": 748,
+        "VIDEO": 24
+      },
+      "new_assignments": 735
+    },
+    "waffles-media-recovery-20261127": {
+      "waffles_assets": 61,
+      "media": {
+        "VIDEO": 61
+      },
+      "new_assignments": 61
+    },
+    "waffles-motion-recovery-20261127": {
+      "waffles_assets": 0,
+      "media": {},
+      "new_assignments": 0
+    }
+  },
+  "frozen_descriptions_and_tags": {
+    "literal_dog": {
+      "description_candidates": 1828,
+      "waffles_matches_in_candidates": 796,
+      "waffles_matches_outside_candidates": 37,
+      "candidates_complete_without_waffles_match": 1032,
+      "candidates_unresolved": 0,
+      "recovered_waffles_in_candidates": 57,
+      "complete_candidates_by_media": {
+        "IMAGE": 1482,
+        "VIDEO": 346
+      },
+      "unmatched_candidates_by_outcome": {
+        "low_confidence": 390,
+        "unknown": 642
+      }
+    },
+    "dog_terms": {
+      "description_candidates": 1842,
+      "waffles_matches_in_candidates": 796,
+      "waffles_matches_outside_candidates": 37,
+      "candidates_complete_without_waffles_match": 1046,
+      "candidates_unresolved": 0,
+      "recovered_waffles_in_candidates": 57,
+      "complete_candidates_by_media": {
+        "IMAGE": 1495,
+        "VIDEO": 347
+      },
+      "unmatched_candidates_by_outcome": {
+        "low_confidence": 391,
+        "unknown": 655
+      }
+    }
+  },
+  "current_descriptions_and_tags": {
+    "literal_dog": {
+      "description_candidates": 1858,
+      "waffles_matches_in_candidates": 812,
+      "waffles_matches_outside_candidates": 21,
+      "candidates_complete_without_waffles_match": 1046,
+      "candidates_unresolved": 0,
+      "recovered_waffles_in_candidates": 57,
+      "complete_candidates_by_media": {
+        "IMAGE": 1512,
+        "VIDEO": 346
+      },
+      "unmatched_candidates_by_outcome": {
+        "low_confidence": 395,
+        "unknown": 651
+      }
+    },
+    "dog_terms": {
+      "description_candidates": 1872,
+      "waffles_matches_in_candidates": 812,
+      "waffles_matches_outside_candidates": 21,
+      "candidates_complete_without_waffles_match": 1060,
+      "candidates_unresolved": 0,
+      "recovered_waffles_in_candidates": 57,
+      "complete_candidates_by_media": {
+        "IMAGE": 1525,
+        "VIDEO": 347
+      },
+      "unmatched_candidates_by_outcome": {
+        "low_confidence": 396,
+        "unknown": 664
+      }
+    }
+  },
+  "current_summary_only": {
+    "literal_dog": {
+      "description_candidates": 1837,
+      "waffles_matches_in_candidates": 808,
+      "waffles_matches_outside_candidates": 25,
+      "candidates_complete_without_waffles_match": 1029,
+      "candidates_unresolved": 0,
+      "recovered_waffles_in_candidates": 57,
+      "complete_candidates_by_media": {
+        "IMAGE": 1491,
+        "VIDEO": 346
+      },
+      "unmatched_candidates_by_outcome": {
+        "low_confidence": 391,
+        "unknown": 638
+      }
+    },
+    "dog_terms": {
+      "description_candidates": 1863,
+      "waffles_matches_in_candidates": 810,
+      "waffles_matches_outside_candidates": 23,
+      "candidates_complete_without_waffles_match": 1053,
+      "candidates_unresolved": 0,
+      "recovered_waffles_in_candidates": 57,
+      "complete_candidates_by_media": {
+        "IMAGE": 1516,
+        "VIDEO": 347
+      },
+      "unmatched_candidates_by_outcome": {
+        "low_confidence": 396,
+        "unknown": 657
+      }
+    }
+  },
+  "previous_visual_audit": {
+    "description_positive_classifier_negative_sample": 32,
+    "visible_dog": 26,
+    "clear_waffles_misses": 9,
+    "still_unmatched": 9,
+    "in_frozen_literal_dog_candidates": 9,
+    "reviewer": "assistant visual inspection, not owner confirmation"
+  }
+}

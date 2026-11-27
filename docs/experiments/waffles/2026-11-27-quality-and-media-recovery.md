@@ -146,3 +146,39 @@ The seven residual failures received a separate
 [source-integrity investigation](2026-11-27-residual-media-recovery.md).
 Two motion-video jobs completed on a follow-up run; four invalid generated clips
 and one corrupted PNG remain unresolved. Historical failure records are retained.
+
+## Final unique-asset and description comparison
+
+The final cross-run audit finds **833 unique Waffles-positive assets: 748 images
+and 85 videos**. The original run found 772; preview recovery added 61, all videos.
+The two residual motion repairs added no Waffles matches. These are unique matched
+assets, not face-write counts: 796 new assignments were made, and 37 positive
+assets already had their assignment.
+
+Using the frozen descriptions **and tags** captured before preview recovery,
+1,828 assets contained the whole word `dog` or `dogs`. All were processed: 796
+matched Waffles and 1,032 did not. Another 37 Waffles matches came from outside
+that candidate set. Of the 61 recovery matches, 57 were already dog-labelled
+and four were not. Adding puppy/canine/breed terms expands the old candidate set
+to 1,842 without retaining additional Waffles matches.
+
+Current enrichment differs from that frozen baseline. In the new database
+snapshot, description **summaries alone** contain `dog`/`dogs` for 1,837 assets:
+808 match Waffles and 1,029 do not; 25 Waffles matches are outside that literal
+summary query. Including current tags changes the totals to 1,858 candidates,
+812 Waffles matches, and 21 Waffles matches outside the query. These distinct
+inputs should not be mixed when reporting query recall.
+
+Completing all dog-described candidates does not establish classification recall.
+The earlier visual audit of 32 description-positive/model-negative candidates
+found 26 with visible dogs, including nine visually identified Waffles misses.
+Those are assistant review labels rather than owner-confirmed ground truth;
+the full rejected set also includes other dogs and description errors. Neither
+all rejected candidates nor the selected audit sample can be treated as a measured
+library-wide false-negative rate.
+
+The repeatable `audit-final-waffles-coverage.py` deduplicates assets across the
+three production runs, excludes benchmark/write-validation duplicates, verifies
+the frozen review manifest hash, and compares frozen versus current metadata.
+Its [aggregate result](../../reference/waffles-final-coverage.json) contains no
+private identifiers or captions.
