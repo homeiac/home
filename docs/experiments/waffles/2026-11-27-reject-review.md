@@ -196,3 +196,29 @@ This resolves the original nine; it does not resolve every ambiguous image in
 the larger cohort. Of the original 896 rows with no assignment after model
 review, 894 have no recovery from this study. Their processing status still does
 not establish a negative identity label or complete population recall.
+
+## Worker shutdown after completion
+
+The owner subsequently requested shutdown of all Waffles workers. This explicit
+post-completion instruction supersedes the continuous-baseline policy used while
+the historical queue was active. At 18:03:23 UTC (10:03 Pacific), verification
+found no unfinished production/in-flight jobs and no Waffles Mac worker processes.
+Both Mac launch agents are disabled and unloaded; fun-bedbug and chief-horse
+Waffles services and timers are disabled and stopped. Flux applied zero replicas
+for the two Kubernetes baseline deployments, two burst deployments and media
+decoder; their pods are gone. RTX remained unused.
+
+Discovery was disabled under the same PostgreSQL advisory lock used by the
+discovery loop, retaining its cursor and prior settings snapshot. Empty running
+queues were paused, while completed history, unresolved cases, all 999 known
+assignments, database state and PVCs were retained. Queue metrics, Grafana and
+the enrollment UI remain available; automatic UI scans were already disabled.
+New uploads will not receive Waffles tags until processing is deliberately resumed.
+
+Local `.maas` DNS resolution failed for the two native hosts. The shutdown script
+used each host's unique recorded inventory address with its FQDN host-key alias;
+SSH key checking was preserved. Verification initially caught a native service
+still stopping and was repeated successfully after shutdown completed. No
+caption/indexing worker or host was shut down. See the
+[aggregate shutdown verification](../../reference/waffles-worker-shutdown.json)
+and the runbook's repeatable shutdown/resume procedure.

@@ -104,6 +104,7 @@ console.log('Discovery disabled; cursor retained; running empty queues paused');
                 raise RuntimeError('Native shutdown incomplete; rerun after resolving transport')
         result = run(ssh+['systemctl show waffles-worker.service waffles-worker.timer -p Id -p ActiveState -p UnitFileState'], check=True)
         if 'ActiveState=active' in result.stdout or 'ActiveState=activating' in result.stdout or 'UnitFileState=enabled' in result.stdout:
+            logging.error('%s state: %s', host, result.stdout.strip())
             raise RuntimeError('Native Waffles unit remains enabled or active: '+host)
         logging.info('Native service and timer stopped/disabled: %s', host)
     processes = run(['ps','-axo','command='], check=True).stdout.splitlines()

@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-27T18:03:23.533171+00:00",
+  "state": "stopped",
+  "unfinished_production_jobs": 0,
+  "discovery_enabled": false,
+  "mac_worker_processes": 0,
+  "mac_agents_disabled": [
+    "com.panderosystems.waffles-worker",
+    "com.panderosystems.waffles-burst-workers"
+  ],
+  "native_services_disabled": [
+    "fun-bedbug.maas",
+    "chief-horse.maas"
+  ],
+  "zero_replica_deployments": [
+    "waffles-worker-still-fawn",
+    "waffles-worker-pve",
+    "waffles-burst-still-fawn",
+    "waffles-burst-pve",
+    "waffles-media"
+  ],
+  "retained": [
+    "PostgreSQL results",
+    "reference and worker PVCs",
+    "queue metrics",
+    "tagger UI",
+    "Grafana dashboard"
+  ]
+}
