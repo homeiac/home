@@ -24,7 +24,7 @@ diagram had changed, so copying the diagram directly would have been a mistake.
 
 ## Keep Traefik in charge of HTTPS
 
-The proposed path reuses that reachable host, with a TCP relay for Immich:
+The resulting path reuses that reachable host, with a TCP relay for Immich:
 
 ```text
 Phone or laptop on Google Wi-Fi
@@ -101,6 +101,13 @@ Finally, open a real shared album on a phone and laptop with Tailscale off. A
 successful ping endpoint is useful evidence, but it does not establish that an
 album's API calls, thumbnails, or videos loaded. The goal is a working album link
 on the devices people already use.
+
+At the first deployment checkpoint, Flux applied the encrypted settings and the
+host Job completed in 18 seconds. The Wi-Fi-bound DNS, HTTPS, and hostname rejection
+checks passed. The remaining handoff was selecting the tested resolver in Google
+Home, followed by opening a real album on the family's devices. That distinction
+matters: a working server path and a completed router configuration are separate
+results.
 
 Implementation and current verification results are in the
 [runbook](../../runbooks/immich-google-wifi.md). Vendor references:

@@ -22,6 +22,9 @@ if [[ ${1:-} == --server ]]; then
   trap 'rm -rf "$decrypted"' EXIT
   cp -R "$bundle/." "$decrypted/"
   sops --decrypt "$bundle/network.sops.yaml" > "$decrypted/network.sops.yaml"
+  # Jobs are immutable in place; Flux replaces them. Use unused dry-run names
+  # so schema validation also works after the real Job has completed.
+  echo 'nameSuffix: -validation' >> "$decrypted/kustomization.yaml"
   kubectl --request-timeout=30s apply --dry-run=server -k "$decrypted"
   kubectl --request-timeout=30s apply --dry-run=server -f "$bundle/../immich-pilot/ingress.yaml"
 fi

@@ -24,13 +24,15 @@ load this encrypted inventory locally. Immich belongs to Flux
 
 `gitops/clusters/homelab/apps/photo-enrichment/immich-wifi/` contains the host
 bundle, a generated ConfigMap, and its deployment Job. It is included by the
-existing photo-enrichment Kustomization. The Job also mounts the SOPS-encrypted network settings. It uses the existing SOPS-managed
+existing photo-enrichment Kustomization. The Job also mounts the SOPS-encrypted
+network settings. It uses the existing SOPS-managed
 `monitoring/nut-deploy-ssh-key` Secret. Its public SSH host key was verified over
 the existing trusted management connection; strict host-key checking is enabled.
 
 The Job installs Debian's HAProxy and dnsmasq-base packages on PVE, validates their
 configurations, and manages three dedicated systemd units. HAProxy relays TLS
-from the encrypted `RELAY_ADDRESS` on port 443 to the encrypted `TRAEFIK_HOSTNAME` on port 443. Traefik continues
+from the encrypted `RELAY_ADDRESS` on port 443 to the encrypted `TRAEFIK_HOSTNAME`
+on port 443. Traefik continues
 terminating TLS with its existing wildcard certificate. DNS listens on PVE's
 ISP-facing address, on UDP and TCP port 53. Only Immich receives the local
 override; other queries are forwarded to independent upstream resolvers.
@@ -74,7 +76,8 @@ use network-provided DNS for this private hostname.
 
 Only do this after the relay and resolver tests pass. In Google Home, open
 Wi-Fi → Network settings → Advanced networking → DNS → Custom. Set the primary
-IPv4 resolver to the decrypted `RELAY_ADDRESS`; leave the secondary empty if accepted. Do not
+IPv4 resolver to the decrypted `RELAY_ADDRESS`; leave the secondary empty if
+accepted. Do not
 use a public resolver as a secondary: clients could receive the old homelab IP.
 Do not configure a public IPv6 resolver that bypasses the same override.
 
@@ -84,7 +87,7 @@ Confirm a real shared album in both a phone browser and a laptop browser, with
 Tailscale off. A 200 response for an application shell alone does not prove that
 the album's API calls and thumbnails loaded.
 
-Because Google Wi-Fi's WAN lease currently supplies the encrypted `GOOGLE_WAN_ADDRESS`, reserve that
+Because Google Wi-Fi's WAN lease supplies the encrypted `GOOGLE_WAN_ADDRESS`, reserve that
 existing lease on the upstream router when practical. If it changes, this setup
 fails closed: update `GOOGLE_WAN_ADDRESS` in the SOPS-encrypted settings, refresh the
 network revision, and commit through Git. The installer refuses an unexpected WAN address.
@@ -108,6 +111,17 @@ its external host side effects.
 
 ## Validation record
 
-Before deployment: shell syntax, complete Kustomize build, Git whitespace checks,
-and Kubernetes server-side dry run passed. Runtime results are recorded after
-Flux deploys the change and the Google Home DNS handoff is completed.
+On 2026-11-26, Flux applied commit `70e1f89`. The host Job completed in 18 seconds.
+The image's POSIX shell, SSH client, and tar were verified before deployment.
+Shell syntax, the complete Kustomize build, Git whitespace checks, and the
+Kubernetes server-side dry run (after SOPS decryption) passed.
+
+The host installed HAProxy `2.6.12-1+deb12u4` and dnsmasq-base `2.90-4~deb12u2`.
+Both daemon configurations validated and all three dedicated units became active.
+From Google Wi-Fi, direct UDP/TCP DNS returned the relay address, ordinary public
+DNS resolved, and certificate-verified HTTPS returned Immich's `pong`. Unrelated
+SNI was rejected; an accepted Immich TLS name with an unrelated HTTP Host returned
+421. IPv6 queries did not leak an upstream address. A request deliberately bound
+to the laptop's lab Ethernet interface was rejected by the new relay's source
+rules. Google Wi-Fi's own resolver still used automatic DNS at this checkpoint;
+the owner-facing Google Home DNS handoff and real album browser check are pending.

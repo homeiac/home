@@ -7,8 +7,8 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=notify
-User=nobody
-Group=nogroup
+User=haproxy
+Group=haproxy
 ExecStartPre=/usr/sbin/haproxy -c -f /opt/immich-wifi/haproxy.cfg
 ExecStart=/usr/sbin/haproxy -Ws -f /opt/immich-wifi/haproxy.cfg
 Restart=on-failure
