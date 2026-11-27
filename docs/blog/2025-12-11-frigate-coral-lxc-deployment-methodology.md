@@ -436,9 +436,9 @@ The time investment in documentation pays dividends in reliability and knowledge
 
 ## Resources
 
-- [Blueprint: Frigate Coral LXC Deployment](../troubleshooting/blueprint-frigate-coral-lxc-deployment.md)
-- [Action Log Template](../templates/action-log-template-frigate-coral-lxc.md)
-- [Action Log: still-fawn Deployment](../troubleshooting/action-log-still-fawn-frigate-coral.md)
+- [Blueprint: Frigate Coral LXC Deployment](https://github.com/homeiac/home/blob/master/docs/troubleshooting/blueprint-frigate-coral-lxc-deployment.md)
+- [Action Log Template](https://github.com/homeiac/home/blob/master/docs/templates/action-log-template-frigate-coral-lxc.md)
+- [Action Log: still-fawn Deployment](https://github.com/homeiac/home/blob/master/docs/troubleshooting/action-log-still-fawn-frigate-coral.md)
 - [Frigate Documentation](https://docs.frigate.video/)
 - [Google Coral Documentation](https://coral.ai/docs/)
 

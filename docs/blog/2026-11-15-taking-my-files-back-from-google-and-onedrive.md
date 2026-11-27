@@ -3,7 +3,7 @@
 *"Your storage is almost full." Instead of paying for the next tier, I pulled everything home, proved the copies were good, and only then deleted from the cloud. Here's the exact, scripted, step-by-step way to do it, including the 2025 Google Photos API change that breaks every tutorial you'll find.*
 
 > **Status:** living guide. Steps marked ✅ are built and verified; 🚧 steps land before this guide is final.
-> Everything here is a committed script or a GitOps manifest. Design spec: [`docs/plans/cloud-drive-backup-and-reclaim.md`](../plans/cloud-drive-backup-and-reclaim.md).
+> Everything here is a committed script or a GitOps manifest. Design spec: [`docs/plans/cloud-drive-backup-and-reclaim.md`](https://github.com/homeiac/home/blob/master/docs/plans/cloud-drive-backup-and-reclaim.md).
 
 ---
 
@@ -260,7 +260,7 @@ It re-verifies every row against **both** copies, shows the total, and makes you
 
 ---
 
-*All scripts: [`scripts/backup/`](../../scripts/backup/) · Design: [`docs/plans/cloud-drive-backup-and-reclaim.md`](../plans/cloud-drive-backup-and-reclaim.md)*
+*All scripts: [`scripts/backup/`](https://github.com/homeiac/home/tree/master/scripts/backup) · Design: [`docs/plans/cloud-drive-backup-and-reclaim.md`](https://github.com/homeiac/home/blob/master/docs/plans/cloud-drive-backup-and-reclaim.md)*
 
 ### Sources
 

@@ -128,4 +128,4 @@ which Proxmox shares across the cluster (`/etc/pve/priv/authorized_keys`).
 - [ ] Runbook linked from the repo's top-level instructions
 - [ ] You know how to regain SSH without the old laptop
 
-Runbook: [`docs/runbooks/sops-age-key-recovery.md`](../runbooks/sops-age-key-recovery.md)
+Runbook: [`docs/runbooks/sops-age-key-recovery.md`](https://github.com/homeiac/home/blob/master/docs/runbooks/sops-age-key-recovery.md)

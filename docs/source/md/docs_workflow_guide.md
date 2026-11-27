@@ -1,11 +1,16 @@
 # Documentation Workflow Guide
 
-This guide describes how the documentation is built and deployed.
+Documentation is deployed automatically when documentation, publishing scripts,
+or `.github/workflows/docs.yml` changes are pushed to `master`.
 
-Documentation is deployed automatically when changes are pushed to `master`. The
-`.github/workflows/deploy_to_github.yml` workflow uses the
-`JacksonMaxfield/github-pages-deploy-action-python` action to build the docs and
-publish the contents of `docs/build/html` to the `gh-pages` branch. The build
-step runs `make -C docs html` so the workflow remains in the repository root and
-the deployment action can correctly locate the generated HTML files.
+The workflow installs `docs/requirements.txt`, runs `make -C docs html`, and
+verifies that all blog posts appear in the rendered site and blog index.
+It uploads `docs/build/html` with `actions/upload-pages-artifact` and publishes
+it with `actions/deploy-pages`. Pull requests build and verify without deploying.
 
+Posts in `docs/blog/` are included through the `docs/source/blog` symlink.
+The blog index also includes the existing `docs/source/md/blog-*.md` posts.
+No generated HTML commits or separate publishing branch are needed.
+
+See the [publishing guide](docs_publishing_guide.md) for local checks and manual
+deployment instructions.

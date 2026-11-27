@@ -340,7 +340,7 @@ Everything is scripted for reproducibility in the [home](https://github.com/pand
 kubectl apply -f scripts/crucible/k8s/crucible-build-job.yaml
 ```
 
-Full deployment runbook: [`docs/crucible-deployment-runbook.md`](../crucible-deployment-runbook.md)
+Full deployment runbook: [`docs/crucible-deployment-runbook.md`](https://github.com/homeiac/home/blob/master/docs/crucible-deployment-runbook.md)
 
 ## Conclusion
 
@@ -354,8 +354,8 @@ The real magic is in the software: Crucible's quorum-based consensus, generation
 
 **Related Posts**:
 
-- [Crucible Deployment Runbook](../crucible-deployment-runbook.md)
-- [MA90 MAAS Deployment Guide](../ma90-crucible-deployment-complete-guide.md)
+- [Crucible Deployment Runbook](https://github.com/homeiac/home/blob/master/docs/crucible-deployment-runbook.md)
+- [MA90 MAAS Deployment Guide](https://github.com/homeiac/home/blob/master/docs/ma90-crucible-deployment-complete-guide.md)
 
 **Resources**:
 

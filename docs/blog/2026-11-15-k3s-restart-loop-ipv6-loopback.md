@@ -26,7 +26,7 @@
   `cred/*.kubeconfig` files → start all servers together.
 - **Tell:** the one server that *didn't* loop was the one whose `controller.kubeconfig` said `127.0.0.1`.
 
-Everything is in one idempotent script: [`scripts/k3s/restart-all-servers.sh`](../../scripts/k3s/restart-all-servers.sh).
+Everything is in one idempotent script: [`scripts/k3s/restart-all-servers.sh`](https://github.com/homeiac/home/blob/master/scripts/k3s/restart-all-servers.sh).
 
 ## The setup (aliases)
 

@@ -1,6 +1,6 @@
 # home
 
-![Deploy](https://github.com/homeiac/home/workflows/.github/workflows/deploy_to_github.yml/badge.svg)
+![Deploy Docs](https://github.com/homeiac/home/actions/workflows/docs.yml/badge.svg)
 ![BalenaCloud Push](https://github.com/homeiac/home/workflows/BalenaCloud%20Push/badge.svg)
 
 This repository manages my homelab entirely as code so that **AI tools can manage the environment running AI workloads**.
@@ -48,7 +48,7 @@ for details on bare metal installs and container provisioning.
   * documentation is deployed from `master` using `make -C docs html`
 * [Docs Build Guide](docs/source/md/docs_build_guide.md) - build docs locally before pushing
 * [Docs Symlink Guide](docs/source/md/docs_symlink_guide.md) - fix broken markdown links
-* [Docs Publishing Guide](docs/source/md/docs_publishing_guide.md) - update the `gh-pages` branch
+* [Docs Publishing Guide](docs/source/md/docs_publishing_guide.md) - automatic GitHub Pages deployment
 * [Python Tests Guide](docs/source/md/guides/python_tests_guide.md)
 * [Agent Guidelines](docs/source/md/guides/agents_guidelines.md)
 * [Project Documentation](https://homeiac.github.io/home/)

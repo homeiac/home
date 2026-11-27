@@ -23,7 +23,7 @@ Cloud storage? Now your secrets depend on someone else's infrastructure. Local b
 
 ## The Solution: Distributed Storage You Control
 
-I already had [Oxide Crucible running on a $30 mini PC](/docs/blog/2026-01-25-budget-oxide-storage-sled.md) for VM storage experiments. Then it hit me: Crucible provides 12.5GB of distributed block storage to each of my 5 Proxmox hosts. That's plenty of space for configs and secrets.
+I already had [Oxide Crucible running on a $30 mini PC](https://homeiac.github.io/home/blog/2026-01-25-budget-oxide-storage-sled.html) for VM storage experiments. Then it hit me: Crucible provides 12.5GB of distributed block storage to each of my 5 Proxmox hosts. That's plenty of space for configs and secrets.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -269,10 +269,10 @@ Sometimes the best tool for a job is the one you already have running.
 ---
 
 **Related posts:**
-- [Budget Oxide Storage Sled](/docs/blog/2026-01-25-budget-oxide-storage-sled.md)
+- [Budget Oxide Storage Sled](https://homeiac.github.io/home/blog/2026-01-25-budget-oxide-storage-sled.html)
 
 **Scripts:**
-- [scripts/crucible/sync-secrets-to-crucible.sh](/scripts/crucible/sync-secrets-to-crucible.sh)
-- [scripts/crucible/backup-services-to-crucible.sh](/scripts/crucible/backup-services-to-crucible.sh)
-- [scripts/crucible/backup-configs-to-crucible.sh](/scripts/crucible/backup-configs-to-crucible.sh)
-- [scripts/crucible/replicate-crucible-storage.sh](/scripts/crucible/replicate-crucible-storage.sh)
+- [scripts/crucible/sync-secrets-to-crucible.sh](https://github.com/homeiac/home/blob/master/scripts/crucible/sync-secrets-to-crucible.sh)
+- [scripts/crucible/backup-services-to-crucible.sh](https://github.com/homeiac/home/blob/master/scripts/crucible/backup-services-to-crucible.sh)
+- [scripts/crucible/backup-configs-to-crucible.sh](https://github.com/homeiac/home/blob/master/scripts/crucible/backup-configs-to-crucible.sh)
+- [scripts/crucible/replicate-crucible-storage.sh](https://github.com/homeiac/home/blob/master/scripts/crucible/replicate-crucible-storage.sh)

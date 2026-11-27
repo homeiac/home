@@ -3,7 +3,7 @@
 **Date:** 2026-05-18
 **Tags:** ups, nut, power-outage, rca, homelab, k3s, etcd, frigate, lessons-learned
 
-> Three months ago I wrote [a blog post](../source/md/blog-ups-homelab-lesson-learned.md) about discovering pve was plugged into a surge-only outlet on my CyberPower CP1500. I learned the lesson. I documented the lesson. Then I unplugged things to move stuff around, plugged them back in, and re-learned the lesson the hard way.
+> Three months ago I wrote [a blog post](https://homeiac.github.io/home/md/blog-ups-homelab-lesson-learned.html) about discovering pve was plugged into a surge-only outlet on my CyberPower CP1500. I learned the lesson. I documented the lesson. Then I unplugged things to move stuff around, plugged them back in, and re-learned the lesson the hard way.
 
 ## TL;DR
 
@@ -44,11 +44,11 @@ The 3-hour gap between pve and the rest is the signature of the bug: BIOS "Last 
 
 Two alert paths are designed; neither delivered.
 
-1. **Email via Prometheus → Grafana → Yahoo SMTP** ([docs/source/md/monitoring-alerting-guide.md](../source/md/monitoring-alerting-guide.md))
+1. **Email via Prometheus → Grafana → Yahoo SMTP** ([docs/source/md/monitoring-alerting-guide.md](https://homeiac.github.io/home/md/monitoring-alerting-guide.html))
    - Prometheus runs on K3s. K3s went down with the cluster. Prometheus has node affinity to `k3s-vm-still-fawn`. Even if K3s had stayed up, this path also needs internet, which is the first thing to die in any real power outage.
    - **The email path is architecturally incapable of warning you about an outage that takes down K3s.**
 
-2. **Out-of-band SMS via Pixel 7 hotspot** ([docs/source/md/blog-out-of-band-sms-disaster-recovery.md](../source/md/blog-out-of-band-sms-disaster-recovery.md))
+2. **Out-of-band SMS via Pixel 7 hotspot** ([docs/source/md/blog-out-of-band-sms-disaster-recovery.md](https://homeiac.github.io/home/md/blog-out-of-band-sms-disaster-recovery.html))
    - The deployed `nut-notify.sh` has the SMS code. Secrets are in `sms-gateway-creds.sops.yaml`. Vars are present in `/opt/nut/.env` on pve. So the path is wired.
    - But `NUT never saw an ONBATT event` — `/var/log/nut-notify.log` doesn't exist, journalctl has zero `ONBATT`/`LOWBATT` entries for pve.
    - That means the script never ran, which means upsmon never observed the UPS going to battery. Because pve wasn't on the UPS. Same as February.
@@ -81,7 +81,7 @@ That bait-and-switch is exactly the kind of thing that wastes time during incide
 
 - [ ] **Physically label the CP1500 outlets** — "BATT" stickers on the left bank. Make the right thing obvious to your hands, not just to your docs.
 - [ ] **Verify BIOS "Restore on AC Power Loss = Last State" on pve.** Other Proxmox hosts have it (proven empirically by today's outage); pve apparently does not.
-- [ ] **Quarterly disaster drill.** [docs/runbooks/nut-tiered-shutdown.md:317](../runbooks/nut-tiered-shutdown.md:317) already calls for annual; the cron at `/etc/cron.d/nut-disaster-drill` runs first Saturday of each month. Confirm it actually executes and the SMS path lights up the next time it does.
+- [ ] **Quarterly disaster drill.** [docs/runbooks/nut-tiered-shutdown.md:317](https://github.com/homeiac/home/blob/master/docs/runbooks/nut-tiered-shutdown.md#L317) already calls for annual; the cron at `/etc/cron.d/nut-disaster-drill` runs first Saturday of each month. Confirm it actually executes and the SMS path lights up the next time it does.
 - [ ] **Pin Prometheus off `k3s-vm-still-fawn`** OR accept that the email-via-Grafana alert path cannot survive an outage that takes the cluster down — and rely on ntfy/SMS as the canonical channels.
 - [ ] **Rotate NUT internal passwords** (`nutadmin`, `upsmonpass`) since they were in git history.
 
@@ -95,4 +95,4 @@ The other lesson: **alert paths need to survive the thing they're alerting about
 
 ---
 
-*Related: [The UPS That Wasn't: A Homelab Lesson](../source/md/blog-ups-homelab-lesson-learned.md) (2026-02-15), [Turning a Power Outage Scare into GitOps Gold](2026-02-15-ups-monitoring-gitops-disaster-to-opportunity.md), [Out-of-Band SMS Notifications for Homelab Disaster Recovery](../source/md/blog-out-of-band-sms-disaster-recovery.md), [NUT Tiered Shutdown Runbook](../runbooks/nut-tiered-shutdown.md)*
+*Related: [The UPS That Wasn't: A Homelab Lesson](https://homeiac.github.io/home/md/blog-ups-homelab-lesson-learned.html) (2026-02-15), [Turning a Power Outage Scare into GitOps Gold](https://homeiac.github.io/home/blog/2026-02-15-ups-monitoring-gitops-disaster-to-opportunity.html), [Out-of-Band SMS Notifications for Homelab Disaster Recovery](https://homeiac.github.io/home/md/blog-out-of-band-sms-disaster-recovery.html), [NUT Tiered Shutdown Runbook](https://github.com/homeiac/home/blob/master/docs/runbooks/nut-tiered-shutdown.md)*

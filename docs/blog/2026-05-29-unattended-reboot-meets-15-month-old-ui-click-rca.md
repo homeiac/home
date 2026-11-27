@@ -66,7 +66,7 @@ For most Debian boxes that's fine. For a Proxmox host running the cluster filesy
 
 ### 3. The alerting blind spot — Pixel 7 hotspot off
 
-Independent of the chief-horse cascade: the [Frigate watchdog](2026-05-19-frigate-sms-spam-two-watchdogs-one-skip-list-rca.md) on `pve` had been doing its job perfectly — `[ALERT] Sent: Frigate STILL DOWN (570min)` every 30 minutes — and every single attempt had been logging `[WARN] SMS delivery failed - could not reach gateway`. The Pixel 7 hotspot (`Pixel_7_2026`, SSID for the out-of-band SMS gateway path) hadn't been associated with `wlan0` since May 26 at 8:32 PM. The phone was off, hotspot toggle off, or out of range.
+Independent of the chief-horse cascade: the [Frigate watchdog](https://homeiac.github.io/home/blog/2026-05-19-frigate-sms-spam-two-watchdogs-one-skip-list-rca.html) on `pve` had been doing its job perfectly — `[ALERT] Sent: Frigate STILL DOWN (570min)` every 30 minutes — and every single attempt had been logging `[WARN] SMS delivery failed - could not reach gateway`. The Pixel 7 hotspot (`Pixel_7_2026`, SSID for the out-of-band SMS gateway path) hadn't been associated with `wlan0` since May 26 at 8:32 PM. The phone was off, hotspot toggle off, or out of range.
 
 `iwctl` showed wlan0 was happily connected to `wiremore2` (the home WiFi), but `10.181.204.183` (the Pixel 7's NAT subnet) is unreachable from there. The watchdog fell back to wlan0's default gateway — `192.168.86.1` (router), no SMS gateway there either.
 
@@ -89,7 +89,7 @@ Net effect: **the alerting subsystem was healthy and the symptom-detection subsy
 
 ## The meta-lesson
 
-This is the third RCA in two weeks where the failure was **"a perfectly working alerting/management path turned out to depend on a thing that wasn't running."** The [2026-05-18 power outage RCA](2026-05-18-ups-plug-strikes-again-power-outage-rca.md) hit it with email-via-Grafana being structurally incapable of warning about a K3s outage. The [2026-05-19 SMS spam RCA](2026-05-19-frigate-sms-spam-two-watchdogs-one-skip-list-rca.md) hit it with two watchdogs needing to agree on a skip list with no mechanism forcing the agreement. Today's version: the chief-horse failure was invisible to every external observer (cluster quorum looked fine, ICMP worked, corosync vote present) but the *useful state* of the host — the parts you actually need to manage VMs and read configs — was gone.
+This is the third RCA in two weeks where the failure was **"a perfectly working alerting/management path turned out to depend on a thing that wasn't running."** The [2026-05-18 power outage RCA](https://homeiac.github.io/home/blog/2026-05-18-ups-plug-strikes-again-power-outage-rca.html) hit it with email-via-Grafana being structurally incapable of warning about a K3s outage. The [2026-05-19 SMS spam RCA](https://homeiac.github.io/home/blog/2026-05-19-frigate-sms-spam-two-watchdogs-one-skip-list-rca.html) hit it with two watchdogs needing to agree on a skip list with no mechanism forcing the agreement. Today's version: the chief-horse failure was invisible to every external observer (cluster quorum looked fine, ICMP worked, corosync vote present) but the *useful state* of the host — the parts you actually need to manage VMs and read configs — was gone.
 
 There's a pattern here worth naming: **"surface-up, depth-down" failures.** The outermost signal (ping responds, vote counts, web UI on other nodes) says everything's fine. The innermost capability (run `qm`, mount the cluster filesystem, accept an SSH key) is dead. Every monitoring system I have is calibrated against the outer signal; none are calibrated against the inner capability.
 
@@ -97,4 +97,4 @@ The fix for that isn't another monitoring tool — it's writing the diagnostic *
 
 ---
 
-*Related: [Same Lesson, Different Outage (Power Outage RCA)](2026-05-18-ups-plug-strikes-again-power-outage-rca.md), [Two Watchdogs, One Skip List (Frigate SMS Spam RCA)](2026-05-19-frigate-sms-spam-two-watchdogs-one-skip-list-rca.md), [Out-of-Band SMS Notifications for Homelab Disaster Recovery](../source/md/blog-out-of-band-sms-disaster-recovery.md)*
+*Related: [Same Lesson, Different Outage (Power Outage RCA)](https://homeiac.github.io/home/blog/2026-05-18-ups-plug-strikes-again-power-outage-rca.html), [Two Watchdogs, One Skip List (Frigate SMS Spam RCA)](https://homeiac.github.io/home/blog/2026-05-19-frigate-sms-spam-two-watchdogs-one-skip-list-rca.html), [Out-of-Band SMS Notifications for Homelab Disaster Recovery](https://homeiac.github.io/home/md/blog-out-of-band-sms-disaster-recovery.html)*

@@ -93,7 +93,7 @@ The general anti-pattern: when reconciling two diverged configs, don't union the
 
 ## Lesson re-learned
 
-The Feb 2026 plug-on-surge-outlet outage taught me [physical affordances beat docs](2026-05-18-ups-plug-strikes-again-power-outage-rca.md#lesson-re-learned). This one's the IaC version of the same lesson: **structural correctness beats best-effort comments.**
+The Feb 2026 plug-on-surge-outlet outage taught me [physical affordances beat docs](https://homeiac.github.io/home/blog/2026-05-18-ups-plug-strikes-again-power-outage-rca.html#lesson-re-learned). This one's the IaC version of the same lesson: **structural correctness beats best-effort comments.**
 
 The `pve-nut` `ImagePolicy` shipped with a comment that confidently asserted "descending order to get newest SHA (alphabetically later = newer commit)." Both halves were wrong. Two months and three commits in, with the right random set of tags in ghcr, it would have silently rolled the deploy back to February. The comment looked reassuring; the structure was a coin flip.
 
@@ -155,4 +155,4 @@ The user's framing during the incident — *"machine trying to do something in a
 
 ---
 
-*Related: [Out-of-Band SMS Notifications for Homelab Disaster Recovery](../source/md/blog-out-of-band-sms-disaster-recovery.md), [Same Lesson, Different Outage](2026-05-18-ups-plug-strikes-again-power-outage-rca.md), [Frigate health checker restart loop RCA](../runbooks/frigate-health-checker-restart-loop-rca.md) (#187)*
+*Related: [Out-of-Band SMS Notifications for Homelab Disaster Recovery](https://homeiac.github.io/home/md/blog-out-of-band-sms-disaster-recovery.html), [Same Lesson, Different Outage](https://homeiac.github.io/home/blog/2026-05-18-ups-plug-strikes-again-power-outage-rca.html), [Frigate health checker restart loop RCA](https://github.com/homeiac/home/blob/master/docs/runbooks/frigate-health-checker-restart-loop-rca.md) (#187)*

@@ -9,6 +9,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   blog
    magicmirror
    homeiac
    markdown_docs
