@@ -228,3 +228,5 @@ Pilot result on November 26. Two independent runs of local generation plus Sol t
 Run the platform checker against all three live rollout bundles on the same release. Close the epic when that check passes. Keep captures, identifiers, captions, relationship facts and private baselines outside GitHub. Publish the journey, scope, release, gate result and failed field names as needed. The [executable contract](../../scripts/knowledge-index/memory-acceptance/check.py) defines the result.
 
 For a person’s activity album, intersect the existing Immich person label with saved descriptions, OCR and visual search. Review candidate images for the activity and remove repeated shots. Deliver a private chronological album and read back its exact membership and sharing status.
+
+Place the active photo-processing progress row first on the Knowledge Index dashboard. Verify its position and its library-stage reading in provisioned Grafana while preserving panel links and the relative order of the other sections.

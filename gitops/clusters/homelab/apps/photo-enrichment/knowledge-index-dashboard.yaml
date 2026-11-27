@@ -25,6 +25,492 @@ data:
       ],
       "panels": [
         {
+          "id": 247,
+          "type": "row",
+          "title": "Photo processing \u00b7 progress and live tuning",
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "panels": []
+        },
+        {
+          "id": 248,
+          "type": "stat",
+          "title": "Items complete or reused",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"complete|reused\"}))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."
+        },
+        {
+          "id": 249,
+          "type": "stat",
+          "title": "Items queued or running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 250,
+          "type": "stat",
+          "title": "Stage completion",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "(sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"complete|reused\"}))) / (sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\".*\"})) > 0)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1,
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Complete and reused divided by the declared scope, including failed and withheld items."
+        },
+        {
+          "id": 251,
+          "type": "stat",
+          "title": "Failed or withheld",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"failed|withheld\"}))",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 252,
+          "type": "stat",
+          "title": "Time to drain queue",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) / (max by(stage) (clamp_min(deriv(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]), 0) and on(instance,stage) (changes(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]) >= 2) and on(instance,stage) (resets(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m]) == 0)) > 0) or on(stage) ((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) == 0)) and on(stage) ((time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})) < 180)",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          },
+          "description": "Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."
+        },
+        {
+          "id": 253,
+          "type": "stat",
+          "title": "Last progress report",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 1
+          },
+          "targets": [
+            {
+              "expr": "time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})",
+              "legendFormat": "{{stage}}",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 180
+                  },
+                  {
+                    "color": "red",
+                    "value": 600
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "noValue": "Awaiting telemetry"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 254,
+          "type": "timeseries",
+          "title": "Queue and outcomes by stage",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\"})",
+              "legendFormat": "{{stage}} \u00b7 {{state}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 255,
+          "type": "timeseries",
+          "title": "Successful work per minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "targets": [
+            {
+              "expr": "max by(stage) (clamp_min(deriv(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]), 0) and on(instance,stage) (changes(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]) >= 2) and on(instance,stage) (resets(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m]) == 0)) * 60",
+              "legendFormat": "{{stage}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              },
+              "decimals": 1
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 256,
+          "type": "timeseries",
+          "title": "Bottleneck timing by phase (p95)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "max by(stage,phase) (knowledge_index_photo_stage_phase_p95_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})",
+              "legendFormat": "{{stage}} \u00b7 {{phase}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "description": "Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."
+        },
+        {
           "id": 175,
           "type": "row",
           "title": "Summary reconciliation \u00b7 Luna",
@@ -33,7 +519,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 19
           },
           "panels": []
         },
@@ -49,7 +535,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 1
+            "y": 20
           },
           "targets": [
             {
@@ -103,7 +589,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 4,
-            "y": 1
+            "y": 20
           },
           "targets": [
             {
@@ -157,7 +643,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 9,
-            "y": 1
+            "y": 20
           },
           "targets": [
             {
@@ -222,7 +708,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 14,
-            "y": 1
+            "y": 20
           },
           "targets": [
             {
@@ -286,7 +772,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 19,
-            "y": 1
+            "y": 20
           },
           "targets": [
             {
@@ -340,7 +826,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 5
+            "y": 24
           },
           "targets": [
             {
@@ -393,7 +879,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 5
+            "y": 24
           },
           "targets": [
             {
@@ -446,7 +932,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 5
+            "y": 24
           },
           "targets": [
             {
@@ -503,7 +989,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 5
+            "y": 24
           },
           "targets": [
             {
@@ -556,7 +1042,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 5
+            "y": 24
           },
           "targets": [
             {
@@ -609,7 +1095,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 5
+            "y": 24
           },
           "targets": [
             {
@@ -678,7 +1164,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 28
           },
           "targets": [
             {
@@ -746,7 +1232,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 9
+            "y": 28
           },
           "targets": [
             {
@@ -805,7 +1291,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 16
+            "y": 35
           },
           "targets": [
             {
@@ -873,7 +1359,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 16
+            "y": 35
           },
           "targets": [
             {
@@ -927,7 +1413,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 16
+            "y": 35
           },
           "targets": [
             {
@@ -981,7 +1467,7 @@ data:
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 20
+            "y": 39
           },
           "targets": [
             {
@@ -1041,7 +1527,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 28
+            "y": 47
           },
           "panels": []
         },
@@ -1057,7 +1543,7 @@ data:
             "h": 4,
             "w": 24,
             "x": 0,
-            "y": 34
+            "y": 53
           },
           "targets": [],
           "fieldConfig": {
@@ -1095,7 +1581,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 38
+            "y": 57
           },
           "targets": [
             {
@@ -1157,7 +1643,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 38
+            "y": 57
           },
           "targets": [
             {
@@ -1219,7 +1705,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 46
+            "y": 65
           },
           "targets": [
             {
@@ -1270,7 +1756,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 46
+            "y": 65
           },
           "targets": [
             {
@@ -1321,7 +1807,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 46
+            "y": 65
           },
           "targets": [
             {
@@ -1372,7 +1858,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 46
+            "y": 65
           },
           "targets": [
             {
@@ -1422,7 +1908,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 50
+            "y": 69
           },
           "targets": [
             {
@@ -1483,7 +1969,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 50
+            "y": 69
           },
           "targets": [
             {
@@ -1539,7 +2025,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 58
+            "y": 77
           },
           "targets": [
             {
@@ -1590,7 +2076,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 58
+            "y": 77
           },
           "targets": [
             {
@@ -1641,7 +2127,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 58
+            "y": 77
           },
           "targets": [
             {
@@ -1692,7 +2178,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 58
+            "y": 77
           },
           "targets": [
             {
@@ -1743,7 +2229,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 0,
-            "y": 63
+            "y": 82
           },
           "targets": [
             {
@@ -1811,7 +2297,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 63
+            "y": 82
           },
           "targets": [
             {
@@ -1862,7 +2348,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 0,
-            "y": 29
+            "y": 48
           },
           "targets": [
             {
@@ -1916,7 +2402,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 6,
-            "y": 29
+            "y": 48
           },
           "targets": [
             {
@@ -1970,7 +2456,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 12,
-            "y": 29
+            "y": 48
           },
           "targets": [
             {
@@ -2024,7 +2510,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 18,
-            "y": 29
+            "y": 48
           },
           "targets": [
             {
@@ -2075,7 +2561,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 70
+            "y": 89
           },
           "panels": []
         },
@@ -2091,7 +2577,7 @@ data:
             "h": 3,
             "w": 24,
             "x": 0,
-            "y": 71
+            "y": 90
           },
           "targets": [],
           "fieldConfig": {
@@ -2129,7 +2615,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 74
+            "y": 93
           },
           "targets": [
             {
@@ -2179,7 +2665,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 74
+            "y": 93
           },
           "targets": [
             {
@@ -2229,7 +2715,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 74
+            "y": 93
           },
           "targets": [
             {
@@ -2279,7 +2765,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 74
+            "y": 93
           },
           "targets": [
             {
@@ -2329,7 +2815,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 74
+            "y": 93
           },
           "targets": [
             {
@@ -2379,7 +2865,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 74
+            "y": 93
           },
           "targets": [
             {
@@ -2429,7 +2915,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 78
+            "y": 97
           },
           "targets": [
             {
@@ -2479,7 +2965,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 78
+            "y": 97
           },
           "targets": [
             {
@@ -2529,7 +3015,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 78
+            "y": 97
           },
           "targets": [
             {
@@ -2579,7 +3065,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 78
+            "y": 97
           },
           "targets": [
             {
@@ -2629,7 +3115,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 78
+            "y": 97
           },
           "targets": [
             {
@@ -2679,7 +3165,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 78
+            "y": 97
           },
           "targets": [
             {
@@ -2729,7 +3215,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 82
+            "y": 101
           },
           "targets": [
             {
@@ -2793,7 +3279,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 82
+            "y": 101
           },
           "targets": [
             {
@@ -2852,7 +3338,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 90
+            "y": 109
           },
           "targets": [
             {
@@ -2919,7 +3405,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 90
+            "y": 109
           },
           "targets": [],
           "fieldConfig": {
@@ -2957,7 +3443,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 96
+            "y": 115
           },
           "targets": [
             {
@@ -3006,7 +3492,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 96
+            "y": 115
           },
           "targets": [
             {
@@ -3055,7 +3541,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 96
+            "y": 115
           },
           "targets": [
             {
@@ -3104,7 +3590,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 96
+            "y": 115
           },
           "targets": [
             {
@@ -3153,7 +3639,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 100
+            "y": 119
           },
           "targets": [
             {
@@ -3203,7 +3689,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 100
+            "y": 119
           },
           "targets": [
             {
@@ -3268,7 +3754,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 100
+            "y": 119
           },
           "targets": [
             {
@@ -3318,7 +3804,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 100
+            "y": 119
           },
           "targets": [
             {
@@ -3368,7 +3854,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 100
+            "y": 119
           },
           "targets": [
             {
@@ -3419,7 +3905,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 100
+            "y": 119
           },
           "targets": [
             {
@@ -3466,7 +3952,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 106
+            "y": 125
           },
           "panels": []
         },
@@ -3482,7 +3968,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 107
+            "y": 126
           },
           "targets": [
             {
@@ -3535,7 +4021,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 107
+            "y": 126
           },
           "targets": [
             {
@@ -3615,7 +4101,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 12,
-            "y": 107
+            "y": 126
           },
           "targets": [
             {
@@ -3669,7 +4155,7 @@ data:
             "h": 4,
             "w": 7,
             "x": 17,
-            "y": 107
+            "y": 126
           },
           "targets": [
             {
@@ -3724,7 +4210,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 0,
-            "y": 111
+            "y": 130
           },
           "targets": [
             {
@@ -3779,7 +4265,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 0,
-            "y": 116
+            "y": 135
           },
           "targets": [
             {
@@ -3834,7 +4320,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 8,
-            "y": 111
+            "y": 130
           },
           "targets": [
             {
@@ -3889,7 +4375,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 8,
-            "y": 116
+            "y": 135
           },
           "targets": [
             {
@@ -3944,7 +4430,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 16,
-            "y": 111
+            "y": 130
           },
           "targets": [
             {
@@ -3999,7 +4485,7 @@ data:
             "h": 5,
             "w": 8,
             "x": 16,
-            "y": 116
+            "y": 135
           },
           "targets": [
             {
@@ -4051,7 +4537,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 121
+            "y": 140
           },
           "panels": []
         },
@@ -4067,7 +4553,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 0,
-            "y": 122
+            "y": 141
           },
           "targets": [
             {
@@ -4117,7 +4603,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 6,
-            "y": 122
+            "y": 141
           },
           "targets": [
             {
@@ -4181,7 +4667,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 12,
-            "y": 122
+            "y": 141
           },
           "targets": [
             {
@@ -4291,7 +4777,7 @@ data:
             "h": 5,
             "w": 6,
             "x": 18,
-            "y": 122
+            "y": 141
           },
           "targets": [
             {
@@ -4348,7 +4834,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 127
+            "y": 146
           },
           "targets": [
             {
@@ -4402,7 +4888,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 127
+            "y": 146
           },
           "targets": [
             {
@@ -4455,7 +4941,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 127
+            "y": 146
           },
           "targets": [
             {
@@ -4508,7 +4994,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 127
+            "y": 146
           },
           "targets": [
             {
@@ -4561,7 +5047,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 131
+            "y": 150
           },
           "targets": [
             {
@@ -4643,7 +5129,7 @@ data:
             "h": 7,
             "w": 14,
             "x": 10,
-            "y": 131
+            "y": 150
           },
           "targets": [
             {
@@ -4766,7 +5252,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 0,
-            "y": 138
+            "y": 157
           },
           "targets": [
             {
@@ -4817,7 +5303,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 8,
-            "y": 138
+            "y": 157
           },
           "targets": [
             {
@@ -4870,7 +5356,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 16,
-            "y": 138
+            "y": 157
           },
           "targets": [
             {
@@ -4923,7 +5409,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 142
+            "y": 161
           },
           "targets": [
             {
@@ -4999,7 +5485,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 148
+            "y": 167
           },
           "targets": [
             {
@@ -5050,7 +5536,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 12,
-            "y": 148
+            "y": 167
           },
           "targets": [
             {
@@ -5101,7 +5587,7 @@ data:
             "h": 6,
             "w": 14,
             "x": 0,
-            "y": 154
+            "y": 173
           },
           "targets": [
             {
@@ -5162,7 +5648,7 @@ data:
             "h": 6,
             "w": 10,
             "x": 14,
-            "y": 154
+            "y": 173
           },
           "targets": [
             {
@@ -5215,7 +5701,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 160
+            "y": 179
           },
           "targets": [
             {
@@ -5269,7 +5755,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 160
+            "y": 179
           },
           "targets": [
             {
@@ -5323,7 +5809,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 160
+            "y": 179
           },
           "targets": [
             {
@@ -5377,7 +5863,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 0,
-            "y": 168
+            "y": 187
           },
           "targets": [
             {
@@ -5429,7 +5915,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 5,
-            "y": 168
+            "y": 187
           },
           "targets": [
             {
@@ -5509,7 +5995,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 10,
-            "y": 168
+            "y": 187
           },
           "targets": [
             {
@@ -5562,7 +6048,7 @@ data:
             "h": 4,
             "w": 5,
             "x": 15,
-            "y": 168
+            "y": 187
           },
           "targets": [
             {
@@ -5615,7 +6101,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 168
+            "y": 187
           },
           "targets": [
             {
@@ -5666,7 +6152,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 172
+            "y": 191
           },
           "panels": []
         },
@@ -5682,7 +6168,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 173
+            "y": 192
           },
           "targets": [
             {
@@ -5766,7 +6252,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 8,
-            "y": 173
+            "y": 192
           },
           "targets": [
             {
@@ -5843,7 +6329,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 16,
-            "y": 173
+            "y": 192
           },
           "targets": [
             {
@@ -5913,7 +6399,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 180
+            "y": 199
           },
           "panels": []
         },
@@ -5929,7 +6415,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 181
+            "y": 200
           },
           "targets": [
             {
@@ -5980,7 +6466,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 181
+            "y": 200
           },
           "targets": [
             {
@@ -6031,7 +6517,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 181
+            "y": 200
           },
           "targets": [
             {
@@ -6082,7 +6568,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 181
+            "y": 200
           },
           "targets": [
             {
@@ -6133,7 +6619,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 181
+            "y": 200
           },
           "targets": [
             {
@@ -6184,7 +6670,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 181
+            "y": 200
           },
           "targets": [
             {
@@ -6235,7 +6721,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 185
+            "y": 204
           },
           "targets": [
             {
@@ -6285,7 +6771,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 185
+            "y": 204
           },
           "targets": [
             {
@@ -6335,7 +6821,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 185
+            "y": 204
           },
           "targets": [
             {
@@ -6385,7 +6871,7 @@ data:
             "h": 4,
             "w": 8,
             "x": 12,
-            "y": 185
+            "y": 204
           },
           "targets": [
             {
@@ -6436,7 +6922,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 185
+            "y": 204
           },
           "targets": [
             {
@@ -6486,7 +6972,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 189
+            "y": 208
           },
           "targets": [
             {
@@ -6541,7 +7027,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 189
+            "y": 208
           },
           "targets": [
             {
@@ -6592,7 +7078,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 196
+            "y": 215
           },
           "panels": []
         },
@@ -6608,7 +7094,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 197
+            "y": 216
           },
           "targets": [
             {
@@ -6711,7 +7197,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 197
+            "y": 216
           },
           "targets": [
             {
@@ -6763,7 +7249,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 197
+            "y": 216
           },
           "targets": [
             {
@@ -6824,7 +7310,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 197
+            "y": 216
           },
           "targets": [
             {
@@ -6877,7 +7363,7 @@ data:
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 201
+            "y": 220
           },
           "targets": [
             {
@@ -6982,7 +7468,7 @@ data:
             "h": 6,
             "w": 8,
             "x": 0,
-            "y": 211
+            "y": 230
           },
           "targets": [
             {
@@ -7036,7 +7522,7 @@ data:
             "h": 6,
             "w": 16,
             "x": 8,
-            "y": 211
+            "y": 230
           },
           "targets": [
             {
@@ -7147,7 +7633,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 217
+            "y": 236
           },
           "targets": [
             {
@@ -7209,7 +7695,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 217
+            "y": 236
           },
           "targets": [
             {
@@ -7262,7 +7748,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 224
+            "y": 243
           },
           "targets": [
             {
@@ -7324,7 +7810,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 224
+            "y": 243
           },
           "targets": [
             {
@@ -7374,7 +7860,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 231
+            "y": 250
           },
           "panels": []
         },
@@ -7390,7 +7876,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 232
+            "y": 251
           },
           "targets": [
             {
@@ -7483,7 +7969,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 232
+            "y": 251
           },
           "targets": [
             {
@@ -7544,7 +8030,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 232
+            "y": 251
           },
           "targets": [
             {
@@ -7597,7 +8083,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 232
+            "y": 251
           },
           "targets": [
             {
@@ -7650,7 +8136,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 236
+            "y": 255
           },
           "targets": [
             {
@@ -7712,7 +8198,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 236
+            "y": 255
           },
           "targets": [
             {
@@ -7798,7 +8284,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 243
+            "y": 262
           },
           "targets": [
             {
@@ -7853,7 +8339,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 243
+            "y": 262
           },
           "targets": [
             {
@@ -7906,7 +8392,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 250
+            "y": 269
           },
           "targets": [
             {
@@ -7960,7 +8446,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 250
+            "y": 269
           },
           "targets": [
             {
@@ -8013,7 +8499,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 250
+            "y": 269
           },
           "targets": [
             {
@@ -8064,7 +8550,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 276
+            "y": 295
           },
           "panels": []
         },
@@ -8080,7 +8566,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 277
+            "y": 296
           },
           "targets": [
             {
@@ -8149,7 +8635,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 277
+            "y": 296
           },
           "targets": [
             {
@@ -8202,7 +8688,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 277
+            "y": 296
           },
           "targets": [
             {
@@ -8255,7 +8741,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 277
+            "y": 296
           },
           "targets": [
             {
@@ -8309,7 +8795,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 281
+            "y": 300
           },
           "targets": [
             {
@@ -8363,7 +8849,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 281
+            "y": 300
           },
           "targets": [
             {
@@ -8413,7 +8899,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 257
+            "y": 276
           },
           "panels": []
         },
@@ -8429,7 +8915,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 258
+            "y": 277
           },
           "targets": [
             {
@@ -8478,7 +8964,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 258
+            "y": 277
           },
           "targets": [
             {
@@ -8532,7 +9018,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 265
+            "y": 284
           },
           "targets": [
             {
@@ -8596,7 +9082,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 265
+            "y": 284
           },
           "targets": [
             {
@@ -8645,7 +9131,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 265
+            "y": 284
           },
           "targets": [
             {
@@ -8694,7 +9180,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 265
+            "y": 284
           },
           "targets": [
             {
@@ -8751,7 +9237,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 269
+            "y": 288
           },
           "targets": [
             {
@@ -8800,7 +9286,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 269
+            "y": 288
           },
           "targets": [
             {
@@ -8846,7 +9332,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 288
+            "y": 307
           },
           "panels": []
         },
@@ -8862,7 +9348,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 289
+            "y": 308
           },
           "targets": [
             {
@@ -8912,7 +9398,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 289
+            "y": 308
           },
           "targets": [
             {
@@ -8966,7 +9452,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 289
+            "y": 308
           },
           "targets": [
             {
@@ -9015,7 +9501,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 289
+            "y": 308
           },
           "targets": [
             {
@@ -9064,7 +9550,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 289
+            "y": 308
           },
           "targets": [
             {
@@ -9114,7 +9600,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 289
+            "y": 308
           },
           "targets": [
             {
@@ -9163,7 +9649,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 293
+            "y": 312
           },
           "targets": [
             {
@@ -9227,7 +9713,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 293
+            "y": 312
           },
           "targets": [
             {
@@ -9276,7 +9762,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 293
+            "y": 312
           },
           "targets": [
             {
@@ -9326,7 +9812,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 293
+            "y": 312
           },
           "targets": [
             {
@@ -9375,7 +9861,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 293
+            "y": 312
           },
           "targets": [
             {
@@ -9424,7 +9910,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 293
+            "y": 312
           },
           "targets": [
             {
@@ -9477,7 +9963,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 297
+            "y": 316
           },
           "targets": [
             {
@@ -9536,7 +10022,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 12,
-            "y": 297
+            "y": 316
           },
           "targets": [
             {
@@ -9585,7 +10071,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 18,
-            "y": 297
+            "y": 316
           },
           "targets": [
             {
@@ -9632,7 +10118,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 304
+            "y": 323
           },
           "panels": []
         },
@@ -9648,7 +10134,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 305
+            "y": 324
           },
           "targets": [
             {
@@ -9702,7 +10188,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 305
+            "y": 324
           },
           "targets": [
             {
@@ -9752,7 +10238,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 305
+            "y": 324
           },
           "targets": [
             {
@@ -9810,7 +10296,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 305
+            "y": 324
           },
           "targets": [
             {
@@ -9860,7 +10346,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 305
+            "y": 324
           },
           "targets": [
             {
@@ -9918,7 +10404,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 305
+            "y": 324
           },
           "targets": [
             {
@@ -9972,7 +10458,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 309
+            "y": 328
           },
           "targets": [
             {
@@ -10040,7 +10526,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 309
+            "y": 328
           },
           "targets": [
             {
@@ -10090,7 +10576,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 309
+            "y": 328
           },
           "targets": [
             {
@@ -10149,7 +10635,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 309
+            "y": 328
           },
           "targets": [
             {
@@ -10199,7 +10685,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 309
+            "y": 328
           },
           "targets": [
             {
@@ -10248,7 +10734,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 309
+            "y": 328
           },
           "targets": [
             {
@@ -10297,7 +10783,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 0,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10366,7 +10852,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 3,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10434,7 +10920,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 6,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10502,7 +10988,7 @@ data:
             "h": 4,
             "w": 3,
             "x": 9,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10566,7 +11052,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10617,7 +11103,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10668,7 +11154,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 313
+            "y": 332
           },
           "targets": [
             {
@@ -10718,7 +11204,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 317
+            "y": 336
           },
           "targets": [
             {
@@ -10767,7 +11253,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 317
+            "y": 336
           },
           "targets": [
             {
@@ -10821,7 +11307,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 324
+            "y": 343
           },
           "targets": [
             {
@@ -10875,7 +11361,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 324
+            "y": 343
           },
           "targets": [
             {
@@ -10921,7 +11407,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 331
+            "y": 350
           },
           "panels": []
         },
@@ -10937,7 +11423,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 332
+            "y": 351
           },
           "targets": [
             {
@@ -11005,7 +11491,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 332
+            "y": 351
           },
           "targets": [
             {
@@ -11062,7 +11548,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 332
+            "y": 351
           },
           "targets": [
             {
@@ -11111,7 +11597,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 332
+            "y": 351
           },
           "targets": [
             {
@@ -11160,7 +11646,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 332
+            "y": 351
           },
           "targets": [
             {
@@ -11209,7 +11695,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 332
+            "y": 351
           },
           "targets": [
             {
@@ -11259,7 +11745,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 336
+            "y": 355
           },
           "panels": []
         },
@@ -11275,7 +11761,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 337
+            "y": 356
           },
           "targets": [
             {
@@ -11325,7 +11811,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 337
+            "y": 356
           },
           "targets": [
             {
@@ -11374,7 +11860,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 337
+            "y": 356
           },
           "targets": [
             {
@@ -11423,7 +11909,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 337
+            "y": 356
           },
           "targets": [
             {
@@ -11476,7 +11962,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 337
+            "y": 356
           },
           "targets": [
             {
@@ -11525,7 +12011,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 337
+            "y": 356
           },
           "targets": [
             {
@@ -11575,7 +12061,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 341
+            "y": 360
           },
           "targets": [
             {
@@ -11625,7 +12111,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 341
+            "y": 360
           },
           "targets": [
             {
@@ -11671,7 +12157,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 349
+            "y": 368
           },
           "panels": []
         },
@@ -11687,7 +12173,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 350
+            "y": 369
           },
           "targets": [
             {
@@ -11736,7 +12222,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 350
+            "y": 369
           },
           "targets": [
             {
@@ -11789,7 +12275,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 350
+            "y": 369
           },
           "targets": [
             {
@@ -11838,7 +12324,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 350
+            "y": 369
           },
           "targets": [
             {
@@ -11888,7 +12374,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 350
+            "y": 369
           },
           "targets": [
             {
@@ -11952,7 +12438,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 350
+            "y": 369
           },
           "targets": [
             {
@@ -12001,7 +12487,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 354
+            "y": 373
           },
           "targets": [
             {
@@ -12136,7 +12622,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 362
+            "y": 381
           },
           "targets": [
             {
@@ -12190,7 +12676,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 362
+            "y": 381
           },
           "targets": [
             {
@@ -12241,7 +12727,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 370
+            "y": 389
           },
           "panels": []
         },
@@ -12257,7 +12743,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 371
+            "y": 390
           },
           "targets": [
             {
@@ -12321,7 +12807,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 371
+            "y": 390
           },
           "targets": [
             {
@@ -12370,7 +12856,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 371
+            "y": 390
           },
           "targets": [
             {
@@ -12438,7 +12924,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 371
+            "y": 390
           },
           "targets": [
             {
@@ -12487,7 +12973,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 371
+            "y": 390
           },
           "targets": [
             {
@@ -12536,7 +13022,7 @@ data:
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 371
+            "y": 390
           },
           "targets": [
             {
@@ -12586,7 +13072,7 @@ data:
             "h": 6,
             "w": 24,
             "x": 0,
-            "y": 375
+            "y": 394
           },
           "targets": [
             {
@@ -12632,7 +13118,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 381
+            "y": 400
           },
           "panels": []
         },
@@ -12648,7 +13134,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 382
+            "y": 401
           },
           "targets": [
             {
@@ -12716,7 +13202,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 382
+            "y": 401
           },
           "targets": [
             {
@@ -12765,7 +13251,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 382
+            "y": 401
           },
           "targets": [
             {
@@ -12824,7 +13310,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 386
+            "y": 405
           },
           "targets": [
             {
@@ -12873,7 +13359,7 @@ data:
             "h": 6,
             "w": 12,
             "x": 0,
-            "y": 392
+            "y": 411
           },
           "targets": [
             {
@@ -12919,7 +13405,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 398
+            "y": 417
           },
           "panels": []
         },
@@ -12935,7 +13421,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 399
+            "y": 418
           },
           "targets": [
             {
@@ -12990,7 +13476,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 399
+            "y": 418
           },
           "targets": [
             {
@@ -13047,7 +13533,7 @@ data:
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 399
+            "y": 418
           },
           "targets": [
             {
@@ -13083,492 +13569,6 @@ data:
             "colorMode": "value",
             "graphMode": "none"
           }
-        },
-        {
-          "id": 247,
-          "type": "row",
-          "title": "Photo processing \u00b7 progress and live tuning",
-          "collapsed": false,
-          "gridPos": {
-            "h": 1,
-            "w": 24,
-            "x": 0,
-            "y": 406
-          },
-          "panels": []
-        },
-        {
-          "id": 248,
-          "type": "stat",
-          "title": "Items complete or reused",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 0,
-            "y": 407
-          },
-          "targets": [
-            {
-              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"complete|reused\"}))",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "noValue": "Awaiting telemetry"
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          },
-          "description": "The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."
-        },
-        {
-          "id": 249,
-          "type": "stat",
-          "title": "Items queued or running",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 4,
-            "y": 407
-          },
-          "targets": [
-            {
-              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "noValue": "Awaiting telemetry"
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          }
-        },
-        {
-          "id": 250,
-          "type": "stat",
-          "title": "Stage completion",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 8,
-            "y": 407
-          },
-          "targets": [
-            {
-              "expr": "(sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"complete|reused\"}))) / (sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\".*\"})) > 0)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percentunit",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 1,
-              "noValue": "Awaiting telemetry"
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          },
-          "description": "Complete and reused divided by the declared scope, including failed and withheld items."
-        },
-        {
-          "id": 251,
-          "type": "stat",
-          "title": "Failed or withheld",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 12,
-            "y": 407
-          },
-          "targets": [
-            {
-              "expr": "sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"failed|withheld\"}))",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "noValue": "Awaiting telemetry"
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          }
-        },
-        {
-          "id": 252,
-          "type": "stat",
-          "title": "Time to drain queue",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 16,
-            "y": 407
-          },
-          "targets": [
-            {
-              "expr": "((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) / (max by(stage) (clamp_min(deriv(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]), 0) and on(instance,stage) (changes(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]) >= 2) and on(instance,stage) (resets(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m]) == 0)) > 0) or on(stage) ((sum by(stage) (max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=~\"pending|running\"}))) == 0)) and on(stage) ((time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})) < 180)",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "noValue": "Awaiting telemetry"
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          },
-          "description": "Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."
-        },
-        {
-          "id": 253,
-          "type": "stat",
-          "title": "Last progress report",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 4,
-            "x": 20,
-            "y": 407
-          },
-          "targets": [
-            {
-              "expr": "time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})",
-              "legendFormat": "{{stage}}",
-              "refId": "A",
-              "instant": true,
-              "range": false
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "orange",
-                    "value": 180
-                  },
-                  {
-                    "color": "red",
-                    "value": 600
-                  }
-                ]
-              },
-              "color": {
-                "mode": "thresholds"
-              },
-              "noValue": "Awaiting telemetry"
-            },
-            "overrides": []
-          },
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "colorMode": "value",
-            "graphMode": "none"
-          }
-        },
-        {
-          "id": 254,
-          "type": "timeseries",
-          "title": "Queue and outcomes by stage",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 411
-          },
-          "targets": [
-            {
-              "expr": "max by(stage,state) (knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\"})",
-              "legendFormat": "{{stage}} \u00b7 {{state}}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "locale",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 255,
-          "type": "timeseries",
-          "title": "Successful work per minute",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 411
-          },
-          "targets": [
-            {
-              "expr": "max by(stage) (clamp_min(deriv(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]), 0) and on(instance,stage) (changes(knowledge_index_photo_stage_items{instance=~\"$instance\",stage=~\"$photo_stage\",state=\"complete\"}[15m]) >= 2) and on(instance,stage) (resets(knowledge_index_photo_stage_completed_total{instance=~\"$instance\",stage=~\"$photo_stage\"}[15m]) == 0)) * 60",
-              "legendFormat": "{{stage}}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "none",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              },
-              "decimals": 1
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 256,
-          "type": "timeseries",
-          "title": "Bottleneck timing by phase (p95)",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 24,
-            "x": 0,
-            "y": 418
-          },
-          "targets": [
-            {
-              "expr": "max by(stage,phase) (knowledge_index_photo_stage_phase_p95_seconds{instance=~\"$instance\",stage=~\"$photo_stage\"})",
-              "legendFormat": "{{stage}} \u00b7 {{phase}}",
-              "refId": "A"
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              },
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": {
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          },
-          "description": "Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."
         },
         {
           "id": 257,

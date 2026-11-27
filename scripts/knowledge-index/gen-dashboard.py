@@ -440,12 +440,13 @@ def panels():
     audio = audio_story_panels()
     processing = photo_processing_panels()
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
-    processing_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
-    processing += shift(life_stage_tuning_panels(), processing_bottom)
-    return (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
-            + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
-            + shift(all_panels + shift(processing, bottom),
-                    RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+    processing_height = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
+    all_panels += shift(life_stage_tuning_panels(), bottom)
+    # Move the shared progress row after allocating IDs so existing panel links still work.
+    remaining = (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
+                 + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
+                 + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+    return processing + shift(remaining, processing_height)
 
 
 def photo_processing_panels():
