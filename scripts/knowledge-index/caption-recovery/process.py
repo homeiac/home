@@ -11,6 +11,7 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+import time
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / 'enrichers'))
@@ -23,12 +24,31 @@ PRIVATE = Path.home() / 'Library/Application Support'
 ASSET_MODULE = HERE / 'asset.mjs'
 
 
+def kubectl_output(command, payload, timeout):
+    """Retry a temporary pod transport failure without repeating model inference."""
+    for attempt in range(4):
+        try:
+            return subprocess.run(command, input=payload, text=True, capture_output=True,
+                                  check=True, timeout=timeout).stdout
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or '').lower()
+            if not any(marker in detail for marker in ('502', '503', 'bad gateway', 'connection reset',
+                    'connection refused', 'i/o timeout', 'unable to upgrade connection', 'unexpected eof')):
+                raise
+            if attempt == 3:
+                raise
+        except subprocess.TimeoutExpired:
+            if attempt == 3:
+                raise
+        time.sleep(5 * 2**attempt)
+
+
 def pod(mode, items):
     """Exchange only allowlisted per-asset records with the existing sync container."""
     prefix = 'const mode=' + json.dumps(mode) + ', items=' + json.dumps(items) + ';\n'
-    out = subprocess.run(KUBE + ['deploy/immich-sync', '--', 'node', '--input-type=module', '-'],
-                         input=prefix + ASSET_MODULE.read_text(), text=True, capture_output=True, check=True, timeout=300)
-    rows = [json.loads(line) for line in out.stdout.splitlines()]
+    out = kubectl_output(KUBE + ['deploy/immich-sync', '--', 'node', '--input-type=module', '-'],
+                         prefix + ASSET_MODULE.read_text(), 300)
+    rows = [json.loads(line) for line in out.splitlines()]
     if [r['id'] for r in rows] != [r['id'] for r in items]:
         raise RuntimeError('incomplete asset response')
     return rows
@@ -75,7 +95,7 @@ def verify(db):
           FROM asset_metadata WHERE key='home.knowledge-index.v1'
           AND "assetId" IN ("""+ids+"""); ROLLBACK;"""
         command=KUBE+['deploy/immich-postgres','--','psql','-XqAt','-v','ON_ERROR_STOP=1','-U','immich','-d','immich']
-        out=subprocess.check_output(command,input=query,text=True,timeout=60)
+        out=kubectl_output(command,query,60)
         found=dict(json.loads(line) for line in out.splitlines())
         for r in records:
             if found.get(r['id'])==json.loads(r['answer'])['summary']:

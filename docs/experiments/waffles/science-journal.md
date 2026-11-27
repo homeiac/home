@@ -127,3 +127,5 @@ FROM gphotos_media WHERE lower(ext) = 'cr2';
 ```
 
 The adapter handles new CR2 files. The catalog view also exposes older CR2 partitions as media without re-importing any originals. The worker reuses existing captions and checks original bytes before sharing a machine caption across paths. A regression test dispatched two identical CR2 inputs concurrently, restarted the cache, and counted one model call in total. A private 24-hour reservation initially covered 2,083 exact path/size pairs still owned by the historical recovery, including items awaiting publication.
+
+At 06:25 Pacific, Flux installed the importer and restarted the caption worker. A live catalog query returned **2,782 media paths** for CR2, including the older Parquet partitions. The separate historical recovery had stopped during a Kubernetes pod command. It resumed from the ledger and submitted its 12 previously generated answers without calling a model again. Temporary pod-transport errors now receive bounded retries. The new worker continues to respect the recovery's reservations.
