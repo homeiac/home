@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-pet-tagger
+  namespace: immich-pilot
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-pet-tagger
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-pet-tagger
+  template:
+    metadata:
+      labels:
+        app: immich-pet-tagger
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tagger
+          image: ghcr.io/tedornitier/immich-pet-tagger:v1.10.0-cpu@sha256:535b4664511db709b1069a7eac789339af05264585511feeea24f68430edf7e6
+          command: [python, /startup/startup.py]
+          env:
+            - name: IMMICH_URL
+              value: http://immich-server.immich-pilot.svc.cluster.local:2283
+            - name: IMMICH_EXTERNAL_URL
+              value: https://immich.app.home.panderosystems.com
+            - name: IMMICH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: immich-pet-tagger
+                  key: api-key
+            - name: TAG_NAME
+              value: Pets/Review
+            - name: AUTOMATIC_SCANS
+              value: "false"
+            - name: POLL_INTERVAL
+              value: "3600"
+            - name: THRESHOLD
+              value: "0.90"
+            - name: THRESHOLD_FALLBACK
+              value: "1.01"
+            - name: YOLO_CONF
+              value: "0.25"
+            - name: MODEL_WORKERS
+              value: "1"
+            - name: SCAN_WORKERS
+              value: "2"
+            - name: OMP_NUM_THREADS
+              value: "2"
+            - name: MKL_NUM_THREADS
+              value: "2"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8000
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 250m, memory: 1Gi}
+            limits: {cpu: "2", memory: 4Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+            - {name: startup, mountPath: /startup, readOnly: true}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: immich-pet-tagger
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+        - name: startup
+          configMap:
+            name: immich-pet-tagger-startup
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-pet-tagger
+  namespace: immich-pilot
+spec:
+  selector:
+    app: immich-pet-tagger
+  ports:
+    - {name: http, port: 8000, targetPort: http}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: immich-pet-tagger
+  namespace: immich-pilot
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`pets.app.home.panderosystems.com`)
+      kind: Rule
+      middlewares:
+        - name: private
+      services:
+        - {name: immich-pet-tagger, port: 8000}
+  tls: {}

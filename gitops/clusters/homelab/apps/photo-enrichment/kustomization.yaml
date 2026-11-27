@@ -5,6 +5,7 @@ resources:
   - observability.yaml
   - dashboard.yaml
   - immich-pilot
+  - immich-pet-tagger
   - immich-wifi
   - knowledge-index-dashboard.yaml
   - immich-observer.yaml
