@@ -232,3 +232,9 @@ For a person’s activity album, intersect the existing Immich person label with
 Place the active photo-processing progress row first on the Knowledge Index dashboard. Verify its position and its library-stage reading in provisioned Grafana while preserving panel links and the relative order of the other sections.
 
 Show per-backend throughput and newly saved results immediately below the progress stats. Verify the selected library stage returns separate Mac and RTX series from provisioned Grafana.
+
+Measure the full-library two-pass worker on Mac and RTX. Compare current and candidate concurrency on identical marked faces with separate age and action calls. Check against reviewed evidence and inspect changed readings before selecting settings per backend. Verify production saves after resuming the queue. Publish per-backend before/after rates, sample size and quality outcome next to the live charts.
+
+The matched replay exposed a valid structured response rejected when the model returned the object separately from its verb. Test lossless composition of unambiguous verb/object fragments against captured responses. Count recovered results separately from any inference speedup.
+
+For a repeat trial, run `memory-acceptance/tune_library_worker.py` with the private library directory, a new private output directory, the RTX endpoint and `--pause-worker`. The baseline uses the production lane defaults. The two passes use the same marked faces in opposite order. Keep model responses and frame hashes private. Compare accepted results with the reviewed actor/action and life-stage evidence before publishing aggregate rates.

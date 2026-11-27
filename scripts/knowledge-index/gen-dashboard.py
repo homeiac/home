@@ -444,7 +444,8 @@ def panels():
     # Allocate the backend charts last to keep all existing dashboard links stable.
     charts_at = next(i for i, panel in enumerate(processing) if panel["type"] == "timeseries")
     backend_charts = photo_backend_panels(processing[charts_at]["gridPos"]["y"])
-    shift(processing[charts_at:], backend_charts[0]["gridPos"]["h"])
+    chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+    shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
     processing[charts_at:charts_at] = backend_charts
     processing_height = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
     # Move the shared progress row after allocating IDs so existing panel links still work.
@@ -512,13 +513,35 @@ def photo_backend_panels(y):
     pace = (f'max by(stage,backend) (clamp_min(deriv({window}), 0) '
             f'and (resets({window}) == 0)) * 60')
     legend = "{{stage}} · {{backend}}"
-    return [
+    panels = [
         series("Results per minute by backend", [(pace, legend)], 0, y, 12, 7, decimals=1,
                description="New successful results per minute on each backend, measured over 15 minutes. For the library face stage, each result is one face occurrence."),
         series("Results saved by backend", [(f'max by(stage,backend) ({saved})', legend)],
                12, y, 12, 7, unit="locale",
                description="New successful results committed by each backend. Previously saved observations reused from another run are excluded."),
     ]
+    trial = json.loads((Path(__file__).parent / "library-backfill-tuning.json").read_text())
+    for x, (backend, result) in enumerate(trial["backends"].items()):
+        before, after = result["before"], result["selected"]
+        rates = [(f'vector({arm["per_min"]})', f'{label} · {arm["lanes"]} lanes')
+                 for label, arm in (("Matched before", before), ("Matched after", after))]
+        alternate = result["more_lanes"]
+        rates.append((f'vector({alternate["per_min"]})', f'Trial · {alternate["lanes"]} lanes (rejected)'))
+        rates.extend((f'vector({value})', label) for label, value in
+                     (("Live before", result["live_before"]), ("Live after", result["live_after"])))
+        evidence = (f' Complete: {before["successful"]}/{before["attempts"]} before and '
+                    f'{after["successful"]}/{after["attempts"]} after. Exact agreement with reviewed '
+                    f'life stages: {before["reviewed_stage_exact"]}/{before["reviewed_attempts"]} before and '
+                    f'{after["reviewed_stage_exact"]}/{after["reviewed_attempts"]} after. Visually supported actor/action '
+                    f'readings: {before["supported_actor_actions"]}/{before["attempts"]} before and '
+                    f'{after["supported_actor_actions"]}/{after["attempts"]} after.')
+        durations = before["median_seconds"]
+        timing = (f' Before tuning, median preview preparation took {durations["preview_seconds"]} s, '
+                  f'life stage {durations["age_seconds"]} s and action {durations["action_seconds"]} s.')
+        panels.append(tuning_comparison(
+            f'Library backfill · {backend} before and after', rates, x * 12, y + 7, 12, 7,
+            "suffix: faces/min", result["decision"] + evidence + timing + " " + trial["method"]))
+    return panels
 
 
 def tuning_story(content):
