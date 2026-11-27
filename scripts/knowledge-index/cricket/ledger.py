@@ -309,7 +309,7 @@ class Ledger:
         """Read a consistent snapshot of album events."""
         with self.connect() as db:
             rows = db.execute(
-                "SELECT * FROM events WHERE owner=? AND album=? AND (? OR dismissed=0) ORDER BY rowid",
+                "SELECT * FROM events WHERE owner=? AND album=? AND (? OR dismissed=0) AND review_state<>'superseded' ORDER BY rowid",
                 (owner, album, include_dismissed),
             )
             return [self._effective(db, dict(row)) for row in rows]
