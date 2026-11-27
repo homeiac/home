@@ -440,12 +440,13 @@ def panels():
     audio = audio_story_panels()
     processing = photo_processing_panels()
     bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
-    processing_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
-    processing += shift(life_stage_tuning_panels(), processing_bottom)
-    return (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
-            + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
-            + shift(all_panels + shift(processing, bottom),
-                    RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+    processing_height = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
+    all_panels += shift(life_stage_tuning_panels(), bottom)
+    # Move the shared progress row after allocating IDs so existing panel links still work.
+    remaining = (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
+                 + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
+                 + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+    return processing + shift(remaining, processing_height)
 
 
 def photo_processing_panels():
@@ -471,11 +472,12 @@ def photo_processing_panels():
            f'and on(stage) (({age}) < 180)')
     panel_set = [
         row("Photo processing · progress and live tuning", 0),
-        stat("Photos complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}"),
-        stat("Photos queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
+        stat("Items complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}",
+             description="The library face stage counts face occurrences. The OCR stage counts photos checked for text, including photos with no text."),
+        stat("Items queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
         stat("Stage completion", f'({completed}) / ({scope} > 0)', 8, 1,
              unit="percentunit", decimals=1, legend="{{stage}}",
-             description="Complete and reused divided by the declared scope, including failed and withheld photos."),
+             description="Complete and reused divided by the declared scope, including failed and withheld items."),
         stat("Failed or withheld", counts("failed|withheld"), 12, 1, unit="locale", legend="{{stage}}"),
         stat("Time to drain queue", eta, 16, 1, unit="s", legend="{{stage}}",
              description="Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."),
