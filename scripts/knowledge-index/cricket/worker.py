@@ -20,6 +20,17 @@ from .reconcile import reconcile
 from .trial import analyze_one
 
 
+def available_memory() -> int | None:
+    """Read host pressure without launching a diagnostic subprocess for every dispatch."""
+    path = Path("/proc/meminfo")
+    if not path.exists():
+        return None
+    for line in path.read_text().splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) * 1024
+    return None
+
+
 def policy(path: Path) -> dict:
     """Validate runtime bounds before accepting a desired worker count."""
     value = json.loads(path.read_text())
@@ -141,6 +152,7 @@ def main() -> None:
     started = time.monotonic()
     completed = 0
     errors = 0
+    pressure_until = 0.0
     with ThreadPoolExecutor(max_workers=60) as pool:
         while True:
             for future, (name, job) in list(running.items()):
@@ -175,9 +187,13 @@ def main() -> None:
                 name: sum(n == name for n, _ in running.values())
                 for name in set(config["backends"]) | {n for n, _ in running.values()}
             }
+            memory = available_memory()
+            if memory is not None and memory < 512 * 1024**2:
+                pressure_until = time.monotonic() + 60
+            pressure = time.monotonic() < pressure_until
             desired = {
                 name: config["backends"].get(name, {}).get("workers", 0)
-                if config["enabled"] and not stopping
+                if config["enabled"] and not stopping and not pressure
                 else 0
                 for name in active
             }
@@ -207,6 +223,10 @@ def main() -> None:
                         (args.version,),
                     )
                 )
+                minutes = db.execute(
+                    "SELECT coalesce(sum(a.duration),0)/60 FROM jobs j JOIN assets a ON a.owner=j.owner AND a.id=j.asset WHERE j.version=? AND j.state='complete'",
+                    (args.version,),
+                ).fetchone()[0]
             save_private(
                 args.state / "status.json",
                 {
@@ -214,6 +234,9 @@ def main() -> None:
                     "desired": desired,
                     "active": active,
                     "jobs": states,
+                    "source_minutes_complete": minutes,
+                    "pressure_paused": pressure,
+                    "host_memory_available_bytes": memory,
                     "completed_this_run": completed,
                     "errors_this_run": errors,
                     "elapsed": time.monotonic() - started,

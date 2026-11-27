@@ -6,7 +6,11 @@ Status: Implementation started; tracked in [#250](https://github.com/homeiac/hom
 
 Completed PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
 [playback API #252](https://github.com/homeiac/home/pull/252), and
-[correction UI #253](https://github.com/homeiac/home/pull/253). These are stacked
+[correction UI #253](https://github.com/homeiac/home/pull/253),
+[inventory #254](https://github.com/homeiac/home/pull/254),
+[evidence #255](https://github.com/homeiac/home/pull/255),
+[inference #256](https://github.com/homeiac/home/pull/256), and
+[reconciliation #257](https://github.com/homeiac/home/pull/257). These are stacked
 review branches; publication of a PR does not imply production deployment.
 
 Live inventory on November 27: **1,500 original assets: 633 videos and 867 photos**
@@ -42,7 +46,7 @@ The implementation was inspected in `.claude/worktrees/photo-memory-album-231` a
 | `scripts/knowledge-index/memory-acceptance/action_gate.py` | Existing named-action publishing requires a reviewed claim or agreement across model families and confirmed regions. Keep that contract intact. Cricket suggestions use a separate, explicitly best-effort status. |
 | `scripts/knowledge-index/photo_enrichment/server.py` and `memory-acceptance/library_review.py` | Extend the existing private review application and navigation. Add timed video playback and correction controls rather than creating a separate public service. |
 
-OpenMemory was queried through the existing repository helper, but its local endpoint was unavailable. No prior memory-based solution is assumed by this plan. No live album count, transcription availability, or model accuracy has been measured for this feature yet.
+OpenMemory was queried through the existing repository helper, but its local endpoint was unavailable. No prior memory-based solution is assumed by this plan. Live inventory and audio availability are recorded above. The album also contains unrelated scenery: album membership alone does not prove cricket activity. Model accuracy remains best effort.
 
 ## User experience
 

@@ -14,6 +14,7 @@ from .analyze import VERSION, parse_reply, prompt, proposal
 from .ledger import Ledger
 from .models import infer
 from .prepare import save_private
+from .reactions import supplement
 
 
 def sample(ledger: Ledger, evidence: Path, count: int) -> list[dict]:
@@ -65,9 +66,17 @@ def analyze_one(
             errors.append(type(error).__name__)
     if events and not proposals:
         raise ValueError("All model events failed validation")
+    # Neutral descriptions of scenery are useful evidence, but are not cricket cards.
+    useful = [
+        p
+        for p in proposals
+        if p["data"]["role"] in {"batting", "bowling"}
+        or p["data"]["outcome"] not in {"unknown", "other"}
+    ]
+    useful = supplement(useful, row["asset"], window, default_batter)
     return {
         "raw": raw,
-        "proposals": proposals,
+        "proposals": useful,
         "invalid_events": errors,
         "seconds": time.monotonic() - start,
     }
