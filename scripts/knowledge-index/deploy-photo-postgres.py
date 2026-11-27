@@ -36,7 +36,7 @@ def main():
             raise RuntimeError('Existing role has no matching database; inspect before continuing')
     if args.mode in ('prepare','cutover','gui','context'):
         files={'photo-enrich.py':(here/'photo-enrich.py').read_text()}
-        for path in sorted((here/'photo_enrichment').rglob('*')):
+        for path in sorted([*(here/'photo_enrichment').rglob('*'),*(here/'cricket').rglob('*')]):
             if path.is_file() and path.suffix in ('.py','.html','.css','.js','.txt','.md'):
                 files[str(path.relative_to(here))]=path.read_text()
         for name in ('media_summary.py','pipeline_metrics.py'):files['enrichers/'+name]=(here/'enrichers'/name).read_text()
