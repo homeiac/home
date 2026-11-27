@@ -8,21 +8,22 @@ The frozen sample contains 122 photos including 13 Waffles and 13 non-Waffles co
 
 | Backend / device | Extra processes | CPU lanes | Pass | Photos/min | Mean seconds/photo | TP / FP | Valid |
 |---|---:|---:|---|---:|---:|---|---|
+| mac / cpu | 1 | default | a | 260.3 | 0.161 | 9 / 0 | True |
 
 ## Selected settings
 
 
-Failure retained: Continuous experiment interrupted (KeyboardInterrupt). Extra capacity restored; baseline production is not paused by this runner.
+Failure retained: Mac sustained memory pressure guard (RuntimeError). Extra capacity restored; baseline production is not paused by this runner.
 
 ## Observed resource ranges
 
-Mac whole-system CPU: 7.3–7.3%. Apple GPU: 99–99%. These include other applications.
-Mac system swap at first/last sample: 19.39/19.39 GiB. This includes preexisting swap; it is not attributed entirely to Waffles.
-still-fawn maximum observed host temperature: 35.0°C.
+Mac whole-system CPU: 0.0–27.0%. Apple GPU: 98–100%. These include other applications.
+Mac system swap at first/last sample: 19.32/19.30 GiB. This includes preexisting swap; it is not attributed entirely to Waffles.
+still-fawn maximum observed host temperature: 40.0°C.
 
 ## Provenance
 
-Session `1127053539`; code revision `49f776c8a2892520749a2856d8787b76da3eb9d3`.
+Session `1127054012`; code revision `a94ef333adbc4af58f7d2c9c7da18ef15b1ae2cc`.
 Sample SHA-256 `3beae47139538015c9968b5d39a38b5bfb3bdb1f9b740370406d6ca73ee57ca2`.
 Classifier SHA-256 `99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2`.
 

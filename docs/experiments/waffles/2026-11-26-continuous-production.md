@@ -103,3 +103,23 @@ assets. Never pause the experiment just because an unrelated historical asset
 lacks a thumbnail. A missing input in the frozen evaluation set still makes that
 trial invalid, rather than silently reducing its denominator. This clarification
 does not remove memory or quality safeguards.
+
+## Resource-limited follow-up
+
+Session `1127054012` completed one valid CPU pass (260.3 photos/min, 9 true
+positives, zero false positives, unchanged decisions). The extra Metal process
+then unloaded under sustained memory pressure, before its measured pass completed.
+Earlier Metal startup attempts also encountered pressure. Do not relax safeguards
+or claim a device speedup from that incomplete comparison. Existing baseline
+Metal remains available and production stays running.
+
+Continue with `--devices cpu` and an explicit protocol note: repeat all CPU cells
+1 → 3 → 5 → 7 → 7 → 5 → 3 → 1 with fresh run IDs, followed by the still-fawn
+CPU-lane sweep. The first CPU pass above is not pooled with this follow-up.
+A resource-rejected configuration is attempted once; record the failure, drain
+extras, and skip that capacity and larger capacities on that device. Resume lower
+eligible repeated cells after pressure returns to normal, bounded by two minutes.
+Quality failures and unhealthy baseline/host workloads still abort the experiment.
+Combined ABBA uses one extra **CPU** Mac worker and one extra still-fawn worker as
+before; selected eligible extra capacity is after. Missing Immich assets continue
+to use the independent four-attempt per-asset policy.

@@ -103,6 +103,8 @@ def main():
     global initial_health
     logging.basicConfig(level=logging.INFO,format='%(message)s')
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('private_directory',type=Path)
+    parser.add_argument('--devices',nargs='+',choices=['cpu','mps'],default=['cpu','mps'])
+    parser.add_argument('--note',default='Original counterbalanced CPU/Metal protocol')
     args=parser.parse_args();private=args.private_directory
     def interrupted(*_):raise KeyboardInterrupt('Continuous experiment interrupted')
     signal.signal(signal.SIGTERM,interrupted)
@@ -119,7 +121,7 @@ def main():
     assert all(v['slots']==0 for v in original.values()),'Begin with extra pools drained'
     initial_health=capacity.observe()['other_pods']['healthy_restarts']
     session=datetime.now(timezone.utc).strftime('%m%d%H%M%S')
-    plan=[('mac',n,d,None) for n in (1,3,5,7) for d in ('cpu','mps')]
+    plan=[('mac',n,d,None) for n in (1,3,5,7) for d in args.devices]
     plan+=list(reversed(plan))
     sf_plan=[('still-fawn',2,'cpu',n) for n in (1,2,3,3,2,1)]
     record('protocol',session=session,sample_count=len(assets),sample_sha256=digest,
@@ -127,7 +129,7 @@ def main():
            runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
            git_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
            mac_plan=plan,still_fawn_plan=sf_plan,baseline_workers=list(ADMITTED),baseline_device='mps',
-           user_preference='Compare CPU and Metal extra workers',production_start=totals(request('/admin/status')))
+           user_preference='Compare CPU and Metal extra workers',protocol_note=args.note,production_start=totals(request('/admin/status')))
     trials=[];selected={};success=False
     def trial(worker,slots,device,cores,suffix):
         name=f'burst-{session}-{worker}-{device}-{slots}-c{cores or 0}-{suffix}'
@@ -142,16 +144,35 @@ def main():
         result={'run':name,'worker':worker,'slots':slots,'device':device,'cores':cores,**summary}
         trials.append(result);record('trial_finished',**result)
         if not summary['valid']:raise RuntimeError('Quality or process stability gate failed')
+    rejected=set();ceilings={}
+    def measured(worker,slots,device,cores,suffix):
+        key=(worker,slots,device,cores)
+        if key in rejected or slots>=ceilings.get((worker,device),100):
+            record('trial_skipped',worker=worker,slots=slots,device=device,cores=cores,reason='At or above a failed resource configuration');return
+        try:trial(worker,slots,device,cores,suffix)
+        except RuntimeError as error:
+            if not any(s in str(error) for s in ('memory pressure guard','did not converge')):raise
+            record('trial_failed',worker=worker,slots=slots,device=device,cores=cores,attempt=1,reason=str(error),error_type=type(error).__name__)
+            rejected.add(key);ceilings[(worker,device)]=slots
+            for name in sorted(owned):request('/admin/state',{'id':name,'state':'paused'})
+            request('/admin/burst',{'worker':worker,'slots':0,'mode':'benchmark','note':'Resource rejection: retain baseline and test lower eligible capacity'})
+            deadline=time.monotonic()+120
+            while True:
+                status=request('/admin/status');active=next(w['burst_instances'] for w in status['workers'] if w['name']==worker)
+                if active==0 and capacity.mac()['pressure']==1:break
+                if time.monotonic()>deadline:raise RuntimeError('Resource recovery did not complete')
+                time.sleep(3)
     try:
-        for index,(worker,slots,device,cores) in enumerate(plan):trial(worker,slots,device,cores,'a' if index<len(plan)//2 else 'b')
+        for index,(worker,slots,device,cores) in enumerate(plan):measured(worker,slots,device,cores,'a' if index<len(plan)//2 else 'b')
+        trials=[t for t in trials if (t['worker'],t['slots'],t['device'],t['cores']) not in rejected]
         selected['mac'],candidates=choose(trials);record('backend_selected',**selected['mac'],candidates=candidates)
         tune('mac',0)
-        for index,(worker,slots,device,cores) in enumerate(sf_plan):trial(worker,slots,device,cores,'a' if index<len(sf_plan)//2 else 'b')
+        for index,(worker,slots,device,cores) in enumerate(sf_plan):measured(worker,slots,device,cores,'a' if index<len(sf_plan)//2 else 'b')
         selected['still-fawn'],candidates=choose([t for t in trials if t['worker']=='still-fawn']);record('backend_selected',**selected['still-fawn'],candidates=candidates)
         for profile,suffix in [('before','a'),('after','a'),('after','b'),('before','b')]:
             for worker in ('mac','still-fawn'):
                 choice=selected[worker]
-                tune(worker,1 if profile=='before' else choice['slots'],'mps' if profile=='before' and worker=='mac' else choice['device'],1 if profile=='before' and worker=='still-fawn' else choice['cores'])
+                tune(worker,1 if profile=='before' else choice['slots'],args.devices[0] if profile=='before' and worker=='mac' else choice['device'],1 if profile=='before' and worker=='still-fawn' else choice['cores'])
             name=f'burst-{session}-pool-{profile}-{suffix}'
             run(name+'-warm',assets[:12],['mac','still-fawn'])
             before=guard(True)
