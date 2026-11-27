@@ -110,6 +110,37 @@ class CricketAPI:
                     )
                 ]
             }
+        if route == "/api/cricket/search":
+            from .search import search
+
+            results = search(
+                self.ledger,
+                self.people,
+                self.owner,
+                query["album"],
+                query.get("q", ""),
+                query.get("filter", "all"),
+            )
+            return {
+                "results": [
+                    {k: v for k, v in r.items() if k not in {"owner", "path"}}
+                    for r in results
+                ]
+            }
+        if route == "/api/cricket/status":
+            with self.ledger.connect() as db:
+                jobs = [
+                    dict(r)
+                    for r in db.execute(
+                        "SELECT a.kind,j.state,count(*) AS assets FROM jobs j JOIN assets a ON a.owner=j.owner AND a.id=j.asset JOIN members m ON m.owner=a.owner AND m.asset=a.id WHERE m.owner=? AND m.album=? AND j.version=? GROUP BY a.kind,j.state",
+                        (
+                            self.owner,
+                            query["album"],
+                            query.get("version", "cricket-v1"),
+                        ),
+                    )
+                ]
+            return {"jobs": jobs}
         if route == "/api/cricket/event":
             return public_event(self.ledger.get(self.owner, query["id"]))
         if route == "/api/cricket/assets":
@@ -142,6 +173,14 @@ class CricketAPI:
                 and asset["fingerprint"] != f"stat:{stat.st_size}:{stat.st_mtime_ns}"
             ):
                 raise ValueError("Original changed; refresh inventory before playback")
+            if query.get("preview") == "true" and asset["kind"] == "photo":
+                previews = (self.ledger.path.parent / "evidence").resolve()
+                preview = (previews / (asset["id"] + ".jpg")).resolve()
+                if not preview.is_relative_to(previews):
+                    raise ValueError("Invalid preview path")
+                if preview.is_file():
+                    size = preview.stat().st_size
+                    return FileBody(preview, 0, size, size, False, "image/jpeg")
             start, length = byte_range(range_header, stat.st_size)
             content_type = (
                 mimetypes.guess_type(path.name)[0] or "application/octet-stream"

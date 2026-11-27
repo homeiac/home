@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const state = {csrf:'', albums:[], people:[], assets:[], events:[], editing:null, busy:false};
+const initial = new URLSearchParams(location.search);state.focus=initial.get('event');state.visibleLimit=60;
 const labels = {four:'Four',six:'Six',boundary_unclear:'Boundary unclear',dismissal:'Dismissal',run_out:'Run-out',other:'Other',unknown:'Result unclear'};
 const node = (tag,text) => {const el=document.createElement(tag);if(text!==undefined)el.textContent=text;return el;};
 const option = (value,text) => {const el=node('option',text);el.value=value;return el;};
@@ -17,6 +18,9 @@ function action(text,fn){const el=node('button',text);el.type='button';el.onclic
 function matches(event){
   const filter=$('filter').value,d=event.data;
   if(event.dismissed&&!$('show-dismissed').checked)return false;
+  if(state.focus&&event.id!==state.focus)return false;
+  const words=[name(d.actor),d.role,labels[d.outcome],event.evidence.reason||'',event.review_state,d.role==='bowling'&&['dismissal','run_out'].includes(d.outcome)?'wicket':''].join(' ').toLowerCase();
+  if(!$('search').value.toLowerCase().split(/\s+/).every(word=>words.includes(word)))return false;
   if(filter==='all')return true;
   if(album()?.default_batter && d.actor!==album().default_batter)return false;
   if(filter==='batting'||filter==='bowling')return d.role===filter;
@@ -32,13 +36,13 @@ async function change(event,operation){
 }
 function render(){
   const visible=state.events.filter(matches);$('cards').replaceChildren();
-  for(const event of visible){
+  for(const event of visible.slice(0,state.visibleLimit)){
     const card=node('article');card.className='card';card.dataset.event=event.id;
     const asset=state.assets.find(a=>a.id===event.asset),d=event.data;
     const preview=node(asset?.kind==='photo'?'img':'video');
-    if(asset?.kind==='photo'){preview.src=media(event.asset);preview.alt='Cricket activity';}
+    if(asset?.kind==='photo'){preview.src=media(event.asset)+'&preview=true';preview.alt='Cricket activity';preview.loading='lazy';}
     else{
-      preview.controls=true;preview.preload='metadata';preview.src=media(event.asset)+'#t='+d.start+','+d.end;
+      preview.controls=true;preview.preload='none';preview.src=media(event.asset)+'#t='+d.start+','+d.end;
       preview.addEventListener('loadedmetadata',()=>{preview.currentTime=d.start;});
       preview.addEventListener('play',()=>{if(preview.currentTime<d.start||preview.currentTime>=d.end)preview.currentTime=d.start;});
       preview.addEventListener('timeupdate',()=>{if(preview.currentTime>=d.end)preview.pause();});
@@ -51,11 +55,14 @@ function render(){
     controls.append(action('Correct',()=>edit(event)),action(event.dismissed?'Restore':'Dismiss',()=>change(event,{action:event.dismissed?'restore':'dismiss'})));
     if(!event.dismissed)controls.append(action('Confirm',()=>change(event,{action:'accept'})));
     const original=node('a',asset?.kind==='video'?'Play full video':'View original');original.href=media(event.asset);original.target='_blank';original.rel='noopener';controls.append(original);
+    const link=node('a','Link to moment');link.href='/cricket?'+new URLSearchParams({album:event.album,event:event.id});controls.append(link);
     card.append(preview,title,badge,details,reason,controls);$('cards').append(card);
   }
   if(!visible.length)$('cards').append(node('p','No moments in this view yet. Try another filter or add one below.'));
-  notify(visible.length+' moments · suggestions are included');
+  $('more').hidden=visible.length<=state.visibleLimit;
+  notify(Math.min(visible.length,state.visibleLimit)+' of '+visible.length+' moments · suggestions are included');
 }
+async function progress(){if(!album())return;const result=await api('status?'+new URLSearchParams({album:album().id}));const count=(kind,done)=>result.jobs.filter(r=>r.kind===kind&&(!done||r.state==='complete')).reduce((n,r)=>n+r.assets,0);$('progress').textContent=count('video',true)+' / '+count('video',false)+' videos analyzed · '+count('photo',true)+' / '+count('photo',false)+' photos analyzed';}
 async function load(){
   if(!album()){notify('No cricket album has been imported yet.');return;}
   const q=new URLSearchParams({album:$('album').value,dismissed:'true'});
@@ -63,6 +70,7 @@ async function load(){
   state.events=events.events;state.assets=assets.assets;
   $('original').replaceChildren(...state.assets.map((a,i)=>option(a.id,(a.kind==='video'?'Video ':'Photo ')+(i+1)+(a.duration?' · '+Math.round(a.duration)+' seconds':''))));
   $('add').disabled=!state.assets.length;render();
+  await progress();
 }
 function edit(event){
   const asset=state.assets.find(a=>a.id===event.asset);if(!asset)throw Error('Original is no longer in this album');
@@ -74,7 +82,7 @@ function edit(event){
   $('timing').hidden=!video;$('start').required=video;$('end').required=video;$('outcome').disabled=!video;$('credit').disabled=!video;
   $('edit-video').hidden=!video;$('edit-image').hidden=video;
   if(video){$('edit-video').src=media(event.asset);$('edit-video').onloadedmetadata=()=>{$('edit-video').currentTime=d.start||0;};}
-  else $('edit-image').src=media(event.asset);
+  else $('edit-image').src=media(event.asset)+'&preview=true';
   $('edit-title').textContent=event.id?'Correct highlight':'Add highlight';$('save').textContent=event.id?'Save correction':'Add highlight';$('save-status').textContent='';$('editor').showModal();
 }
 function closeEditor(){$('edit-video').pause();$('editor').close();}
@@ -96,10 +104,16 @@ $('edit-form').onsubmit=async event=>{
   finally{state.busy=false;$('save').disabled=false;}
 };
 $('add').onclick=()=>{const asset=state.assets.find(a=>a.id===$('original').value);if(!asset)return;edit({asset:asset.id,data:{actor:album()?.default_batter||null,role:'batting',outcome:'unknown',wicket_credit:'unknown',start:asset.kind==='video'?0:null,end:asset.kind==='video'?Math.min(30,asset.duration):null,delivery_start:null,outcome_end:null}});};
-$('filter').onchange=render;$('show-dismissed').onchange=render;
+function filterChanged(){state.focus=null;state.visibleLimit=60;const query=new URLSearchParams({album:$('album').value,filter:$('filter').value});if($('search').value)query.set('q',$('search').value);history.replaceState(null,'','/cricket?'+query);render();}
+$('filter').onchange=filterChanged;$('search').oninput=filterChanged;$('show-dismissed').onchange=render;
+$('more').onclick=()=>{state.visibleLimit+=60;render();};
 $('album').onchange=()=>load().catch(e=>notify(e.message,true));$('refresh').onclick=()=>load().catch(e=>notify(e.message,true));
 (async()=>{const response=await fetch('/api/config');const config=await response.json();state.csrf=config.csrf;
   const [albums,people]=await Promise.all([api('albums'),api('people')]);state.albums=albums.albums;state.people=people.people;
   $('album').replaceChildren(...state.albums.map((a,i)=>option(a.id,name(a.default_batter)+' · Cricket'+(state.albums.length>1?' '+(i+1):''))));
+  if(state.albums.some(a=>a.id===initial.get('album')))$('album').value=initial.get('album');
+  if([...$('filter').options].some(o=>o.value===initial.get('filter')))$('filter').value=initial.get('filter');
+  $('search').value=(initial.get('q')||'').slice(0,200);
   await load();
+  setInterval(()=>progress().catch(()=>{}),15000);
 })().catch(error=>notify(error.message,true));

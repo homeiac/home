@@ -24,7 +24,7 @@ def main() -> None:
     args = parser.parse_args()
     here = Path(__file__).resolve().parent
     files = {"photo-enrich.py": (here / "photo-enrich.py").read_text()}
-    for path in sorted((here / "photo_enrichment").rglob("*")):
+    for path in sorted([*(here / "photo_enrichment").rglob("*"), *(here / "cricket").rglob("*")]):
         if path.is_file() and path.suffix in (".py", ".js", ".css", ".html", ".txt", ".md"):
             files[str(path.relative_to(here))] = path.read_text()
     unit = (here / "host/photo-enrichment-worker.service").read_text()

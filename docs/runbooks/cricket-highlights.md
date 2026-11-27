@@ -60,3 +60,31 @@ over corrections created since the backup.
 
 Private inventories, portraits, transcripts, frame caches, source IDs, and runtime
 policies stay out of Git. Aggregate status contains no media paths or names.
+
+## Corrected search and publication
+
+The cricket page supports saved filter URLs (`?filter=four`, `?filter=six`,
+`?filter=batting_out`, `?filter=bowling_wicket`), text search, and exact-moment
+links. All filters read effective corrections immediately. Cards load in pages
+of 60 and defer original-video loading until playback.
+
+The existing photo analytical export now publishes `cricket_highlights` alongside
+the photo search tables. It contains corrected actor/role/result, clip bounds,
+review status, category memberships, searchable text, and links to the moment
+and original. Each generation replaces the entire table, so dismissed, removed,
+or recategorized moments cannot linger in append-only output. Export timing and
+failures use the existing snapshot manifest and retry timer. `cricket.remote
+status` reports the publication timestamp and row count.
+
+Example query through the existing analytical query command:
+
+```sql
+SELECT person, role, outcome, start_seconds, end_seconds, highlight_url
+FROM cricket_highlights
+WHERE list_contains(categories, 'bowling_wicket');
+```
+
+The worker also exports aggregate Prometheus metrics in
+`/var/lib/prometheus/node-exporter/cricket_highlights.prom`: heartbeat, queued /
+running / complete / error jobs, desired and active workers, completed source
+minutes, and memory-pressure pause state. Labels contain no names or media IDs.

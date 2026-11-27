@@ -13,7 +13,7 @@ REMOTE = r"""
 import json,hashlib,subprocess,urllib.request
 from pathlib import Path
 root=Path('/opt/photo-enrichment/gui').resolve()
-names=['photo-enrich.py','photo_enrichment/server.py','photo_enrichment/static/index.html','photo_enrichment/static/app.js']
+names=['photo-enrich.py','photo_enrichment/server.py','photo_enrichment/static/index.html','photo_enrichment/static/app.js','photo_enrichment/snapshots.py']
 files={name:(root/name).read_text() for name in names if (root/name).exists()}
 unit=Path('/etc/systemd/system/photo-enrichment-gui.service').read_text()
 health={}

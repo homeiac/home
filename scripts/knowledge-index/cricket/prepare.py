@@ -1,6 +1,7 @@
 """Cache host-decoded cricket previews locally while preserving completed evidence."""
 
 import argparse
+import base64
 import json
 import logging
 import os
@@ -24,6 +25,19 @@ def save_private(path: Path, value: dict) -> None:
     os.replace(temporary, path)
 
 
+def save_preview(folder: Path, asset: dict, prepared: dict) -> None:
+    """Supply browser-readable previews for HEIC and other original photo formats."""
+    if asset["kind"] != "photo":
+        return
+    target = folder / (asset["id"] + ".jpg")
+    with tempfile.NamedTemporaryFile(dir=folder, delete=False) as output:
+        output.write(
+            base64.b64decode(prepared["windows"][0]["frames"][0], validate=True)
+        )
+        temporary = Path(output.name)
+    os.replace(temporary, target)
+
+
 def prepare(asset: dict, *, host: str, folder: Path, audio: dict | None) -> dict:
     """Reuse an exact preparation or extract it through an inventory-approved host."""
     key = fingerprint({"asset": asset, "audio": audio})
@@ -31,6 +45,7 @@ def prepare(asset: dict, *, host: str, folder: Path, audio: dict | None) -> dict
     if target.exists():
         old = json.loads(target.read_text())
         if old.get("cache_key") == key and old.get("version") == VERSION:
+            save_preview(folder, asset, old)
             return {
                 "asset": asset["id"],
                 "state": "reused",
@@ -64,6 +79,7 @@ def prepare(asset: dict, *, host: str, folder: Path, audio: dict | None) -> dict
         window["audio"] = audio_evidence(audio, window["start"], window["end"])
     result.update(asset=asset["id"], cache_key=key, seconds=time.monotonic() - started)
     save_private(target, result)
+    save_preview(folder, asset, result)
     return {
         "asset": asset["id"],
         "state": "prepared",

@@ -18,6 +18,10 @@ subprocess.run(command,cwd=root,check=True)
 if packet['command']=='status':
     status=state/'worker/status.json'
     if status.exists():print(status.read_text())
+    manifest=state.parent/'analytics/current.json'
+    if manifest.exists():
+        snapshot=json.loads(manifest.read_text());table=snapshot.get('tables',{}).get('cricket_highlights')
+        print(json.dumps({'search_publication':{'published_at':snapshot.get('published_at'),'rows':table.get('rows') if table else None}}))
     for name in ('photo-enrichment-gui','cricket-highlights','knowledge-index-enrich','knowledge-index-audio-story'):
         print(name,subprocess.run(['systemctl','is-active',name],text=True,capture_output=True).stdout.strip())
 """

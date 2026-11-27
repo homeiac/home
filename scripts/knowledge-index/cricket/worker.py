@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import logging
+import re
 import signal
 import subprocess
 import time
@@ -38,6 +39,10 @@ def policy(path: Path) -> dict:
         value.get("backends"), dict
     ):
         raise ValueError("Invalid runtime policy")
+    if len(value["backends"]) > 3 or any(
+        not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", name) for name in value["backends"]
+    ):
+        raise ValueError("Invalid backend names or too many backends")
     for backend in value["backends"].values():
         maximum = backend["max_workers"]
         desired = backend["workers"]
@@ -49,6 +54,33 @@ def policy(path: Path) -> dict:
         ):
             raise ValueError("Worker count exceeds configured resource bound")
     return value
+
+
+def metrics(path: Path, status: dict) -> None:
+    """Publish only low-cardinality aggregate progress to the existing node exporter."""
+    lines = [
+        "# HELP cricket_heartbeat_timestamp_seconds Last worker heartbeat",
+        "# TYPE cricket_heartbeat_timestamp_seconds gauge",
+        f"cricket_heartbeat_timestamp_seconds {status['time']}",
+        "# HELP cricket_source_minutes_complete Completed source video minutes",
+        "# TYPE cricket_source_minutes_complete gauge",
+        f"cricket_source_minutes_complete {status['source_minutes_complete']}",
+        "# TYPE cricket_pressure_paused gauge",
+        f"cricket_pressure_paused {int(status['pressure_paused'])}",
+        "# TYPE cricket_jobs gauge",
+        "# TYPE cricket_workers gauge",
+    ]
+    for state in ("queued", "running", "complete", "error"):
+        lines.append(f'cricket_jobs{{state="{state}"}} {status["jobs"].get(state, 0)}')
+    for kind in ("desired", "active"):
+        for backend, count in status[kind].items():
+            lines.append(
+                f'cricket_workers{{backend="{backend}",kind="{kind}"}} {count}'
+            )
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text("\n".join(lines) + "\n")
+    temporary.chmod(0o644)
+    temporary.replace(path)
 
 
 def process(
@@ -125,6 +157,7 @@ def main() -> None:
     parser.add_argument("--policy", type=Path, required=True)
     parser.add_argument("--portrait", type=Path)
     parser.add_argument("--version", default="cricket-v1")
+    parser.add_argument("--prom", type=Path)
     parser.add_argument("--until-idle", action="store_true")
     args = parser.parse_args()
     args.state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -227,21 +260,21 @@ def main() -> None:
                     "SELECT coalesce(sum(a.duration),0)/60 FROM jobs j JOIN assets a ON a.owner=j.owner AND a.id=j.asset WHERE j.version=? AND j.state='complete'",
                     (args.version,),
                 ).fetchone()[0]
-            save_private(
-                args.state / "status.json",
-                {
-                    "time": time.time(),
-                    "desired": desired,
-                    "active": active,
-                    "jobs": states,
-                    "source_minutes_complete": minutes,
-                    "pressure_paused": pressure,
-                    "host_memory_available_bytes": memory,
-                    "completed_this_run": completed,
-                    "errors_this_run": errors,
-                    "elapsed": time.monotonic() - started,
-                },
-            )
+            report = {
+                "time": time.time(),
+                "desired": desired,
+                "active": active,
+                "jobs": states,
+                "source_minutes_complete": minutes,
+                "pressure_paused": pressure,
+                "host_memory_available_bytes": memory,
+                "completed_this_run": completed,
+                "errors_this_run": errors,
+                "elapsed": time.monotonic() - started,
+            }
+            save_private(args.state / "status.json", report)
+            if args.prom:
+                metrics(args.prom, report)
             export(ledger, args.state / "effective")
             if not running and (stopping or args.until_idle):
                 break

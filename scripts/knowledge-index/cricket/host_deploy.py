@@ -136,7 +136,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory={release}
-ExecStart={release}/venv/bin/python -m cricket.worker --ledger {STATE}/ledger.sqlite3 --evidence {STATE}/evidence --state {STATE}/worker --policy {STATE}/policy.json --portrait {STATE}/reference.jpg
+ExecStart={release}/venv/bin/python -m cricket.worker --ledger {STATE}/ledger.sqlite3 --evidence {STATE}/evidence --state {STATE}/worker --policy {STATE}/policy.json --portrait {STATE}/reference.jpg --prom /var/lib/prometheus/node-exporter/cricket_highlights.prom
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=700
@@ -150,7 +150,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths={STATE}
+ReadWritePaths={STATE} /var/lib/prometheus/node-exporter
 [Install]
 WantedBy=multi-user.target
 """)
@@ -158,6 +158,7 @@ WantedBy=multi-user.target
     run("systemctl", "daemon-reload")
     # Policy is initially disabled; service persists queue state and reports readiness.
     run("systemctl", "enable", "--now", worker.name)
+    run("systemctl", "restart", worker.name)
     sys.stdout.write(
         json.dumps({"ui": "healthy", "worker": "disabled", "backup": str(backup)})
         + "\n"
