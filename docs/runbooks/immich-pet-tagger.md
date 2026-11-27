@@ -206,6 +206,15 @@ caps, fencing and baseline progress without changing production jobs or runs.
 
 ## Live tuning and experimental evidence
 
+Immich thumbnail errors are per-asset failures. Each job receives at most four
+total attempts, with 30 seconds before retry. Exhausted jobs remain `failed` and
+workers immediately continue other eligible assets; these warnings never pause
+the run or experiment. `thumbnail_http_404` identifies a missing preview rather
+than a negative Waffles classification. Grafana shows failures by reason. The
+bounded retry path is tested against isolated PostgreSQL tables, including stale
+failure acknowledgements and continuing to the next job. Memory and quality
+safeguards remain separate from source-asset availability errors.
+
 One permanent baseline process remains on every admitted backend: Mac uses
 Apple Metal; PVE, still-fawn and fun-bedbug use CPU. Chief-horse remains desired
 but guarded standby until memory headroom and its quality test permit admission.

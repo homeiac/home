@@ -2678,6 +2678,59 @@ data:
               "mode": "multi"
             }
           }
+        },
+        {
+          "id": 41,
+          "title": "Failed assets by reason",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 98,
+            "w": 24,
+            "h": 5
+          },
+          "description": "Per-asset errors never pause the run. Four total attempts with a 30-second retry delay, then retain failed status and process other assets. thumbnail_http_404 means Immich could not supply a preview; this is not a successful non-Waffles result.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(sum by(reason)(waffles_failed_jobs{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "{{reason}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 0,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
         }
       ]
     }

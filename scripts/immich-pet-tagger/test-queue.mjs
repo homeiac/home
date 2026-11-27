@@ -1,7 +1,7 @@
 // Pure validation checks run locally; --postgres also exercises real concurrent claims.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {claim,finish,validateResult,validateTuning,validateBurst} from './queue-core.mjs';
+import {claim,finish,fail,validateResult,validateTuning,validateBurst} from './queue-core.mjs';
 const value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};
 assert.equal(validateResult(value).seconds,1.2);
 assert.deepEqual(validateTuning('mac',1),{slots:1});
@@ -50,7 +50,22 @@ if(process.argv.includes('--postgres')) {
     await isolated.query("UPDATE waffles.settings SET value='{\"pve\":{\"slots\":0,\"mode\":\"benchmark\"}}' WHERE key='burst'");
     assert.equal(await claim(isolated,'pve','burst'),null);
     assert.equal(await finish(isolated,baseline,value),true);
-    assert.equal((await claim(isolated,'pve')).run_id,'prod','Zero burst slots must not stop baseline work');
+    let unavailable=await claim(isolated,'pve');assert.equal(unavailable.run_id,'prod','Zero burst slots must not stop baseline work');
+    const missingId=unavailable.asset_id;
+    for(let attempt=1;attempt<=4;attempt++) {
+      assert.equal(unavailable.attempts,attempt);
+      await isolated.query("UPDATE waffles.jobs SET last_error='thumbnail_http_404' WHERE run_id=$1 AND asset_id=$2",[unavailable.run_id,missingId]);
+      assert.equal(await fail(isolated,unavailable),true);
+      assert.equal(await fail(isolated,unavailable),false,'Repeated failure acknowledgement is fenced');
+      const row=(await isolated.query('SELECT status,last_error FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId])).rows[0];
+      assert.equal(row.status,attempt===4?'failed':'pending');assert.equal(row.last_error,'thumbnail_http_404');
+      if(attempt<4){
+        await isolated.query('UPDATE waffles.jobs SET available_at=now() WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId]);
+        unavailable=await claim(isolated,'pve');assert.equal(unavailable.asset_id,missingId);
+      }
+    }
+    assert.notEqual((await claim(isolated,'pve')).asset_id,missingId,'Exhausted thumbnail failure must not block the next asset');
+    console.log('404 failure retained after four attempts; next production asset continues; duplicate failures are fenced');
     console.log('Isolated PostgreSQL pool separation, concurrent caps, fencing and baseline continuity passed');
   } finally {
     for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF EXISTS ${names[name]}`);

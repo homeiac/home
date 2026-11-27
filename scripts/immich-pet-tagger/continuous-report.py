@@ -33,9 +33,13 @@ if complete:
     for r in trials:
         if '-pool-' in r['run']:groups[r['run'].split('-')[-2]].append(r)
     rates={k:60*sum(r['photos'] for r in v)/sum(r['wall_seconds'] for r in v) for k,v in groups.items()}
-    lines+=['',f"Combined extra capacity: **{rates['before']:.1f} → {rates['after']:.1f} photos/min ({rates['after']/rates['before']:.2f}×)** on identical benchmark inputs while baseline production continued. This is not a baseline-only versus total-production speedup.",'']
+    if set(rates)=={'before','after'}:
+        lines+=['',f"Combined extra capacity: **{rates['before']:.1f} → {rates['after']:.1f} photos/min ({rates['after']/rates['before']:.2f}×)** on identical benchmark inputs while baseline production continued. This is not a baseline-only versus total-production speedup.",'']
+    else:lines+=['','Combined comparison was not eligible; no before/after gain is claimed.','']
     lines.append('Production completions during the experiment: '+', '.join(f"{w} {n-protocol['production_start'][w]:,}" for w,n in complete['production_end'].items())+'.')
 for r in failed:lines+=['',f"Failure retained: {r['reason']} ({r['error_type']}). Extra capacity restored; baseline production is not paused by this runner."]
+for r in session:
+    if r['event']=='trial_failed':lines+=['',f"Trial failure retained: {r['worker']} {r['device']} {r['slots']} extras, attempt {r['attempt']}: {r['reason']}."]
 samples=[r['observation'] for r in session if r['event']=='resource_sample']
 if samples:
     lines+=['','## Observed resource ranges','',

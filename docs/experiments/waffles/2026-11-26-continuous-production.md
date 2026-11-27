@@ -83,7 +83,7 @@ state changes or baseline restarts are allowed in the runner or cleanup.
 These settings and code must be committed before execution. This preregistration
 does not claim that the new trials have run.
 
-## Amendment before measured trials, 05:37 UTC
+## Amendment before measured trials, 05:35 UTC
 
 The first attempt was interrupted to investigate three production failures:
 existing VIDEO assets returned preview-thumbnail 404, while asset metadata was
@@ -95,3 +95,11 @@ follow-ups every two seconds, retain each observation and stop critical pressure
 immediately. New processes still refuse startup outside normal pressure. Start
 with CPU then Metal at each concurrency, and reverse the complete order for the
 second pass. Prior attempts remain in the journal; no completed result is reused.
+
+The owner clarified that warnings should not interrupt work when they concern
+Immich 404s or similar per-photo failures. Production jobs already have a four-
+attempt bound and 30-second retry delay; retain failed status and continue other
+assets. Never pause the experiment just because an unrelated historical asset
+lacks a thumbnail. A missing input in the frozen evaluation set still makes that
+trial invalid, rather than silently reducing its denominator. This clarification
+does not remove memory or quality safeguards.

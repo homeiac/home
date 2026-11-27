@@ -3,7 +3,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
-import {claim,finish,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst} from './queue-core.mjs';
+import {claim,finish,fail,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst} from './queue-core.mjs';
 import {discover} from './discovery.mjs';
 const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');
 const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
@@ -15,7 +15,7 @@ const safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.le
 async function api(path,method='GET',body) {
   const r=await fetch(IMMICH+'/api'+path,{method,headers:{'x-api-key':process.env.IMMICH_API_KEY,'Content-Type':'application/json'},
     body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
-  if(!r.ok)throw Error('Immich HTTP '+r.status);
+  if(!r.ok)throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});
   return r;
 }
 async function jsonBody(req) {
@@ -72,12 +72,14 @@ async function refresh() {
       coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int applied
       FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status`)).rows;
     const devices=(await pool.query("SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs FROM waffles.jobs WHERE status='complete' GROUP BY run_id,worker,pool,device")).rows;
+    const failures=(await pool.query("SELECT run_id,coalesce(last_error,'unknown') reason,count(*)::int jobs FROM waffles.jobs WHERE status='failed' GROUP BY run_id,last_error")).rows;
     const instances=(await pool.query("SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.instances WHERE reported_at>now()-interval '60 seconds'")).rows;
     const burst=(await pool.query("SELECT value FROM waffles.settings WHERE key='burst'")).rows[0]?.value??{};
     await pool.query("DELETE FROM waffles.instances WHERE reported_at<now()-interval '7 days'");
     const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'} '+Number(value);
     const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];
     for(const row of devices)lines.push(metric('device_jobs',row.jobs,{run:row.run_id,worker:row.worker,pool:row.pool,device:row.device}));
+    for(const row of failures)lines.push(metric('failed_jobs',row.jobs,{run:row.run_id,reason:row.reason}));
     const mac=(await pool.query("SELECT value FROM waffles.settings WHERE key='mac-observation'")).rows[0]?.value;
     if(mac)for(const [name,value] of Object.entries(mac))lines.push(metric('mac_'+name,value));
     const discovery=(await pool.query("SELECT value FROM waffles.settings WHERE key='discovery'")).rows[0]?.value;
@@ -140,8 +142,15 @@ http.createServer(async(req,res)=>{
     if(req.method==='GET'&&/^\/immich\/api\/assets\/[0-9a-f-]{36}\/thumbnail$/.test(url.pathname)) {
       const id=url.pathname.split('/')[4];
       if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT 1',[id])).rowCount){respond(res,{},404);return;}
-      const r=await api('/assets/'+id+'/thumbnail?size=preview');
-      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await r.arrayBuffer()));return;
+      try {
+        const r=await api('/assets/'+id+'/thumbnail?size=preview');
+        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await r.arrayBuffer()));
+      } catch(error) {
+        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;
+        await pool.query("UPDATE waffles.jobs SET last_error=$2 WHERE asset_id=$1 AND status='running' AND lease_until>now()",[id,'thumbnail_http_'+status]);
+        respond(res,{error:'thumbnail unavailable'},status);
+      }
+      return;
     }
     const body=await jsonBody(req);
     if(req.method==='POST'&&url.pathname==='/api/heartbeat') {
@@ -167,10 +176,7 @@ http.createServer(async(req,res)=>{
     if(req.method==='POST'&&url.pathname==='/api/claim') {respond(res,await claim(pool,body.worker,body.pool??'base',body.device??(body.worker==='mac'?'mps':'cpu')));return;}
     if(req.method==='POST'&&url.pathname==='/api/finish') {respond(res,{accepted:await finish(pool,body,body.result)});return;}
     if(req.method==='POST'&&url.pathname==='/api/fail') {
-      await pool.query(`UPDATE waffles.jobs SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE 'pending' END,
-        available_at=now()+interval '30 seconds',last_error='inference_failed',lease_until=NULL
-        WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND lease_until>now()`,[body.run_id,body.asset_id,body.claim]);
-      respond(res,{ok:true});return;
+      respond(res,{ok:await fail(pool,body)});return;
     }
     if(req.method==='POST'&&url.pathname==='/admin/config') {
       if(!uuid.test(body.person_id)||body.names?.[0]!=='Waffles'||!body.scaler||!body.model)throw Error('Invalid config');

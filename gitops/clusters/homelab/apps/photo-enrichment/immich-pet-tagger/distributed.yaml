@@ -114,11 +114,18 @@ data:
     \ waffles.runs r WHERE j.run_id=r.id AND j.run_id=$1 AND j.asset_id=$2 AND j.claim=$3\n\
     \    AND j.status='running' AND j.lease_until>now() RETURNING j.asset_id`,\n \
     \   [job.run_id,job.asset_id,job.claim,result,result.seconds])).rowCount===1;\n\
-    }\n"
+    }\n\nexport async function fail(db,job) {\n  // Four total claims, then retain\
+    \ an asset-level failure and move on.\n  // A stale worker cannot consume another\
+    \ attempt or change a newer claim.\n  return (await db.query(`UPDATE waffles.jobs\
+    \ SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE 'pending' END,\n    available_at=now()+interval\
+    \ '30 seconds',\n    last_error=CASE WHEN last_error LIKE 'thumbnail_http_%' THEN\
+    \ last_error ELSE 'inference_failed' END,\n    lease_until=NULL\n    WHERE run_id=$1\
+    \ AND asset_id=$2 AND claim=$3 AND status='running' AND lease_until>now()`,\n\
+    \    [job.run_id,job.asset_id,job.claim])).rowCount===1;\n}\n"
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst}\
+    \ {claim,finish,fail,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
@@ -127,9 +134,10 @@ data:
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
     async function api(path,method='GET',body) {\n  const r=await fetch(IMMICH+'/api'+path,{method,headers:{'x-api-key':process.env.IMMICH_API_KEY,'Content-Type':'application/json'},\n\
     \    body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});\n\
-    \  if(!r.ok)throw Error('Immich HTTP '+r.status);\n  return r;\n}\nasync function\
-    \ jsonBody(req) {\n  let value='';for await(const chunk of req){value+=chunk;if(value.length>25e6)throw\
-    \ Error('Too large');}\n  return JSON.parse(value||'{}');\n}\nconst respond=(res,value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};\n\
+    \  if(!r.ok)throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});\n\
+    \  return r;\n}\nasync function jsonBody(req) {\n  let value='';for await(const\
+    \ chunk of req){value+=chunk;if(value.length>25e6)throw Error('Too large');}\n\
+    \  return JSON.parse(value||'{}');\n}\nconst respond=(res,value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};\n\
     async function transaction(fn) {\n  const db=await pool.connect();try {await db.query('BEGIN');const\
     \ value=await fn(db);await db.query('COMMIT');return value;}\n  catch(e){await\
     \ db.query('ROLLBACK');throw e;}finally{db.release();}\n}\n\nasync function writeOne()\
@@ -170,6 +178,8 @@ data:
     \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const devices=(await pool.query(\"\
     SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs\
     \ FROM waffles.jobs WHERE status='complete' GROUP BY run_id,worker,pool,device\"\
+    )).rows;\n    const failures=(await pool.query(\"SELECT run_id,coalesce(last_error,'unknown')\
+    \ reason,count(*)::int jobs FROM waffles.jobs WHERE status='failed' GROUP BY run_id,last_error\"\
     )).rows;\n    const instances=(await pool.query(\"SELECT *,extract(epoch FROM\
     \ reported_at)::float8 reported FROM waffles.instances WHERE reported_at>now()-interval\
     \ '60 seconds'\")).rows;\n    const burst=(await pool.query(\"SELECT value FROM\
@@ -178,6 +188,7 @@ data:
     \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
     \    for(const row of devices)lines.push(metric('device_jobs',row.jobs,{run:row.run_id,worker:row.worker,pool:row.pool,device:row.device}));\n\
+    \    for(const row of failures)lines.push(metric('failed_jobs',row.jobs,{run:row.run_id,reason:row.reason}));\n\
     \    const mac=(await pool.query(\"SELECT value FROM waffles.settings WHERE key='mac-observation'\"\
     )).rows[0]?.value;\n    if(mac)for(const [name,value] of Object.entries(mac))lines.push(metric('mac_'+name,value));\n\
     \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
@@ -218,9 +229,13 @@ data:
     \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
     /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
     \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
-    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      const r=await api('/assets/'+id+'/thumbnail?size=preview');\n\
-    \      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
-    \ r.arrayBuffer()));return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
+    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      try {\n        const\
+    \ r=await api('/assets/'+id+'/thumbnail?size=preview');\n        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
+    \ r.arrayBuffer()));\n      } catch(error) {\n        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;\n\
+    \        await pool.query(\"UPDATE waffles.jobs SET last_error=$2 WHERE asset_id=$1\
+    \ AND status='running' AND lease_until>now()\",[id,'thumbnail_http_'+status]);\n\
+    \        respond(res,{error:'thumbnail unavailable'},status);\n      }\n     \
+    \ return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
     \ {\n      if(!WORKERS.includes(body.worker))throw Error('Invalid worker');\n\
     \      const instance=body.instance??body.worker;\n      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw\
     \ Error('Invalid instance');\n      const lane=body.pool??'base';if(!['base','burst'].includes(lane))throw\
@@ -244,11 +259,8 @@ data:
     \ {respond(res,await claim(pool,body.worker,body.pool??'base',body.device??(body.worker==='mac'?'mps':'cpu')));return;}\n\
     \    if(req.method==='POST'&&url.pathname==='/api/finish') {respond(res,{accepted:await\
     \ finish(pool,body,body.result)});return;}\n    if(req.method==='POST'&&url.pathname==='/api/fail')\
-    \ {\n      await pool.query(`UPDATE waffles.jobs SET status=CASE WHEN attempts>=4\
-    \ THEN 'failed' ELSE 'pending' END,\n        available_at=now()+interval '30 seconds',last_error='inference_failed',lease_until=NULL\n\
-    \        WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND\
-    \ lease_until>now()`,[body.run_id,body.asset_id,body.claim]);\n      respond(res,{ok:true});return;\n\
-    \    }\n    if(req.method==='POST'&&url.pathname==='/admin/config') {\n      if(!uuid.test(body.person_id)||body.names?.[0]!=='Waffles'||!body.scaler||!body.model)throw\
+    \ {\n      respond(res,{ok:await fail(pool,body)});return;\n    }\n    if(req.method==='POST'&&url.pathname==='/admin/config')\
+    \ {\n      if(!uuid.test(body.person_id)||body.names?.[0]!=='Waffles'||!body.scaler||!body.model)throw\
     \ Error('Invalid config');\n      if((await pool.query(\"SELECT 1 FROM waffles.runs\
     \ WHERE state='running' LIMIT 1\")).rowCount)throw Error('Pause and drain before\
     \ changing classifier');\n      await pool.query(\"INSERT INTO waffles.settings\
@@ -648,7 +660,7 @@ data:
     \    except Exception:return False\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning,validateBurst}\
+    \ from 'node:module';\nimport {claim,finish,fail,validateResult,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
     assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',1),{slots:1});\n\
     for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
@@ -694,12 +706,25 @@ data:
     \    await isolated.query(\"UPDATE waffles.settings SET value='{\\\"pve\\\":{\\\
     \"slots\\\":0,\\\"mode\\\":\\\"benchmark\\\"}}' WHERE key='burst'\");\n    assert.equal(await\
     \ claim(isolated,'pve','burst'),null);\n    assert.equal(await finish(isolated,baseline,value),true);\n\
-    \    assert.equal((await claim(isolated,'pve')).run_id,'prod','Zero burst slots\
-    \ must not stop baseline work');\n    console.log('Isolated PostgreSQL pool separation,\
-    \ concurrent caps, fencing and baseline continuity passed');\n  } finally {\n\
-    \    for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF\
-    \ EXISTS ${names[name]}`);\n    await db.end();\n  }\n}\nconsole.log('Result validation\
-    \ checks passed');\n"
+    \    let unavailable=await claim(isolated,'pve');assert.equal(unavailable.run_id,'prod','Zero\
+    \ burst slots must not stop baseline work');\n    const missingId=unavailable.asset_id;\n\
+    \    for(let attempt=1;attempt<=4;attempt++) {\n      assert.equal(unavailable.attempts,attempt);\n\
+    \      await isolated.query(\"UPDATE waffles.jobs SET last_error='thumbnail_http_404'\
+    \ WHERE run_id=$1 AND asset_id=$2\",[unavailable.run_id,missingId]);\n      assert.equal(await\
+    \ fail(isolated,unavailable),true);\n      assert.equal(await fail(isolated,unavailable),false,'Repeated\
+    \ failure acknowledgement is fenced');\n      const row=(await isolated.query('SELECT\
+    \ status,last_error FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId])).rows[0];\n\
+    \      assert.equal(row.status,attempt===4?'failed':'pending');assert.equal(row.last_error,'thumbnail_http_404');\n\
+    \      if(attempt<4){\n        await isolated.query('UPDATE waffles.jobs SET available_at=now()\
+    \ WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId]);\n        unavailable=await\
+    \ claim(isolated,'pve');assert.equal(unavailable.asset_id,missingId);\n      }\n\
+    \    }\n    assert.notEqual((await claim(isolated,'pve')).asset_id,missingId,'Exhausted\
+    \ thumbnail failure must not block the next asset');\n    console.log('404 failure\
+    \ retained after four attempts; next production asset continues; duplicate failures\
+    \ are fenced');\n    console.log('Isolated PostgreSQL pool separation, concurrent\
+    \ caps, fencing and baseline continuity passed');\n  } finally {\n    for(const\
+    \ name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF EXISTS ${names[name]}`);\n\
+    \    await db.end();\n  }\n}\nconsole.log('Result validation checks passed');\n"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -817,11 +842,18 @@ data:
     \ waffles.runs r WHERE j.run_id=r.id AND j.run_id=$1 AND j.asset_id=$2 AND j.claim=$3\n\
     \    AND j.status='running' AND j.lease_until>now() RETURNING j.asset_id`,\n \
     \   [job.run_id,job.asset_id,job.claim,result,result.seconds])).rowCount===1;\n\
-    }\n"
+    }\n\nexport async function fail(db,job) {\n  // Four total claims, then retain\
+    \ an asset-level failure and move on.\n  // A stale worker cannot consume another\
+    \ attempt or change a newer claim.\n  return (await db.query(`UPDATE waffles.jobs\
+    \ SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE 'pending' END,\n    available_at=now()+interval\
+    \ '30 seconds',\n    last_error=CASE WHEN last_error LIKE 'thumbnail_http_%' THEN\
+    \ last_error ELSE 'inference_failed' END,\n    lease_until=NULL\n    WHERE run_id=$1\
+    \ AND asset_id=$2 AND claim=$3 AND status='running' AND lease_until>now()`,\n\
+    \    [job.run_id,job.asset_id,job.claim])).rowCount===1;\n}\n"
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst}\
+    \ {claim,finish,fail,WORKERS,SLOT_LIMITS,BURST_LIMITS,BURST_CPU_LIMITS,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
@@ -830,9 +862,10 @@ data:
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
     async function api(path,method='GET',body) {\n  const r=await fetch(IMMICH+'/api'+path,{method,headers:{'x-api-key':process.env.IMMICH_API_KEY,'Content-Type':'application/json'},\n\
     \    body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});\n\
-    \  if(!r.ok)throw Error('Immich HTTP '+r.status);\n  return r;\n}\nasync function\
-    \ jsonBody(req) {\n  let value='';for await(const chunk of req){value+=chunk;if(value.length>25e6)throw\
-    \ Error('Too large');}\n  return JSON.parse(value||'{}');\n}\nconst respond=(res,value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};\n\
+    \  if(!r.ok)throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});\n\
+    \  return r;\n}\nasync function jsonBody(req) {\n  let value='';for await(const\
+    \ chunk of req){value+=chunk;if(value.length>25e6)throw Error('Too large');}\n\
+    \  return JSON.parse(value||'{}');\n}\nconst respond=(res,value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};\n\
     async function transaction(fn) {\n  const db=await pool.connect();try {await db.query('BEGIN');const\
     \ value=await fn(db);await db.query('COMMIT');return value;}\n  catch(e){await\
     \ db.query('ROLLBACK');throw e;}finally{db.release();}\n}\n\nasync function writeOne()\
@@ -873,6 +906,8 @@ data:
     \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const devices=(await pool.query(\"\
     SELECT run_id,worker,pool,coalesce(device,'unknown') device,count(*)::int jobs\
     \ FROM waffles.jobs WHERE status='complete' GROUP BY run_id,worker,pool,device\"\
+    )).rows;\n    const failures=(await pool.query(\"SELECT run_id,coalesce(last_error,'unknown')\
+    \ reason,count(*)::int jobs FROM waffles.jobs WHERE status='failed' GROUP BY run_id,last_error\"\
     )).rows;\n    const instances=(await pool.query(\"SELECT *,extract(epoch FROM\
     \ reported_at)::float8 reported FROM waffles.instances WHERE reported_at>now()-interval\
     \ '60 seconds'\")).rows;\n    const burst=(await pool.query(\"SELECT value FROM\
@@ -881,6 +916,7 @@ data:
     \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
     \    for(const row of devices)lines.push(metric('device_jobs',row.jobs,{run:row.run_id,worker:row.worker,pool:row.pool,device:row.device}));\n\
+    \    for(const row of failures)lines.push(metric('failed_jobs',row.jobs,{run:row.run_id,reason:row.reason}));\n\
     \    const mac=(await pool.query(\"SELECT value FROM waffles.settings WHERE key='mac-observation'\"\
     )).rows[0]?.value;\n    if(mac)for(const [name,value] of Object.entries(mac))lines.push(metric('mac_'+name,value));\n\
     \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
@@ -921,9 +957,13 @@ data:
     \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
     /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
     \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
-    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      const r=await api('/assets/'+id+'/thumbnail?size=preview');\n\
-    \      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
-    \ r.arrayBuffer()));return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
+    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      try {\n        const\
+    \ r=await api('/assets/'+id+'/thumbnail?size=preview');\n        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
+    \ r.arrayBuffer()));\n      } catch(error) {\n        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;\n\
+    \        await pool.query(\"UPDATE waffles.jobs SET last_error=$2 WHERE asset_id=$1\
+    \ AND status='running' AND lease_until>now()\",[id,'thumbnail_http_'+status]);\n\
+    \        respond(res,{error:'thumbnail unavailable'},status);\n      }\n     \
+    \ return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
     \ {\n      if(!WORKERS.includes(body.worker))throw Error('Invalid worker');\n\
     \      const instance=body.instance??body.worker;\n      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw\
     \ Error('Invalid instance');\n      const lane=body.pool??'base';if(!['base','burst'].includes(lane))throw\
@@ -947,11 +987,8 @@ data:
     \ {respond(res,await claim(pool,body.worker,body.pool??'base',body.device??(body.worker==='mac'?'mps':'cpu')));return;}\n\
     \    if(req.method==='POST'&&url.pathname==='/api/finish') {respond(res,{accepted:await\
     \ finish(pool,body,body.result)});return;}\n    if(req.method==='POST'&&url.pathname==='/api/fail')\
-    \ {\n      await pool.query(`UPDATE waffles.jobs SET status=CASE WHEN attempts>=4\
-    \ THEN 'failed' ELSE 'pending' END,\n        available_at=now()+interval '30 seconds',last_error='inference_failed',lease_until=NULL\n\
-    \        WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND\
-    \ lease_until>now()`,[body.run_id,body.asset_id,body.claim]);\n      respond(res,{ok:true});return;\n\
-    \    }\n    if(req.method==='POST'&&url.pathname==='/admin/config') {\n      if(!uuid.test(body.person_id)||body.names?.[0]!=='Waffles'||!body.scaler||!body.model)throw\
+    \ {\n      respond(res,{ok:await fail(pool,body)});return;\n    }\n    if(req.method==='POST'&&url.pathname==='/admin/config')\
+    \ {\n      if(!uuid.test(body.person_id)||body.names?.[0]!=='Waffles'||!body.scaler||!body.model)throw\
     \ Error('Invalid config');\n      if((await pool.query(\"SELECT 1 FROM waffles.runs\
     \ WHERE state='running' LIMIT 1\")).rowCount)throw Error('Pause and drain before\
     \ changing classifier');\n      await pool.query(\"INSERT INTO waffles.settings\
@@ -1351,7 +1388,7 @@ data:
     \    except Exception:return False\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning,validateBurst}\
+    \ from 'node:module';\nimport {claim,finish,fail,validateResult,validateTuning,validateBurst}\
     \ from './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
     assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',1),{slots:1});\n\
     for(const [worker,slots] of [['mac',4],['pve',2],['still-fawn',0],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
@@ -1397,12 +1434,25 @@ data:
     \    await isolated.query(\"UPDATE waffles.settings SET value='{\\\"pve\\\":{\\\
     \"slots\\\":0,\\\"mode\\\":\\\"benchmark\\\"}}' WHERE key='burst'\");\n    assert.equal(await\
     \ claim(isolated,'pve','burst'),null);\n    assert.equal(await finish(isolated,baseline,value),true);\n\
-    \    assert.equal((await claim(isolated,'pve')).run_id,'prod','Zero burst slots\
-    \ must not stop baseline work');\n    console.log('Isolated PostgreSQL pool separation,\
-    \ concurrent caps, fencing and baseline continuity passed');\n  } finally {\n\
-    \    for(const name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF\
-    \ EXISTS ${names[name]}`);\n    await db.end();\n  }\n}\nconsole.log('Result validation\
-    \ checks passed');\n"
+    \    let unavailable=await claim(isolated,'pve');assert.equal(unavailable.run_id,'prod','Zero\
+    \ burst slots must not stop baseline work');\n    const missingId=unavailable.asset_id;\n\
+    \    for(let attempt=1;attempt<=4;attempt++) {\n      assert.equal(unavailable.attempts,attempt);\n\
+    \      await isolated.query(\"UPDATE waffles.jobs SET last_error='thumbnail_http_404'\
+    \ WHERE run_id=$1 AND asset_id=$2\",[unavailable.run_id,missingId]);\n      assert.equal(await\
+    \ fail(isolated,unavailable),true);\n      assert.equal(await fail(isolated,unavailable),false,'Repeated\
+    \ failure acknowledgement is fenced');\n      const row=(await isolated.query('SELECT\
+    \ status,last_error FROM waffles.jobs WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId])).rows[0];\n\
+    \      assert.equal(row.status,attempt===4?'failed':'pending');assert.equal(row.last_error,'thumbnail_http_404');\n\
+    \      if(attempt<4){\n        await isolated.query('UPDATE waffles.jobs SET available_at=now()\
+    \ WHERE run_id=$1 AND asset_id=$2',[unavailable.run_id,missingId]);\n        unavailable=await\
+    \ claim(isolated,'pve');assert.equal(unavailable.asset_id,missingId);\n      }\n\
+    \    }\n    assert.notEqual((await claim(isolated,'pve')).asset_id,missingId,'Exhausted\
+    \ thumbnail failure must not block the next asset');\n    console.log('404 failure\
+    \ retained after four attempts; next production asset continues; duplicate failures\
+    \ are fenced');\n    console.log('Isolated PostgreSQL pool separation, concurrent\
+    \ caps, fencing and baseline continuity passed');\n  } finally {\n    for(const\
+    \ name of ['jobs','runs','settings'])await db.query(`DROP TABLE IF EXISTS ${names[name]}`);\n\
+    \    await db.end();\n  }\n}\nconsole.log('Result validation checks passed');\n"
 ---
 apiVersion: batch/v1
 kind: Job
@@ -1483,7 +1533,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 9c9b8ff19a9a5ca8a3f9782aa90c863e8c2d6984638e7c5c74eeec1e7f99a1d0
+        checksum/code: 3a9403b61f89b86a573ce23bd80a45438cb86bd2ce932079d925ce8e101b88d3
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1642,7 +1692,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 9c9b8ff19a9a5ca8a3f9782aa90c863e8c2d6984638e7c5c74eeec1e7f99a1d0
+        checksum/code: 3a9403b61f89b86a573ce23bd80a45438cb86bd2ce932079d925ce8e101b88d3
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1753,7 +1803,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 9c9b8ff19a9a5ca8a3f9782aa90c863e8c2d6984638e7c5c74eeec1e7f99a1d0
+        checksum/code: 3a9403b61f89b86a573ce23bd80a45438cb86bd2ce932079d925ce8e101b88d3
     spec:
       automountServiceAccountToken: false
       securityContext:

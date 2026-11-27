@@ -16,13 +16,13 @@ Failure retained: Continuous experiment interrupted (KeyboardInterrupt). Extra c
 
 ## Observed resource ranges
 
-Mac whole-system CPU: 6.4–22.3%. Apple GPU: 97–100%. These include other applications.
-Mac system swap at first/last sample: 19.53/19.51 GiB. This includes preexisting swap; it is not attributed entirely to Waffles.
-still-fawn maximum observed host temperature: 40.0°C.
+Mac whole-system CPU: 7.3–7.3%. Apple GPU: 99–99%. These include other applications.
+Mac system swap at first/last sample: 19.39/19.39 GiB. This includes preexisting swap; it is not attributed entirely to Waffles.
+still-fawn maximum observed host temperature: 35.0°C.
 
 ## Provenance
 
-Session `1127053201`; code revision `53325ca5341c18621d05c3b0320fe5eea76d35ec`.
+Session `1127053539`; code revision `49f776c8a2892520749a2856d8787b76da3eb9d3`.
 Sample SHA-256 `3beae47139538015c9968b5d39a38b5bfb3bdb1f9b740370406d6ca73ee57ca2`.
 Classifier SHA-256 `99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2`.
 

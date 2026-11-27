@@ -71,3 +71,14 @@ export async function finish(db,job,value) {
     AND j.status='running' AND j.lease_until>now() RETURNING j.asset_id`,
     [job.run_id,job.asset_id,job.claim,result,result.seconds])).rowCount===1;
 }
+
+export async function fail(db,job) {
+  // Four total claims, then retain an asset-level failure and move on.
+  // A stale worker cannot consume another attempt or change a newer claim.
+  return (await db.query(`UPDATE waffles.jobs SET status=CASE WHEN attempts>=4 THEN 'failed' ELSE 'pending' END,
+    available_at=now()+interval '30 seconds',
+    last_error=CASE WHEN last_error LIKE 'thumbnail_http_%' THEN last_error ELSE 'inference_failed' END,
+    lease_until=NULL
+    WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND status='running' AND lease_until>now()`,
+    [job.run_id,job.asset_id,job.claim])).rowCount===1;
+}
