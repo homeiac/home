@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: immich-pet-tagger-metrics
+  namespace: immich-pilot
+data:
+  metrics.py: "#!/usr/bin/env python3\n\"\"\"Read-only, aggregate Prometheus exporter\
+    \ for the pinned pet-tagger API.\n\nNo Immich credential, photo content, asset\
+    \ IDs or person IDs are exported.\nOnly GET requests are made. This runs separately\
+    \ so it cannot restart a scan.\n\"\"\"\nimport argparse\nfrom datetime import\
+    \ datetime, timezone\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\n\
+    import json\nimport logging\nimport math\nimport os\nimport sys\nimport threading\n\
+    import time\nfrom typing import Callable\nimport urllib.request\n\nPREFIX = 'immich_pet_tagger_'\n\
+    STATES = {'none': 0, 'running': 1, 'idle': 2, 'stopped': 3, 'error': 4}\nCOUNTS\
+    \ = ('fetched', 'added', 'unknown', 'out_of_range', 'already_tagged', 'failed',\
+    \ 'no_thumb')\nPATHS = ('/api/scan/result', '/api/poll-status', '/api/pets', '/api/negatives')\n\
+    \n\ndef number(value: object) -> float:\n    \"\"\"Reject malformed measurements\
+    \ rather than reporting them as zero.\"\"\"\n    if isinstance(value, bool) or\
+    \ not isinstance(value, (int, float)):\n        raise ValueError('Non-numeric\
+    \ measurement')\n    result = float(value)\n    if not math.isfinite(result) or\
+    \ result < 0:\n        raise ValueError('Invalid measurement')\n    return result\n\
+    \n\ndef timestamp(value: str) -> float:\n    \"\"\"Convert upstream UTC timestamps\
+    \ or photo dates to Unix seconds.\"\"\"\n    parsed = datetime.fromisoformat(value.replace('Z',\
+    \ '+00:00'))\n    if parsed.tzinfo is None:\n        parsed = parsed.replace(tzinfo=timezone.utc)\n\
+    \    return parsed.timestamp()\n\n\ndef sample(name: str, value: float, **labels:\
+    \ str) -> str:\n    \"\"\"Render only fixed metric names and controlled labels.\"\
+    \"\"\n    suffix = '{' + ','.join(f'{k}={json.dumps(v)}' for k, v in labels.items())\
+    \ + '}' if labels else ''\n    return f'{PREFIX}{name}{suffix} {value:.17g}'\n\
+    \n\ndef measurements(manual: dict, poll: dict, pets: dict, negatives: dict) ->\
+    \ list[str]:\n    \"\"\"Normalize upstream snapshots; mixed crop/asset outcomes\
+    \ remain separate.\"\"\"\n    lines = []\n    for scope, result in [('manual',\
+    \ manual), ('latest_cycle', poll)]:\n        status = result.get('status', 'none')\n\
+    \        lines.append(sample('scan_state', STATES.get(status, 5), scope=scope))\n\
+    \        for key in ('started_at', 'ran_at'):\n            if result.get(key):\n\
+    \                lines.append(sample('scan_' + key + '_timestamp_seconds', timestamp(result[key]),\
+    \ scope=scope))\n        if result.get('current_date'):\n            lines.append(sample('photo_date_timestamp_seconds',\
+    \ timestamp(result['current_date']), scope=scope))\n        # Missing fields during\
+    \ warmup or errors must not look like zero outcomes.\n        counts = result.get('counts',\
+    \ {})\n        for outcome in COUNTS:\n            if outcome in counts:\n   \
+    \             lines.append(sample('scan_items', number(counts[outcome]), scope=scope,\
+    \ outcome=outcome))\n        # v1.10.0 /scan/result replaces live low_confidence\
+    \ with an empty review\n        # list until completion. It is neither a live\
+    \ crop count nor a zero backlog.\n        if scope == 'manual' and status == 'idle'\
+    \ and 'low_confidence' in counts:\n            lines.append(sample('review_assets',\
+    \ number(counts['low_confidence'])))\n    waffles = [pet for pet in pets['pets']\
+    \ if pet['name'] == 'Waffles']\n    if len(waffles) == 1:\n        lines.append(sample('references',\
+    \ number(waffles[0]['ref_count'])))\n    lines.append(sample('negatives', number(negatives['count'])))\n\
+    \    return lines\n\n\nHELP = {\n    'source_up': 'Whether all read-only API reads\
+    \ and schema validation succeeded.',\n    'last_success_timestamp_seconds': 'Last\
+    \ successful API collection time.',\n    'collection_timestamp_seconds': 'Most\
+    \ recent collection attempt time.',\n    'scan_state': '0 no manual result, 1\
+    \ running, 2 idle/completed, 3 stopped, 4 error, 5 unknown.',\n    'scan_started_at_timestamp_seconds':\
+    \ 'Upstream scan start time when available.',\n    'scan_ran_at_timestamp_seconds':\
+    \ 'Upstream final scan report time when available.',\n    'photo_date_timestamp_seconds':\
+    \ 'Photo date currently visited; not a completion watermark.',\n    'scan_items':\
+    \ 'Per-scan outcome gauges mixing crops and assets; never sum as processed photos.',\n\
+    \    'review_assets': 'Filtered review assets after a completed manual scan only.',\n\
+    \    'references': 'Enrolled Waffles reference count.',\n    'negatives': 'Enrolled\
+    \ negative example count.',\n}\n\n\nclass Collector:\n    \"\"\"Atomically publish\
+    \ a snapshot and remove measurements on collection failure.\"\"\"\n\n    def __init__(self,\
+    \ read: Callable[[str], dict], clock: Callable[[], float] = time.time) -> None:\n\
+    \        self.read = read\n        self.clock = clock\n        self.last_success\
+    \ = 0.0\n        self.output = ''\n\n    def collect(self) -> None:\n        \"\
+    \"\"Fetch small status endpoints, discarding private fields immediately.\"\"\"\
+    \n        now = self.clock()\n        try:\n            lines = measurements(*(self.read(path)\
+    \ for path in PATHS))\n            self.last_success = now\n            up = 1\n\
+    \        except Exception:\n            # Exception text can include remote content:\
+    \ never log it.\n            logging.warning('Pet-tagger status collection failed')\n\
+    \            lines, up = [], 0\n        lines += [sample('source_up', up),\n \
+    \                 sample('last_success_timestamp_seconds', self.last_success),\n\
+    \                  sample('collection_timestamp_seconds', now)]\n        headers\
+    \ = [f'# HELP {PREFIX}{name} {help_text}\\n# TYPE {PREFIX}{name} gauge'\n    \
+    \               for name, help_text in HELP.items()]\n        self.output = '\\\
+    n'.join(headers + lines) + '\\n'\n\n\ndef main() -> None:\n    \"\"\"Serve cached\
+    \ metrics while an independent thread collects every 15 seconds.\"\"\"\n    parser\
+    \ = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument('--once',\
+    \ action='store_true', help='Read once and emit metrics for validation')\n   \
+    \ args = parser.parse_args()\n    base = os.environ.get('PET_TAGGER_URL', 'http://immich-pet-tagger.immich-pilot.svc.cluster.local:8000')\n\
+    \n    def read(path: str) -> dict:\n        with urllib.request.urlopen(base +\
+    \ path, timeout=5) as response:\n            return json.load(response)\n\n  \
+    \  collector = Collector(read)\n    if args.once:\n        collector.collect()\n\
+    \        sys.stdout.write(collector.output)\n        return\n\n    def loop()\
+    \ -> None:\n        while True:\n            collector.collect()\n           \
+    \ time.sleep(15)\n\n    class Handler(BaseHTTPRequestHandler):\n        def do_GET(self)\
+    \ -> None:\n            \"\"\"Expose process health independently of upstream\
+    \ reachability.\"\"\"\n            if self.path not in ('/metrics', '/healthz'):\n\
+    \                self.send_error(404)\n                return\n            body\
+    \ = collector.output if self.path == '/metrics' else 'ok\\n'\n            self.send_response(200)\n\
+    \            self.send_header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')\n\
+    \            self.end_headers()\n            self.wfile.write(body.encode())\n\
+    \n        def log_message(self, format: str, *args: object) -> None:\n       \
+    \     \"\"\"Keep routine scrape logs quiet.\"\"\"\n\n    threading.Thread(target=loop,\
+    \ daemon=True).start()\n    ThreadingHTTPServer(('0.0.0.0', 9198), Handler).serve_forever()\n\
+    \n\nif __name__ == '__main__':\n    main()\n"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-pet-tagger-metrics
+  namespace: immich-pilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &id001
+      app: immich-pet-tagger-metrics
+  template:
+    metadata:
+      labels: *id001
+      annotations:
+        checksum/config: b7b9a0a7048e7db7a2e6df61bc1c7d4e517221ec6296c1251e914d80bfcbe17e
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: metrics
+        image: ghcr.io/tedornitier/immich-pet-tagger:v1.10.0-cpu@sha256:535b4664511db709b1069a7eac789339af05264585511feeea24f68430edf7e6
+        command:
+        - python
+        - -B
+        - /observer/metrics.py
+        workingDir: /tmp
+        ports:
+        - name: metrics
+          containerPort: 9198
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 96Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: code
+          mountPath: /observer
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 10
+      volumes:
+      - name: code
+        configMap:
+          name: immich-pet-tagger-metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: immich-pet-tagger-metrics
+  namespace: immich-pilot
+  labels: &id001
+    app: immich-pet-tagger-metrics
+spec:
+  selector: *id001
+  ports:
+  - name: metrics
+    port: 9198
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: immich-pet-tagger-metrics
+  namespace: immich-pilot
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: immich-pet-tagger-metrics
+  endpoints:
+  - port: metrics
+    interval: 15s

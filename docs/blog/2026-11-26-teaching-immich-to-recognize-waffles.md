@@ -126,6 +126,23 @@ Live checks then verify the pod and private HTTPS endpoint. This makes the
 deployment reproducible, while keeping recognition quality a separate validation
 step.
 
+### Give the scan its own dashboard
+
+A dedicated [Waffles Grafana dashboard](https://grafana.app.home.panderosystems.com/d/immich-waffles/waffles-immich-pet-tagger)
+uses the Knowledge Index dashboard's overview layout: scan state, fetched assets,
+new assignments, failures, elapsed time, and report freshness first, followed by
+the recognition flow and resource charts. A separate read-only metrics Deployment
+collects aggregate API status. It needs neither the Immich credential nor access
+to the training volume, and deploying it does not restart the active backfill.
+Its ServiceMonitor and dashboard ConfigMap follow the same Flux workflow.
+
+The dashboard makes the upstream measurement boundaries explicit. Fetched assets
+are not completed assets, and crop outcomes cannot be summed into a photo count.
+There is no completion percentage or ETA without a distinct processed-asset
+counter. The pinned API also substitutes an empty review list for live
+low-confidence counts during a manual scan, so that panel waits for completion.
+Freshness guards prevent old successful samples from looking like current health.
+
 ## Teaching it what Waffles is—and what Waffles is not
 
 Search results are candidates, not training labels. Numbered contact sheets let

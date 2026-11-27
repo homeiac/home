@@ -11,12 +11,12 @@ directory = root/'gitops/clusters/homelab/apps/photo-enrichment/immich-pet-tagge
 subprocess.run([sys.executable, str(Path(__file__).with_name('test-startup.py'))], check=True)
 rendered = subprocess.check_output(['kubectl', 'kustomize', str(directory)], text=True)
 documents = list(yaml.safe_load_all(rendered))
-deployment = next(d for d in documents if d['kind'] == 'Deployment')
+deployment = next(d for d in documents if d['kind'] == 'Deployment' and d['metadata']['name'] == 'immich-pet-tagger')
 container = deployment['spec']['template']['spec']['containers'][0]
 assert '@sha256:' in container['image'] and ':latest' not in container['image']
 assert deployment['spec']['template']['spec']['automountServiceAccountToken'] is False
 assert container['securityContext']['readOnlyRootFilesystem'] is True
-configmap = next(d for d in documents if d['kind'] == 'ConfigMap')
+configmap = next(d for d in documents if d['kind'] == 'ConfigMap' and 'startup.py' in d.get('data', {}))
 assert configmap['data']['startup.py'] == Path(__file__).with_name('startup.py').read_text()
 secret_file = directory/'credentials.sops.yaml'
 encrypted = yaml.safe_load(secret_file.read_text())

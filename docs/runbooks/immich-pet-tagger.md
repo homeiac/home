@@ -81,6 +81,52 @@ its Kustomize resource and reconcile; the retained PVC preserves its state.
 Removing the workload does not remove tags already written to Immich.
 Avoid a full database restore as routine undo: it could overwrite newer changes.
 
+## Dedicated Grafana dashboard
+
+Open [Waffles · Immich Pet Tagger](https://grafana.app.home.panderosystems.com/d/immich-waffles/waffles-immich-pet-tagger).
+The overview follows the Knowledge Index dashboard's status-first layout. It
+shows the manual scan state, fetched assets, new assignments, failures, elapsed
+time, and telemetry freshness. Lower panels cover the recognition flow, outcomes,
+CPU and memory limits, throttling, restarts, storage, and training example counts.
+
+`immich-pet-tagger-metrics` is a separate, read-only Deployment. It polls four
+status endpoints every 15 seconds and exposes aggregate gauges to a ServiceMonitor.
+It has no Immich API key, Kubernetes token, or access to the tagger's PVC. Adding
+or updating this collector does not restart the tagger or its active backfill.
+Its Python runtime uses the same pinned image already verified for the tagger;
+it imports only the standard library, not the inference stack.
+
+The manual scan and latest-cycle panels intentionally stay separate: upstream
+poll status includes both manual and automatic scans, so adding their counts
+would double-count work. Per-scan gauges reset between runs. The tag-write pace
+uses a gauge slope with a scan-start change guard, not a counter rate.
+
+Do not sum outcomes to infer processed photos: they mix crops and assets. The
+API does not expose a unique completed-asset count, so this dashboard does not
+calculate completion percentage or ETA. The current photo date is the date of
+the latest started asset, not a completed-through watermark. Low-confidence
+review assets are shown only after a completed manual scan because upstream
+v1.10.0 replaces the live count with an unpopulated review list while running.
+Missing measurements stay unavailable, and live scan metrics are hidden when
+collection fails or the last successful collection is over 60 seconds old.
+Volume charts show the backing filesystem reported by kubelet: this local-path
+driver reports filesystem-wide usage/capacity, not the tagger directory's size
+or an enforced 5 GiB quota.
+
+To change or validate the dashboard:
+
+```bash
+python3 scripts/immich-pet-tagger/generate-dashboard.py
+python3 scripts/immich-pet-tagger/test-metrics.py
+python3 scripts/immich-pet-tagger/validate.py
+python3 scripts/immich-pet-tagger/check-dashboard.py --queries-only
+# After committing, pushing and reconciling through Flux:
+python3 scripts/immich-pet-tagger/check-dashboard.py
+```
+
+The final check compares generated manifests, the live ConfigMap, Grafana's
+actually served panels, and all PromQL expressions against live Prometheus.
+
 ## Verification record
 
 Deployment and reference-validation results are recorded in the accompanying

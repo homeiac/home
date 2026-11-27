@@ -4,3 +4,5 @@ resources:
 - resources.yaml
 - startup-configmap.yaml
 - credentials.sops.yaml
+- metrics.yaml
+- dashboard.yaml

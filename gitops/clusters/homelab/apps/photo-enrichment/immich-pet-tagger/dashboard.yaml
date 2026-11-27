@@ -1,0 +1,1672 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-immich-waffles
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Homelab
+data:
+  immich-waffles.json: |-
+    {
+      "uid": "immich-waffles",
+      "title": "Waffles \u00b7 Immich Pet Tagger",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": false,
+      "tags": [
+        "immich",
+        "waffles",
+        "pets",
+        "gitops"
+      ],
+      "timezone": "utc",
+      "refresh": "30s",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "links": [
+        {
+          "title": "Pet Tagger \u00b7 scan and review",
+          "url": "https://pets.app.home.panderosystems.com",
+          "type": "link",
+          "targetBlank": true
+        },
+        {
+          "title": "Immich",
+          "url": "https://immich.app.home.panderosystems.com",
+          "type": "link",
+          "targetBlank": true
+        },
+        {
+          "title": "Knowledge Index",
+          "url": "/d/knowledge-index/knowledge-index",
+          "type": "link"
+        }
+      ],
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Historical scan",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "description": "Latest manual scan result. Independent of the automatic hourly cycle. Missing or stale telemetry is never reported as complete.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_state{scope=\"manual\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "No manual scan",
+                      "color": "gray"
+                    },
+                    "1": {
+                      "text": "Running",
+                      "color": "blue"
+                    },
+                    "2": {
+                      "text": "Complete",
+                      "color": "green"
+                    },
+                    "3": {
+                      "text": "Stopped",
+                      "color": "orange"
+                    },
+                    "4": {
+                      "text": "Error",
+                      "color": "red"
+                    },
+                    "5": {
+                      "text": "Unknown",
+                      "color": "orange"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Assets fetched",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 4,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "description": "Assets enumerated for the current manual date window, not assets processed or remaining.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"fetched\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Waffles tags added",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "description": "New face assignments in this manual scan. Waffles is the only enrolled pet. Excludes the initial reference tags and earlier scans.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Failures reported",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "description": "Upstream failed outcome count; can include inference, thumbnail processing or face-write failures. Not an error percentage.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "Scan elapsed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "description": "Wall time since the running manual scan started, including model preparation. Not an ETA.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "((time() - max(immich_pet_tagger_scan_started_at_timestamp_seconds{scope=\"manual\"})) and on() (max(immich_pet_tagger_scan_state{scope=\"manual\"}) == 1)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Last successful report",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "description": "Age of the last successful status collection. Observer polls every 15 seconds. Measures telemetry freshness, not inference progress.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "time() - max(immich_pet_tagger_last_success_timestamp_seconds > 0)",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 60
+                  },
+                  {
+                    "color": "red",
+                    "value": 180
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Current photo date (UTC)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Taken date of the most recently started photo. Concurrent workers can move this backward; it is not a completed-through watermark.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_photo_date_timestamp_seconds{scope=\"manual\"}) * 1000) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dateTimeAsIso",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Already tagged matches",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 4,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Matching crops skipped because the person was already assigned, including duplicate matches within one photo. Not distinct photos.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"already_tagged\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 9,
+          "type": "stat",
+          "title": "Missing thumbnails",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 4,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Assets where the upstream thumbnail fetch returned no image.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"no_thumb\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 10,
+          "type": "stat",
+          "title": "Review assets after completion",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 4,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Available only after the manual scan completes. v1.10.0 overwrites live low-confidence counts with an unpopulated review list during a scan; do not interpret that as zero.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_review_assets)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Available after scan",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 11,
+          "type": "text",
+          "title": "Reading this scan",
+          "gridPos": {
+            "x": 0,
+            "y": 8,
+            "w": 24,
+            "h": 3
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**Waffles only \u00b7 CPU inference \u00b7 private homelab**  \nImmich photos \u2192 animal detection \u2192 embedding + Waffles classifier \u2192 Immich People and `Pets/Review`. **Fetched is the scan scope, not completed work.** Outcomes mix crops and assets; they cannot be summed into a completion percentage or ETA. A low match rate is expected in a whole-library scan. Model accuracy requires reviewed photos, not dashboard counts."
+          }
+        },
+        {
+          "id": 12,
+          "type": "nodeGraph",
+          "title": "Waffles recognition pipeline",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 11,
+            "w": 24,
+            "h": 9
+          },
+          "description": "Logical flow, not measured transfer rates or phase timings. Detection/classifier value is scan state: 1 running, 2 completed. Other nodes show their named counts; crops and assets are different units.",
+          "targets": [
+            {
+              "refId": "nodes",
+              "expr": "label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"fetched\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"photos\", \"\", \"\")), \"title\", \"Photos fetched\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_references)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"references\", \"\", \"\")), \"title\", \"Waffles references\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_negatives)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"negatives\", \"\", \"\")), \"title\", \"Negative examples\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_state{scope=\"manual\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"scan\", \"\", \"\")), \"title\", \"Detection + classifier\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"tags\", \"\", \"\")), \"title\", \"New face assignments\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"unknown\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"unknown\", \"\", \"\")), \"title\", \"Unknown crops\", \"\", \"\") or label_replace((label_replace(((max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))), \"id\", \"failed\", \"\", \"\")), \"title\", \"Failed outcomes\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "edges",
+              "expr": "label_replace((label_replace((label_replace((vector(1)), \"id\", \"photos_scan\", \"\", \"\")), \"source\", \"photos\", \"\", \"\")), \"target\", \"scan\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"references_scan\", \"\", \"\")), \"source\", \"references\", \"\", \"\")), \"target\", \"scan\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"negatives_scan\", \"\", \"\")), \"source\", \"negatives\", \"\", \"\")), \"target\", \"scan\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"scan_tags\", \"\", \"\")), \"source\", \"scan\", \"\", \"\")), \"target\", \"tags\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"scan_unknown\", \"\", \"\")), \"source\", \"scan\", \"\", \"\")), \"target\", \"unknown\", \"\", \"\") or label_replace((label_replace((label_replace((vector(1)), \"id\", \"scan_failed\", \"\", \"\")), \"source\", \"scan\", \"\", \"\")), \"target\", \"failed\", \"\", \"\")",
+              "format": "table",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "options": {
+            "nodes": {
+              "mainStatUnit": "short"
+            }
+          },
+          "transformations": [
+            {
+              "id": "calculateField",
+              "filter": {
+                "id": "byRefId",
+                "options": "nodes"
+              },
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "sum",
+                  "include": [
+                    "Value",
+                    "Value #nodes"
+                  ]
+                },
+                "alias": "mainstat"
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "nodes"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #nodes": true
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "filter": {
+                "id": "byRefId",
+                "options": "edges"
+              },
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "Value #edges": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "type": "timeseries",
+          "title": "New Waffles assignments / minute",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 20,
+            "w": 12,
+            "h": 7
+          },
+          "description": "Five-minute slope of the per-scan added gauge. Suppressed across observed scan-start changes, outside running scans and when telemetry is stale. Measures tag writes, not photo processing speed.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "((max(clamp_min(deriv(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"}[5m]), 0) and on(job,instance,scope) (changes(immich_pet_tagger_scan_started_at_timestamp_seconds{scope=\"manual\"}[5m]) == 0)) * 60) and on() (max(immich_pet_tagger_scan_state{scope=\"manual\"}) == 1)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "Assignments/min",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 2,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 14,
+          "type": "timeseries",
+          "title": "Manual scan outcomes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 20,
+            "w": 12,
+            "h": 7
+          },
+          "description": "Independent per-scan gauges; reset on new scans. Not a stacked or mutually exclusive count of photos.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "Added assignments",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"already_tagged\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "Already tagged crops",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "C",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"unknown\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "Unknown crops",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "D",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"failed\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "Failed outcomes",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "E",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"manual\",outcome=\"no_thumb\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "Missing thumbnail assets",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Tagger CPU \u00b7 usage and limit",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 27,
+            "w": 12,
+            "h": 7
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"}[5m]))",
+              "legendFormat": "CPU used",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "sum(kube_pod_container_resource_limits{namespace=\"immich-pilot\",container=\"tagger\",resource=\"cpu\"})",
+              "legendFormat": "CPU limit",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "cores",
+              "noValue": "Awaiting telemetry",
+              "decimals": 2,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 16,
+          "type": "timeseries",
+          "title": "Tagger memory \u00b7 working set and limit",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 27,
+            "w": 12,
+            "h": 7
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"})",
+              "legendFormat": "Working set",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "sum(kube_pod_container_resource_limits{namespace=\"immich-pilot\",container=\"tagger\",resource=\"memory\"})",
+              "legendFormat": "Memory limit",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 17,
+          "type": "timeseries",
+          "title": "CPU throttled scheduling periods",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 34,
+            "w": 8,
+            "h": 7
+          },
+          "description": "Fraction of scheduling periods throttled, not CPU utilization. Correlate with usage and recognition progress.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "100 * sum(rate(container_cpu_cfs_throttled_periods_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"}[5m])) / sum(rate(container_cpu_cfs_periods_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"}[5m]))",
+              "legendFormat": "Throttled periods",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 18,
+          "type": "timeseries",
+          "title": "Tagger restarts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 34,
+            "w": 8,
+            "h": 7
+          },
+          "description": "A restart interrupts the in-memory manual backfill. A no-manual-scan state after restart does not prove completion.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(kube_pod_container_status_restarts_total{namespace=\"immich-pilot\",container=\"tagger\",pod=~\"immich-pet-tagger-[a-f0-9]+-.*\"})",
+              "legendFormat": "Restarts",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 19,
+          "type": "timeseries",
+          "title": "Storage \u00b7 backing filesystem",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 34,
+            "w": 8,
+            "h": 7
+          },
+          "description": "Kubelet reports the entire backing filesystem for this local-path PVC. These are not tagger-directory bytes or an enforced 5 GiB quota. Absence means unreported, not empty.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(kubelet_volume_stats_used_bytes{namespace=\"immich-pilot\",persistentvolumeclaim=\"immich-pet-tagger\"})",
+              "legendFormat": "Used",
+              "instant": false,
+              "range": true
+            },
+            {
+              "refId": "B",
+              "expr": "max(kubelet_volume_stats_capacity_bytes{namespace=\"immich-pilot\",persistentvolumeclaim=\"immich-pet-tagger\"})",
+              "legendFormat": "Capacity",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 20,
+          "type": "stat",
+          "title": "Status collector",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 41,
+            "w": 6,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(immich_pet_tagger_source_up) and on() (time() - max(immich_pet_tagger_collection_timestamp_seconds) < 60)",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Unavailable",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "Healthy",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 21,
+          "type": "stat",
+          "title": "Tagger available replicas",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 41,
+            "w": 6,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(kube_deployment_status_replicas_available{namespace=\"immich-pilot\",deployment=\"immich-pet-tagger\"})",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 22,
+          "type": "stat",
+          "title": "Waffles references",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 41,
+            "w": 6,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_references)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 23,
+          "type": "stat",
+          "title": "Negative examples",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 41,
+            "w": 6,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_negatives)) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 24,
+          "type": "stat",
+          "title": "Latest cycle state",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 45,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Shared upstream poll status includes manual and automatic scans. Running does not mean two scans are executing; they share a lock.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_state{scope=\"latest_cycle\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "No cycle",
+                      "color": "gray"
+                    },
+                    "1": {
+                      "text": "Running",
+                      "color": "blue"
+                    },
+                    "2": {
+                      "text": "Idle",
+                      "color": "green"
+                    },
+                    "3": {
+                      "text": "Stopped",
+                      "color": "orange"
+                    },
+                    "4": {
+                      "text": "Error",
+                      "color": "red"
+                    },
+                    "5": {
+                      "text": "Unknown",
+                      "color": "orange"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 25,
+          "type": "stat",
+          "title": "Latest cycle assignments",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 45,
+            "w": 6,
+            "h": 4
+          },
+          "description": "Final count from the latest completed cycle. Not a lifetime total; can overlap the manual scan. Upstream omits it while running.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_items{scope=\"latest_cycle\",outcome=\"added\"})) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 26,
+          "type": "stat",
+          "title": "Latest cycle final report",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 45,
+            "w": 6,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(immich_pet_tagger_scan_ran_at_timestamp_seconds{scope=\"latest_cycle\"}) * 1000) and on() ((max(immich_pet_tagger_source_up) == 1) and on() (time() - max(immich_pet_tagger_last_success_timestamp_seconds) < 60))",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "dateTimeAsIso",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "palette-classic"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        },
+        {
+          "id": 27,
+          "type": "stat",
+          "title": "Prometheus scrape",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 45,
+            "w": 6,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(up{namespace=\"immich-pilot\",service=\"immich-pet-tagger-metrics\"})",
+              "legendFormat": "",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "Awaiting telemetry",
+              "decimals": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "Unavailable",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "Healthy",
+                      "color": "green"
+                    }
+                  }
+                }
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "colorMode": "value",
+            "textMode": "value"
+          }
+        }
+      ]
+    }
