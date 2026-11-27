@@ -1,22 +1,36 @@
 # Create GitHub Pull Requests from Kubernetes Pods
 
-A pod needs two things to open a PR: a GitHub identity allowed to write to the repository, and network access permitted by the enterprise. Signing in successfully on your laptop proves only the laptop works.
+Sign in to GitHub on your laptop, then run a script that passes that login's token to a Kubernetes pod. **Every command below runs in your laptop terminal.**
 
-I tested separate Rancher Desktop pods with a personal account and an enterprise-managed account. Both read their repositories, pushed disposable branches, and created draft PRs with the correct author. The tests then closed the PRs and deleted the branches. No enterprise policy changes were needed.
+You need macOS, Rancher Desktop using the Moby runtime, and `gh`, `git`, `docker`, `kubectl`, and Python 3 installed.
 
-**Authenticate where your organization permits it.** If pod-initiated login is allowed, run `gh auth login --hostname github.com --git-protocol https --web` inside the pod and complete its device-code flow in your browser. Otherwise, sign in on your approved workstation. [GitHub CLI supports browser login and environment-token authentication](https://cli.github.com/manual/gh_auth_login).
-
-**Transfer the selected credential only when policy permits it.** Copying `~/.config/gh/hosts.yml` from a Mac can miss the actual token: it may live in the macOS keychain. Use `gh auth token --hostname github.com --user ACCOUNT` and stream its output directly to the pod. Never run that command bare in a recorded terminal. [The `--user` option selects the intended account](https://cli.github.com/manual/gh_auth_token).
-
-The [companion scripts](https://github.com/homeiac/home/tree/master/scripts/github-pods) handle that transfer through `kubectl exec` standard input. They set `GH_TOKEN` for one command, verify its identity, and leave no token in YAML, images, Kubernetes Secrets, or credential files.
+**1. On your laptop: sign in to GitHub.**
 
 ```bash
+gh auth login --hostname github.com --git-protocol https --web
+gh auth status
+```
+
+Complete the browser login with the account you want the pod to use. For work, choose your enterprise account and complete SSO. If that account is already signed in, skip login. Note its GitHub username from `gh auth status`.
+
+**2. On your laptop: get the scripts, launch the pods, and transfer authentication.**
+
+```bash
+git clone --depth 1 https://github.com/homeiac/home.git home-gh-pods
+cd home-gh-pods
 bash scripts/github-pods/prepare.sh
+
 python3 scripts/github-pods/pod-test.py check \
   --account YOUR_LOGIN --pod enterprise --repo ORG/REPO
 ```
 
-For a pushed feature branch, open the PR from the pod:
+Replace `YOUR_LOGIN` with that username and `ORG/REPO` with your target repository. For example, the personal-account test uses `--account gshiva --pod personal --repo homeiac/home`.
+
+`prepare.sh` creates two local test pods named `personal` and `enterprise`. `check` reads the selected account's token from your laptop, streams it into the chosen pod, and verifies identity, repository access, and Git HTTPS access. You do not copy a file or paste a token.
+
+**3. On your laptop: tell the pod to create the PR.**
+
+Use an existing, pushed feature branch; replace the uppercase placeholders and change `main` if your repository uses another base branch.
 
 ```bash
 python3 scripts/github-pods/pod-test.py exec \
@@ -25,10 +39,12 @@ python3 scripts/github-pods/pod-test.py exec \
   --draft --title 'Describe the change' --body 'Describe validation.'
 ```
 
-**Respect the enterprise boundary.** Token transfer does not make a pod compliant or bypass SSO, app approval, IP allowlists, or conditional access. If the laptop succeeds and the pod gets a policy-related 403, use an organization-approved runner or approved network path. Ask the administrator to resolve the restriction; copying another token is not the fix. [GitHub documents enterprise IP restrictions](https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/hardening-security-for-your-enterprise/restricting-network-traffic-to-your-enterprise-with-an-ip-allow-list).
+The script runs `gh pr create` **inside the pod**. Authentication is passed again for each invocation; it is not saved as a permanent pod login. Keep using this wrapper for authenticated commands. [GitHub CLI supports this `GH_TOKEN` authentication method](https://cli.github.com/manual/gh_auth_login).
 
-These pods are temporary. Remove them when finished:
+**4. On your laptop: remove the test pods when finished.**
 
 ```bash
 python3 scripts/github-pods/pod-test.py cleanup
 ```
+
+Both personal and enterprise-managed accounts passed this flow on Rancher Desktop, including draft-PR creation and cleanup. Your organization must permit credential use in the pod and its network access. A policy-related 403 needs an approved runner or administrator resolution; token transfer does not override enterprise controls.
