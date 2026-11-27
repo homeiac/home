@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: immich-wifi-network
+    namespace: monitoring
+type: Opaque
+stringData:
+    network.env: ENC[AES256_GCM,data:SYY5VNtzL1Bf/VFIj+R/5+QMnghq5zed1kzoQof7VCHn/c+v/t03WIPDZglGEe1RTsJDql39E4hIWhdDxUGSA54yB12ltibpIBHlGpyKGpzzxLfnAjHUoM2X3NIHBr8MnmNjcopJ00pZXpw0yakgbIAzeqJiM5sQ+nKKmCWn/tqLHKuF1e53Rh7e11CKx1ZPUMzpy+OD26g01YmVZNbuGTqC2KlTsBPPwW9Y9pM2TmUMYx3lJaFxVtLibYE1dcjvJCgp0i2j0VCJ/za/9NLJpq9+92j9p75Bdqd8qiOQVhOxMOBNA0IGJYQCKabHqUeoBmU4D9GKXL3JM8+XBQmp3VrBomAeCyGcdMxcGqX4dRIIa3117y0RXFRgrgi2pV5RPNwbPhmBJ6bpPS/28IevS2P99w==,iv:Rg93VseMwarl83TyK+D6BNifJfbCf81bKF3M3N88IDc=,tag:0XoYsoqvwklu1jZP3FchWA==,type:str]
+    known_hosts: ENC[AES256_GCM,data:HKdqxp8Qcjkg3arATyXQeqsMrGZwgFcKcr2BhOmrjWTzQiI3DdvEkq+OGoMOSN+K6xKoFWMeYaX/3ltnreinUlkKbWr1ILqLg+xqsATKXPXkycNcmYpZKx5Xy/ZVmgJEGTxBxbkmeZQ=,iv:URk1dDdF5xwWDDew6mCMvxbvpl2Wi6vSB7CaLGdk32o=,tag:U1o8Ir6RI23KUHmqUPlf6A==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAzSE9kVG1BZzRTQi92RzRa
+            NVhHYTVkaFE3Y2hDaERsZkpNMGFQME5QZVhzCmJBeEJJdnI2SmtYUnZZb0hXbVlQ
+            elREczZ6T0p3eE43NXF0MW9OY3FydUkKLS0tIHJvWXdlN1hvRFU1cWRFUlE1bVFO
+            QitmZk5RVzBVWTFjNklXbmVFZCtSUkkKsgoHZ6w/JJaQubqgAlDLdc1J2t7o7Tcn
+            ymCx8Kff7TYTmoRrdyv3liAWGoqfsZoKjJXtXZHosZBDjG3887lU+g==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-11-27T01:49:12Z"
+    mac: ENC[AES256_GCM,data:VybBAzS88PX+4vKCy9erQKSUiePShzowPeXToPp4KAMsxKivLzByqG2TIUFrUm3bjUZ+D+p6BiBOUp+ZGDpIuNuxSeeg9FiN2JOVDZoMBuDHLCEAgLNYFV3YT0dQ+lxUhc5zT/PXT1SV65EWer9jQKCD1HqPY+1rnmyqpuPh4DE=,iv:04uXt60eN4m0lJAbRDDfZI0gk3yAKYbUUNPR9cZJ5i4=,tag:4f2Of1KseBZk+psugTZTyg==,type:str]
+    version: 3.13.1

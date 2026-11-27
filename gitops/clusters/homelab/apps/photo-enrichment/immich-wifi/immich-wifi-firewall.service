@@ -1,0 +1,14 @@
+[Unit]
+Description=Local Immich Wi-Fi listener access rules (GitOps)
+After=network-online.target pve-firewall.service
+Wants=network-online.target
+Before=immich-wifi-proxy.service immich-wifi-dns.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/immich-wifi/firewall.sh apply
+ExecStop=/bin/bash /opt/immich-wifi/firewall.sh remove
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

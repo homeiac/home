@@ -1,0 +1,21 @@
+[Unit]
+Description=Immich split DNS for Google Wi-Fi (GitOps)
+After=network-online.target immich-wifi-firewall.service
+Requires=immich-wifi-firewall.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/dnsmasq --test --conf-file=/opt/immich-wifi/dnsmasq.conf
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/opt/immich-wifi/dnsmasq.conf
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

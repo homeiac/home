@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - job.yaml
+  - network.sops.yaml
+configMapGenerator:
+  - name: immich-wifi-code
+    files:
+      - deploy.sh
+      - host.sh
+      - firewall.sh
+      - haproxy.cfg
+      - dnsmasq.conf
+      - immich-wifi-firewall.service
+      - immich-wifi-proxy.service
+      - immich-wifi-dns.service
+      - network-revision
