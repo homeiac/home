@@ -33,7 +33,10 @@ def tune(threads):
 
 def main():
     logging.basicConfig(level=logging.INFO,format='%(message)s')
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('private_directory',type=Path);args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('private_directory',type=Path)
+    parser.add_argument('--allow-memory-warning',action='store_true',help='Record warning pressure; still stop on critical pressure or quality failure')
+    args=parser.parse_args()
+    continuous.memory_warning_policy='observe' if args.allow_memory_warning else 'stop'
     def interrupted(*_):raise KeyboardInterrupt('CPU-thread experiment interrupted')
     signal.signal(signal.SIGTERM,interrupted)
     private=args.private_directory
@@ -48,7 +51,7 @@ def main():
     assert original['slots']<=1,'Thread experiment requires a single extra model'
     continuous.initial_health=continuous.capacity.observe()['other_pods']['healthy_restarts']
     session=datetime.now(timezone.utc).strftime('%m%d%H%M%S');plan=[2,4,8,16,16,8,4,2]
-    record('protocol',session=session,plan=plan,extra_processes=1,device='cpu',baseline_device='mps',sample_sha256=digest,
+    record('protocol',memory_warning_policy=continuous.memory_warning_policy,session=session,plan=plan,extra_processes=1,device='cpu',baseline_device='mps',sample_sha256=digest,
            classifier_sha256=hashlib.sha256((private/'distributed/classifier.json').read_bytes()).hexdigest(),
            runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),git_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
            production_start=continuous.totals(request('/admin/status')),original_extra_policy=original)

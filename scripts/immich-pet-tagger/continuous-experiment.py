@@ -22,6 +22,7 @@ ADMITTED=('mac','pve','still-fawn','fun-bedbug')
 owned=set()
 initial_health=None
 last_observed=0
+memory_warning_policy='stop'
 
 def record(event,**values):
     evidence.JOURNAL=JOURNAL
@@ -41,7 +42,7 @@ def guard(force=False):
         record('resource_sample',observation=observed,production=totals(status),workers=status['workers'])
         if not observed['queue_healthy'] or observed['queue_health_seconds']>5:raise RuntimeError('Queue health guard')
         if observed['mac']['pressure']>=4:raise RuntimeError('Mac critical memory pressure guard')
-        if observed['mac']['pressure']!=1:
+        if observed['mac']['pressure']!=1 and memory_warning_policy=='stop':
             # Match the deployed worker's six-second sustained-warning rule.
             # Record every follow-up; never discard a critical observation.
             started=time.monotonic()

@@ -20,7 +20,7 @@ os.umask(0o077)
 destination=root/'burst';destination.mkdir(parents=True,exist_ok=True)
 for name in ('burst-worker.py','burst-supervisor.py','burst_guard.py','mac_observation.py'):
     if (destination/name).exists():shutil.copy2(destination/name,destination/(name+'.previous'))
-    shutil.copy2(here/name,destination/name)
+    shutil.copy2(here/('mac_burst_guard.py' if name=='burst_guard.py' else name),destination/name)
 assert (root/'venv/bin/python').exists() and (root/'worker-token').exists()
 config={'Label':label,'ProgramArguments':['/usr/bin/caffeinate','-s',str(root/'venv/bin/python'),'-B',str(destination/'burst-supervisor.py')],
         'RunAtLoad':True,'KeepAlive':True,'ThrottleInterval':30,'WorkingDirectory':str(root/'data'),

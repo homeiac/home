@@ -38,3 +38,23 @@ unless completed throughput improves while quality passes.
 Preregister this protocol and runner before executing `thread-experiment.py`.
 All photos and asset identifiers remain outside Git; aggregate observations and
 failed attempts belong in `2026-11-26-cpu-threads.jsonl`.
+
+## Amendment: reduced Rancher allocation and observed warnings
+
+After the first attempt stopped before measurement, the owner requested reducing
+Rancher Desktop and explicitly authorized starting jobs despite warning pressure.
+Rancher's VM allocation changed from 24 GiB to 8 GiB; all 14 previously healthy
+local Kubernetes workload owners and the Dagger container recovered. Waffles'
+native Mac baseline and homelab workers remained unchanged.
+
+Run a new session with `--allow-memory-warning`. Record macOS level 2 as an
+observation, allowing startup and continued inference. Level 4 critical pressure,
+unknown pressure/probe failure, process crashes, baseline unavailability and
+recognition failures remain stop conditions. The Mac-specific worker guard and
+experiment now agree on this policy. Linux worker guards are unchanged.
+
+Keep the frozen sample, classifier, trial order, two repetitions and quality
+criteria unchanged. Record this amendment in protocol metadata. Earlier warning
+rejections remain in the append-only journal; they establish neither an optimal
+Mac concurrency nor a demonstrated memory capacity failure. Do not pool results
+across the changed Rancher allocation and warning policy.
