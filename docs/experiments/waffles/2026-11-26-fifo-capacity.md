@@ -13,3 +13,19 @@ The schema-v5 GitOps rollout briefly restarts the queue and extra Kubernetes pod
 Mac capacity experiment: keep its one Metal baseline and all other admitted baseline workers running. Keep still-fawn's adopted two CPU extras serving production. Compare Mac CPU extras (two threads per process) at 2, 4, 8, 12, 15 processes and Metal extras at 1, 2, 4, 8, stopping escalation within a device only on a critical resource failure, crash, failed quality gate, or two consecutive throughput regressions. Warning memory pressure is recorded, not a stop condition. Repeat each eligible setting on the frozen 122-photo canary in opposite order after warmup. Same classifier and thresholds, at least 9/13 positives, zero of 13 negative controls, all 122 binary decisions identical, no retries or process crashes. These small controls do not establish library-wide precision.
 
 Select the fastest repeated quality-valid setting, then verify sustained production for two minutes with all admitted baselines advancing. Keep the existing three-worker configuration as fallback. Record every request, convergence, resource observation, failed/skipped trial, quality result, and final adoption in the append-only FIFO capacity JSONL. No RTX or unrelated Mac workloads are changed.
+
+## Protocol amendment before measured capacity trials
+
+At 23:01 Pacific, the initial attempt stopped before any measured trial because
+fun-bedbug's native capacity guard unloaded its model. The journal retains this
+attempt and restoration to the original two CPU extras. Its supervisor remained
+active, desired capacity one, and immediately retried model loading. This is a
+protected native-host availability event, not evidence against Mac capacity.
+
+The amended Mac experiment requires Mac/PVE/still-fawn baselines to stay ready and
+advance; fun-bedbug and chief-horse retain desired baseline one and their unchanged
+host guards. Native availability and counts remain in every resource observation.
+Only Mac unexpected exits invalidate Mac process stability; native guard cycles
+are recorded separately. No claim of uninterrupted processing on a guarded native
+host is made. The stable diagnostic window similarly requires the three main
+backends and unchanged extra policies.

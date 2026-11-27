@@ -340,6 +340,32 @@ waiting. The [diagnosis](../experiments/waffles/2026-11-26-pipeline-diagnosis.md
 records the limits of those measurements. We did not change the query, index,
 lock or transport during a diagnosis-only request.
 
+### Make the ready queue cheap to consume
+
+After the owner authorized the fix, schema v5 added a partial ordered index on
+`(run_id, ordinal, asset_id)` for pending jobs with attempts remaining. Claims
+resolve the small eligible-run list first, then take the first ready photo using
+`SKIP LOCKED`. Independent baseline and extra pools now have independent claim
+locks. Expired leases return through a bounded recovery task every 15 seconds;
+fencing and the four-attempt limit remain intact. Delayed retries do not block
+ready photos, and parallel completion order is naturally different from claim order.
+
+This is work the original single-process Docker application did not need: a shared
+queue has to make dispatch cheap enough that additional Kubernetes and native Mac
+workers spend their time on photos. The migration is versioned in Flux, with a
+verified private PostgreSQL backup before deployment. An 80,000-row scratch test
+checks indexed selection along with concurrency, FIFO ordering, retries, and stale
+claims. The baseline pod identities and Mac supervisor were preserved during the
+queue rollout, although the API restart briefly interrupted dispatch.
+
+The diagnostics are also reproducible. `bottleneck-report.py capture` saves an
+immutable JSON snapshot and Markdown report; `compare` presents before and after.
+It separates measured SQL selection time and control-request latency from the
+estimated difference between processing time and completion intervals. Native
+Mac stack sampling is available with `--sample-mac`. The
+[FIFO capacity journal](../experiments/waffles/2026-11-26-fifo-capacity.md) records
+the migration and subsequent CPU/Metal concurrency trials.
+
 ### Auditing an apparent throughput cliff
 
 The dashboard briefly showed a simultaneous backend throughput drop around

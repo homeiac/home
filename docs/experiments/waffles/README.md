@@ -97,3 +97,14 @@ reusing completed jobs or silently overwriting earlier measurements.
 Two repetitions and a selected 26-photo holdout do not establish a confidence
 interval or library-wide accuracy. Benchmark jobs exclude Immich face/tag writes;
 production throughput must be observed separately.
+
+## Indexed FIFO and Mac capacity
+
+The [FIFO protocol](2026-11-26-fifo-capacity.md) covers the queue migration and
+repeated CPU/Metal extra-worker sweep. `mac-capacity-experiment.py` is the current
+Mac-only controller; it preserves the adopted still-fawn configuration. The older
+continuous and thread journals remain historical evidence.
+
+`bottleneck-report.py capture LABEL --directory PRIVATE_DIR` is the reusable
+read-only calculator; `compare BEFORE.json AFTER.json` reports identical before
+and after measures. Optional native samples stay in the private directory.

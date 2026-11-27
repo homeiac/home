@@ -22,6 +22,8 @@ spec=importlib.util.spec_from_file_location('continuous',HERE/'continuous-experi
 c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 c.JOURNAL=ROOT/'docs/experiments/waffles/2026-11-26-fifo-capacity.jsonl'
 c.memory_warning_policy='observe'
+# Native hosts retain desired=1 and their existing independent safety guards.
+c.required_baselines=('mac','pve','still-fawn')
 
 def main():
     logging.basicConfig(level=logging.INFO,format='%(message)s')
@@ -44,7 +46,7 @@ def main():
     c.record('protocol',session=session,plan=plan,cpu_threads=2,memory_warning_policy='observe',
              sample_sha256=digest,classifier_sha256=hashlib.sha256((private/'distributed/classifier.json').read_bytes()).hexdigest(),
              runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),git_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
-             original_policy=original,production_start=c.totals(request('/admin/status')))
+             required_baselines=list(c.required_baselines),native_policy='Keep desired=1; observe independently guarded standby',original_policy=original,production_start=c.totals(request('/admin/status')))
     candidates=[];selected=None;adopted=False
     def pause_owned():
         for name in sorted(c.owned):request('/admin/state',{'id':name,'state':'paused'})
@@ -69,7 +71,7 @@ def main():
                         before=c.guard(True);run=name+'-'+suffix;c.record('trial_started',run=run,device=device,slots=slots)
                         rows=c.run(run,sample,['mac']);after=c.guard(True)
                         summary,_=evidence.summarize(rows,truth,reference)
-                        summary['unexpected_exit_delta']=sum(w['unexpected_exits'] for w in after['workers'])-sum(w['unexpected_exits'] for w in before['workers'])
+                        summary['unexpected_exit_delta']=sum(w['unexpected_exits'] for w in after['workers'] if w['name']=='mac')-sum(w['unexpected_exits'] for w in before['workers'] if w['name']=='mac')
                         summary['valid'] &= summary['unexpected_exit_delta']==0
                         summary['production_delta']={w:c.totals(after)[w]-c.totals(before)[w] for w in c.ADMITTED}
                         c.record('trial_finished',run=run,device=device,slots=slots,**summary);trials.append(summary)
@@ -82,6 +84,7 @@ def main():
                         c.record('device_escalation_stopped',device=device,slots=slots,reason='Two consecutive throughput regressions');break
                 except RuntimeError as error:
                     c.record('configuration_rejected',device=device,slots=slots,reason=str(error))
+                    if 'Baseline unavailable' in str(error) or 'Previously healthy workload' in str(error):raise
                     recover()
                     # Quality failure invalidates this configuration and all larger
                     # configurations on the same device; retain previous valid ones.
@@ -101,8 +104,8 @@ def main():
         before=c.guard(True);started=time.monotonic();c.record('adoption_started',selected=selected)
         while time.monotonic()-started<120:c.guard(True);time.sleep(10)
         after=c.guard(True);delta={w:c.totals(after)[w]-c.totals(before)[w] for w in c.ADMITTED}
-        exits=sum(w['unexpected_exits'] for w in after['workers'])-sum(w['unexpected_exits'] for w in before['workers'])
-        if min(delta.values())<=0 or exits:raise RuntimeError('Production adoption continuity/stability failed')
+        exits=sum(w['unexpected_exits'] for w in after['workers'] if w['name']=='mac')-sum(w['unexpected_exits'] for w in before['workers'] if w['name']=='mac')
+        if any(delta[w]<=0 for w in c.required_baselines) or exits:raise RuntimeError('Production adoption continuity/stability failed')
         c.record('adoption_passed',seconds=time.monotonic()-started,production_delta=delta,unexpected_exit_delta=exits)
         adopted=True
     except BaseException as error:

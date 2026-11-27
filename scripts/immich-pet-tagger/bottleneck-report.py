@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 HERE=Path(__file__).resolve().parent
 LIMITS=['Candidate timing is a SELECT without row locks/UPDATE; it is not total claim latency.',
@@ -57,7 +58,7 @@ def markdown(report):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest='command',required=True)
-    cap=sub.add_parser('capture');cap.add_argument('label');cap.add_argument('--directory',type=Path,required=True);cap.add_argument('--sample-mac',action='store_true')
+    cap=sub.add_parser('capture');cap.add_argument('label');cap.add_argument('--directory',type=Path,required=True);cap.add_argument('--sample-mac',action='store_true');cap.add_argument('--settle-seconds',type=int,default=0,help='Require unchanged extra policy and admitted baseline readiness before capture')
     comp=sub.add_parser('compare');comp.add_argument('before',type=Path);comp.add_argument('after',type=Path)
     args=parser.parse_args()
     if args.command=='compare':
@@ -73,6 +74,19 @@ def main():
     os.umask(0o077);args.directory.mkdir(parents=True,exist_ok=True)
     path=args.directory/(args.label+'.json')
     if path.exists():raise FileExistsError('Captures are immutable; choose a new label')
+    if args.settle_seconds<0:parser.error('Settle seconds must be nonnegative')
+    if args.settle_seconds:
+        from distributed import request
+        policy=request('/api/burst')['workers'];deadline=time.monotonic()+args.settle_seconds
+        while True:
+            status=request('/admin/status')
+            admitted={'mac','pve','still-fawn'}
+            ready={r['name'] for r in status['workers'] if r['base_instances']==1}
+            if not admitted<=ready:raise RuntimeError('Admitted baseline unavailable during settle window')
+            if request('/api/burst')['workers']!=policy:raise RuntimeError('Worker policy changed during settle window')
+            remaining=deadline-time.monotonic()
+            if remaining<=0:break
+            time.sleep(min(15,remaining))
     def probe(name):
         proc=subprocess.run([sys.executable,str(HERE/name)],capture_output=True,text=True,timeout=90,check=True)
         return json.loads(proc.stdout)

@@ -341,3 +341,32 @@ training/holdout separation and the approved photo-sharing scope.
 
 Deployment and reference-validation results are recorded in the accompanying
 [blog post](../blog/2026-11-26-teaching-immich-to-recognize-waffles.md).
+
+## Repeatable bottleneck report and FIFO capacity sweep
+
+The single diagnostic entry point is read-only and writes immutable JSON plus a
+Markdown explanation. It calculates baseline processing time, completion spacing,
+and estimated residual overhead; captures the deployed candidate query plan and
+small control-GET timing; and optionally records native Mac stack samples. It does
+not label the residual as network latency or treat different production photos as
+a matched hardware benchmark.
+
+```bash
+python3 scripts/immich-pet-tagger/bottleneck-report.py capture before --directory /private/tmp/waffles-bottleneck
+# After a change, allow at least three stable production minutes:
+python3 scripts/immich-pet-tagger/bottleneck-report.py capture after --directory /private/tmp/waffles-bottleneck --sample-mac
+python3 scripts/immich-pet-tagger/bottleneck-report.py compare /private/tmp/waffles-bottleneck/before.json /private/tmp/waffles-bottleneck/after.json
+```
+
+The schema-v5 queue uses a partial `(run_id, ordinal, asset_id)` index for ready
+jobs, separate baseline/extra claim locks, and a bounded expired-lease recovery
+batch every 15 seconds. Ready FIFO skips delayed retries and locked jobs; parallel
+completion order can differ. A worker with an expired lease remains fenced.
+
+`mac-capacity-experiment.py PRIVATE_DIRECTORY` runs the registered repeated
+CPU/Metal concurrency sweep, journals every trial, and adopts the fastest
+quality-valid setting only after a two-minute production observation. One Mac
+Metal baseline and all other admitted baseline workers continue; memory warnings
+are observed, critical pressure rejects that configuration. On failure the
+controller restores the pre-experiment Mac extra policy. The protocol and journal
+are under `docs/experiments/waffles/2026-11-26-fifo-capacity*`.

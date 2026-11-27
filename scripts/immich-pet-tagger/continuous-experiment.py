@@ -19,6 +19,7 @@ JOURNAL=ROOT/'docs/experiments/waffles/2026-11-26-continuous-production.jsonl'
 spec=importlib.util.spec_from_file_location('capacity',HERE/'observe-capacity.py')
 capacity=importlib.util.module_from_spec(spec);spec.loader.exec_module(capacity)
 ADMITTED=('mac','pve','still-fawn','fun-bedbug')
+required_baselines=ADMITTED
 owned=set()
 initial_health=None
 last_observed=0
@@ -34,7 +35,7 @@ def totals(status):
 def guard(force=False):
     global last_observed
     status=request('/admin/status')
-    for name in ADMITTED:
+    for name in required_baselines:
         worker=next(w for w in status['workers'] if w['name']==name)
         if worker['base_instances']!=1:raise RuntimeError('Baseline unavailable: '+name)
     if force or time.monotonic()-last_observed>=15:
