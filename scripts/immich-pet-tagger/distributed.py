@@ -66,12 +66,14 @@ def main() -> None:
     config = commands.add_parser('config'); config.add_argument('file', type=Path)
     run = commands.add_parser('create'); run.add_argument('id'); run.add_argument('file', type=Path)
     run.add_argument('--mode', choices=['benchmark', 'production'], required=True)
-    run.add_argument('--workers', nargs='+', required=True, choices=['mac', 'pve', 'still-fawn'])
+    run.add_argument('--workers', nargs='+', required=True, choices=['mac', 'pve', 'still-fawn', 'fun-bedbug', 'chief-horse'])
     run.add_argument('--reverse', action='store_true')
     state = commands.add_parser('state'); state.add_argument('id'); state.add_argument('state', choices=['paused', 'running'])
     status = commands.add_parser('status'); status.add_argument('--compact', action='store_true')
     discovery = commands.add_parser('discovery'); discovery.add_argument('--since', required=True)
     discovery.add_argument('--disabled', action='store_true')
+    workers = commands.add_parser('workers'); workers.add_argument('id')
+    workers.add_argument('names', nargs='+', choices=['mac', 'pve', 'still-fawn', 'fun-bedbug', 'chief-horse'])
     args = parser.parse_args()
     if args.command == 'export':
         export_private(args.directory)
@@ -86,6 +88,8 @@ def main() -> None:
         logging.info('%s', request('/admin/state', {'id': args.id, 'state': args.state}))
     elif args.command == 'discovery':
         logging.info('%s', request('/admin/discovery', {'enabled': not args.disabled, 'since': args.since}))
+    elif args.command == 'workers':
+        logging.info('%s', request('/admin/workers', {'id': args.id, 'workers': args.names}))
     else:
         data = request('/admin/status')
         if args.compact:

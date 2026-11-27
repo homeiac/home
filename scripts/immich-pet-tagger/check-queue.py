@@ -23,5 +23,5 @@ assert status('/admin/status',worker)==403
 assert status('/immich/api/assets/00000000-0000-4000-8000-000000000000/thumbnail',worker)==404
 assert status('/immich/api/users/me',worker)==404
 data=request('/admin/status')
-assert {w['name'] for w in data['workers']}=={'mac','pve','still-fawn'}
+assert {'mac','pve','still-fawn'} <= {w['name'] for w in data['workers']} <= {'mac','pve','still-fawn','fun-bedbug','chief-horse'}
 print('Queue health, authentication, admin isolation and thumbnail allowlist checks passed')

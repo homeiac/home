@@ -18,7 +18,8 @@ def main() -> None:
     args=parser.parse_args()
     report=json.loads(args.report.read_text())
     checks=[r for r in report['runs'] if r['run'].startswith('holdout-')]
-    assert len(checks)==3 and all(r['accuracy']['negative']['matched']==0 and r['accuracy']['positive']['matched']>=9 for r in checks)
+    assert {'holdout-mac','holdout-pve','holdout-still-fawn'} <= {r['run'] for r in checks}
+    assert all(r['accuracy']['negative']['matched']==0 and r['accuracy']['positive']['matched']>=9 for r in checks)
     assert all(a['compared']==96 and a['different']==0 for a in report['agreement'].values())
     truth=json.loads(args.holdout.read_text());ids=set(truth['positive']+truth['negative'])
     assets=[a for a in json.loads(args.inventory.read_text()) if a['id'] in ids]

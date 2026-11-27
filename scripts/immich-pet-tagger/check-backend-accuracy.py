@@ -12,12 +12,13 @@ def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('holdout',type=Path)
     parser.add_argument('inventory',type=Path)
+    parser.add_argument('--workers',nargs='+',default=['mac','pve','still-fawn'],choices=['mac','pve','still-fawn','fun-bedbug','chief-horse'])
     args=parser.parse_args()
     truth=json.loads(args.holdout.read_text())
     ids=set(truth['positive']+truth['negative'])
     assets=[a for a in json.loads(args.inventory.read_text()) if a['id'] in ids]
     assert len(assets)==len(ids)==26
-    for worker in ['mac','pve','still-fawn']:
+    for worker in args.workers:
         run('holdout-'+worker,assets,[worker])
 
 

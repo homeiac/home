@@ -78,6 +78,13 @@ def main() -> None:
         while True:
             job = None
             try:
+                if os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':
+                    from native_guard import can_run
+                    if not can_run():
+                        state['ready'] = False
+                        request('/api/heartbeat', state)
+                        logging.info('Native capacity guard: unloading models and returning to standby')
+                        return
                 job = request('/api/claim', {'worker': worker})
                 if not job:
                     time.sleep(2)

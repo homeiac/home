@@ -160,6 +160,10 @@ http.createServer(async(req,res)=>{
       if(!['paused','running'].includes(body.state))throw Error('Invalid state');
       await pool.query("UPDATE waffles.runs SET state=$2,started_at=CASE WHEN $2='running' THEN coalesce(started_at,now()) ELSE started_at END WHERE id=$1 AND state<>'complete'",[body.id,body.state]);respond(res,{ok:true});return;
     }
+    if(req.method==='POST'&&url.pathname==='/admin/workers') {
+      if(!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw Error('Invalid workers');
+      await pool.query('UPDATE waffles.runs SET workers=$2 WHERE id=$1',[body.id,body.workers]);respond(res,{ok:true});return;
+    }
     if(req.method==='GET'&&url.pathname==='/admin/status') {
       const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int jobs,
         sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;

@@ -1,6 +1,6 @@
 // Fenced claims adapted from photo_enrichment/postgres.py; inference is outside transactions.
 import crypto from 'node:crypto';
-export const WORKERS=['mac','pve','still-fawn'];
+export const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];
 export const CLAIM_SQL=`WITH candidate AS (
  SELECT j.run_id,j.asset_id FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id
  WHERE r.state='running' AND $1=ANY(r.workers)

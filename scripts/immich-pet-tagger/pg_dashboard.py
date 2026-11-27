@@ -1,6 +1,7 @@
 """Durable photo completion and backend distribution, using real queue outcomes."""
 DS = {'type': 'prometheus', 'uid': 'prometheus'}
 FRESH = '(max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)'
+WORKERS = ['mac','pve','still-fawn','fun-bedbug','chief-horse']
 
 
 def live(expr):
@@ -45,13 +46,13 @@ def dashboard():
     panel('Failed photos',[(jobs('failed'),'Exhausted retries')],12,0)
     panel('Estimated time remaining',[(f'({remaining}) / (({rate()})/60 > 0)','At recent pace')],16,0,unit='s',description='Pending, in-flight and awaiting-write jobs divided by five-minute committed throughput. Unavailable until progress is measurable; not a deadline.')
     panel('Queue report age', [('time()-max(waffles_queue_report_timestamp_seconds)','Telemetry age')],20,0,unit='s')
-    for x,worker in enumerate(['mac','pve','still-fawn']):
-        panel(worker+' · processed',[(jobs('complete',worker),'Photos'),(f'100*({jobs("complete",worker)})/clamp_min(({done}),1)','Share (%)')],x*6,4,w=6)
-    panel('Run state',[(live('max(waffles_run_state{run="$run"})'),'Queue state')],18,4,w=6)['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Paused','color':'orange'},'1':{'text':'Running','color':'blue'},'2':{'text':'Finished','color':'green'}}}]
+    for x,worker in enumerate(WORKERS):
+        panel(worker+' · processed',[(jobs('complete',worker),'Photos'),(f'100*({jobs("complete",worker)})/clamp_min(({done}),1)','Share (%)')],x*4,4,w=4)
+    panel('Run state',[(live('max(waffles_run_state{run="$run"})'),'Queue state')],20,4,w=4)['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Paused','color':'orange'},'1':{'text':'Running','color':'blue'},'2':{'text':'Finished','color':'green'}}}]
 
-    workers = ['mac','pve','still-fawn']
+    workers = WORKERS
     nodes = [('queue','PostgreSQL','Durable job queue',total,average()),
-             *[(w,{'mac':'Mac · Metal','pve':'PVE · CPU','still-fawn':'still-fawn · CPU'}[w],'Processed photos',jobs('complete',w),average(w)) for w in workers],
+             *[(w,{'mac':'Mac · Metal','pve':'PVE · CPU','still-fawn':'still-fawn · CPU','fun-bedbug':'fun-bedbug · native','chief-horse':'chief-horse · native'}[w],'Processed photos',jobs('complete',w),average(w)) for w in workers],
              ('committed','Committed results','Processed photos',done,average())]
     queries = {
         'nodes': ' or '.join(label(f'({value}) or vector(0/0)',id=key,title=title,subtitle=subtitle) for key,title,subtitle,value,_ in nodes),

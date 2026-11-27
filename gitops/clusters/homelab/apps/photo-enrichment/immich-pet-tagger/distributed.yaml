@@ -39,7 +39,7 @@ data:
     \ db.query('ROLLBACK');}catch{}\n  console.error('Waffles schema bootstrap failed:',e.code??'unknown');process.exitCode=1;\n\
     } finally {await db.end();}\n"
   queue-core.mjs: "// Fenced claims adapted from photo_enrichment/postgres.py; inference\
-    \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn'];\n\
+    \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];\n\
     export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
     \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
     \ AND $1=ANY(r.workers)\n AND ((j.status='pending' AND j.available_at<=now())\
@@ -188,8 +188,12 @@ data:
     \ Error('Invalid state');\n      await pool.query(\"UPDATE waffles.runs SET state=$2,started_at=CASE\
     \ WHEN $2='running' THEN coalesce(started_at,now()) ELSE started_at END WHERE\
     \ id=$1 AND state<>'complete'\",[body.id,body.state]);respond(res,{ok:true});return;\n\
-    \    }\n    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const\
-    \ runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
+    \    }\n    if(req.method==='POST'&&url.pathname==='/admin/workers') {\n     \
+    \ if(!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw\
+    \ Error('Invalid workers');\n      await pool.query('UPDATE waffles.runs SET workers=$2\
+    \ WHERE id=$1',[body.id,body.workers]);respond(res,{ok:true});return;\n    }\n\
+    \    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const runs=(await\
+    \ pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
@@ -276,13 +280,18 @@ data:
     \ 'detector', 'immich'):\n        logging.getLogger(name).setLevel(logging.ERROR)\n\
     \    with inference.inference_session():\n        state.update(ready=True, device=pick_device())\n\
     \        logging.info('Worker %s ready on %s', worker, state['device'])\n    \
-    \    while True:\n            job = None\n            try:\n                job\
-    \ = request('/api/claim', {'worker': worker})\n                if not job:\n \
-    \                   time.sleep(2)\n                    continue\n            \
-    \    # Runs retain their classifier snapshot across future enrollment\n      \
-    \          # changes; never classify an old run with a newer global model.\n \
-    \               if job.get('config') and job['config'] != config:\n          \
-    \          config = job['config']\n                    for obj, values in [(scaler,\
+    \    while True:\n            job = None\n            try:\n                if\
+    \ os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':\n                    from\
+    \ native_guard import can_run\n                    if not can_run():\n       \
+    \                 state['ready'] = False\n                        request('/api/heartbeat',\
+    \ state)\n                        logging.info('Native capacity guard: unloading\
+    \ models and returning to standby')\n                        return\n        \
+    \        job = request('/api/claim', {'worker': worker})\n                if not\
+    \ job:\n                    time.sleep(2)\n                    continue\n    \
+    \            # Runs retain their classifier snapshot across future enrollment\n\
+    \                # changes; never classify an old run with a newer global model.\n\
+    \                if job.get('config') and job['config'] != config:\n         \
+    \           config = job['config']\n                    for obj, values in [(scaler,\
     \ config['scaler']), (model, config['model'])]:\n                        for name,\
     \ value in values.items():\n                            setattr(obj, name, np.asarray(value)\
     \ if isinstance(value, list) else value)\n                state.update({key: job[key]\
@@ -382,7 +391,7 @@ data:
     \ db.query('ROLLBACK');}catch{}\n  console.error('Waffles schema bootstrap failed:',e.code??'unknown');process.exitCode=1;\n\
     } finally {await db.end();}\n"
   queue-core.mjs: "// Fenced claims adapted from photo_enrichment/postgres.py; inference\
-    \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn'];\n\
+    \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];\n\
     export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
     \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
     \ AND $1=ANY(r.workers)\n AND ((j.status='pending' AND j.available_at<=now())\
@@ -531,8 +540,12 @@ data:
     \ Error('Invalid state');\n      await pool.query(\"UPDATE waffles.runs SET state=$2,started_at=CASE\
     \ WHEN $2='running' THEN coalesce(started_at,now()) ELSE started_at END WHERE\
     \ id=$1 AND state<>'complete'\",[body.id,body.state]);respond(res,{ok:true});return;\n\
-    \    }\n    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const\
-    \ runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
+    \    }\n    if(req.method==='POST'&&url.pathname==='/admin/workers') {\n     \
+    \ if(!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw\
+    \ Error('Invalid workers');\n      await pool.query('UPDATE waffles.runs SET workers=$2\
+    \ WHERE id=$1',[body.id,body.workers]);respond(res,{ok:true});return;\n    }\n\
+    \    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const runs=(await\
+    \ pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
@@ -619,13 +632,18 @@ data:
     \ 'detector', 'immich'):\n        logging.getLogger(name).setLevel(logging.ERROR)\n\
     \    with inference.inference_session():\n        state.update(ready=True, device=pick_device())\n\
     \        logging.info('Worker %s ready on %s', worker, state['device'])\n    \
-    \    while True:\n            job = None\n            try:\n                job\
-    \ = request('/api/claim', {'worker': worker})\n                if not job:\n \
-    \                   time.sleep(2)\n                    continue\n            \
-    \    # Runs retain their classifier snapshot across future enrollment\n      \
-    \          # changes; never classify an old run with a newer global model.\n \
-    \               if job.get('config') and job['config'] != config:\n          \
-    \          config = job['config']\n                    for obj, values in [(scaler,\
+    \    while True:\n            job = None\n            try:\n                if\
+    \ os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':\n                    from\
+    \ native_guard import can_run\n                    if not can_run():\n       \
+    \                 state['ready'] = False\n                        request('/api/heartbeat',\
+    \ state)\n                        logging.info('Native capacity guard: unloading\
+    \ models and returning to standby')\n                        return\n        \
+    \        job = request('/api/claim', {'worker': worker})\n                if not\
+    \ job:\n                    time.sleep(2)\n                    continue\n    \
+    \            # Runs retain their classifier snapshot across future enrollment\n\
+    \                # changes; never classify an old run with a newer global model.\n\
+    \                if job.get('config') and job['config'] != config:\n         \
+    \           config = job['config']\n                    for obj, values in [(scaler,\
     \ config['scaler']), (model, config['model'])]:\n                        for name,\
     \ value in values.items():\n                            setattr(obj, name, np.asarray(value)\
     \ if isinstance(value, list) else value)\n                state.update({key: job[key]\
@@ -763,7 +781,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: aab165dcf3acd4e2262f7b29fd2487b9a798cf59d9fd121a9a7b8c969bd8586f
+        checksum/code: 7ead1769f4095f6a8f0f9286e546c4525ecd5f384ea34724200180384f7590fb
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -921,7 +939,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: aab165dcf3acd4e2262f7b29fd2487b9a798cf59d9fd121a9a7b8c969bd8586f
+        checksum/code: 7ead1769f4095f6a8f0f9286e546c4525ecd5f384ea34724200180384f7590fb
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1030,7 +1048,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: aab165dcf3acd4e2262f7b29fd2487b9a798cf59d9fd121a9a7b8c969bd8586f
+        checksum/code: 7ead1769f4095f6a8f0f9286e546c4525ecd5f384ea34724200180384f7590fb
     spec:
       automountServiceAccountToken: false
       securityContext:

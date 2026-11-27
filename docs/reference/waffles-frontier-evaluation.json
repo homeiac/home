@@ -1,0 +1,32 @@
+[
+  {
+    "model": "gpt-6-luna",
+    "reference_images": 1,
+    "evaluated": 26,
+    "true_positive": 0,
+    "false_positive": 0,
+    "false_negative": 13,
+    "true_negative": 13,
+    "uncertain": 8,
+    "mean_request_seconds": 4.328983165116649,
+    "input_tokens": 499504,
+    "output_tokens": 1435,
+    "eligible_for_fallback": false,
+    "additional_local_misses_recovered": 0
+  },
+  {
+    "model": "gpt-6.2-sol",
+    "reference_images": 1,
+    "evaluated": 26,
+    "true_positive": 2,
+    "false_positive": 0,
+    "false_negative": 11,
+    "true_negative": 13,
+    "uncertain": 3,
+    "mean_request_seconds": 4.705048171420528,
+    "input_tokens": 552700,
+    "output_tokens": 1981,
+    "eligible_for_fallback": false,
+    "additional_local_misses_recovered": 0
+  }
+]
