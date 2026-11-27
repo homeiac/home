@@ -774,3 +774,71 @@ The [final review journal](../experiments/waffles/2026-11-27-reject-review.md)
 links the assignment and shutdown verification. The reusable scripts and GitOps
 configuration preserve the ability to resume without keeping idle model workers
 resident in memory.
+
+
+## Follow-up: the same photos on each worker
+
+We then ran the comparison the production charts could not provide: the exact
+same 26 frozen images and fitted classifier, with matching image and weight hashes,
+on one Mac CPU process, one Mac Metal process and one still-fawn CPU process.
+Both CPU backends used two observed model threads; still-fawn's test container
+had a two-core quota. Six warmups were excluded and every trial ran the full
+sample forwards and backwards. Source modules and model-library versions match
+across ARM and x86, with platform-specific PyTorch builds. This measures configured
+workers, rather than whole-chip peak performance.
+
+| Single process | Observed photos/min across repeated passes |
+| --- | ---: |
+| Mac CPU | **307–430**, initial repeats clustered at 307–332 |
+| still-fawn i5 CPU | **110–113** |
+| Mac Metal, serial | **170–369**, substantially variable |
+| Mac CPU detector + Metal CLIP | **396–444** |
+
+All successful variants made identical binary decisions: nine of thirteen Waffles
+holdouts accepted and no false positives among thirteen controls. These are frozen
+classifier decisions, not a claim that the remaining four positives are negatives.
+The comparison wrote no Immich metadata; the known collection remains 999 assets.
+
+The CPU result answers one part clearly: **the Mac CPU is about 2.7–3.9 times
+faster per process than the observed i5 range on the same work**. The final
+cache-path verification also varied within the Mac, so its fastest pass is not
+a claimed sustained operating point. Its apparent competitiveness in the
+old charts was not evidence of equal compute speed. Those charts combined queue
+waiting, different photos, concurrency, preview failures and resource sharing.
+The previous queue-index intervention directly measured one of those bottlenecks.
+
+There is also a specific reason “GPU enabled” did not guarantee a large Mac win.
+Metal made CLIP faster, but its detection stage could be slower than Mac CPU.
+Native sampling of the actual worker found MPS indexing/`nonzero` paths entering
+GPU synchronization and command-buffer waits. Python samples placed work in NMS
+filtering and box extraction. Moving only the unchanged detector to CPU, keeping
+CLIP on Metal, repeatedly reduced detection cost and reached 396–444 photos/min.
+That is evidence for choosing devices per stage rather than assuming every stage
+benefits from the same accelerator.
+
+Network overhead is now measured on matching response bytes too. Fresh preview
+requests averaged 42–44 ms on the Mac versus about 24 ms inside still-fawn.
+Reusing a connection brought the Mac to 22–30 ms. This is a useful improvement,
+but roughly 19 ms of extra transport cannot by itself explain the earlier parity.
+The cached inference comparison removes that transport entirely.
+
+One causal question remains open. A later Metal repeat dropped from 357–369 to
+170–184 photos/min, mainly through slower detection. Other llama-server workloads
+were active, and whole-host GPU activity remained at 100% after Waffles exited.
+That shows competing activity, but does not assign a precise share of GPU time
+or prove a thermal bottleneck. A short pause/resume A/B of that other work requires
+the owner's approval and is pending. The journal keeps every slow pass; it does
+not replace the range with the fastest number. Four-photo batching also produced
+an uneven 220/498 photos/min result, so it is not adopted as a proven speedup.
+
+The tracing lesson is equally concrete: a caller sleeping does not mean its model
+threads are idle. Linux eBPF caught the test caller in futex waits while all-thread
+samples showed CLIP performing computation. Native Mac stacks and Linux eBPF
+succeeded; the optional sudo DTrace/power capture was not collected because it
+required a password. No privileged GPU-attribution result is claimed.
+
+The [matched-worker science journal](../experiments/waffles/2026-11-27-matched-worker-analysis.md)
+records hashes, stage timings, device-placement and connection-reuse interventions,
+failed harness starts, tracing limits and repeatable scripts. The matched-photo
+comparison is measured; attribution of the shared-GPU variability still awaits
+the bounded contention experiment. Production Waffles workers remain shut down.

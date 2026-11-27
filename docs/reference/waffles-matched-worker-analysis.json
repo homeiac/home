@@ -1,0 +1,1253 @@
+{
+  "trials": {
+    "mac-cpu-explicit-cache": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "mac-cpu-explicit-cache",
+        "device": "cpu",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.0297001670114696,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "pass_wall_seconds": [
+          3.629858542000875,
+          4.660083915980067
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 429.768813839254,
+          "seconds": 3.629858542000875,
+          "means": {
+            "decode": 0.0065060961127388645,
+            "detect": 0.05271370350517547,
+            "embed": 0.07744468100449572,
+            "classify": 0.0002644761116243899,
+            "total": 0.1369350127710137
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 334.75792027060845,
+          "seconds": 4.660083915980067,
+          "means": {
+            "decode": 0.008041358924506662,
+            "detect": 0.06555025650259967,
+            "embed": 0.10213581096748105,
+            "classify": 0.00038461230220631336,
+            "total": 0.17611854795653087
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 8.659574000000001,
+      "wall_seconds": 8.29131293296814,
+      "rss_peak": 1991294976
+    },
+    "mac-cpu-t2-corrected": {
+      "metadata": {
+        "label": "mac-cpu-t2-corrected",
+        "device": "cpu",
+        "threads_requested": 2,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.717019125004299,
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 309.08513682098703,
+          "seconds": 5.047153079067357,
+          "means": {
+            "decode": 0.008984879655494856,
+            "detect": 0.07334859134369673,
+            "embed": 0.11142508164630271,
+            "classify": 0.00035589091846934304,
+            "total": 0.1941212722718214
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 331.4851883106616,
+          "seconds": 4.706092624983285,
+          "means": {
+            "decode": 0.008448056196077513,
+            "detect": 0.06687807356446193,
+            "embed": 0.10539454800443938,
+            "classify": 0.0002768238079555046,
+            "total": 0.1810035624993571
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 9.998914,
+      "wall_seconds": 9.91231107711792,
+      "rss_peak": 1811824640
+    },
+    "mac-cpu-t2-verified": {
+      "metadata": {
+        "label": "mac-cpu-t2-verified",
+        "device": "cpu",
+        "threads_requested": 2,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.4467845829785801,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 318.3707660547467,
+          "seconds": 4.899947376863565,
+          "means": {
+            "decode": 0.009091945530739255,
+            "detect": 0.07041789431241341,
+            "embed": 0.10858577077474016,
+            "classify": 0.0003572419608155122,
+            "total": 0.1884595144947525
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 307.01040023985314,
+          "seconds": 5.08126108685974,
+          "means": {
+            "decode": 0.009066081802862195,
+            "detect": 0.07100888776655595,
+            "embed": 0.11504091022428699,
+            "classify": 0.00031082853764438856,
+            "total": 0.19543311872537464
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 10.546104999999999,
+      "wall_seconds": 10.169687032699585,
+      "rss_peak": 1910702080
+    },
+    "mac-hybrid-cpu-yolo": {
+      "metadata": {
+        "label": "mac-hybrid-cpu-yolo",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": true,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.7904160000034608,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          3.5147396249813028,
+          3.6539922079537064
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 443.84511128852074,
+          "seconds": 3.5147396249813028,
+          "means": {
+            "decode": 0.00888825961514018,
+            "detect": 0.06781076607876457,
+            "embed": 0.05800464418671954,
+            "classify": 0.0002785511986495784,
+            "total": 0.13498844557817882
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 426.9303028628035,
+          "seconds": 3.6539922079537064,
+          "means": {
+            "decode": 0.0073125033052817276,
+            "detect": 0.054398700151628315,
+            "embed": 0.07826839257345106,
+            "classify": 0.0003202163072553678,
+            "total": 0.1403053878479673
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 5.13169,
+      "wall_seconds": 7.17003870010376,
+      "rss_peak": 1992392704
+    },
+    "mac-hybrid-main-repeat": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "mac-hybrid-main-repeat",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": true,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.5725412089959718,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          3.567127749964129,
+          3.9419235000386834
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 437.3266418663271,
+          "seconds": 3.567127749964129,
+          "means": {
+            "decode": 0.007541125118642902,
+            "detect": 0.0643153493426955,
+            "embed": 0.06173514592452333,
+            "classify": 0.0003306987749126095,
+            "total": 0.13392883661435917
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 395.7458839535296,
+          "seconds": 3.9419235000386834,
+          "means": {
+            "decode": 0.008456748343842965,
+            "detect": 0.0769455978476729,
+            "embed": 0.06278802065599638,
+            "classify": 0.00032699996238359465,
+            "total": 0.14852480607805774
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 5.619001000000001,
+      "wall_seconds": 7.510268926620483,
+      "rss_peak": 1990524928
+    },
+    "mac-mps-inflight4": {
+      "metadata": {
+        "label": "mac-mps-inflight4",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 4,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.177367708995007,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          7.100102792028338,
+          3.135203499987256
+        ],
+        "clip_avg_batch": 1.511111111111111,
+        "yolo_avg_batch": 1.5263157894736843
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 219.71512887834453,
+          "seconds": 7.100102792028338,
+          "means": {
+            "decode": 0.007075261235093841,
+            "detect": 0.5807560673095465,
+            "embed": 0.4989354167303715,
+            "classify": 0.0002728366503456178,
+            "total": 1.0870435208556815
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 497.57535675318724,
+          "seconds": 3.135203499987256,
+          "means": {
+            "decode": 0.007468272416959875,
+            "detect": 0.25535029969446793,
+            "embed": 0.20839243754072903,
+            "classify": 0.0002916729225454709,
+            "total": 0.471506812455258
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.7996479999999995,
+      "wall_seconds": 10.236549139022827,
+      "rss_peak": 1985970176
+    },
+    "mac-mps-main-repeat": {
+      "metadata": {
+        "label": "mac-mps-main-repeat",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.6674084999831393,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          8.935545917018317,
+          8.468778499984182
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 174.58362527452078,
+          "seconds": 8.935545917018317,
+          "means": {
+            "decode": 0.007389746731720292,
+            "detect": 0.2765576490827908,
+            "embed": 0.057955349423886776,
+            "classify": 0.00038496157503686845,
+            "total": 0.3422938781553127
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 184.20602215572336,
+          "seconds": 8.468778499984182,
+          "means": {
+            "decode": 0.00778218914862149,
+            "detect": 0.242224355772263,
+            "embed": 0.07376422446283798,
+            "classify": 0.0002612725007705964,
+            "total": 0.3240380769577594
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.9730500000000006,
+      "wall_seconds": 17.40532398223877,
+      "rss_peak": 1989459968
+    },
+    "mac-mps-serial-repeat": {
+      "metadata": {
+        "label": "mac-mps-serial-repeat",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.8691144170006737,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          9.161123667028733,
+          8.878430583979934
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 170.28478783825452,
+          "seconds": 9.161123667028733,
+          "means": {
+            "decode": 0.008348153810052631,
+            "detect": 0.2838440962323847,
+            "embed": 0.05957311223028228,
+            "classify": 0.00044014430694425333,
+            "total": 0.35221224050753963
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 175.70672938692942,
+          "seconds": 8.878430583979934,
+          "means": {
+            "decode": 0.007988003154213611,
+            "detect": 0.2705274999584967,
+            "embed": 0.06015042641844887,
+            "classify": 0.0004032466900893129,
+            "total": 0.3390760497266176
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 4.52956,
+      "wall_seconds": 18.041199207305908,
+      "rss_peak": 1993359360
+    },
+    "mac-mps-unprivileged": {
+      "metadata": {
+        "label": "mac-mps-unprivileged",
+        "device": "mps",
+        "threads_requested": 2,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.1774271670146845,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 356.9863249349763,
+          "seconds": 4.369915290968493,
+          "means": {
+            "decode": 0.0063762659623395074,
+            "detect": 0.10792152249800543,
+            "embed": 0.05345913950273266,
+            "classify": 0.0003113943138697113,
+            "total": 0.16807366503724971
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 368.8658869341746,
+          "seconds": 4.22917937184684,
+          "means": {
+            "decode": 0.005696766033697014,
+            "detect": 0.09122163781117146,
+            "embed": 0.06550057210663979,
+            "classify": 0.000236185995163396,
+            "total": 0.1626607450710323
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.1906539999999994,
+      "wall_seconds": 8.731297016143799,
+      "rss_peak": 1985937408
+    },
+    "still-fawn-t2": {
+      "metadata": {
+        "label": "still-fawn-t2",
+        "device": "cpu",
+        "threads_requested": 2,
+        "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.41",
+        "torch": "2.7.0+cpu",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 4.043185160961002,
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 112.70033613315383,
+          "seconds": 13.842017278075218,
+          "means": {
+            "decode": 0.02231894076192895,
+            "detect": 0.1557505854154722,
+            "embed": 0.3536433282827672,
+            "classify": 0.0006590917384108672,
+            "total": 0.53238527992597
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 110.31091622833733,
+          "seconds": 14.141846095910296,
+          "means": {
+            "decode": 0.020999099629429672,
+            "detect": 0.1548147124435323,
+            "embed": 0.36740897551107293,
+            "classify": 0.0006773616008173961,
+            "total": 0.5439171575350114
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 52.609167824000004,
+      "wall_seconds": 28.135488271713257,
+      "rss_peak": 1451444,
+      "nr_throttled_delta": 79,
+      "throttled_usec_delta": 654981
+    },
+    "still-fawn-t2-repeat": {
+      "metadata": {
+        "label": "still-fawn-t2-repeat",
+        "device": "cpu",
+        "threads_requested": 2,
+        "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.41",
+        "torch": "2.7.0+cpu",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 3.563685721019283,
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 112.79995444940121,
+          "seconds": 13.829792818753049,
+          "means": {
+            "decode": 0.021648915538277764,
+            "detect": 0.15632912893600476,
+            "embed": 0.35331954770327473,
+            "classify": 0.0006043607225784889,
+            "total": 0.5319151084135788
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 109.61629610528011,
+          "seconds": 14.231460607843474,
+          "means": {
+            "decode": 0.020018765649113517,
+            "detect": 0.1616866333016123,
+            "embed": 0.36491654472103197,
+            "classify": 0.000725371207898626,
+            "total": 0.5473638695324413
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 53.282812234999994,
+      "wall_seconds": 28.15675449371338,
+      "rss_peak": 1451464,
+      "nr_throttled_delta": 61,
+      "throttled_usec_delta": 107282
+    },
+    "still-fawn-t2-verified": {
+      "metadata": {
+        "label": "still-fawn-t2-verified",
+        "device": "cpu",
+        "threads_requested": 2,
+        "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.41",
+        "torch": "2.7.0+cpu",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 3.5296334698796272,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 111.73742493879888,
+          "seconds": 13.961302588228136,
+          "means": {
+            "decode": 0.022191141203690607,
+            "detect": 0.1570548180383272,
+            "embed": 0.3570620445534587,
+            "classify": 0.0006519811084637275,
+            "total": 0.536973176470313
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 111.55079223988464,
+          "seconds": 13.984660876682028,
+          "means": {
+            "decode": 0.020564715521266826,
+            "detect": 0.15408676613766986,
+            "embed": 0.3625570778699162,
+            "classify": 0.0006475554725441795,
+            "total": 0.537871572180078
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 53.22451603099999,
+      "wall_seconds": 28.078194618225098,
+      "rss_peak": 1451088,
+      "nr_throttled_delta": 73,
+      "throttled_usec_delta": 118070
+    }
+  },
+  "network": {
+    "mac": [
+      {
+        "pass": 0,
+        "mode": "fresh",
+        "mean_ms": 42.33005127081505,
+        "median_ms": 37.73091651964933,
+        "bytes": 8935845
+      },
+      {
+        "pass": 0,
+        "mode": "pooled",
+        "mean_ms": 29.91882211286933,
+        "median_ms": 24.822833016514778,
+        "bytes": 8935845
+      },
+      {
+        "pass": 1,
+        "mode": "fresh",
+        "mean_ms": 44.2715753810122,
+        "median_ms": 36.721166979987174,
+        "bytes": 8935845
+      },
+      {
+        "pass": 1,
+        "mode": "pooled",
+        "mean_ms": 22.077721082426322,
+        "median_ms": 20.592687505995855,
+        "bytes": 8935845
+      }
+    ],
+    "mac_stable_hashes": true,
+    "still-fawn": [
+      {
+        "pass": 0,
+        "mode": "fresh",
+        "mean_ms": 23.925112309650736,
+        "median_ms": 20.707878982648253,
+        "bytes": 8935845
+      },
+      {
+        "pass": 0,
+        "mode": "pooled",
+        "mean_ms": 22.999985421148057,
+        "median_ms": 18.058107001706958,
+        "bytes": 8935845
+      },
+      {
+        "pass": 1,
+        "mode": "fresh",
+        "mean_ms": 23.79168316614456,
+        "median_ms": 19.989246386103332,
+        "bytes": 8935845
+      },
+      {
+        "pass": 1,
+        "mode": "pooled",
+        "mean_ms": 17.722785078848784,
+        "median_ms": 15.32877259887755,
+        "bytes": 8935845
+      }
+    ],
+    "still-fawn_stable_hashes": true
+  },
+  "agreement": [
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-explicit-cache",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-corrected",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-cpu-t2-verified",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-cpu-yolo",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-hybrid-main-repeat",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-inflight4",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-inflight4",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-inflight4",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-inflight4",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-inflight4",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-inflight4",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-main-repeat",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-main-repeat",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-main-repeat",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-main-repeat",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-main-repeat",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-serial-repeat",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-serial-repeat",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-serial-repeat",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-serial-repeat",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-unprivileged",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-unprivileged",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "mac-mps-unprivileged",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "still-fawn-t2",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "still-fawn-t2",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "still-fawn-t2-repeat",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    }
+  ],
+  "at": "2026-11-27T18:27:34.021256+00:00",
+  "status": "matched comparisons complete; GPU contention intervention awaiting owner approval",
+  "runtime_audit": {
+    "mac": {
+      "python": "3.12.14",
+      "machine": "arm64",
+      "versions": {
+        "torch": "2.7.0",
+        "torchvision": "0.22.0",
+        "open_clip_torch": "2.26.1",
+        "ultralytics": "8.4.118",
+        "scikit-learn": "1.5.2",
+        "Pillow": "10.4.0"
+      },
+      "source_hashes": {
+        "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+        "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+        "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+        "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+      }
+    },
+    "still_fawn": {
+      "python": "3.12.16",
+      "machine": "x86_64",
+      "versions": {
+        "torch": "2.7.0+cpu",
+        "torchvision": "0.22.0+cpu",
+        "open_clip_torch": "2.26.1",
+        "ultralytics": "8.4.118",
+        "scikit-learn": "1.5.2",
+        "Pillow": "10.4.0"
+      },
+      "source_hashes": {
+        "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+        "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+        "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+        "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+      }
+    },
+    "same_source": true,
+    "mac_hardware": "Model Name: MacBook Pro\nChip: Apple M5 Pro\nTotal Number of Cores: 18 (6 Super and 12 Performance)\nMemory: 48 GB"
+  },
+  "trace_status": {
+    "native_mac_sample": "successful actual model-process native stacks",
+    "python_all_thread_samples": "successful",
+    "linux_ebpf": "successful 20-second syscall capture of actual model process",
+    "mac_sudo": "not collected: sudo password required; diagnostic worker readiness deadline expired"
+  },
+  "limitations": [
+    "26 frozen holdouts, not a representative library throughput sample",
+    "13 negative controls do not establish population precision",
+    "No timed production workers restarted; independent caption/LLM workloads remained active",
+    "Mac GPU contention pause/resume A/B requires owner approval",
+    "Measured stages include preprocessing, postprocessing and synchronization; not GPU kernel time",
+    "A serial variant temporarily used one ThreadPool caller; main-thread repeats explicitly recorded",
+    "Idle Metal diagnostic model was resident during early CPU tests while awaiting sudo; later main-thread repeats had no waiting test model",
+    "Short batching variant includes new batch-shape warmup costs; no stable throughput win claimed"
+  ]
+}
