@@ -149,3 +149,27 @@ the corresponding write allowance. Baseline caption/audio services were not
 stopped. New requests and heartbeat resumed, with 30 videos completed and zero
 worker errors at the first follow-up. Corrected search now opens a read-only
 ledger instead of attempting schema/WAL writes from the export service.
+
+### Release checks and album scope
+
+The SSD search exporter published eight effective rows successfully. The live UI
+confirmed original playback (9.404-second source, decoded 1920-pixel video) and
+an on-demand MP4 export with byte-range download. A later evidence transfer
+revealed that preserving the Mac's numeric UID blocked the capability-restricted
+review service from reading previews. The sync helper now sets private evidence
+ownership on the host; browser readback passed after the repair.
+
+The final source passes 83 photo/cricket tests and 51 subtests, Ruff, and the Chrome
+correction/export journey. PostgreSQL integration collection additionally requires
+the unavailable psycopg/database fixture. The external Entire PR review gate could
+not run because its organization credit was exhausted; this is not a passing
+review. The unrelated homelab suite has existing infrastructure/fixture failures.
+
+Expanded scope to the full album after 32 videos and four photos completed with
+zero worker errors, about 8.41 completed source-video minutes. Thirteen suggested
+moments existed, all outcome-unknown at this checkpoint. Visual inspection found
+batting candidates and explicitly unidentified bowling candidates. Three longer
+pilot videos remained in flight and continue under the same leases; full-album
+dispatch does not restart them. This is a functional best-effort release, not a
+claim that the pilot or album is fully analyzed or that four/six/wicket recall is
+established. Corrections, playback, export, and search are available immediately.

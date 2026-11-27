@@ -1,4 +1,4 @@
-// Read-only browser smoke check of the deployed private cricket page.
+// Read-only browser smoke check; --export additionally creates one derived clip.
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict');
 (async()=>{
@@ -16,6 +16,19 @@ const assert=require('node:assert/strict');
    return {videos:assets.filter(a=>a.kind==='video').length,photos:assets.filter(a=>a.kind==='photo').length,range:response.status,bytes:(await response.arrayBuffer()).byteLength};
   });
   assert.equal(counts.range,206);assert.equal(counts.bytes,1024);assert.deepEqual(errors,[]);
+  const video=page.locator('.card video').first();
+  if(await video.count()){
+   await video.evaluate(el=>{el.muted=true;el.play().catch(()=>{});});
+   await page.waitForFunction(()=>{const v=document.querySelector('.card video');return v.videoWidth>0&&v.currentTime>0.25;},{},{timeout:40000});
+   await video.evaluate(el=>el.pause());counts.highlightPlayback=true;
+   if(process.argv.includes('--export')){
+    await page.getByRole('button',{name:'Export clip',exact:true}).first().click();
+    const download=page.getByRole('link',{name:'Download clip',exact:true}).first();
+    await download.waitFor({timeout:60000});
+    const response=await page.request.get(new URL(await download.getAttribute('href'),page.url()).href,{headers:{Range:'bytes=0-1023'}});
+    assert.equal(response.status(),206);assert.equal((await response.body()).length,1024);counts.clipExport=true;
+   }
+  }
   await page.screenshot({path:process.argv[2],fullPage:true});
   console.log(JSON.stringify({page:'healthy',...counts}));
  }finally{await browser.close();}

@@ -98,7 +98,18 @@ class APITests(unittest.TestCase):
             self.request("/api/cricket/albums")[2]["albums"][0]["id"], "album"
         )
         assets = self.request("/api/cricket/assets?album=album")[2]["assets"]
-        self.assertEqual(assets, [{"id": "clip", "kind": "video", "duration": 120}])
+        self.assertEqual(
+            assets,
+            [
+                {
+                    "id": "clip",
+                    "kind": "video",
+                    "duration": 120,
+                    "name": "clip.mp4",
+                    "preview": False,
+                }
+            ],
+        )
         event = self.request("/api/cricket/events?album=album")[2]["events"][0]
         self.assertNotIn("owner", event)
         self.assertNotIn("locator", event)

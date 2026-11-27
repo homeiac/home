@@ -92,6 +92,19 @@ or recategorized moments cannot linger in append-only output. Export timing and
 failures use the existing snapshot manifest and retry timer. `cricket.remote
 status` reports the publication timestamp and row count.
 
+Bowling filters include unidentified bowling candidates, visibly labeled as
+unclear, so they can be corrected without assuming every bowler is Adil. A saved
+correction to another named person removes the moment from Adil's filters.
+
+## Clip downloads
+
+Use **Export clip** on a video moment to create an MP4 for its current corrected
+interval. The download retains audio and stores provenance to the original,
+source fingerprint, and effective revision. A timing correction creates a new
+export; stale revision URLs are rejected. Two low-priority encodes may run at
+once. Derived files live under `exports` and are not imported into Immich or
+analyzed as new originals. Export errors leave the saved correction intact.
+
 Example query through the existing analytical query command:
 
 ```sql
