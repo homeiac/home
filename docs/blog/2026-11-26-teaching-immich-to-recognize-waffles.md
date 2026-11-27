@@ -129,19 +129,104 @@ step.
 ### Give the scan its own dashboard
 
 A dedicated [Waffles Grafana dashboard](https://grafana.app.home.panderosystems.com/d/immich-waffles/waffles-immich-pet-tagger)
-uses the Knowledge Index dashboard's overview layout: scan state, fetched assets,
+initially used the Knowledge Index dashboard's overview layout: scan state, fetched assets,
 new assignments, failures, elapsed time, and report freshness first, followed by
 the recognition flow and resource charts. A separate read-only metrics Deployment
 collects aggregate API status. It needs neither the Immich credential nor access
 to the training volume, and deploying it does not restart the active backfill.
 Its ServiceMonitor and dashboard ConfigMap follow the same Flux workflow.
 
-The dashboard makes the upstream measurement boundaries explicit. Fetched assets
+That first dashboard made the upstream measurement boundaries explicit. Fetched assets
 are not completed assets, and crop outcomes cannot be summed into a photo count.
 There is no completion percentage or ETA without a distinct processed-asset
 counter. The pinned API also substitutes an empty review list for live
 low-confidence counts during a manual scan, so that panel waits for completion.
 Freshness guards prevent old successful samples from looking like current health.
+The distributed version below replaces those upstream counters with durable,
+unique completed jobs, making backend distribution and completion measurable.
+
+## Scaling beyond one container
+
+Simply increasing the original Deployment's replica count would create several
+independent scanners sharing mutable local state. It would not distribute a
+single backfill reliably. We reused the existing photo-enrichment PostgreSQL
+claim pattern and the native Mac worker pattern instead.
+
+An isolated `waffles` schema lives in the existing `photo_enrichment` database.
+It stores each run's classifier snapshot and one job per asset. Workers claim
+jobs with `FOR UPDATE SKIP LOCKED`, renew a 90-second lease every 15 seconds,
+and receive a fresh fencing token with every claim. The expensive inference runs
+outside the database transaction. Results from an expired or replaced claim
+cannot commit; completed work survives a pod or Mac restart.
+
+The workers run the pinned upstream detection and embedding code and the same
+fitted classifier parameters. A single coordinator writes accepted results to
+Immich. It checks existing Waffles faces first, then creates missing assignments
+and applies `Pets/Review`. API failures are retried without repeating inference.
+Workers receive only a queue token and a restricted thumbnail proxy; they do not
+receive the Immich API key or PostgreSQL password.
+
+The initial pool has three backends:
+
+| Backend | Runtime | Bound |
+| --- | --- | --- |
+| Mac | Native Python LaunchAgent, Apple Metal | One inference worker; AC-only sleep assertion |
+| still-fawn | Kubernetes CPU worker | Two CPU cores, 3 GiB memory |
+| PVE | Kubernetes CPU worker | One CPU core, 1536 MiB memory |
+
+Each Kubernetes worker has its own retained model-cache PVC. The original PVC
+continues to hold the reference selection; PostgreSQL holds authoritative job
+progress. Existing PostgreSQL backups use `pg_dumpall`, so they include the new
+schema. This adds restart recovery without pretending that local-path storage
+or the existing single PostgreSQL instance is highly available.
+
+RTX is deliberately left out. Its existing workloads remain unchanged, and the
+three-backend measurements give no reason to add GPU contention yet. VPA objects
+collect CPU and memory recommendations for the Kubernetes workers in `Off`,
+`RequestsOnly` mode. The dashboard displays those recommendations; VPA does not
+automatically evict or resize workers during the backfill.
+
+The old automatic scanner is disabled in Git. The coordinator discovers new
+uploads hourly using an owner-filtered creation-time search, a durable cursor,
+and a five-minute overlap. It deduplicates against production jobs and advances
+the cursor only after every search page succeeds. New uploads get a separate
+run so they do not silently change the historical run's denominator.
+
+### Before and after, measured on the same photos
+
+We froze a 96-photo sample spanning the library chronology, warmed the models,
+and ran still-fawn alone, then the three backends twice, then still-fawn alone
+again. The second pass reverses the photo order. Every pass repeats inference
+and benchmark mode never writes recognition metadata to Immich.
+
+| Profile | Pass 1 | Pass 2 | Combined throughput |
+| --- | ---: | ---: | ---: |
+| Before: still-fawn alone | 56.253 s | 53.060 s | 105.4 photos/min |
+| After: Mac + PVE + still-fawn | 18.525 s | 16.927 s | 324.9 photos/min |
+
+That is a **3.08x throughput increase**. Mac completed 109 of the 192 distributed
+jobs, still-fawn 62, and PVE 21. All 96 Waffles/non-Waffles decisions agreed across
+the four passes. These timings end at the last committed result, excluding the
+observer's polling delay. They compare this queue adapter on one backend versus
+three; they are not a benchmark against Docker Compose. They also do not measure
+the additional cost of production Immich writes or establish library-wide accuracy.
+The [aggregate measurement file](../reference/waffles-backend-benchmark.json)
+contains no photo IDs or thumbnails.
+
+### Show how much work each backend actually did
+
+The dedicated dashboard now shows processed, remaining, percentage, failed jobs,
+ETA, and report age first, followed by each backend's processed count and share.
+Its node graph connects PostgreSQL to Mac, PVE, and still-fawn, then to committed
+results. Nodes show processed photos and mean seconds per photo. Edge hover shows
+recent photos per minute; worker hover includes in-flight jobs. Time series show
+each backend's throughput, latency, and completed work, alongside the before/after
+measurements and VPA recommendations.
+
+"Processed" means a durable completed result, including a photo without Waffles.
+It does not mean that the photo was tagged as Waffles. Backend totals sum to the
+completed total for the selected run. This is the important difference from
+counting fetched photos or adding crop outcomes from the original scanner.
 
 ## Teaching it what Waffles is—and what Waffles is not
 
@@ -204,16 +289,28 @@ failures. These counters mix assets and detected crops, so they should not be
 summed as mutually exclusive photo counts. The conservative behavior leaves
 some photos for review instead of forcing a label.
 
-With those checks complete, hourly scanning is enabled through Git. The upstream
+With those initial checks complete, hourly scanning was enabled through Git. The upstream
 upload-time cursor starts at the current UTC day's midnight when absent; older
 photos need a separate manual historical scan. The scan panel exposes progress
 and can stop that backfill without deleting existing recognition metadata.
 
 On November 26, 2026, the owner explicitly approved the full historical backfill.
-It was started for January 1, 1900 through November 26, 2026 using the committed
+It was initially started for January 1, 1900 through November 26, 2026 using the committed
 `manage.py scan` command. This is a background scan, not a claim that the historical
 library has finished processing. The deployment retains the same two-core CPU
-limit, 4 GiB memory limit, and conservative recognition thresholds.
+limit, 4 GiB memory limit, and conservative recognition thresholds. During the
+distributed cutover, that original scan was stopped and its 78,900-asset scope
+was frozen into the PostgreSQL historical run. Existing tags are preserved and
+checked before creating any new face assignment.
+
+The same 26 reviewed holdouts were then checked on every backend. Each accepted
+9 of 13 Waffles photos and rejected all 13 non-Waffles photos. One previously
+accepted photo now falls just below the 0.90 threshold. A fresh evaluation inside
+the original upstream CPU pod also misses that photo; the frozen classifier
+scores its two crops about 0.872 and 0.892. This is not a Mac-versus-CPU disagreement.
+The earlier and current fitted parameters differ slightly, so the earlier 10/13
+spot check must not be presented as the current result. The threshold remains
+0.90; we did not tune it on the holdout to make the score look better.
 
 The reusable commands, permissions, operating controls, and recovery procedure are
 in the [runbook](../runbooks/immich-pet-tagger.md).

@@ -1,0 +1,156 @@
+{
+  "method": "96 identical photos, warm models, ABBA ordering, reverse second pass; no Immich writes; wall time ends at last committed result",
+  "runs": [
+    {
+      "run": "after-1",
+      "photos": 96,
+      "wall_seconds": 18.525,
+      "photos_per_minute": 310.93,
+      "sample_sha256": "59532be06f0fc0f6d097de433ecb964d265ecbc98949572d99d7a677a26cf5c6",
+      "backends": {
+        "mac": {
+          "photos": 52,
+          "mean_processing_seconds": 0.287
+        },
+        "pve": {
+          "photos": 11,
+          "mean_processing_seconds": 1.571
+        },
+        "still-fawn": {
+          "photos": 33,
+          "mean_processing_seconds": 0.525
+        }
+      }
+    },
+    {
+      "run": "after-2",
+      "photos": 96,
+      "wall_seconds": 16.927,
+      "photos_per_minute": 340.28,
+      "sample_sha256": "59532be06f0fc0f6d097de433ecb964d265ecbc98949572d99d7a677a26cf5c6",
+      "backends": {
+        "mac": {
+          "photos": 57,
+          "mean_processing_seconds": 0.229
+        },
+        "pve": {
+          "photos": 10,
+          "mean_processing_seconds": 1.514
+        },
+        "still-fawn": {
+          "photos": 29,
+          "mean_processing_seconds": 0.509
+        }
+      }
+    },
+    {
+      "run": "before-1",
+      "photos": 96,
+      "wall_seconds": 56.253,
+      "photos_per_minute": 102.39,
+      "sample_sha256": "59532be06f0fc0f6d097de433ecb964d265ecbc98949572d99d7a677a26cf5c6",
+      "backends": {
+        "still-fawn": {
+          "photos": 96,
+          "mean_processing_seconds": 0.545
+        }
+      }
+    },
+    {
+      "run": "before-2",
+      "photos": 96,
+      "wall_seconds": 53.06,
+      "photos_per_minute": 108.56,
+      "sample_sha256": "59532be06f0fc0f6d097de433ecb964d265ecbc98949572d99d7a677a26cf5c6",
+      "backends": {
+        "still-fawn": {
+          "photos": 96,
+          "mean_processing_seconds": 0.518
+        }
+      }
+    },
+    {
+      "run": "holdout-mac",
+      "photos": 26,
+      "wall_seconds": 9.457,
+      "photos_per_minute": 164.96,
+      "sample_sha256": "eaa521acd532c829e0b8307c8e1a3e4b9f23b891949d55647c48215d713cd12a",
+      "backends": {
+        "mac": {
+          "photos": 26,
+          "mean_processing_seconds": 0.287
+        }
+      },
+      "accuracy": {
+        "positive": {
+          "total": 13,
+          "matched": 9
+        },
+        "negative": {
+          "total": 13,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "run": "holdout-pve",
+      "photos": 26,
+      "wall_seconds": 45.165,
+      "photos_per_minute": 34.54,
+      "sample_sha256": "eaa521acd532c829e0b8307c8e1a3e4b9f23b891949d55647c48215d713cd12a",
+      "backends": {
+        "pve": {
+          "photos": 26,
+          "mean_processing_seconds": 1.696
+        }
+      },
+      "accuracy": {
+        "positive": {
+          "total": 13,
+          "matched": 9
+        },
+        "negative": {
+          "total": 13,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "run": "holdout-still-fawn",
+      "photos": 26,
+      "wall_seconds": 15.833,
+      "photos_per_minute": 98.53,
+      "sample_sha256": "eaa521acd532c829e0b8307c8e1a3e4b9f23b891949d55647c48215d713cd12a",
+      "backends": {
+        "still-fawn": {
+          "photos": 26,
+          "mean_processing_seconds": 0.573
+        }
+      },
+      "accuracy": {
+        "positive": {
+          "total": 13,
+          "matched": 9
+        },
+        "negative": {
+          "total": 13,
+          "matched": 0
+        }
+      }
+    }
+  ],
+  "agreement": {
+    "after-1": {
+      "compared": 96,
+      "different": 0
+    },
+    "after-2": {
+      "compared": 96,
+      "different": 0
+    },
+    "before-2": {
+      "compared": 96,
+      "different": 0
+    }
+  }
+}

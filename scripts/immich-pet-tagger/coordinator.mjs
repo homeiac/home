@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {claim,finish,WORKERS} from './queue-core.mjs';
+import {discover} from './discovery.mjs';
 const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');
 const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
 const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';
@@ -51,9 +52,10 @@ async function writeOne() {
         await api('/tags/'+tagId+'/assets','PUT',{ids:[job.asset_id]});
       }
       await db.query("UPDATE waffles.jobs SET status='complete',completed_at=now(),applied=applied+$3,last_error=NULL WHERE run_id=$1 AND asset_id=$2",[job.run_id,job.asset_id,added]);
-    } catch {
+    } catch(e) {
       // Retry application without repeating inference; record no private API response.
       await db.query("UPDATE waffles.jobs SET available_at=now()+interval '60 seconds',last_error='apply_failed',applied=applied+$3 WHERE run_id=$1 AND asset_id=$2",[job.run_id,job.asset_id,added]);
+      console.error('Immich apply retry:',/^Immich HTTP \d+$/.test(e.message)?e.message:e.constructor.name);
     }
     return true;
   });
@@ -66,12 +68,15 @@ async function refresh() {
       AND EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running','classified'))`);
     const rows=(await pool.query(`SELECT r.id,r.mode,r.state,extract(epoch FROM r.started_at)::float8 started,
-      extract(epoch FROM r.finished_at)::float8 finished,j.worker,j.status,count(j.asset_id)::int count,
+      CASE WHEN r.state='complete' THEN (SELECT extract(epoch FROM max(done.completed_at))::float8 FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int count,
       coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int applied
       FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status`)).rows;
     const workers=(await pool.query('SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.workers')).rows;
     const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'} '+Number(value);
     const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];
+    const discovery=(await pool.query("SELECT value FROM waffles.settings WHERE key='discovery'")).rows[0]?.value;
+    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));
+    if(discovery?.last_success)lines.push(metric('discovery_last_success_timestamp_seconds',Date.parse(discovery.last_success)/1000));
     const seen=new Set();
     for(const row of rows) {
       const labels={run:row.id,mode:row.mode};
@@ -135,6 +140,11 @@ http.createServer(async(req,res)=>{
       if((await pool.query("SELECT 1 FROM waffles.runs WHERE state='running' LIMIT 1")).rowCount)throw Error('Pause and drain before changing classifier');
       await pool.query("INSERT INTO waffles.settings VALUES('config',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[body]);respond(res,{ok:true});return;
     }
+    if(req.method==='POST'&&url.pathname==='/admin/discovery') {
+      if(typeof body.enabled!=='boolean'||!Number.isFinite(Date.parse(body.since)))throw Error('Invalid discovery settings');
+      await pool.query("INSERT INTO waffles.settings VALUES('discovery',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[{enabled:body.enabled,since:body.since}]);
+      respond(res,{ok:true});return;
+    }
     if(req.method==='POST'&&url.pathname==='/admin/run') {
       if(!/^[a-z0-9-]{1,60}$/.test(body.id)||!['production','benchmark'].includes(body.mode)||!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw Error('Invalid run');
       await transaction(async db=>{
@@ -153,10 +163,11 @@ http.createServer(async(req,res)=>{
     if(req.method==='GET'&&url.pathname==='/admin/status') {
       const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int jobs,
         sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;
-      respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows});return;
+      respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows,discovery:(await pool.query("SELECT value FROM waffles.settings WHERE key='discovery'")).rows[0]?.value});return;
     }
     respond(res,{error:'not found'},404);
   }catch(e){console.error('Queue request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}
 }).listen(9200,'0.0.0.0');
 await refresh();setInterval(refresh,15000);
+setInterval(()=>discover(pool,api),60000);
 for(;;){try{if(!await writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await new Promise(r=>setTimeout(r,5000));}}

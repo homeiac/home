@@ -578,7 +578,7 @@ data:
             {
               "refId": "A",
               "expr": "(max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
-              "legendFormat": "",
+              "legendFormat": "Queue state",
               "instant": true,
               "range": false
             }
@@ -704,7 +704,32 @@ data:
                 }
               ]
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "mainstat"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Processed photos"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "secondarystat"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Mean seconds/photo"
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "nodes": {
@@ -1650,17 +1675,176 @@ data:
         },
         {
           "id": 25,
+          "title": "Upload discovery enabled",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 58,
+            "w": 8,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(waffles_discovery_enabled)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Hourly discovery",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 0,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 26,
+          "title": "Upload discovery errors",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 58,
+            "w": 8,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(max(waffles_discovery_error)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Last attempt failed",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 0,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 27,
+          "title": "Last upload discovery",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 58,
+            "w": 8,
+            "h": 4
+          },
+          "description": "",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "(time()-max(waffles_discovery_last_success_timestamp_seconds)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "Last success",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 0,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 28,
           "title": "How to read this dashboard",
           "type": "text",
           "gridPos": {
             "x": 0,
-            "y": 58,
+            "y": 62,
             "w": 24,
             "h": 4
           },
           "options": {
             "mode": "markdown",
-            "content": "**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; edges show photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich."
+            "content": "**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; hover edges for photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich. New uploads are discovered hourly into a separate durable run."
           }
         }
       ]

@@ -82,6 +82,13 @@ def main() -> None:
                 if not job:
                     time.sleep(2)
                     continue
+                # Runs retain their classifier snapshot across future enrollment
+                # changes; never classify an old run with a newer global model.
+                if job.get('config') and job['config'] != config:
+                    config = job['config']
+                    for obj, values in [(scaler, config['scaler']), (model, config['model'])]:
+                        for name, value in values.items():
+                            setattr(obj, name, np.asarray(value) if isinstance(value, list) else value)
                 state.update({key: job[key] for key in ('run_id', 'asset_id', 'claim')})
                 started = time.monotonic()
                 errors = inference.model_error_count()

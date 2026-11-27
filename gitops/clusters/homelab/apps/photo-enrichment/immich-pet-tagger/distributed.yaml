@@ -47,8 +47,9 @@ data:
     \ BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs\
     \ j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1\n\
     \ FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING\
-    \ j.*`;\n\nexport async function claim(db,worker) {\n  if(!WORKERS.includes(worker))throw\
-    \ Error('Invalid worker');\n  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n\
+    \ j.*,\n (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;\n\nexport\
+    \ async function claim(db,worker) {\n  if(!WORKERS.includes(worker))throw Error('Invalid\
+    \ worker');\n  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n\
     }\n\nexport function validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds)\
     \ || value.seconds<0 || value.seconds>3600)throw Error('Invalid duration');\n\
     \  if(!Array.isArray(value.matches) || value.matches.length>100)throw Error('Invalid\
@@ -70,9 +71,10 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS} from './queue-core.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
-    const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
-    const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
+    \ {claim,finish,WORKERS} from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\n\
+    const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\nconst pool=new\
+    \ Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\nconst\
+    \ IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
     const workerToken=process.env.WORKER_TOKEN,adminToken=process.env.ADMIN_TOKEN;\n\
     const uuid=/^[0-9a-f-]{36}$/i;\nlet report='',healthy=false,tagId=null;\nconst\
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
@@ -100,25 +102,31 @@ data:
     \          added=1;\n        }\n        if(!tagId){const tags=await(await api('/tags','PUT',{tags:['Pets/Review']})).json();tagId=tags.find(t=>t.value==='Pets/Review'||t.name==='Pets/Review')?.id;if(!tagId)throw\
     \ Error('Review tag unavailable');}\n        await api('/tags/'+tagId+'/assets','PUT',{ids:[job.asset_id]});\n\
     \      }\n      await db.query(\"UPDATE waffles.jobs SET status='complete',completed_at=now(),applied=applied+$3,last_error=NULL\
-    \ WHERE run_id=$1 AND asset_id=$2\",[job.run_id,job.asset_id,added]);\n    } catch\
+    \ WHERE run_id=$1 AND asset_id=$2\",[job.run_id,job.asset_id,added]);\n    } catch(e)\
     \ {\n      // Retry application without repeating inference; record no private\
     \ API response.\n      await db.query(\"UPDATE waffles.jobs SET available_at=now()+interval\
     \ '60 seconds',last_error='apply_failed',applied=applied+$3 WHERE run_id=$1 AND\
-    \ asset_id=$2\",[job.run_id,job.asset_id,added]);\n    }\n    return true;\n \
-    \ });\n}\n\nasync function refresh() {\n  try {\n    await pool.query(\"UPDATE\
-    \ waffles.jobs SET status='failed',last_error='lease_exhausted' WHERE status='running'\
-    \ AND lease_until<now() AND attempts>=4\");\n    await pool.query(`UPDATE waffles.runs\
-    \ r SET state='complete',finished_at=now() WHERE r.state='running'\n      AND\
-    \ EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n      AND NOT EXISTS(SELECT\
-    \ 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running','classified'))`);\n\
-    \    const rows=(await pool.query(`SELECT r.id,r.mode,r.state,extract(epoch FROM\
-    \ r.started_at)::float8 started,\n      extract(epoch FROM r.finished_at)::float8\
-    \ finished,j.worker,j.status,count(j.asset_id)::int count,\n      coalesce(sum(j.processing_seconds),0)::float8\
-    \ seconds,coalesce(sum(j.applied),0)::int applied\n      FROM waffles.runs r LEFT\
-    \ JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status`)).rows;\n\
-    \    const workers=(await pool.query('SELECT *,extract(epoch FROM reported_at)::float8\
-    \ reported FROM waffles.workers')).rows;\n    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
+    \ asset_id=$2\",[job.run_id,job.asset_id,added]);\n      console.error('Immich\
+    \ apply retry:',/^Immich HTTP \\d+$/.test(e.message)?e.message:e.constructor.name);\n\
+    \    }\n    return true;\n  });\n}\n\nasync function refresh() {\n  try {\n  \
+    \  await pool.query(\"UPDATE waffles.jobs SET status='failed',last_error='lease_exhausted'\
+    \ WHERE status='running' AND lease_until<now() AND attempts>=4\");\n    await\
+    \ pool.query(`UPDATE waffles.runs r SET state='complete',finished_at=now() WHERE\
+    \ r.state='running'\n      AND EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n\
+    \      AND NOT EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status\
+    \ IN ('pending','running','classified'))`);\n    const rows=(await pool.query(`SELECT\
+    \ r.id,r.mode,r.state,extract(epoch FROM r.started_at)::float8 started,\n    \
+    \  CASE WHEN r.state='complete' THEN (SELECT extract(epoch FROM max(done.completed_at))::float8\
+    \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
+    \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
+    \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
+    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const workers=(await pool.query('SELECT\
+    \ *,extract(epoch FROM reported_at)::float8 reported FROM waffles.workers')).rows;\n\
+    \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
+    \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
+    \ key='discovery'\")).rows[0]?.value;\n    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));\n\
+    \    if(discovery?.last_success)lines.push(metric('discovery_last_success_timestamp_seconds',Date.parse(discovery.last_success)/1000));\n\
     \    const seen=new Set();\n    for(const row of rows) {\n      const labels={run:row.id,mode:row.mode};\n\
     \      if(!seen.has(row.id)) {\n        seen.add(row.id);lines.push(metric('run_state',{paused:0,running:1,complete:2}[row.state],labels));\n\
     \        if(row.started)lines.push(metric('run_started_timestamp_seconds',row.started,labels));\n\
@@ -163,6 +171,11 @@ data:
     \ WHERE state='running' LIMIT 1\")).rowCount)throw Error('Pause and drain before\
     \ changing classifier');\n      await pool.query(\"INSERT INTO waffles.settings\
     \ VALUES('config',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value\",[body]);respond(res,{ok:true});return;\n\
+    \    }\n    if(req.method==='POST'&&url.pathname==='/admin/discovery') {\n   \
+    \   if(typeof body.enabled!=='boolean'||!Number.isFinite(Date.parse(body.since)))throw\
+    \ Error('Invalid discovery settings');\n      await pool.query(\"INSERT INTO waffles.settings\
+    \ VALUES('discovery',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value\"\
+    ,[{enabled:body.enabled,since:body.since}]);\n      respond(res,{ok:true});return;\n\
     \    }\n    if(req.method==='POST'&&url.pathname==='/admin/run') {\n      if(!/^[a-z0-9-]{1,60}$/.test(body.id)||!['production','benchmark'].includes(body.mode)||!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw\
     \ Error('Invalid run');\n      await transaction(async db=>{\n        const config=(await\
     \ db.query(\"SELECT value FROM waffles.settings WHERE key='config'\")).rows[0].value;\n\
@@ -180,11 +193,48 @@ data:
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
-    \    respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows});return;\n\
+    \    respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows,discovery:(await\
+    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n\
     \    }\n    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue\
     \ request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
-    }).listen(9200,'0.0.0.0');\nawait refresh();setInterval(refresh,15000);\nfor(;;){try{if(!await\
-    \ writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await new Promise(r=>setTimeout(r,5000));}}\n"
+    }).listen(9200,'0.0.0.0');\nawait refresh();setInterval(refresh,15000);\nsetInterval(()=>discover(pool,api),60000);\n\
+    for(;;){try{if(!await writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await\
+    \ new Promise(r=>setTimeout(r,5000));}}\n"
+  discovery.mjs: "// Hourly upload discovery with durable cursor; private owner scope\
+    \ is checked on every asset.\nexport async function discover(pool, api) {\n  const\
+    \ db=await pool.connect();\n  let locked=false;\n  try {\n    locked=(await db.query('SELECT\
+    \ pg_try_advisory_lock(244,2) AS locked')).rows[0].locked;\n    if(!locked)return;\n\
+    \    const settings=(await db.query(\"SELECT value FROM waffles.settings WHERE\
+    \ key='discovery'\")).rows[0]?.value;\n    if(!settings?.enabled||Date.now()-Date.parse(settings.last_success??0)<3600000)return;\n\
+    \    const owner=(await(await api('/users/me')).json()).id;\n    if(!owner)throw\
+    \ Error('Owner unavailable');\n    const config=(await db.query(\"SELECT value\
+    \ FROM waffles.settings WHERE key='config'\")).rows[0].value;\n    const until=new\
+    \ Date().toISOString();\n    await db.query(`INSERT INTO waffles.runs(id,mode,state,workers,config,started_at)\n\
+    \      VALUES('new-uploads','production','running',ARRAY['mac','pve','still-fawn'],$1,now())\
+    \ ON CONFLICT(id) DO NOTHING`,[config]);\n    let cursor=null,added=0;\n    const\
+    \ seen=new Set();\n    do {\n      const body={size:1000,filter:{trashedAt:{eq:null},createdAt:{gte:settings.since,lte:until}},orderBy:{field:'fileCreatedAt',direction:'asc'}};\n\
+    \      if(cursor)body.cursor=cursor;\n      const response=await(await api('/search/metadata','POST',body)).json();\n\
+    \      const block=response.assets??response;\n      if(!Array.isArray(block.items))throw\
+    \ Error('Unexpected search response');\n      const items=block.items.filter(a=>a.ownerId===owner).map(a=>({id:a.id,date:a.fileCreatedAt}));\n\
+    \      // Page insertion is atomic and idempotent. Cursor advances only after\
+    \ all\n      // pages succeed; a retry overlaps safely with historical and prior\
+    \ uploads.\n      added+=(await db.query(`INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\n\
+    \        SELECT 'new-uploads',x.id,x.date,coalesce((SELECT max(ordinal)+1 FROM\
+    \ waffles.jobs WHERE run_id='new-uploads'),0)+row_number() OVER()::int\n     \
+    \   FROM jsonb_to_recordset($1::jsonb) x(id uuid,date text)\n        WHERE NOT\
+    \ EXISTS(SELECT 1 FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id WHERE\
+    \ r.mode='production' AND j.asset_id=x.id)\n        ON CONFLICT DO NOTHING`,[JSON.stringify(items)])).rowCount;\n\
+    \      cursor=block.nextCursor??null;\n      if(cursor&&seen.has(cursor))throw\
+    \ Error('Repeated search cursor');\n      if(cursor)seen.add(cursor);\n    }while(cursor);\n\
+    \    if(added)await db.query(\"UPDATE waffles.runs SET state='running',finished_at=NULL\
+    \ WHERE id='new-uploads' AND state='complete'\");\n    const next={...settings,since:new\
+    \ Date(Date.parse(until)-300000).toISOString(),last_success:until,last_added:added,error:false};\n\
+    \    await db.query(\"UPDATE waffles.settings SET value=$1 WHERE key='discovery'\"\
+    ,[next]);\n    console.log('Upload discovery complete:',added,'new jobs');\n \
+    \ }catch(e){\n    await db.query(\"UPDATE waffles.settings SET value=jsonb_set(value,'{error}','true')\
+    \ WHERE key='discovery'\");\n    console.error('Upload discovery failed:',e.code??e.constructor.name);\n\
+    \  }finally{\n    if(locked)await db.query('SELECT pg_advisory_unlock(244,2)');\n\
+    \    db.release();\n  }\n}\n"
   distributed-worker.py: "#!/usr/bin/env python3\n\"\"\"Run unchanged upstream detection/embedding/classification\
     \ with fenced PG jobs.\n\nThe coordinator proxies thumbnails and owns all Immich\
     \ writes. This worker gets\nno Immich API credential, does not enroll pets, and\
@@ -229,12 +279,19 @@ data:
     \    while True:\n            job = None\n            try:\n                job\
     \ = request('/api/claim', {'worker': worker})\n                if not job:\n \
     \                   time.sleep(2)\n                    continue\n            \
-    \    state.update({key: job[key] for key in ('run_id', 'asset_id', 'claim')})\n\
-    \                started = time.monotonic()\n                errors = inference.model_error_count()\n\
-    \                image = embedder.fetch_thumbnail(job['asset_id'])\n         \
-    \       if image is None:\n                    raise RuntimeError('Thumbnail unavailable')\n\
-    \                crops = embedder.crop_animals(image, conf=0.25) or [(None, image)]\n\
-    \                result = dict(size=list(image.size), matches=[], unknown=0, low_confidence=0,\
+    \    # Runs retain their classifier snapshot across future enrollment\n      \
+    \          # changes; never classify an old run with a newer global model.\n \
+    \               if job.get('config') and job['config'] != config:\n          \
+    \          config = job['config']\n                    for obj, values in [(scaler,\
+    \ config['scaler']), (model, config['model'])]:\n                        for name,\
+    \ value in values.items():\n                            setattr(obj, name, np.asarray(value)\
+    \ if isinstance(value, list) else value)\n                state.update({key: job[key]\
+    \ for key in ('run_id', 'asset_id', 'claim')})\n                started = time.monotonic()\n\
+    \                errors = inference.model_error_count()\n                image\
+    \ = embedder.fetch_thumbnail(job['asset_id'])\n                if image is None:\n\
+    \                    raise RuntimeError('Thumbnail unavailable')\n           \
+    \     crops = embedder.crop_animals(image, conf=0.25) or [(None, image)]\n   \
+    \             result = dict(size=list(image.size), matches=[], unknown=0, low_confidence=0,\
     \ out_of_range=0)\n                for box, crop in crops:\n                 \
     \   vector = embedder.embed_image(crop)\n                    if vector is None\
     \ or inference.model_error_count() != errors:\n                        raise RuntimeError('Model\
@@ -333,8 +390,9 @@ data:
     \ BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs\
     \ j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1\n\
     \ FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING\
-    \ j.*`;\n\nexport async function claim(db,worker) {\n  if(!WORKERS.includes(worker))throw\
-    \ Error('Invalid worker');\n  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n\
+    \ j.*,\n (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;\n\nexport\
+    \ async function claim(db,worker) {\n  if(!WORKERS.includes(worker))throw Error('Invalid\
+    \ worker');\n  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n\
     }\n\nexport function validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds)\
     \ || value.seconds<0 || value.seconds>3600)throw Error('Invalid duration');\n\
     \  if(!Array.isArray(value.matches) || value.matches.length>100)throw Error('Invalid\
@@ -356,9 +414,10 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS} from './queue-core.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
-    const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
-    const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
+    \ {claim,finish,WORKERS} from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\n\
+    const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\nconst pool=new\
+    \ Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\nconst\
+    \ IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
     const workerToken=process.env.WORKER_TOKEN,adminToken=process.env.ADMIN_TOKEN;\n\
     const uuid=/^[0-9a-f-]{36}$/i;\nlet report='',healthy=false,tagId=null;\nconst\
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
@@ -386,25 +445,31 @@ data:
     \          added=1;\n        }\n        if(!tagId){const tags=await(await api('/tags','PUT',{tags:['Pets/Review']})).json();tagId=tags.find(t=>t.value==='Pets/Review'||t.name==='Pets/Review')?.id;if(!tagId)throw\
     \ Error('Review tag unavailable');}\n        await api('/tags/'+tagId+'/assets','PUT',{ids:[job.asset_id]});\n\
     \      }\n      await db.query(\"UPDATE waffles.jobs SET status='complete',completed_at=now(),applied=applied+$3,last_error=NULL\
-    \ WHERE run_id=$1 AND asset_id=$2\",[job.run_id,job.asset_id,added]);\n    } catch\
+    \ WHERE run_id=$1 AND asset_id=$2\",[job.run_id,job.asset_id,added]);\n    } catch(e)\
     \ {\n      // Retry application without repeating inference; record no private\
     \ API response.\n      await db.query(\"UPDATE waffles.jobs SET available_at=now()+interval\
     \ '60 seconds',last_error='apply_failed',applied=applied+$3 WHERE run_id=$1 AND\
-    \ asset_id=$2\",[job.run_id,job.asset_id,added]);\n    }\n    return true;\n \
-    \ });\n}\n\nasync function refresh() {\n  try {\n    await pool.query(\"UPDATE\
-    \ waffles.jobs SET status='failed',last_error='lease_exhausted' WHERE status='running'\
-    \ AND lease_until<now() AND attempts>=4\");\n    await pool.query(`UPDATE waffles.runs\
-    \ r SET state='complete',finished_at=now() WHERE r.state='running'\n      AND\
-    \ EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n      AND NOT EXISTS(SELECT\
-    \ 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status IN ('pending','running','classified'))`);\n\
-    \    const rows=(await pool.query(`SELECT r.id,r.mode,r.state,extract(epoch FROM\
-    \ r.started_at)::float8 started,\n      extract(epoch FROM r.finished_at)::float8\
-    \ finished,j.worker,j.status,count(j.asset_id)::int count,\n      coalesce(sum(j.processing_seconds),0)::float8\
-    \ seconds,coalesce(sum(j.applied),0)::int applied\n      FROM waffles.runs r LEFT\
-    \ JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status`)).rows;\n\
-    \    const workers=(await pool.query('SELECT *,extract(epoch FROM reported_at)::float8\
-    \ reported FROM waffles.workers')).rows;\n    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
+    \ asset_id=$2\",[job.run_id,job.asset_id,added]);\n      console.error('Immich\
+    \ apply retry:',/^Immich HTTP \\d+$/.test(e.message)?e.message:e.constructor.name);\n\
+    \    }\n    return true;\n  });\n}\n\nasync function refresh() {\n  try {\n  \
+    \  await pool.query(\"UPDATE waffles.jobs SET status='failed',last_error='lease_exhausted'\
+    \ WHERE status='running' AND lease_until<now() AND attempts>=4\");\n    await\
+    \ pool.query(`UPDATE waffles.runs r SET state='complete',finished_at=now() WHERE\
+    \ r.state='running'\n      AND EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id)\n\
+    \      AND NOT EXISTS(SELECT 1 FROM waffles.jobs j WHERE j.run_id=r.id AND j.status\
+    \ IN ('pending','running','classified'))`);\n    const rows=(await pool.query(`SELECT\
+    \ r.id,r.mode,r.state,extract(epoch FROM r.started_at)::float8 started,\n    \
+    \  CASE WHEN r.state='complete' THEN (SELECT extract(epoch FROM max(done.completed_at))::float8\
+    \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
+    \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
+    \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
+    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const workers=(await pool.query('SELECT\
+    \ *,extract(epoch FROM reported_at)::float8 reported FROM waffles.workers')).rows;\n\
+    \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
+    \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
+    \ key='discovery'\")).rows[0]?.value;\n    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));\n\
+    \    if(discovery?.last_success)lines.push(metric('discovery_last_success_timestamp_seconds',Date.parse(discovery.last_success)/1000));\n\
     \    const seen=new Set();\n    for(const row of rows) {\n      const labels={run:row.id,mode:row.mode};\n\
     \      if(!seen.has(row.id)) {\n        seen.add(row.id);lines.push(metric('run_state',{paused:0,running:1,complete:2}[row.state],labels));\n\
     \        if(row.started)lines.push(metric('run_started_timestamp_seconds',row.started,labels));\n\
@@ -449,6 +514,11 @@ data:
     \ WHERE state='running' LIMIT 1\")).rowCount)throw Error('Pause and drain before\
     \ changing classifier');\n      await pool.query(\"INSERT INTO waffles.settings\
     \ VALUES('config',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value\",[body]);respond(res,{ok:true});return;\n\
+    \    }\n    if(req.method==='POST'&&url.pathname==='/admin/discovery') {\n   \
+    \   if(typeof body.enabled!=='boolean'||!Number.isFinite(Date.parse(body.since)))throw\
+    \ Error('Invalid discovery settings');\n      await pool.query(\"INSERT INTO waffles.settings\
+    \ VALUES('discovery',$1) ON CONFLICT(key) DO UPDATE SET value=excluded.value\"\
+    ,[{enabled:body.enabled,since:body.since}]);\n      respond(res,{ok:true});return;\n\
     \    }\n    if(req.method==='POST'&&url.pathname==='/admin/run') {\n      if(!/^[a-z0-9-]{1,60}$/.test(body.id)||!['production','benchmark'].includes(body.mode)||!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw\
     \ Error('Invalid run');\n      await transaction(async db=>{\n        const config=(await\
     \ db.query(\"SELECT value FROM waffles.settings WHERE key='config'\")).rows[0].value;\n\
@@ -466,11 +536,48 @@ data:
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
-    \    respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows});return;\n\
+    \    respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows,discovery:(await\
+    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n\
     \    }\n    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue\
     \ request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
-    }).listen(9200,'0.0.0.0');\nawait refresh();setInterval(refresh,15000);\nfor(;;){try{if(!await\
-    \ writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await new Promise(r=>setTimeout(r,5000));}}\n"
+    }).listen(9200,'0.0.0.0');\nawait refresh();setInterval(refresh,15000);\nsetInterval(()=>discover(pool,api),60000);\n\
+    for(;;){try{if(!await writeOne())await new Promise(r=>setTimeout(r,1000));}catch{await\
+    \ new Promise(r=>setTimeout(r,5000));}}\n"
+  discovery.mjs: "// Hourly upload discovery with durable cursor; private owner scope\
+    \ is checked on every asset.\nexport async function discover(pool, api) {\n  const\
+    \ db=await pool.connect();\n  let locked=false;\n  try {\n    locked=(await db.query('SELECT\
+    \ pg_try_advisory_lock(244,2) AS locked')).rows[0].locked;\n    if(!locked)return;\n\
+    \    const settings=(await db.query(\"SELECT value FROM waffles.settings WHERE\
+    \ key='discovery'\")).rows[0]?.value;\n    if(!settings?.enabled||Date.now()-Date.parse(settings.last_success??0)<3600000)return;\n\
+    \    const owner=(await(await api('/users/me')).json()).id;\n    if(!owner)throw\
+    \ Error('Owner unavailable');\n    const config=(await db.query(\"SELECT value\
+    \ FROM waffles.settings WHERE key='config'\")).rows[0].value;\n    const until=new\
+    \ Date().toISOString();\n    await db.query(`INSERT INTO waffles.runs(id,mode,state,workers,config,started_at)\n\
+    \      VALUES('new-uploads','production','running',ARRAY['mac','pve','still-fawn'],$1,now())\
+    \ ON CONFLICT(id) DO NOTHING`,[config]);\n    let cursor=null,added=0;\n    const\
+    \ seen=new Set();\n    do {\n      const body={size:1000,filter:{trashedAt:{eq:null},createdAt:{gte:settings.since,lte:until}},orderBy:{field:'fileCreatedAt',direction:'asc'}};\n\
+    \      if(cursor)body.cursor=cursor;\n      const response=await(await api('/search/metadata','POST',body)).json();\n\
+    \      const block=response.assets??response;\n      if(!Array.isArray(block.items))throw\
+    \ Error('Unexpected search response');\n      const items=block.items.filter(a=>a.ownerId===owner).map(a=>({id:a.id,date:a.fileCreatedAt}));\n\
+    \      // Page insertion is atomic and idempotent. Cursor advances only after\
+    \ all\n      // pages succeed; a retry overlaps safely with historical and prior\
+    \ uploads.\n      added+=(await db.query(`INSERT INTO waffles.jobs(run_id,asset_id,taken_at,ordinal)\n\
+    \        SELECT 'new-uploads',x.id,x.date,coalesce((SELECT max(ordinal)+1 FROM\
+    \ waffles.jobs WHERE run_id='new-uploads'),0)+row_number() OVER()::int\n     \
+    \   FROM jsonb_to_recordset($1::jsonb) x(id uuid,date text)\n        WHERE NOT\
+    \ EXISTS(SELECT 1 FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id WHERE\
+    \ r.mode='production' AND j.asset_id=x.id)\n        ON CONFLICT DO NOTHING`,[JSON.stringify(items)])).rowCount;\n\
+    \      cursor=block.nextCursor??null;\n      if(cursor&&seen.has(cursor))throw\
+    \ Error('Repeated search cursor');\n      if(cursor)seen.add(cursor);\n    }while(cursor);\n\
+    \    if(added)await db.query(\"UPDATE waffles.runs SET state='running',finished_at=NULL\
+    \ WHERE id='new-uploads' AND state='complete'\");\n    const next={...settings,since:new\
+    \ Date(Date.parse(until)-300000).toISOString(),last_success:until,last_added:added,error:false};\n\
+    \    await db.query(\"UPDATE waffles.settings SET value=$1 WHERE key='discovery'\"\
+    ,[next]);\n    console.log('Upload discovery complete:',added,'new jobs');\n \
+    \ }catch(e){\n    await db.query(\"UPDATE waffles.settings SET value=jsonb_set(value,'{error}','true')\
+    \ WHERE key='discovery'\");\n    console.error('Upload discovery failed:',e.code??e.constructor.name);\n\
+    \  }finally{\n    if(locked)await db.query('SELECT pg_advisory_unlock(244,2)');\n\
+    \    db.release();\n  }\n}\n"
   distributed-worker.py: "#!/usr/bin/env python3\n\"\"\"Run unchanged upstream detection/embedding/classification\
     \ with fenced PG jobs.\n\nThe coordinator proxies thumbnails and owns all Immich\
     \ writes. This worker gets\nno Immich API credential, does not enroll pets, and\
@@ -515,12 +622,19 @@ data:
     \    while True:\n            job = None\n            try:\n                job\
     \ = request('/api/claim', {'worker': worker})\n                if not job:\n \
     \                   time.sleep(2)\n                    continue\n            \
-    \    state.update({key: job[key] for key in ('run_id', 'asset_id', 'claim')})\n\
-    \                started = time.monotonic()\n                errors = inference.model_error_count()\n\
-    \                image = embedder.fetch_thumbnail(job['asset_id'])\n         \
-    \       if image is None:\n                    raise RuntimeError('Thumbnail unavailable')\n\
-    \                crops = embedder.crop_animals(image, conf=0.25) or [(None, image)]\n\
-    \                result = dict(size=list(image.size), matches=[], unknown=0, low_confidence=0,\
+    \    # Runs retain their classifier snapshot across future enrollment\n      \
+    \          # changes; never classify an old run with a newer global model.\n \
+    \               if job.get('config') and job['config'] != config:\n          \
+    \          config = job['config']\n                    for obj, values in [(scaler,\
+    \ config['scaler']), (model, config['model'])]:\n                        for name,\
+    \ value in values.items():\n                            setattr(obj, name, np.asarray(value)\
+    \ if isinstance(value, list) else value)\n                state.update({key: job[key]\
+    \ for key in ('run_id', 'asset_id', 'claim')})\n                started = time.monotonic()\n\
+    \                errors = inference.model_error_count()\n                image\
+    \ = embedder.fetch_thumbnail(job['asset_id'])\n                if image is None:\n\
+    \                    raise RuntimeError('Thumbnail unavailable')\n           \
+    \     crops = embedder.crop_animals(image, conf=0.25) or [(None, image)]\n   \
+    \             result = dict(size=list(image.size), matches=[], unknown=0, low_confidence=0,\
     \ out_of_range=0)\n                for box, crop in crops:\n                 \
     \   vector = embedder.embed_image(crop)\n                    if vector is None\
     \ or inference.model_error_count() != errors:\n                        raise RuntimeError('Model\
@@ -649,7 +763,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 2eaa2f5bb314f6e5979e6ae0d88fd98cebd316c69a6becec21dd33618d132afe
+        checksum/code: aab165dcf3acd4e2262f7b29fd2487b9a798cf59d9fd121a9a7b8c969bd8586f
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -807,7 +921,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 2eaa2f5bb314f6e5979e6ae0d88fd98cebd316c69a6becec21dd33618d132afe
+        checksum/code: aab165dcf3acd4e2262f7b29fd2487b9a798cf59d9fd121a9a7b8c969bd8586f
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -916,7 +1030,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 2eaa2f5bb314f6e5979e6ae0d88fd98cebd316c69a6becec21dd33618d132afe
+        checksum/code: aab165dcf3acd4e2262f7b29fd2487b9a798cf59d9fd121a9a7b8c969bd8586f
     spec:
       automountServiceAccountToken: false
       securityContext:

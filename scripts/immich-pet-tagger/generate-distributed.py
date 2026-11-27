@@ -21,7 +21,7 @@ def obj(kind, name, namespace='immich-pilot', api='v1', **values):
 
 
 def resources():
-    files = {name: (HERE / name).read_text() for name in ['schema.sql', 'bootstrap.mjs', 'queue-core.mjs', 'coordinator.mjs', 'distributed-worker.py', 'test-queue.mjs']}
+    files = {name: (HERE / name).read_text() for name in ['schema.sql', 'bootstrap.mjs', 'queue-core.mjs', 'coordinator.mjs', 'discovery.mjs', 'distributed-worker.py', 'test-queue.mjs']}
     digest = hashlib.sha256(''.join(files.values()).encode()).hexdigest()
     for namespace in ('database', 'immich-pilot'):
         yield obj('ConfigMap', 'waffles-code', namespace, data=files)

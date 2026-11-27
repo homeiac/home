@@ -4,13 +4,11 @@ The pet tagger runs alongside Immich in `immich-pilot`, managed by the
 `photo-enrichment-preview` Flux Kustomization. Its source is the
 `codex/photo-enrichment-217` branch, not `master`.
 
-Current status: deployed and healthy. Waffles has 23 references and 42 negative
-examples. Automatic scans run hourly with the validated confidence settings.
-
-The owner-approved historical backfill was started on November 26, 2026 for
-`1900-01-01` through `2026-11-26`. Check `manage.py status` for live progress;
-do not start a duplicate scan while that one is running. The manual scan runs
-inside the service and continues after the operator's terminal closes.
+Waffles has 23 references and 42 negative examples. The current execution path is
+a PostgreSQL queue with Mac (Metal), PVE (CPU), and still-fawn (CPU) workers.
+RTX is excluded unless measurements establish a need for it. The original
+single-pod historical scan was stopped during this cutover; its stopped status
+does not describe the distributed run. Use `distributed.py status` and Grafana.
 
 ## Deployment
 
@@ -59,7 +57,7 @@ Scripts live under `scripts/immich-pet-tagger/`. They take credentials from an
 injected `IMMICH_API_KEY` or the already-existing Kubernetes Secret, never literals.
 Private manifests, IDs, thumbnails, API keys, and database dumps stay outside Git.
 
-## Automatic scans and recovery
+## Original UI and scan gate
 
 Set `AUTOMATIC_SCANS=false` to prevent the upstream background loop from running,
 including after a pod restart. Manual scans and enrollment remain available.
@@ -67,13 +65,12 @@ The small startup wrapper changes only background scheduling; inference and API
 behavior come from the pinned upstream image. `generate-startup.py` embeds it in
 the versioned ConfigMap. Revisit this wrapper when upgrading upstream.
 
-The validated deployment uses `AUTOMATIC_SCANS=true`. Change it in Git and reconcile. The
-upstream poller scans once at startup and hourly thereafter. Its upload-time
-cursor is on the PVC. The pinned version initializes an absent cursor to the
-current UTC day's midnight; it does not automatically backfill older uploads.
-Use an explicit manual date window for historical photos and allow enough time
-for CPU inference. Manual scans use photo-taken dates and do not advance the
-automatic upload-time cursor.
+The distributed deployment uses `AUTOMATIC_SCANS=false`. Do not start a manual
+UI scan alongside the PostgreSQL writer. The UI and retained PVC are still the
+source of reference enrollment; fitted classifier parameters are exported to the
+queue. Pause and drain all runs, export updated parameters, and restart workers
+when changing training examples. Running workers keep an immutable classifier
+in memory; changing UI references alone does not update them.
 
 To stop an active manual scan, run `manage.py stop`. To disable scheduled scans,
 set `AUTOMATIC_SCANS=false` in Git and reconcile. To remove the workload, remove
@@ -84,34 +81,30 @@ Avoid a full database restore as routine undo: it could overwrite newer changes.
 ## Dedicated Grafana dashboard
 
 Open [Waffles · Immich Pet Tagger](https://grafana.app.home.panderosystems.com/d/immich-waffles/waffles-immich-pet-tagger).
-The overview follows the Knowledge Index dashboard's status-first layout. It
-shows the manual scan state, fetched assets, new assignments, failures, elapsed
-time, and telemetry freshness. Lower panels cover the recognition flow, outcomes,
-CPU and memory limits, throttling, restarts, storage, and training example counts.
+The overview follows the Knowledge Index dashboard: processed, remaining,
+completion percentage, failed jobs, estimated remaining time, and freshness.
+The second row shows processed counts and shares for Mac, PVE, and still-fawn.
+The node graph connects PostgreSQL to those workers and then committed results.
+Nodes display completed assets and average seconds/asset; hover edges for recent
+assets/minute and workers for in-flight jobs. Backend counts sum to the run's
+processed total. Select a benchmark run to inspect its distribution separately.
 
-`immich-pet-tagger-metrics` is a separate, read-only Deployment. It polls four
+The retained `immich-pet-tagger-metrics` is a separate, read-only Deployment. It polls four
 status endpoints every 15 seconds and exposes aggregate gauges to a ServiceMonitor.
 It has no Immich API key, Kubernetes token, or access to the tagger's PVC. Adding
 or updating this collector does not restart the tagger or its active backfill.
 Its Python runtime uses the same pinned image already verified for the tagger;
 it imports only the standard library, not the inference stack.
 
-The manual scan and latest-cycle panels intentionally stay separate: upstream
-poll status includes both manual and automatic scans, so adding their counts
-would double-count work. Per-scan gauges reset between runs. The tag-write pace
-uses a gauge slope with a scan-start change guard, not a counter rate.
-
-Do not sum outcomes to infer processed photos: they mix crops and assets. The
-API does not expose a unique completed-asset count, so this dashboard does not
-calculate completion percentage or ETA. The current photo date is the date of
-the latest started asset, not a completed-through watermark. Low-confidence
-review assets are shown only after a completed manual scan because upstream
-v1.10.0 replaces the live count with an unpopulated review list while running.
-Missing measurements stay unavailable, and live scan metrics are hidden when
-collection fails or the last successful collection is over 60 seconds old.
-Volume charts show the backing filesystem reported by kubelet: this local-path
-driver reports filesystem-wide usage/capacity, not the tagger directory's size
-or an enforced 5 GiB quota.
+The dashboard now uses `waffles_*` metrics from the coordinator's ServiceMonitor,
+not the old scan counters. Each `(run, asset)` has one durable status, so completed
+photos, percentages, and backend contributions are well-defined. Processing
+includes non-Waffles results; face assignments are a separate metric. Throughput
+is the five-minute slope of completed-job gauges. Average processing time covers
+thumbnail fetch, detection and classification, excluding queue wait and API
+writes. ETA uses recent committed throughput and can change as photo mix changes.
+Metrics older than 60 seconds are hidden. Failed jobs remain separate from the
+processed percentage, even after a run reaches its terminal state.
 
 To change or validate the dashboard:
 
@@ -126,6 +119,87 @@ python3 scripts/immich-pet-tagger/check-dashboard.py
 
 The final check compares generated manifests, the live ConfigMap, Grafana's
 actually served panels, and all PromQL expressions against live Prometheus.
+
+## PostgreSQL and worker operation
+
+`waffles` is an isolated schema in the existing `photo_enrichment` database at
+`postgres-postgresql.database.svc.cluster.local`. It is not Immich's application
+database. Bootstrap follows the existing photo-enrichment scoped-role pattern;
+runtime uses `waffles_worker`, never the PostgreSQL administrator role. Password
+and coordinator tokens are encrypted in `queue-credentials.sops.yaml`.
+
+Jobs use `FOR UPDATE SKIP LOCKED`, 90-second leases, 15-second heartbeats, and a
+new UUID fencing token on every claim. Inference happens outside transactions.
+Expired results cannot commit. After four failed attempts, a job is marked failed.
+One coordinator applies classified results to Immich and retries API failures
+without repeating inference. It checks existing Waffles faces before creating
+one, protecting against duplicates after an uncertain write or process restart.
+Neither a queue restart nor a worker restart loses committed progress.
+
+Workers receive a restricted queue token and thumbnail proxy, not the Immich API
+key or PostgreSQL credentials. The coordinator alone holds those credentials.
+PVE and still-fawn each run one worker with a local model-cache PVC. PVE is bounded
+to one CPU and 1536 MiB; still-fawn to two CPU and 3 GiB. The native Mac LaunchAgent
+uses the same pinned upstream release, Apple Metal, and one inference worker.
+`caffeinate -s` prevents sleep on AC while it runs. Battery sleep or disconnection
+is handled by lease expiry. Existing Mac/RTX caption workers remain unchanged.
+
+```bash
+# Native Mac worker; setup and settings are versioned, local tokens are private.
+python3 scripts/immich-pet-tagger/install-mac.py prepare
+python3 scripts/immich-pet-tagger/install-mac.py start
+python3 scripts/immich-pet-tagger/distributed.py status
+python3 scripts/immich-pet-tagger/distributed.py state historical-waffles paused
+python3 scripts/immich-pet-tagger/distributed.py state historical-waffles running
+```
+
+Pause stops new claims and new API application; already-leased inference may
+finish into the queue. Drain in-flight jobs before changing the classifier.
+To fully stop processing, also pause `new-uploads` and stop the Mac agent if needed.
+Do not delete queue rows to retry failures: retain the audit trail and investigate
+the worker or thumbnail failure first.
+
+Upload discovery runs hourly with a durable creation-time cursor and five-minute
+overlap. It filters the authenticated owner's assets, excludes trashed assets,
+and deduplicates against all production jobs. The cursor advances only after all
+pages succeed. New jobs go into `new-uploads`; historical work keeps its original
+78,900-asset scope. A partial crawl is safe to retry. Discovery is enabled with:
+
+```bash
+python3 scripts/immich-pet-tagger/distributed.py discovery --since 2026-11-26T00:00:00Z
+```
+
+The existing PostgreSQL backup covers the shared database and therefore the new
+schema. Keep the original tagger reference PVC backed up separately; worker cache
+PVCs can be rebuilt. Full restores can overwrite newer work and are not routine
+undo operations.
+
+## VPA and measured scaling
+
+VPA objects for both Kubernetes workers and the original UI run in recommendation
+mode (`Off`, `RequestsOnly`). The existing observer exports their target CPU and
+memory requests. VPA does not resize or evict workers automatically; apply reviewed
+requests through Git. The Mac is not a Kubernetes pod and has no VPA.
+
+The matched benchmark uses 96 chronological sample photos, warm models, ABBA
+profile order, and reversed inputs on the second pass. Each pass redoes inference
+and writes no Immich metadata. Before is this adapter on still-fawn alone; after
+is Mac + PVE + still-fawn. It is not a benchmark against upstream Docker Compose.
+The two before passes averaged 105.4 photos/minute; the two after passes averaged
+324.9 photos/minute, a 3.08x gain. All 96 decisions agreed across passes.
+See [aggregate measurements](../reference/waffles-backend-benchmark.json).
+
+```bash
+node scripts/immich-pet-tagger/test-queue.mjs
+node scripts/immich-pet-tagger/test-discovery.mjs
+python3 scripts/immich-pet-tagger/benchmark.py /private/benchmark.json
+python3 scripts/immich-pet-tagger/check-backend-accuracy.py /private/holdout.json /private/inventory.json
+python3 scripts/immich-pet-tagger/benchmark-report.py --holdout /private/holdout.json
+```
+
+The live PostgreSQL concurrency test (`test-queue.mjs --postgres` inside the queue
+pod) was run before publishing the classifier. Do not rerun it while workers are
+claiming jobs: it inserts short-lived synthetic jobs with the real worker names.
 
 ## Verification record
 

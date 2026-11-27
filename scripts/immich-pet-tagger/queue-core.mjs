@@ -8,7 +8,8 @@ export const CLAIM_SQL=`WITH candidate AS (
  AND j.attempts<4
  ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)
  UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1
- FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*`;
+ FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*,
+ (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;
 
 export async function claim(db,worker) {
   if(!WORKERS.includes(worker))throw Error('Invalid worker');

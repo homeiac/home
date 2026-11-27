@@ -70,6 +70,8 @@ def main() -> None:
     run.add_argument('--reverse', action='store_true')
     state = commands.add_parser('state'); state.add_argument('id'); state.add_argument('state', choices=['paused', 'running'])
     commands.add_parser('status')
+    discovery = commands.add_parser('discovery'); discovery.add_argument('--since', required=True)
+    discovery.add_argument('--disabled', action='store_true')
     args = parser.parse_args()
     if args.command == 'export':
         export_private(args.directory)
@@ -82,6 +84,8 @@ def main() -> None:
         logging.info('%s', request('/admin/run', {'id': args.id, 'mode': args.mode, 'workers': args.workers, 'assets': assets}))
     elif args.command == 'state':
         logging.info('%s', request('/admin/state', {'id': args.id, 'state': args.state}))
+    elif args.command == 'discovery':
+        logging.info('%s', request('/admin/discovery', {'enabled': not args.disabled, 'since': args.since}))
     else:
         logging.info('%s', json.dumps(request('/admin/status'), indent=2))
 

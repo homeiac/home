@@ -47,7 +47,7 @@ def dashboard():
     panel('Queue report age', [('time()-max(waffles_queue_report_timestamp_seconds)','Telemetry age')],20,0,unit='s')
     for x,worker in enumerate(['mac','pve','still-fawn']):
         panel(worker+' · processed',[(jobs('complete',worker),'Photos'),(f'100*({jobs("complete",worker)})/clamp_min(({done}),1)','Share (%)')],x*6,4,w=6)
-    panel('Run state',[(live('max(waffles_run_state{run="$run"})'),'')],18,4,w=6)['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Paused','color':'orange'},'1':{'text':'Running','color':'blue'},'2':{'text':'Finished','color':'green'}}}]
+    panel('Run state',[(live('max(waffles_run_state{run="$run"})'),'Queue state')],18,4,w=6)['fieldConfig']['defaults']['mappings']=[{'type':'value','options':{'0':{'text':'Paused','color':'orange'},'1':{'text':'Running','color':'blue'},'2':{'text':'Finished','color':'green'}}}]
 
     workers = ['mac','pve','still-fawn']
     nodes = [('queue','PostgreSQL','Durable job queue',total,average()),
@@ -62,6 +62,7 @@ def dashboard():
     graph = panel('Job distribution · processed photos by backend',[],0,8,w=24,h=14,kind='nodeGraph',description='Node: committed photo count and mean processing seconds/photo. Edge: recent photos/minute. Hover a backend for in-flight jobs and throughput. Means cover completed jobs in this run; timings include thumbnail fetch, detection and classification. RTX is excluded.')
     graph['targets']=[dict(refId=ref,expr=expr,format='table',instant=True,range=False) for ref,expr in queries.items()]
     graph['options']={'nodes':{'mainStatUnit':'photos','secondaryStatUnit':'s/photo'},'edges':{'mainStatUnit':'photos/min'}}
+    graph['fieldConfig']['overrides']=[{'matcher':{'id':'byName','options':'mainstat'},'properties':[{'id':'displayName','value':'Processed photos'}]}, {'matcher':{'id':'byName','options':'secondarystat'},'properties':[{'id':'displayName','value':'Mean seconds/photo'}]}]
     graph['fieldConfig']['defaults']['decimals']=1
     graph['fieldConfig']['defaults']['mappings']=[{'type':'special','options':{'match':'nan','result':{'text':'—','color':'gray'}}}]
     transforms=[]
@@ -86,7 +87,10 @@ def dashboard():
     for x,profile in [(0,'before'),(12,'after')]:
         expr=f'60 * sum by(run)(waffles_jobs{{run=~"{profile}-[12]",state="complete"}}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{{run=~"{profile}-[12]"}})-max by(run)(waffles_run_started_timestamp_seconds{{run=~"{profile}-[12]"}}))'
         panel(profile.title()+' · matched sample photos/min',[(expr,'{{run}}')],x,54,w=12,description='Same 96 photos, ABBA order, reversed second pass. Before: still-fawn alone. After: Mac + PVE + still-fawn. Model warmup excluded. Benchmark mode never writes faces.')['fieldConfig']['defaults']['decimals']=2
-    panels.append({'id':len(panels)+1,'title':'How to read this dashboard','type':'text','gridPos':dict(x=0,y=58,w=24,h=4),'options':{'mode':'markdown','content':'**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; edges show photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich.'}})
+    panel('Upload discovery enabled',[(live('max(waffles_discovery_enabled)'),'Hourly discovery')],0,58,w=8)
+    panel('Upload discovery errors',[(live('max(waffles_discovery_error)'),'Last attempt failed')],8,58,w=8)
+    panel('Last upload discovery',[(live('time()-max(waffles_discovery_last_success_timestamp_seconds)'),'Last success')],16,58,w=8,unit='s')
+    panels.append({'id':len(panels)+1,'title':'How to read this dashboard','type':'text','gridPos':dict(x=0,y=62,w=24,h=4),'options':{'mode':'markdown','content':'**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; hover edges for photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich. New uploads are discovered hourly into a separate durable run.'}})
     return {'uid':'immich-waffles','title':'Waffles · Immich Pet Tagger','schemaVersion':39,'version':2,'editable':False,'tags':['immich','waffles','pets','gitops'],
             'timezone':'utc','refresh':'15s','time':{'from':'now-1h','to':'now'},
             'templating':{'list':[{'name':'run','label':'Run','type':'query','datasource':DS,'query':'label_values(waffles_run_state, run)','refresh':1,'sort':1,'current':{'text':'historical-waffles','value':'historical-waffles'}}]},
