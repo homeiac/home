@@ -117,3 +117,27 @@ described assets last. This requested recovery retains scope while applying
 description priority; it does not silently discard the lower-priority group.
 Existing successful jobs are not reprocessed. Results will be appended after
 the canary and production run; implementation alone is not a passed experiment.
+
+## Validation outcome and recovery launch
+
+The deployed decoder passed its health and unauthenticated-access checks. The
+first canary stalled with all 34 jobs pending: the empty `new-uploads` production
+run remained running, so baseline scheduling preferred production even with no
+jobs available. The existing Mac extra-worker policy was saved, temporarily
+routed to benchmark mode, and restored automatically after validation. Worker
+counts, device settings and baseline workers were unchanged. The reusable
+`inspect-canary-scheduling.py` exposes empty runs that the status API's inner
+join hides; `run-media-canary.py` bounds validation to 180 seconds and restores
+policy in a finally block. This routing workaround does not fix the scheduler's
+empty-production-run preference.
+
+All 34 canary jobs completed. The owner-reviewed holdout retained 9/13 Waffles
+positives and 0/13 false positives. Five different-dog video controls produced
+zero false positives. One of two clear Waffles video frames was recognized;
+the other remains a known false negative. This passes the registered gate,
+not a claim of perfect recognition. No classifier thresholds were lowered.
+
+Production recovery was then submitted as `waffles-media-recovery-20261127`,
+with all 3,178 original failed assets. Original historical results and the old
+preview audit remain intact. Recovery completion and any residual media errors
+must be measured separately from this successful validation.
