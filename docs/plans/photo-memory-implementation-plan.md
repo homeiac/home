@@ -230,3 +230,5 @@ Run the platform checker against all three live rollout bundles on the same rele
 For a person’s activity album, intersect the existing Immich person label with saved descriptions, OCR and visual search. Review candidate images for the activity and remove repeated shots. Deliver a private chronological album and read back its exact membership and sharing status.
 
 Place the active photo-processing progress row first on the Knowledge Index dashboard. Verify its position and its library-stage reading in provisioned Grafana while preserving panel links and the relative order of the other sections.
+
+Show per-backend throughput and newly saved results immediately below the progress stats. Verify the selected library stage returns separate Mac and RTX series from provisioned Grafana.
