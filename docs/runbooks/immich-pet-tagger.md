@@ -260,6 +260,15 @@ otherwise overrides `OMP_NUM_THREADS`. Thread settings above the default apply
 only to Mac CPU extras; switching back to Metal restores the default automatically.
 See the [thread experiment](../experiments/waffles/2026-11-26-cpu-threads.md).
 
+Observed production policy after the November 26 experiments: Mac, PVE and
+fun-bedbug each retain one baseline; still-fawn retains its baseline plus two
+CPU extras using three affinity lanes. Mac extras are zero after sustained
+memory-pressure rejections. Chief-horse remains guarded standby. The
+[adoption record](../experiments/waffles/README.md#production-adoption-after-the-interrupted-comparison)
+distinguishes independently validated still-fawn capacity from the incomplete
+combined comparison. `wait-production-progress.py` verifies that all admitted
+baselines advance after a queue rollout before starting new measurements.
+
 The [continuous-production protocol](../experiments/waffles/2026-11-26-continuous-production.md)
 compares CPU and Metal on the same 122 photos, with the 26 reviewed holdouts.
 `continuous-experiment.py PRIVATE_DIRECTORY` records settings, hashes, resource

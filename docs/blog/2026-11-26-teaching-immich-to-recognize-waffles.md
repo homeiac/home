@@ -288,6 +288,21 @@ The new Mac CPU adapter controls that selector explicitly and reports its actual
 thread count. This changes only extra workers; previous process-sweep rates must
 not be relabeled as verified two-thread measurements.
 
+The thread phase then encountered sustained Mac memory pressure while starting
+its first two-thread extra worker, before a measured trial. Its
+[separate journal and report](../experiments/waffles/2026-11-26-cpu-threads-results.md)
+record the rejection. There is no thread-count winner or CPU-versus-Metal speedup
+to report under that shared load; Mac extra capacity was restored to zero while
+the original Metal baseline continued.
+
+We separately adopted still-fawn's two CPU extras using its two quality-valid
+three-lane passes as evidence. A bounded production observation kept every
+admitted baseline advancing, with host temperatures at 38–43°C and at least
+1706 MiB available memory. This is an operational adoption, documented in the
+[journal](../experiments/waffles/README.md#production-adoption-after-the-interrupted-comparison),
+not a completed combined benchmark. Mac extras remain drained; still-fawn now
+processes production with one baseline and two extra workers.
+
 ### Auditing an apparent throughput cliff
 
 The dashboard briefly showed a simultaneous backend throughput drop around

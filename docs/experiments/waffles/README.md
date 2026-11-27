@@ -19,6 +19,26 @@ resource rejections and the incomplete combined comparison.
 The [one-model CPU-thread experiment](2026-11-26-cpu-threads.md) follows resource
 rejections at higher process counts. Its results must remain separate because
 the pinned detector library's thread override is explicitly controlled there.
+Its [results](2026-11-26-cpu-threads-results.md) and
+[journal](2026-11-26-cpu-threads.jsonl) record a startup memory-pressure rejection
+before the first measurement, not a completed thread comparison.
+
+## Production adoption after the interrupted comparison
+
+still-fawn's two independently valid three-lane passes supported an operational
+decision to enable two CPU extras there. This does not turn the interrupted
+combined experiment into a successful result. The
+[adoption journal](2026-11-26-still-fawn-adoption.jsonl) records the decision before
+the change, convergence, and more than two minutes of subsequent observation.
+Temperatures stayed 38–43°C, minimum host available memory was 1706 MiB, every
+admitted baseline advanced, and no previously healthy workload restarted.
+
+Across startup plus observation, production completions increased by 323 on
+still-fawn, 185 on Mac, 76 on PVE and 30 on fun-bedbug. These unequal real photos
+are operational progress, not a controlled before/after speedup. Production now
+uses the original baseline workers plus two still-fawn extras with three CPU
+affinity lanes. Mac extras remain zero under the observed shared memory pressure;
+chief-horse remains guarded standby and RTX is unused.
 
 The [throughput exporter audit](2026-11-26-throughput-exporter-audit.md) explains
 the reported simultaneous graph drop: old and new queue-pod slopes were added

@@ -22,8 +22,8 @@ if complete:
             f"Two-thread reference: {before['photos_per_minute']:.1f} photos/min; selected/reference ratio {value['photos_per_minute']/before['photos_per_minute']:.2f}×. This measures extra-worker benchmark throughput, not total-production speedup."]
     lines+=['','Production completions during the experiment: '+', '.join(f"{w} {n-protocol['production_start'][w]:,}" for w,n in complete['production_end'].items())+'.']
 if failure:lines+=['','Failure retained: '+failure['reason']+'. Previous extra policy was restored; no completed winner is claimed.']
-samples=[r['observation'] for r in rows if r['event']=='resource_sample']
-if samples:lines+=['',f"Observed whole-Mac CPU range: {min(s['mac']['cpu_percent'] for s in samples):.1f}–{max(s['mac']['cpu_percent'] for s in samples):.1f}%; includes other applications. System swap first/last: {samples[0]['mac']['swap_bytes']/1024**3:.2f}/{samples[-1]['mac']['swap_bytes']/1024**3:.2f} GiB."]
+samples=[r['observation']['mac'] if r['event']=='resource_sample' else r['observation'] for r in rows if r['event'] in ('resource_sample','memory_warning_followup')]
+if samples:lines+=['',f"Observed whole-Mac CPU range: {min(s['cpu_percent'] for s in samples):.1f}–{max(s['cpu_percent'] for s in samples):.1f}%; includes other applications. System swap first/last: {samples[0]['swap_bytes']/1024**3:.2f}/{samples[-1]['swap_bytes']/1024**3:.2f} GiB."]
 lines+=['','Two repetitions are not a confidence interval. Zero false positives on 13 selected controls does not establish library-wide precision.', '',f"Session `{protocol['session']}`; code `{protocol['git_revision']}`; sample SHA-256 `{protocol['sample_sha256']}`.",'','[Protocol](2026-11-26-cpu-threads.md) · [Journal](2026-11-26-cpu-threads.jsonl)','']
 text='\n'.join(lines)
 if args.write:(folder/'2026-11-26-cpu-threads-results.md').write_text(text)
