@@ -97,3 +97,23 @@ Preparation caches include source fingerprint, extraction version and audio
 evidence. Completed assets survive restarts; failed assets can be retried. The
 pilot does not mutate original media or the existing backfill. `--limit 0`
 prepares the full chosen media kind; do that only after the live capacity trials.
+
+## Suggestions and descending live trials
+
+The analyzer accepts likely fours, sixes, unclear boundaries, dismissals and
+run-outs. Run-up timestamps get ten seconds of pre-roll; release-only observations
+get an approximate fifteen-second fallback. End times include five seconds of
+aftermath and all bounds are clamped to the original. A separate portrait match
+can suggest bowling identity; only featured batting uses the album assumption.
+
+`discover_backends` records reachable existing Mac/RTX/CPU endpoints and their
+upper serving bounds in a private, initially disabled policy. `reference` reads
+the selected person's existing portrait. `trial` runs a fixed private set without
+publishing, saves hashes before requests, and records every result. Begin at each
+backend's measured maximum, then descend. Use `--match PREVIOUS/inputs.json` for
+later trials, including reverse-order confirmation, so newly prepared files do
+not change the comparison. Never count cached answers as inference throughput.
+
+See [the experiment journal](../../../../docs/experiments/cricket/science-journal.md)
+for acceptance criteria and aggregate results. Raw outputs, portraits, evidence
+and policy credentials remain outside Git.
