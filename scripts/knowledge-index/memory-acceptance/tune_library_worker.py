@@ -1,4 +1,4 @@
-"""Replay the production two-pass worker on the same private faces at each concurrency."""
+"""Compare inference strategies and concurrency on the same private marked faces."""
 
 import argparse
 from collections import defaultdict
@@ -107,7 +107,12 @@ def summarize(runs, rows):
             phase: round(
                 statistics.median(item[phase] for item in outcomes if phase in item), 2
             )
-            for phase in ("preview_seconds", "age_seconds", "action_seconds")
+            for phase in (
+                "preview_seconds",
+                "age_seconds",
+                "action_seconds",
+                "joint_seconds",
+            )
             if any(phase in item for item in outcomes)
         },
     }
@@ -131,6 +136,11 @@ def run(args):
 
     def observe(backend, endpoint, pics, prompt, schema):
         started = time.monotonic()
+        phase = "action"
+        if schema is worker.JOINT_SCHEMA:
+            phase = "joint"
+        elif schema is worker.AGE_SCHEMA:
+            phase = "age"
         try:
             answer = original_observe(
                 backend,
@@ -140,14 +150,10 @@ def run(args):
                 schema,
                 images_first=timings.images_first,
             )
-            timings.item["raw_age" if schema is worker.AGE_SCHEMA else "raw_action"] = (
-                answer
-            )
+            timings.item["raw_" + phase] = answer
             return answer
         finally:
-            timings.item[
-                "age_seconds" if schema is worker.AGE_SCHEMA else "action_seconds"
-            ] = (time.monotonic() - started)
+            timings.item[phase + "_seconds"] = time.monotonic() - started
 
     def trial(backend, endpoint, slots, sequence, name):
         def evaluate(index):
@@ -156,7 +162,12 @@ def run(args):
             row = rows[index][0]
             try:
                 state, outcome = worker.infer(
-                    row, backend, endpoint, {}, lambda _: None
+                    row,
+                    backend,
+                    endpoint,
+                    {},
+                    lambda _: None,
+                    joint=args.compare_joint and name.startswith("candidate"),
                 )
             except (OSError, ValueError, KeyError, TypeError, IndexError) as err:
                 state, outcome = "failed", {"error": type(err).__name__}
@@ -198,6 +209,13 @@ def run(args):
                 ("baseline-2", baseline),
             )
         )
+        if args.joint_first:
+            arms = (
+                ("candidate-1", candidate),
+                ("baseline-1", baseline),
+                ("baseline-2", baseline),
+                ("candidate-2", candidate),
+            )
         for label, slots in arms:
             sequence = forward if label.endswith("1") else forward[::-1]
             trial(backend, endpoint, slots, sequence, label)
@@ -238,6 +256,16 @@ if __name__ == "__main__":
     parser.add_argument("--baseline-rtx", type=int, default=worker.DEFAULT_RTX_LANES)
     parser.add_argument("--mac", type=int, default=6)
     parser.add_argument("--rtx", type=int, default=4)
+    parser.add_argument(
+        "--compare-joint",
+        action="store_true",
+        help="Compare two calls with one combined call at production concurrency",
+    )
+    parser.add_argument(
+        "--joint-first",
+        action="store_true",
+        help="Reverse the treatment order for a counterbalanced second block",
+    )
     parser.add_argument("--rtx-endpoint", required=True)
     parser.add_argument(
         "--sample",
@@ -261,6 +289,12 @@ if __name__ == "__main__":
     )
     os.umask(0o077)
     args = parser.parse_args()
+    if args.joint_first and not args.compare_joint:
+        parser.error("--joint-first requires --compare-joint")
+    if args.compare_joint:
+        if args.candidate_only or args.images_first or not args.sample:
+            parser.error("The paired joint trial requires a saved sample and both arms")
+        args.mac, args.rtx = args.baseline_mac, args.baseline_rtx
     if args.pause_worker:
 
         def terminate(signum, _frame):
@@ -277,5 +311,13 @@ if __name__ == "__main__":
         with paused_worker(args.pause_worker), (args.root / "worker.lock").open(
             "a"
         ) as worker_lock:
-            fcntl.flock(worker_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            deadline = time.monotonic() + (45 if args.pause_worker else 0)
+            while True:
+                try:
+                    fcntl.flock(worker_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.25)
             run(args)

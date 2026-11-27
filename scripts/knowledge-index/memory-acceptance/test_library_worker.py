@@ -35,6 +35,32 @@ class LibraryWorkerTests(unittest.TestCase):
             ["print", "bootout", "bootstrap"],
         )
 
+    @patch.object(worker, "frames", return_value=[b"full", b"crop"])
+    def test_joint_call_validates_both_outputs_and_preserves_reviewed_age(self, frames):
+        answer = dict(
+            stage="adult", confidence="high", verb="holds", action="a diploma"
+        )
+        with patch.object(worker, "observe", return_value=answer) as observe:
+            state, result = worker.infer(
+                {}, "rtx3070", "", {}, lambda _: None, joint=True
+            )
+            self.assertEqual((state, result["action"]), ("complete", "holds a diploma"))
+            self.assertEqual(observe.call_count, 1)
+            self.assertEqual(result["inference_mode"], "joint")
+            self.assertIs(observe.call_args.args[-1], worker.JOINT_SCHEMA)
+        with patch.object(worker, "observe", return_value=answer) as observe:
+            state, result = worker.infer(
+                {}, "mac-metal", "", {"stage": "teen"}, self.fail, joint=True
+            )
+            self.assertEqual(result["stage"], "teen")
+            self.assertEqual(result["inference_mode"], "reused_stage")
+            self.assertIs(observe.call_args.args[-1], worker.ACTION_SCHEMA)
+        with patch.object(
+            worker, "observe", return_value=dict(answer, confidence="low")
+        ):
+            state, _ = worker.infer({}, "mac-metal", "", {}, lambda _: None, joint=True)
+            self.assertEqual(state, "withheld")
+
     def test_model_must_return_an_object(self):
         for raw in ("[]", "null", None, '""'):
             with self.subTest(raw=raw), self.assertRaises(ValueError):

@@ -25,6 +25,8 @@ from media_summary import ask_model
 
 DEFAULT_MAC_LANES = 4
 DEFAULT_RTX_LANES = 3
+# The matched pass-count trial selected joint inference on RTX only.
+JOINT_BACKENDS = {"rtx3070"}
 
 STAGES = (
     "baby_toddler",
@@ -64,6 +66,24 @@ ACTION_SCHEMA = {
         "action": {"type": ["string", "null"]},
     },
     "required": ["verb", "action"],
+}
+
+
+JOINT_PROMPT = """Use the full image and crop to describe only the person whose face is
+boxed in yellow. Return one JSON object with stage, confidence, verb and action.
+For stage, choose one of %s. Ignore dates and writing. Use unknown when unclear.
+Give stage confidence as high, medium or low. For action, follow the marked face to
+its own body. Describe only what that person visibly does. Use no names, ages,
+relationships or intentions in the action. Choose one verb from %s and a short English
+fragment starting with the same lowercase verb, e.g. smiles toward the camera.
+Return null for both verb and action if the actor or activity is unclear.""" % (
+    ", ".join(STAGES),
+    ", ".join(VERBS),
+)
+JOINT_SCHEMA = {
+    "type": "object",
+    "properties": {**AGE_SCHEMA["properties"], **ACTION_SCHEMA["properties"]},
+    "required": [*AGE_SCHEMA["required"], *ACTION_SCHEMA["required"]],
 }
 
 
@@ -202,13 +222,21 @@ def normalized_action(action):
     return verb, text
 
 
-def infer(row, backend, endpoint, saved, checkpoint):
+def infer(row, backend, endpoint, saved, checkpoint, *, joint=False):
     start = time.monotonic()
     pics = frames(row)
     if not pics:
         return "withheld", dict(saved, reason="Face too small on preview")
+    combined = None
+    reused_age = "stage" in saved
+    if joint and "stage" not in saved and not saved.get("reviewed_action"):
+        combined = observe(backend, endpoint, pics, JOINT_PROMPT, JOINT_SCHEMA)
     if "stage" not in saved:
-        age = observe(backend, endpoint, pics, AGE_PROMPT, AGE_SCHEMA)
+        age = (
+            combined
+            if combined is not None
+            else observe(backend, endpoint, pics, AGE_PROMPT, AGE_SCHEMA)
+        )
         if age.get("stage") not in STAGES or age.get("confidence") not in {
             "high",
             "medium",
@@ -221,10 +249,23 @@ def infer(row, backend, endpoint, saved, checkpoint):
         )
         checkpoint(saved)
     if not saved.get("reviewed_action"):
-        action = observe(backend, endpoint, pics, ACTION_PROMPT, ACTION_SCHEMA)
+        action = (
+            combined
+            if combined is not None
+            else observe(backend, endpoint, pics, ACTION_PROMPT, ACTION_SCHEMA)
+        )
         verb, text = normalized_action(action)
         saved.update(verb=verb, action=text, code=VERBS.get(verb))
+    if combined is not None:
+        mode = "joint"
+    elif reused_age:
+        mode = "reused_stage"
+    elif saved.get("reviewed_action"):
+        mode = "reused_action"
+    else:
+        mode = "two_pass"
     saved.update(
+        inference_mode=mode,
         backend=backend,
         seconds=round(time.monotonic() - start, 3),
         source="marked face",
@@ -258,7 +299,12 @@ def lane(root, backend, endpoint, limit):
 
             try:
                 state, value = infer(
-                    json.loads(raw), backend, endpoint, saved, checkpoint
+                    json.loads(raw),
+                    backend,
+                    endpoint,
+                    saved,
+                    checkpoint,
+                    joint=backend in JOINT_BACKENDS,
                 )
                 failures = 0
             except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
