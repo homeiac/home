@@ -16,7 +16,17 @@ export async function probe(base, key, asset, fetcher=fetch) {
   const response=await fetcher(base+'/api/assets/'+asset+'/thumbnail?size=preview',{
     headers:{'x-api-key':key},redirect:'manual',signal:AbortSignal.timeout(10000)});
   await response.body?.cancel();
-  return response.status;
+  if(response.status!==404)return response.status;
+  // A missing generated preview is not a missing original. Do not exclude a
+  // playable video or a readable original; the decoder can recover its image.
+  const options={headers:{'x-api-key':key},redirect:'manual',signal:AbortSignal.timeout(10000)};
+  const metadata=await fetcher(base+'/api/assets/'+asset,options);
+  if(!metadata.ok){await metadata.body?.cancel();return metadata.status;}
+  const info=await metadata.json();
+  if(!['IMAGE','VIDEO'].includes(info.type))return 422;
+  const media=await fetcher(base+'/api/assets/'+asset+(info.type==='VIDEO'?'/video/playback':'/original'),
+    {...options,signal:AbortSignal.timeout(10000)});
+  await media.body?.cancel();return media.status;
 }
 
 export function outcome(previous,status) {

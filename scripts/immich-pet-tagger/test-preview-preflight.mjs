@@ -8,6 +8,14 @@ assert.equal(await probe('http://example.invalid','test','fixture',async(url,opt
   return {status:200,body:{cancel:async()=>{cancelled=true;}}};
 }),200);
 assert(cancelled,'Successful GET must stop reading the image body');
+for(const [type,lastStatus,expectedSuffix] of [['VIDEO',200,'/video/playback'],['IMAGE',403,'/original'],['VIDEO',404,'/video/playback']]) {
+  let call=0;
+  assert.equal(await probe('http://example.invalid','test','fixture',async url=>{
+    call++;if(call===1)return new Response('',{status:404});
+    if(call===2)return Response.json({type});
+    assert(url.endsWith(expectedSuffix));return new Response('',{status:lastStatus});
+  }),lastStatus,'Missing preview alone must not be treated as missing media');
+}
 assert.throws(()=>outcome({attempts:0,not_found:0},401),/authentication/);
 assert.throws(()=>outcome({attempts:0,not_found:0},403),/authentication/);
 assert.equal(outcome({attempts:3,not_found:3},404).state,'unavailable');

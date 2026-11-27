@@ -120,3 +120,8 @@ record TLS/HTTPS waiting on the Metal worker, eBPF-observed retry sleeps on
 still-fawn, the fleet-wide throughput drop, unsuccessful diagnostic attempts,
 and the registered background-preview scanner intervention. Per-process GPU
 occupancy was not obtained; whole-host GPU utilization is not attributed to Waffles.
+
+The [November 27 quality and media recovery study](2026-11-27-quality-and-media-recovery.md)
+compares existing descriptions with all completed classifications, visually audits
+disagreements, and corrects the assumption that a preview 404 means unavailable
+media. It records frozen samples, query-selection tradeoffs and the recovery gate.

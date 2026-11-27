@@ -1,5 +1,11 @@
 # Actual-worker traces and missing-preview throughput incident
 
+**November 27 correction:** the original preview-only exclusion criterion was
+too narrow: readable videos can lack generated previews. See the
+[follow-up quality and media recovery study](2026-11-27-quality-and-media-recovery.md).
+The original measurements below are retained, not rewritten as a successful
+media-availability test.
+
 Observed November 26, 2026, Pacific time (November 27 UTC). These are traces of
 existing production workers, not extra inference jobs or a matched-photo hardware
 benchmark. The production targets remain Mac 16 (one Metal, 15 CPU), still-fawn

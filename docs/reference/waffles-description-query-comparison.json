@@ -1,0 +1,62 @@
+{
+  "population": 75722,
+  "model_matched_assets": 772,
+  "query_variants": {
+    "broad_with_waffles": {
+      "candidates": 1925,
+      "model_matches_retained": 739,
+      "model_matches_omitted": 33,
+      "query_hits_without_model_match": 1186,
+      "inference_reduction_percent": 97.46
+    },
+    "dog_terms": {
+      "candidates": 1697,
+      "model_matches_retained": 739,
+      "model_matches_omitted": 33,
+      "query_hits_without_model_match": 958,
+      "inference_reduction_percent": 97.76
+    },
+    "dog_terms_or_missing_description": {
+      "candidates": 3892,
+      "model_matches_retained": 763,
+      "model_matches_omitted": 9,
+      "query_hits_without_model_match": 3129,
+      "inference_reduction_percent": 94.86
+    }
+  },
+  "visual_audit": {
+    "query_positive_model_negative": {
+      "sampled": 32,
+      "dog_visible": 26,
+      "no_visible_dog": 6,
+      "clear_waffles_misses": 9
+    },
+    "query_negative_model_positive": {
+      "sampled": 33,
+      "dog_visible": 33,
+      "obvious_wrong_dog_tags": 0
+    },
+    "query_negative_model_negative": {
+      "sampled": 24,
+      "dog_visible": 0
+    },
+    "separate_accepted_sample": {
+      "random_across_backends": 32,
+      "lowest_confidence": 12,
+      "obvious_wrong_dog_tags": 0
+    },
+    "separate_low_confidence_rejected_sample": {
+      "sampled": 12,
+      "clear_waffles_misses": 5,
+      "identity_uncertain": 3,
+      "other_dogs_or_no_waffles": 4
+    },
+    "manifest_sha256": "8e6c89740554784f0909fc39234b788b78e264a47049f2afd1b886cade5b8543"
+  },
+  "limits": [
+    "Full-population agreement counts use model output, not independently verified truth.",
+    "Visual labels are assistant judgments; obscured/rear/young-dog identity is not owner-confirmed.",
+    "Stratified samples are not pooled into library-wide precision or recall; query hits can correctly show dogs other than Waffles.",
+    "The stricter query removes the food-word ambiguity after inspecting this sample; it is not an untouched test set."
+  ]
+}

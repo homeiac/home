@@ -15,7 +15,7 @@ const safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.le
 async function api(path,method='GET',body) {
   const r=await fetch(IMMICH+'/api'+path,{method,headers:{'x-api-key':process.env.IMMICH_API_KEY,'Content-Type':'application/json'},
     body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
-  if(!r.ok)throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});
+  if(!r.ok){await r.body?.cancel();throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});}
   return r;
 }
 async function jsonBody(req) {
@@ -145,8 +145,18 @@ http.createServer(async(req,res)=>{
       const id=url.pathname.split('/')[4];
       if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT 1',[id])).rowCount){respond(res,{},404);return;}
       try {
-        const r=await api('/assets/'+id+'/thumbnail?size=preview');
-        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await r.arrayBuffer()));
+        let r;
+        try {r=await api('/assets/'+id+'/thumbnail?size=preview');}
+        catch(error) {
+          if(error.status!==404)throw error;
+          // A missing generated preview is not proof the original is missing.
+          // The bounded decoder uses existing asset.view access for videos.
+          r=await fetch('http://waffles-media.immich-pilot.svc.cluster.local:9201/assets/'+id,{
+            headers:{Authorization:'Bearer '+workerToken},signal:AbortSignal.timeout(25000)});
+          if(!r.ok){await r.body?.cancel();throw Object.assign(Error('Media fallback unavailable'),{status:r.status});}
+        }
+        const bytes=Buffer.from(await r.arrayBuffer());
+        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(bytes);
       } catch(error) {
         const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;
         await pool.query("UPDATE waffles.jobs SET last_error=$2 WHERE asset_id=$1 AND status='running' AND lease_until>now()",[id,'thumbnail_http_'+status]);

@@ -10,3 +10,5 @@ resources:
 - distributed.yaml
 - baseline.yaml
 - preview-preflight.yaml
+- preview-preflight-v2.yaml
+- media-fallback.yaml

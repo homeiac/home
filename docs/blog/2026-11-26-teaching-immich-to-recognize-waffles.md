@@ -582,3 +582,24 @@ so the queue and inference pods stayed up. Its first verified result excluded
 records and a separate PostgreSQL audit. Mac stayed at sixteen processes and
 still-fawn at four. Those exclusions are verified; a throughput speedup is not
 yet established because the live library contains different work in each window.
+
+## Reuse descriptions before paying for another full inference pass
+
+The completed scan made a missed optimization measurable. A query over the
+existing Knowledge Index descriptions selected 1,697 dog candidates from 75,722
+processed assets and retained 739 of the model's 772 Waffles matches. Including
+assets with no description raised the candidate set to 3,892 and retained 763
+matches: 94.86% fewer inference jobs, at the cost of nine known model matches.
+This is a comparison with model output, not a guarantee of true recall. A visual
+audit also found clear Waffles photos the classifier itself had missed. Bare
+"Waffles" was removed from the candidate query because it selected food photos.
+
+The preview failures exposed another mistaken assumption. Every one of 32 sampled
+failed videos played successfully despite returning 404 for both thumbnail sizes.
+The corrected adapter recovers an oriented first frame through a separate bounded
+decoder using the existing viewing permission. This adds a PVC-backed derived
+image cache, backpressure, deadlines and an audit trail to the Kubernetes design.
+Historical failure records are preserved, and recovery runs separately with
+dog-described assets first. A first-frame classifier can still miss a dog appearing
+later in the video. The [follow-up science record](../experiments/waffles/2026-11-27-quality-and-media-recovery.md)
+separates measured quality, query/model agreement and recovery results.

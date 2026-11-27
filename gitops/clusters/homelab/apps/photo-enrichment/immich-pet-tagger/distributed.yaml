@@ -165,7 +165,7 @@ data:
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
     async function api(path,method='GET',body) {\n  const r=await fetch(IMMICH+'/api'+path,{method,headers:{'x-api-key':process.env.IMMICH_API_KEY,'Content-Type':'application/json'},\n\
     \    body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});\n\
-    \  if(!r.ok)throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});\n\
+    \  if(!r.ok){await r.body?.cancel();throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});}\n\
     \  return r;\n}\nasync function jsonBody(req) {\n  let value='';for await(const\
     \ chunk of req){value+=chunk;if(value.length>25e6)throw Error('Too large');}\n\
     \  return JSON.parse(value||'{}');\n}\nconst respond=(res,value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};\n\
@@ -259,9 +259,17 @@ data:
     \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
     /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
     \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
-    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      try {\n        const\
-    \ r=await api('/assets/'+id+'/thumbnail?size=preview');\n        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
-    \ r.arrayBuffer()));\n      } catch(error) {\n        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;\n\
+    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      try {\n        let r;\n\
+    \        try {r=await api('/assets/'+id+'/thumbnail?size=preview');}\n       \
+    \ catch(error) {\n          if(error.status!==404)throw error;\n          // A\
+    \ missing generated preview is not proof the original is missing.\n          //\
+    \ The bounded decoder uses existing asset.view access for videos.\n          r=await\
+    \ fetch('http://waffles-media.immich-pilot.svc.cluster.local:9201/assets/'+id,{\n\
+    \            headers:{Authorization:'Bearer '+workerToken},signal:AbortSignal.timeout(25000)});\n\
+    \          if(!r.ok){await r.body?.cancel();throw Object.assign(Error('Media fallback\
+    \ unavailable'),{status:r.status});}\n        }\n        const bytes=Buffer.from(await\
+    \ r.arrayBuffer());\n        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(bytes);\n\
+    \      } catch(error) {\n        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;\n\
     \        await pool.query(\"UPDATE waffles.jobs SET last_error=$2 WHERE asset_id=$1\
     \ AND status='running' AND lease_until>now()\",[id,'thumbnail_http_'+status]);\n\
     \        respond(res,{error:'thumbnail unavailable'},status);\n      }\n     \
@@ -968,7 +976,7 @@ data:
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
     async function api(path,method='GET',body) {\n  const r=await fetch(IMMICH+'/api'+path,{method,headers:{'x-api-key':process.env.IMMICH_API_KEY,'Content-Type':'application/json'},\n\
     \    body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});\n\
-    \  if(!r.ok)throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});\n\
+    \  if(!r.ok){await r.body?.cancel();throw Object.assign(Error('Immich HTTP '+r.status),{status:r.status});}\n\
     \  return r;\n}\nasync function jsonBody(req) {\n  let value='';for await(const\
     \ chunk of req){value+=chunk;if(value.length>25e6)throw Error('Too large');}\n\
     \  return JSON.parse(value||'{}');\n}\nconst respond=(res,value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};\n\
@@ -1062,9 +1070,17 @@ data:
     \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
     /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
     \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
-    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      try {\n        const\
-    \ r=await api('/assets/'+id+'/thumbnail?size=preview');\n        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
-    \ r.arrayBuffer()));\n      } catch(error) {\n        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;\n\
+    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      try {\n        let r;\n\
+    \        try {r=await api('/assets/'+id+'/thumbnail?size=preview');}\n       \
+    \ catch(error) {\n          if(error.status!==404)throw error;\n          // A\
+    \ missing generated preview is not proof the original is missing.\n          //\
+    \ The bounded decoder uses existing asset.view access for videos.\n          r=await\
+    \ fetch('http://waffles-media.immich-pilot.svc.cluster.local:9201/assets/'+id,{\n\
+    \            headers:{Authorization:'Bearer '+workerToken},signal:AbortSignal.timeout(25000)});\n\
+    \          if(!r.ok){await r.body?.cancel();throw Object.assign(Error('Media fallback\
+    \ unavailable'),{status:r.status});}\n        }\n        const bytes=Buffer.from(await\
+    \ r.arrayBuffer());\n        res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(bytes);\n\
+    \      } catch(error) {\n        const status=Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502;\n\
     \        await pool.query(\"UPDATE waffles.jobs SET last_error=$2 WHERE asset_id=$1\
     \ AND status='running' AND lease_until>now()\",[id,'thumbnail_http_'+status]);\n\
     \        respond(res,{error:'thumbnail unavailable'},status);\n      }\n     \
@@ -1683,7 +1699,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: a45346d8b8187e00bb7b2016c98144794af0085ddc76393eeb03eb9f795c8543
+        checksum/code: f57cfe0a3cddb573ceba4a2e59811c97782f7703be3cf5d39dd86d16d2d339a4
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1842,7 +1858,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: a45346d8b8187e00bb7b2016c98144794af0085ddc76393eeb03eb9f795c8543
+        checksum/code: f57cfe0a3cddb573ceba4a2e59811c97782f7703be3cf5d39dd86d16d2d339a4
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1953,7 +1969,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: a45346d8b8187e00bb7b2016c98144794af0085ddc76393eeb03eb9f795c8543
+        checksum/code: f57cfe0a3cddb573ceba4a2e59811c97782f7703be3cf5d39dd86d16d2d339a4
     spec:
       automountServiceAccountToken: false
       securityContext:

@@ -1,0 +1,165 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: waffles-preview-preflight-v2
+  namespace: immich-pilot
+data:
+  preview-preflight-core.mjs: "// Read-only Immich probes; only confirmed unavailable\
+    \ pending jobs leave the queue.\nexport const SCHEMA = `CREATE TABLE IF NOT EXISTS\
+    \ waffles.preview_checks (\n run_id text NOT NULL, asset_id uuid NOT NULL, ordinal\
+    \ integer NOT NULL,\n state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','available','unavailable','unresolved')),\n\
+    \ attempts integer NOT NULL DEFAULT 0, not_found integer NOT NULL DEFAULT 0,\n\
+    \ last_status integer, checked_at timestamptz, next_check timestamptz NOT NULL\
+    \ DEFAULT now(),\n removed boolean NOT NULL DEFAULT false,\n PRIMARY KEY(run_id,asset_id),\n\
+    \ FOREIGN KEY(run_id,asset_id) REFERENCES waffles.jobs(run_id,asset_id)\n);\n\
+    CREATE INDEX IF NOT EXISTS waffles_preview_due ON waffles.preview_checks(run_id,(not_found>0)\
+    \ DESC,ordinal) WHERE state='pending';`;\n\nexport async function probe(base,\
+    \ key, asset, fetcher=fetch) {\n  // GET has the same semantics as the workers;\
+    \ HEAD can be routed differently.\n  // Discard the stream immediately after headers,\
+    \ without decoding/downloading images.\n  const response=await fetcher(base+'/api/assets/'+asset+'/thumbnail?size=preview',{\n\
+    \    headers:{'x-api-key':key},redirect:'manual',signal:AbortSignal.timeout(10000)});\n\
+    \  await response.body?.cancel();\n  if(response.status!==404)return response.status;\n\
+    \  // A missing generated preview is not a missing original. Do not exclude a\n\
+    \  // playable video or a readable original; the decoder can recover its image.\n\
+    \  const options={headers:{'x-api-key':key},redirect:'manual',signal:AbortSignal.timeout(10000)};\n\
+    \  const metadata=await fetcher(base+'/api/assets/'+asset,options);\n  if(!metadata.ok){await\
+    \ metadata.body?.cancel();return metadata.status;}\n  const info=await metadata.json();\n\
+    \  if(!['IMAGE','VIDEO'].includes(info.type))return 422;\n  const media=await\
+    \ fetcher(base+'/api/assets/'+asset+(info.type==='VIDEO'?'/video/playback':'/original'),\n\
+    \    {...options,signal:AbortSignal.timeout(10000)});\n  await media.body?.cancel();return\
+    \ media.status;\n}\n\nexport function outcome(previous,status) {\n  if(status===401||status===403)throw\
+    \ Error('authentication');\n  const attempts=previous.attempts+1;\n  const notFound=status===404?previous.not_found+1:0;\n\
+    \  const state=status===200?'available':notFound===4?'unavailable':attempts>=4?'unresolved':'pending';\n\
+    \  return {attempts,not_found:notFound,state};\n}\n\nexport async function save(db,job,status)\
+    \ {\n  const result=outcome(job,status);\n  await db.query('BEGIN');\n  try {\n\
+    \    let removed=false;\n    if(result.state==='unavailable') {\n      // Fence\
+    \ both a currently claimed job and a claim/fail race that returned it\n      //\
+    \ to pending since this probe started. Inference counters remain honest.\n   \
+    \   removed=(await db.query(`UPDATE waffles.jobs SET status='failed',last_error='thumbnail_http_404'\n\
+    \       WHERE run_id=$1 AND asset_id=$2 AND status='pending' AND attempts=$3\n\
+    \       AND claim IS NOT DISTINCT FROM $4::uuid`,[job.run_id,job.asset_id,job.job_attempts,job.claim])).rowCount===1;\n\
+    \    }\n    await db.query(`UPDATE waffles.preview_checks SET attempts=$3,not_found=$4,state=$5,\n\
+    \      last_status=$6,checked_at=now(),next_check=now()+interval '30 seconds',removed=$7\n\
+    \      WHERE run_id=$1 AND asset_id=$2`,[job.run_id,job.asset_id,result.attempts,result.not_found,result.state,status,removed]);\n\
+    \    await db.query('COMMIT');return {...result,removed};\n  } catch(error) {await\
+    \ db.query('ROLLBACK');throw error;}\n}\n\nexport const NEXT = `SELECT p.*,j.attempts\
+    \ AS job_attempts,j.claim FROM waffles.preview_checks p\n JOIN waffles.jobs j\
+    \ USING(run_id,asset_id)\n WHERE p.run_id=$1 AND p.state='pending' AND p.next_check<=now()\
+    \ AND j.status='pending'\n ORDER BY (p.not_found>0) DESC,p.ordinal LIMIT $2`;\n"
+  preview-preflight.mjs: "// Independently deployed scanner. Never consumes or pauses\
+    \ inference capacity.\nimport {createRequire} from 'node:module';\nimport {SCHEMA,NEXT,probe,save}\
+    \ from './preview-preflight-core.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
+    const run=process.env.PREFLIGHT_RUN??'historical-waffles';\nconst concurrency=Number(process.env.PREFLIGHT_CONCURRENCY??4);\n\
+    const rate=Number(process.env.PREFLIGHT_REQUESTS_PER_SECOND??10);\nif(!Number.isInteger(concurrency)||concurrency<1||concurrency>8||!Number.isFinite(rate)||rate<1||rate>40)throw\
+    \ Error('Invalid preflight capacity');\nconst base=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
+    const pool=new Pool({max:concurrency+1,statement_timeout:10000,connectionTimeoutMillis:10000});\n\
+    let stopping=false;process.on('SIGTERM',()=>{stopping=true;});process.on('SIGINT',()=>{stopping=true;});\n\
+    const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));\nlet lastLog=0,checked=0,removed=0,unknown=0,lock;\n\
+    function progress(event,extra={}) {console.log(JSON.stringify({at:new Date().toISOString(),event,checked_this_process:checked,removed_this_process:removed,unresolved_this_process:unknown,...extra}));lastLog=Date.now();}\n\
+    async function totals() {return (await lock.query(`SELECT state,count(*)::int\
+    \ jobs,sum(attempts)::int http_attempts,\n  count(*) FILTER(WHERE removed)::int\
+    \ removed FROM waffles.preview_checks WHERE run_id=$1 GROUP BY state`,[run])).rows;}\n\
+    try {\n  progress('start',{concurrency,requests_per_second:rate,retries:4,retry_delay_seconds:30});\n\
+    \  if(!process.env.IMMICH_API_KEY)throw Error('missing_credential');\n  lock=await\
+    \ pool.connect();\n  if(!(await lock.query('SELECT pg_try_advisory_lock(244,244404)\
+    \ AS acquired')).rows[0].acquired)throw Error('scanner_already_running');\n  await\
+    \ lock.query(SCHEMA);\n  await lock.query(`INSERT INTO waffles.preview_checks(run_id,asset_id,ordinal)\n\
+    \    SELECT j.run_id,j.asset_id,j.ordinal FROM waffles.jobs j JOIN waffles.runs\
+    \ r ON r.id=j.run_id\n    WHERE j.run_id=$1 AND j.status='pending' AND r.mode='production'\
+    \ ON CONFLICT DO NOTHING`,[run]);\n  while(!stopping) {\n    const started=Date.now();\n\
+    \    const jobs=(await lock.query(NEXT,[run,concurrency])).rows;\n    if(!jobs.length)\
+    \ {\n      const remaining=Number((await lock.query(`SELECT count(*) AS n FROM\
+    \ waffles.preview_checks p\n        JOIN waffles.jobs j USING(run_id,asset_id)\
+    \ WHERE p.run_id=$1 AND p.state='pending' AND j.status='pending'`,[run])).rows[0].n);\n\
+    \      if(!remaining)break;\n      if(Date.now()-lastLog>=15000)progress('waiting_for_retries',{remaining,totals:await\
+    \ totals()});\n      await sleep(1000);continue;\n    }\n    await Promise.all(jobs.map(async\
+    \ job=>{\n      let status=0;\n      try {status=await probe(base,process.env.IMMICH_API_KEY,job.asset_id);}\
+    \ catch { /* bounded transport failures remain unresolved */ }\n      if(status===401||status===403){stopping=true;throw\
+    \ Error('authentication');}\n      const db=await pool.connect();\n      try {const\
+    \ result=await save(db,job,status);checked++;if(result.removed)removed++;if(result.state==='unresolved')unknown++;}\n\
+    \      finally {db.release();}\n    }));\n    if(Date.now()-lastLog>=15000)progress('progress',{totals:await\
+    \ totals()});\n    // Rate cap also bounds successful probes, which otherwise\
+    \ finish very quickly.\n    await sleep(Math.max(0,jobs.length*1000/rate-(Date.now()-started)));\n\
+    \  }\n  progress(stopping?'interrupted':'complete',{totals:await totals()});\n\
+    } catch(error) {\n  // Never log URLs, photo identifiers, keys or raw network\
+    \ exceptions.\n  const safe=['authentication','missing_credential','scanner_already_running'].includes(error.message)?error.message:error.code??'scanner_failed';\n\
+    \  progress('error',{reason:safe});process.exitCode=1;\n} finally {if(lock)lock.release();await\
+    \ pool.end();}\n"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: waffles-preview-preflight-v2
+  namespace: immich-pilot
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 10800
+  template:
+    metadata:
+      labels:
+        app: waffles-preview-preflight
+      annotations:
+        checksum/code: d2ac6dae14b85e1cc9c97a87b30a8ea20a57192814c127cf0dd90af49fc9d2b4
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: k3s-vm-still-fawn
+      terminationGracePeriodSeconds: 20
+      volumes:
+      - name: code
+        configMap:
+          name: waffles-preview-preflight-v2
+      containers:
+      - name: scanner
+        image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+        command:
+        - node
+        - /code/preview-preflight.mjs
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        volumeMounts:
+        - name: code
+          mountPath: /code
+          readOnly: true
+        env:
+        - name: PGHOST
+          value: postgres-postgresql.database.svc.cluster.local
+        - name: PGDATABASE
+          value: photo_enrichment
+        - name: PGUSER
+          value: waffles_worker
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: waffles-queue
+              key: password
+        - name: IMMICH_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: immich-pet-tagger
+              key: api-key
+        - name: PREFLIGHT_RUN
+          value: historical-waffles
+        - name: PREFLIGHT_CONCURRENCY
+          value: '4'
+        - name: PREFLIGHT_REQUESTS_PER_SECOND
+          value: '20'
