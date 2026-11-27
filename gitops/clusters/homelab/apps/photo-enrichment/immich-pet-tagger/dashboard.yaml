@@ -79,7 +79,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Committed results",
               "instant": true,
               "range": false
@@ -132,7 +132,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"pending|running|classified\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"pending|running|classified\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Awaiting completion",
               "instant": true,
               "range": false
@@ -185,7 +185,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/(((sum(waffles_jobs{run=\"$run\",state=~\".*\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))",
+              "expr": "100*(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\".*\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))",
               "legendFormat": "Complete",
               "instant": true,
               "range": false
@@ -238,7 +238,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"failed\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"failed\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Exhausted retries",
               "instant": true,
               "range": false
@@ -291,7 +291,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((((sum(waffles_jobs{run=\"$run\",state=~\"pending|running|classified\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) / (((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/60 > 0)) and on() (max(waffles_run_state{run=\"$run\"})==1)",
+              "expr": "((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"pending|running|classified\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) / (((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/60 > 0)) and on() (max(waffles_run_state{run=\"$run\"})==1)",
               "legendFormat": "At recent pace",
               "instant": true,
               "range": false
@@ -397,14 +397,14 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Photos",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "expr": "100*(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
               "legendFormat": "Share (%)",
               "instant": true,
               "range": false
@@ -457,14 +457,14 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Photos",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "expr": "100*(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
               "legendFormat": "Share (%)",
               "instant": true,
               "range": false
@@ -517,14 +517,14 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Photos",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "expr": "100*(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
               "legendFormat": "Share (%)",
               "instant": true,
               "range": false
@@ -577,14 +577,14 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Photos",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "expr": "100*(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
               "legendFormat": "Share (%)",
               "instant": true,
               "range": false
@@ -637,14 +637,14 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Photos",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "100*(((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
+              "expr": "100*(((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60)))/clamp_min((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))),1)",
               "legendFormat": "Share (%)",
               "instant": true,
               "range": false
@@ -769,35 +769,35 @@ data:
           "targets": [
             {
               "refId": "nodes",
-              "expr": "label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\".*\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"queue\", \"\", \"\")), \"title\", \"PostgreSQL\", \"\", \"\")), \"subtitle\", \"Durable job queue\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"mac\", \"\", \"\")), \"title\", \"Mac \u00b7 Apple Silicon\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"pve\", \"\", \"\")), \"title\", \"PVE \u00b7 CPU\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"still-fawn\", \"\", \"\")), \"title\", \"still-fawn \u00b7 CPU\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"fun-bedbug\", \"\", \"\")), \"title\", \"fun-bedbug \u00b7 native\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"chief-horse\", \"\", \"\")), \"title\", \"chief-horse \u00b7 native\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"committed\", \"\", \"\")), \"title\", \"Committed results\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\")",
+              "expr": "label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\".*\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"queue\", \"\", \"\")), \"title\", \"PostgreSQL\", \"\", \"\")), \"subtitle\", \"Durable job queue\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"mac\", \"\", \"\")), \"title\", \"Mac \u00b7 Apple Silicon\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"pve\", \"\", \"\")), \"title\", \"PVE \u00b7 CPU\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"still-fawn\", \"\", \"\")), \"title\", \"still-fawn \u00b7 CPU\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"fun-bedbug\", \"\", \"\")), \"title\", \"fun-bedbug \u00b7 native\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"chief-horse\", \"\", \"\")), \"title\", \"chief-horse \u00b7 native\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\") or label_replace((label_replace((label_replace(((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"committed\", \"\", \"\")), \"title\", \"Committed results\", \"\", \"\")), \"subtitle\", \"Processed photos\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
             },
             {
               "refId": "timing",
-              "expr": "label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\".*\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"queue\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"mac\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"mac\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"pve\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"pve\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"still-fawn\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"fun-bedbug\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"chief-horse\", \"\", \"\") or label_replace((((sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\".*\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"committed\", \"\", \"\")",
+              "expr": "label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\".*\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"queue\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"mac\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"mac\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"pve\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"pve\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"still-fawn\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"fun-bedbug\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"chief-horse\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\".*\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\".*\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))) or vector(0/0)), \"id\", \"committed\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
             },
             {
               "refId": "inflight",
-              "expr": "label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac\", \"\", \"\") or label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve\", \"\", \"\") or label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn\", \"\", \"\") or label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"fun-bedbug\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"fun-bedbug\", \"\", \"\") or label_replace((((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"chief-horse\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"chief-horse\", \"\", \"\")",
+              "expr": "label_replace((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"mac\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"pve\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"still-fawn\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"fun-bedbug\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"fun-bedbug\", \"\", \"\") or label_replace((((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"chief-horse\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"chief-horse\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
             },
             {
               "refId": "pace",
-              "expr": "label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"fun-bedbug\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"chief-horse\", \"\", \"\")",
+              "expr": "label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"fun-bedbug\", \"\", \"\") or label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"chief-horse\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
             },
             {
               "refId": "edges",
-              "expr": "label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_mac\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"mac\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac_committed\", \"\", \"\")), \"source\", \"mac\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_pve\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"pve\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve_committed\", \"\", \"\")), \"source\", \"pve\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_still-fawn\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"still-fawn\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn_committed\", \"\", \"\")), \"source\", \"still-fawn\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_fun-bedbug\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"fun-bedbug\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"fun-bedbug_committed\", \"\", \"\")), \"source\", \"fun-bedbug\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_chief-horse\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"chief-horse\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"chief-horse_committed\", \"\", \"\")), \"source\", \"chief-horse\", \"\", \"\")), \"target\", \"committed\", \"\", \"\")",
+              "expr": "label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_mac\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"mac\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"mac_committed\", \"\", \"\")), \"source\", \"mac\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_pve\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"pve\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"pve_committed\", \"\", \"\")), \"source\", \"pve\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_still-fawn\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"still-fawn\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"still-fawn_committed\", \"\", \"\")), \"source\", \"still-fawn\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_fun-bedbug\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"fun-bedbug\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"fun-bedbug_committed\", \"\", \"\")), \"source\", \"fun-bedbug\", \"\", \"\")), \"target\", \"committed\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"queue_chief-horse\", \"\", \"\")), \"source\", \"queue\", \"\", \"\")), \"target\", \"chief-horse\", \"\", \"\") or label_replace((label_replace((label_replace(((60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))), \"id\", \"chief-horse_committed\", \"\", \"\")), \"source\", \"chief-horse\", \"\", \"\")), \"target\", \"committed\", \"\", \"\")",
               "format": "table",
               "instant": true,
               "range": false
@@ -1052,35 +1052,35 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"mac\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "mac",
               "instant": false,
               "range": true
             },
             {
               "refId": "B",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"pve\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "pve",
               "instant": false,
               "range": true
             },
             {
               "refId": "C",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"still-fawn\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             },
             {
               "refId": "D",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"fun-bedbug\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "fun-bedbug",
               "instant": false,
               "range": true
             },
             {
               "refId": "E",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"complete\",worker=~\"chief-horse\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "chief-horse",
               "instant": false,
               "range": true
@@ -1133,35 +1133,35 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "mac",
               "instant": false,
               "range": true
             },
             {
               "refId": "B",
-              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "pve",
               "instant": false,
               "range": true
             },
             {
               "refId": "C",
-              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             },
             {
               "refId": "D",
-              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "fun-bedbug",
               "instant": false,
               "range": true
             },
             {
               "refId": "E",
-              "expr": "(60 * sum(clamp_min(deriv(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}[5m]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}))[5m:15s]),0)) or vector(0)) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "chief-horse",
               "instant": false,
               "range": true
@@ -1214,35 +1214,35 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"mac\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"mac\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"mac\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "mac",
               "instant": false,
               "range": true
             },
             {
               "refId": "B",
-              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"pve\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"pve\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"pve\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "pve",
               "instant": false,
               "range": true
             },
             {
               "refId": "C",
-              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"still-fawn\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             },
             {
               "refId": "D",
-              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"fun-bedbug\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "fun-bedbug",
               "instant": false,
               "range": true
             },
             {
               "refId": "E",
-              "expr": "(sum(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}) / sum(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "(sum(max by(run,worker,state)(waffles_processing_seconds{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"})) / sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=\"complete\",worker=~\"chief-horse\"}))) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "chief-horse",
               "instant": false,
               "range": true
@@ -1295,35 +1295,35 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"mac\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"mac\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "mac",
               "instant": false,
               "range": true
             },
             {
               "refId": "B",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"pve\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"pve\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "pve",
               "instant": false,
               "range": true
             },
             {
               "refId": "C",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"still-fawn\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"still-fawn\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "still-fawn",
               "instant": false,
               "range": true
             },
             {
               "refId": "D",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"fun-bedbug\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"fun-bedbug\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "fun-bedbug",
               "instant": false,
               "range": true
             },
             {
               "refId": "E",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"chief-horse\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"running\",worker=~\"chief-horse\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "chief-horse",
               "instant": false,
               "range": true
@@ -1545,7 +1545,7 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "((sum(waffles_jobs{run=\"$run\",state=~\"classified\",worker=~\".*\"}) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "expr": "((sum(max by(run,worker,state)(waffles_jobs{run=\"$run\",state=~\"classified\",worker=~\".*\"})) or vector(0)) and on() max(waffles_run_state{run=\"$run\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
               "legendFormat": "Classified photos",
               "instant": true,
               "range": false

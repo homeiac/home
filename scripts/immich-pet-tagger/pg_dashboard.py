@@ -9,15 +9,18 @@ def live(expr):
 
 
 def jobs(state='.*', worker='.*'):
-    return live(f'(sum(waffles_jobs{{run="$run",state=~"{state}",worker=~"{worker}"}}) or vector(0)) and on() max(waffles_run_state{{run="$run"}})')
+    return live(f'(sum(max by(run,worker,state)(waffles_jobs{{run="$run",state=~"{state}",worker=~"{worker}"}})) or vector(0)) and on() max(waffles_run_state{{run="$run"}})')
 
 
 def rate(worker='.*'):
-    return live(f'60 * sum(clamp_min(deriv(waffles_jobs{{run="$run",state="complete",worker=~"{worker}"}}[5m]),0)) or vector(0)')
+    # Durable PG totals are exported again by every replacement queue pod.
+    # Deduplicate each instant BEFORE the range derivative, otherwise retired
+    # pod slopes remain counted until their samples leave the five-minute window.
+    return live(f'60 * sum(clamp_min(deriv((max by(run,worker,state)(waffles_jobs{{run="$run",state="complete",worker=~"{worker}"}}))[5m:15s]),0)) or vector(0)')
 
 
 def average(worker='.*'):
-    return live(f'sum(waffles_processing_seconds{{run="$run",state="complete",worker=~"{worker}"}}) / sum(waffles_jobs{{run="$run",state="complete",worker=~"{worker}"}})')
+    return live(f'sum(max by(run,worker,state)(waffles_processing_seconds{{run="$run",state="complete",worker=~"{worker}"}})) / sum(max by(run,worker,state)(waffles_jobs{{run="$run",state="complete",worker=~"{worker}"}}))')
 
 
 def label(expr, **fields):
