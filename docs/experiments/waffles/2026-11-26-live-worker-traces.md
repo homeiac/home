@@ -136,6 +136,29 @@ incident evidence. Audit rows still marked pending may refer to jobs completed o
 failed by inference before the scanner reached them. `still_pending_inference`
 in the repeatable report distinguishes that case from remaining runnable work.
 
+### Completed historical run, verified November 27
+
+The historical run finished at 00:31:02 Pacific on November 27: 75,722 assets
+completed, 3,178 failed exclusively with `thumbnail_http_404`, and no runnable or
+in-flight historical work remained. Completed jobs recorded 735 new Waffles face
+assignments. Backend totals were Mac 47,315, still-fawn 20,956, PVE 5,665 and
+fun-bedbug 1,786. These are total completed assets, not counts of Waffles photos.
+
+The scanner completed at 00:23:37 after one pod retry. The original scanner
+process stopped with `ECONNREFUSED` at 23:48:23; its successor resumed the durable
+audit. Final audit: 33,678 available, 2,525 confirmed unavailable, two unresolved,
+and 132 still marked audit-pending whose inference jobs had already left pending.
+None remained pending for inference. It excluded 2,507 jobs itself; racing workers
+owned the other confirmed-unavailable outcomes. All 2,507 exclusions passed the
+four-404 evidence and final-state invariants. No photo or job record was deleted.
+
+At the status check, Mac still had sixteen ready workers and still-fawn four;
+PVE and fun-bedbug had one each. Current historical throughput was zero because
+the queue had finished. These final counts establish completion and correct
+exclusions, not an isolated causal throughput speedup. The aggregate final report
+is appended to the JSONL journal. The status script selects the newest scanner
+pod explicitly so a retained failed pod cannot be mistaken for the final outcome.
+
 ## Reproduction
 
 Use `diagnose-throughput-drop.py --output PRIVATE_REPORT.json` for aggregate

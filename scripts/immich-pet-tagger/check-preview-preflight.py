@@ -11,12 +11,20 @@ parser.add_argument('--journal',action='store_true',help='Append aggregate obser
 args=parser.parse_args()
 
 subprocess.run(KUBE+['-n','immich-pilot','get','job','waffles-preview-preflight-v1'],check=True)
-subprocess.run(KUBE+['-n','immich-pilot','logs','job/waffles-preview-preflight-v1','--tail=5'],check=True)
+pods=json.loads(subprocess.check_output(KUBE+['-n','immich-pilot','get','pods','-l','job-name=waffles-preview-preflight-v1','-o','json'],text=True))['items']
+if pods:
+    # A retried Job can retain its failed pod; kubectl logs job/... may choose it.
+    latest=max(pods,key=lambda pod:pod['metadata']['creationTimestamp'])
+    subprocess.run(KUBE+['-n','immich-pilot','logs',latest['metadata']['name'],'--tail=5'],check=True)
 code='''import {createRequire} from 'node:module';
 const {Client}=createRequire('/usr/src/app/server/package.json')('pg');
 const db=new Client();await db.connect();await db.query('BEGIN READ ONLY');
 await db.query("SET LOCAL statement_timeout='10s'");
 const report={};
+report.historical=(await db.query(`SELECT r.state,r.finished_at,j.status,j.last_error,
+ count(*)::int assets,sum(j.applied)::int assignments_added,max(j.completed_at) last_completed
+ FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id
+ WHERE r.id='historical-waffles' GROUP BY r.state,r.finished_at,j.status,j.last_error`)).rows;
 report.audit=(await db.query(`SELECT p.state,count(*)::int assets,sum(p.attempts)::int http_attempts,
  count(*) FILTER(WHERE p.removed)::int removed,
  count(*) FILTER(WHERE j.status='pending')::int still_pending_inference
