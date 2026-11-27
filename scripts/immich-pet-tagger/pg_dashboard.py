@@ -60,7 +60,7 @@ def dashboard():
         'inflight': ' or '.join(label(jobs('running',w),id=w) for w in workers),
         'pace': ' or '.join(label(rate(w),id=w) for w in workers),
         'edges': ' or '.join(label(rate(w),id=a+'_'+b,source=a,target=b) for w in workers for a,b in [('queue',w),(w,'committed')])}
-    graph = panel('Job distribution · processed photos by backend',[],0,8,w=24,h=14,kind='nodeGraph',description='Node: committed photo count and mean processing seconds/photo. Edge: recent photos/minute. Hover a backend for in-flight jobs and throughput. Means cover completed jobs in this run; timings include thumbnail fetch, detection and classification. RTX is excluded.')
+    graph = panel('Job distribution · processed photos by backend',[],0,8,w=24,h=20,kind='nodeGraph',description='Node: committed photo count and mean processing seconds/photo. Edge: recent photos/minute. Hover a backend for in-flight jobs and throughput. Means cover completed jobs in this run; timings include thumbnail fetch, detection and classification. RTX is excluded.')
     graph['targets']=[dict(refId=ref,expr=expr,format='table',instant=True,range=False) for ref,expr in queries.items()]
     graph['options']={'nodes':{'mainStatUnit':'photos','secondaryStatUnit':'s/photo'},'edges':{'mainStatUnit':'photos/min'}}
     graph['fieldConfig']['overrides']=[{'matcher':{'id':'byName','options':'mainstat'},'properties':[{'id':'displayName','value':'Processed photos'}]}, {'matcher':{'id':'byName','options':'secondarystat'},'properties':[{'id':'displayName','value':'Mean seconds/photo'}]}]
@@ -78,7 +78,7 @@ def dashboard():
     p=panel('Throughput by backend · photos/min',[(rate(w),w) for w in workers],12,22,w=12,h=7,kind='timeseries');p['fieldConfig']['defaults']['decimals']=2
     panel('Mean processing time by backend',[(average(w),w) for w in workers],0,29,w=12,h=7,kind='timeseries',unit='s')['fieldConfig']['defaults']['decimals']=2
     panel('In-flight jobs by backend',[(jobs('running',w),w) for w in workers],12,29,w=12,h=7,kind='timeseries')
-    panel('Worker ready',[(live(f'max(waffles_worker_ready{{worker="{w}"}})'),w) for w in workers],0,36,w=8)
+    panel('Active / desired processes',[(live(f'max(waffles_worker_{kind}_instances{{worker="{w}"}})'),w+' '+kind) for w in workers for kind in ['active','desired']],0,36,w=8)
     panel('Waffles face assignments added',[(live('sum(waffles_assignments{run="$run"}) or vector(0)'),'New assignments')],8,36,w=8)
     panel('Awaiting Immich writes',[(jobs('classified'),'Classified photos')],16,36,w=8)
     panel('Kubernetes worker CPU', [('sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="immich-pilot",container="worker",pod=~"waffles-worker-.*"}[5m]))','{{pod}}')],0,40,w=12,h=7,kind='timeseries',unit='cores')['fieldConfig']['defaults']['decimals']=2
@@ -92,6 +92,12 @@ def dashboard():
     panel('Upload discovery errors',[(live('max(waffles_discovery_error)'),'Last attempt failed')],8,58,w=8)
     panel('Last upload discovery',[(live('time()-max(waffles_discovery_last_success_timestamp_seconds)'),'Last success')],16,58,w=8,unit='s')
     panels.append({'id':len(panels)+1,'title':'How to read this dashboard','type':'text','gridPos':dict(x=0,y=62,w=24,h=4),'options':{'mode':'markdown','content':'**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; hover edges for photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich. New uploads are discovered hourly into a separate durable run.'}})
+    for p in panels:
+        if p['gridPos']['y']>=22:p['gridPos']['y']+=6
+    for x,profile in [(0,'before'),(12,'after')]:
+        pattern=f'tune-.*-pool-{profile}-[ab]'
+        expr=f'60 * sum by(run)(waffles_jobs{{run=~"{pattern}",state="complete"}}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{{run=~"{pattern}"}})-max by(run)(waffles_run_started_timestamp_seconds{{run=~"{pattern}"}}))'
+        panel('Live tuning '+profile+' · photos/min',[(expr,'{{run}}')],x,72,w=12,h=5,description='Preregistered concurrency experiment. Same frozen chronological sample plus reviewed holdouts; ABBA order. Before: one process on each of Mac, PVE and still-fawn. After: measured winning concurrency. See the experiment journal for quality gates and failed trials.')['fieldConfig']['defaults']['decimals']=2
     return {'uid':'immich-waffles','title':'Waffles · Immich Pet Tagger','schemaVersion':39,'version':2,'editable':False,'tags':['immich','waffles','pets','gitops'],
             'timezone':'utc','refresh':'15s','time':{'from':'now-1h','to':'now'},
             'templating':{'list':[{'name':'run','label':'Run','type':'query','datasource':DS,'query':'label_values(waffles_run_state, run)','refresh':1,'sort':1,'current':{'text':'historical-waffles','value':'historical-waffles'}}]},

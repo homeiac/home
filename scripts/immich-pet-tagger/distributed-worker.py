@@ -9,6 +9,7 @@ import logging
 import os
 from pathlib import Path
 import resource
+import signal
 import sys
 import threading
 import time
@@ -32,7 +33,13 @@ def main() -> None:
     os.environ.setdefault('HF_HOME', str(directory / '.cache/huggingface'))
     os.environ.setdefault('YOLO_CONFIG_DIR', str(directory / '.ultralytics'))
     sys.path.insert(0, os.environ.get('UPSTREAM_APP', '/app'))
-    state = dict(worker=worker, ready=False, device='loading')
+    state = dict(worker=worker, instance=os.environ.get('WAFFLES_INSTANCE',worker), ready=False, device='loading', draining=False)
+    draining = threading.Event()
+    def drain(*_):
+        state['draining'] = True
+        draining.set()
+    signal.signal(signal.SIGTERM, drain)
+    signal.signal(signal.SIGINT, drain)
 
     def request(path: str, body=None):
         req = urllib.request.Request(base + path, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
@@ -75,7 +82,7 @@ def main() -> None:
     with inference.inference_session():
         state.update(ready=True, device=pick_device())
         logging.info('Worker %s ready on %s', worker, state['device'])
-        while True:
+        while not draining.is_set():
             job = None
             try:
                 if os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':
@@ -130,6 +137,8 @@ def main() -> None:
             finally:
                 for key in ('run_id', 'asset_id', 'claim'):
                     state.pop(key, None)
+        state['ready'] = False
+        request('/api/heartbeat', state)
 
 
 if __name__ == '__main__':

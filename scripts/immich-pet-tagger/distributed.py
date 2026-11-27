@@ -74,6 +74,9 @@ def main() -> None:
     discovery.add_argument('--disabled', action='store_true')
     workers = commands.add_parser('workers'); workers.add_argument('id')
     workers.add_argument('names', nargs='+', choices=['mac', 'pve', 'still-fawn', 'fun-bedbug', 'chief-horse'])
+    tune=commands.add_parser('tune');tune.add_argument('worker',choices=['mac','pve','still-fawn','fun-bedbug','chief-horse'])
+    tune.add_argument('slots',type=int);tune.add_argument('--note',default='Operator live tuning')
+    commands.add_parser('tuning')
     args = parser.parse_args()
     if args.command == 'export':
         export_private(args.directory)
@@ -90,6 +93,10 @@ def main() -> None:
         logging.info('%s', request('/admin/discovery', {'enabled': not args.disabled, 'since': args.since}))
     elif args.command == 'workers':
         logging.info('%s', request('/admin/workers', {'id': args.id, 'workers': args.names}))
+    elif args.command == 'tune':
+        logging.info('%s',request('/admin/tuning',{'worker':args.worker,'slots':args.slots,'note':args.note}))
+    elif args.command == 'tuning':
+        logging.info('%s',json.dumps(request('/api/tuning'),indent=2))
     else:
         data = request('/admin/status')
         if args.compact:
@@ -101,7 +108,7 @@ def main() -> None:
                 item['statuses'][row['status']] = item['statuses'].get(row['status'], 0) + row['jobs']
                 if row['status'] == 'complete':
                     item['processed_by_backend'][row['worker']] = row['jobs']
-            data = {'runs': grouped, 'workers': [{k: w[k] for k in ('name', 'ready', 'device')} for w in data['workers']], 'discovery': data.get('discovery')}
+            data = {'runs': grouped, 'workers': [{k: w[k] for k in ('name', 'ready', 'device', 'active_instances') if k in w} for w in data['workers']], 'discovery': data.get('discovery')}
         logging.info('%s', json.dumps(data, indent=2))
 
 

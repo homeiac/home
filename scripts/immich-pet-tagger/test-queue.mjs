@@ -1,9 +1,16 @@
 // Pure validation checks run locally; --postgres also exercises real concurrent claims.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {claim,finish,validateResult} from './queue-core.mjs';
+import {claim,finish,validateResult,validateTuning} from './queue-core.mjs';
 const value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};
 assert.equal(validateResult(value).seconds,1.2);
+assert.deepEqual(validateTuning('mac',4),{slots:4});
+assert.deepEqual(validateTuning('still-fawn',0),{slots:0});
+for(const [worker,slots] of [['mac',5],['pve',2],['still-fawn',-1],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));
+const calls=[];
+const connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};
+assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');
+assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');
 for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])
   assert.throws(()=>validateResult(bad));
 if(process.argv.includes('--postgres')) {

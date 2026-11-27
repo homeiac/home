@@ -763,7 +763,7 @@ data:
             "x": 0,
             "y": 8,
             "w": 24,
-            "h": 14
+            "h": 20
           },
           "description": "Node: committed photo count and mean processing seconds/photo. Edge: recent photos/minute. Hover a backend for in-flight jobs and throughput. Means cover completed jobs in this run; timings include thumbnail fetch, detection and classification. RTX is excluded.",
           "targets": [
@@ -1044,7 +1044,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 22,
+            "y": 28,
             "w": 12,
             "h": 7
           },
@@ -1125,7 +1125,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 22,
+            "y": 28,
             "w": 12,
             "h": 7
           },
@@ -1206,7 +1206,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 29,
+            "y": 35,
             "w": 12,
             "h": 7
           },
@@ -1287,7 +1287,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 29,
+            "y": 35,
             "w": 12,
             "h": 7
           },
@@ -1360,7 +1360,7 @@ data:
         },
         {
           "id": 18,
-          "title": "Worker ready",
+          "title": "Active / desired processes",
           "type": "stat",
           "datasource": {
             "type": "prometheus",
@@ -1368,7 +1368,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 36,
+            "y": 42,
             "w": 8,
             "h": 4
           },
@@ -1376,36 +1376,71 @@ data:
           "targets": [
             {
               "refId": "A",
-              "expr": "(max(waffles_worker_ready{worker=\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
-              "legendFormat": "mac",
+              "expr": "(max(waffles_worker_active_instances{worker=\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac active",
               "instant": true,
               "range": false
             },
             {
               "refId": "B",
-              "expr": "(max(waffles_worker_ready{worker=\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
-              "legendFormat": "pve",
+              "expr": "(max(waffles_worker_desired_instances{worker=\"mac\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "mac desired",
               "instant": true,
               "range": false
             },
             {
               "refId": "C",
-              "expr": "(max(waffles_worker_ready{worker=\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
-              "legendFormat": "still-fawn",
+              "expr": "(max(waffles_worker_active_instances{worker=\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve active",
               "instant": true,
               "range": false
             },
             {
               "refId": "D",
-              "expr": "(max(waffles_worker_ready{worker=\"fun-bedbug\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
-              "legendFormat": "fun-bedbug",
+              "expr": "(max(waffles_worker_desired_instances{worker=\"pve\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "pve desired",
               "instant": true,
               "range": false
             },
             {
               "refId": "E",
-              "expr": "(max(waffles_worker_ready{worker=\"chief-horse\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
-              "legendFormat": "chief-horse",
+              "expr": "(max(waffles_worker_active_instances{worker=\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn active",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "F",
+              "expr": "(max(waffles_worker_desired_instances{worker=\"still-fawn\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "still-fawn desired",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "G",
+              "expr": "(max(waffles_worker_active_instances{worker=\"fun-bedbug\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "fun-bedbug active",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "H",
+              "expr": "(max(waffles_worker_desired_instances{worker=\"fun-bedbug\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "fun-bedbug desired",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "I",
+              "expr": "(max(waffles_worker_active_instances{worker=\"chief-horse\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "chief-horse active",
+              "instant": true,
+              "range": false
+            },
+            {
+              "refId": "J",
+              "expr": "(max(waffles_worker_desired_instances{worker=\"chief-horse\"})) and on() ((max(waffles_queue_up)==1) and on() (time()-max(waffles_queue_report_timestamp_seconds)<60))",
+              "legendFormat": "chief-horse desired",
               "instant": true,
               "range": false
             }
@@ -1449,7 +1484,7 @@ data:
           },
           "gridPos": {
             "x": 8,
-            "y": 36,
+            "y": 42,
             "w": 8,
             "h": 4
           },
@@ -1502,7 +1537,7 @@ data:
           },
           "gridPos": {
             "x": 16,
-            "y": 36,
+            "y": 42,
             "w": 8,
             "h": 4
           },
@@ -1555,7 +1590,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 40,
+            "y": 46,
             "w": 12,
             "h": 7
           },
@@ -1608,7 +1643,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 40,
+            "y": 46,
             "w": 12,
             "h": 7
           },
@@ -1661,7 +1696,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 47,
+            "y": 53,
             "w": 12,
             "h": 7
           },
@@ -1714,7 +1749,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 47,
+            "y": 53,
             "w": 12,
             "h": 7
           },
@@ -1767,7 +1802,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 54,
+            "y": 60,
             "w": 12,
             "h": 4
           },
@@ -1820,7 +1855,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 54,
+            "y": 60,
             "w": 12,
             "h": 4
           },
@@ -1873,7 +1908,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 58,
+            "y": 64,
             "w": 8,
             "h": 4
           },
@@ -1926,7 +1961,7 @@ data:
           },
           "gridPos": {
             "x": 8,
-            "y": 58,
+            "y": 64,
             "w": 8,
             "h": 4
           },
@@ -1979,7 +2014,7 @@ data:
           },
           "gridPos": {
             "x": 16,
-            "y": 58,
+            "y": 64,
             "w": 8,
             "h": 4
           },
@@ -2028,13 +2063,119 @@ data:
           "type": "text",
           "gridPos": {
             "x": 0,
-            "y": 62,
+            "y": 68,
             "w": 24,
             "h": 4
           },
           "options": {
             "mode": "markdown",
             "content": "**One job per asset per run.** Processed means a committed result, including photos without Waffles. Backend totals add up to processed photos. Failed jobs remain visible separately. Node counts show distribution; hover edges for photos/minute; node secondary values show mean seconds/photo. **RTX remains unused.** VPA collects Kubernetes resource recommendations without evictions. Select a benchmark run to inspect its distribution; benchmark jobs never change Immich. New uploads are discovered hourly into a separate durable run."
+          }
+        },
+        {
+          "id": 31,
+          "title": "Live tuning before \u00b7 photos/min",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 72,
+            "w": 12,
+            "h": 5
+          },
+          "description": "Preregistered concurrency experiment. Same frozen chronological sample plus reviewed holdouts; ABBA order. Before: one process on each of Mac, PVE and still-fawn. After: measured winning concurrency. See the experiment journal for quality gates and failed trials.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "60 * sum by(run)(waffles_jobs{run=~\"tune-.*-pool-before-[ab]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"tune-.*-pool-before-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"tune-.*-pool-before-[ab]\"}))",
+              "legendFormat": "{{run}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 2,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 32,
+          "title": "Live tuning after \u00b7 photos/min",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 72,
+            "w": 12,
+            "h": 5
+          },
+          "description": "Preregistered concurrency experiment. Same frozen chronological sample plus reviewed holdouts; ABBA order. Before: one process on each of Mac, PVE and still-fawn. After: measured winning concurrency. See the experiment journal for quality gates and failed trials.",
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "60 * sum by(run)(waffles_jobs{run=~\"tune-.*-pool-after-[ab]\",state=\"complete\"}) / on(run) (max by(run)(waffles_run_finished_timestamp_seconds{run=~\"tune-.*-pool-after-[ab]\"})-max by(run)(waffles_run_started_timestamp_seconds{run=~\"tune-.*-pool-after-[ab]\"}))",
+              "legendFormat": "{{run}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "locale",
+              "decimals": 2,
+              "noValue": "No data yet",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "none",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
           }
         }
       ]

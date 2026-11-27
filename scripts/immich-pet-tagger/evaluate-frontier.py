@@ -81,7 +81,9 @@ def main() -> None:
         key=('true_positive' if accepted else 'false_negative') if r['expected']=='positive' else ('false_positive' if accepted else 'true_negative')
         summary[key]+=1
         summary['uncertain']+=int(r['answer']['verdict']=='uncertain')
-    summary['eligible_for_fallback']=summary['false_positive']==0 and summary['true_positive']>9
+    # Eligibility is decided by compare-frontier.py on incremental recovery of
+    # local misses, not whether this model has better standalone recall.
+    summary['standalone_recall_improved']=summary['false_positive']==0 and summary['true_positive']>9
     (args.output/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
     logging.info('%s',json.dumps(summary,indent=2))
 

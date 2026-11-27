@@ -228,6 +228,44 @@ It does not mean that the photo was tagged as Waffles. Backend totals sum to the
 completed total for the selected run. This is the important difference from
 counting fetched photos or adding crop outcomes from the original scanner.
 
+### Adding native hosts without moving their other workloads
+
+fun-bedbug and chief-horse were also available outside Kubernetes. Live checks
+showed why "available" needs a resource check: fun-bedbug had about 2 GiB spare
+but was already at 64°C; chief-horse had 933 MiB spare while running a 6 GiB Home
+Assistant VM. The inference process uses about 1.1 GiB before extra headroom.
+
+The native deployment uses an isolated Python environment and an unprivileged
+systemd service. It caps fun-bedbug at half a CPU core, chief-horse at one core,
+and both at 1536 MiB with process swapping disabled. No Home Assistant or K3s VM
+allocation changes. Startup requires 1800 MiB available memory and a CPU package
+temperature below 65°C. While running, a drop below 512 MiB available or a rise
+to 68°C stops new claims, unloads the models and returns the service to standby.
+A timer rechecks capacity. The dashboard includes both native backends, even when
+they have completed zero jobs or remain on standby. Chief-horse's memory guard
+kept it from loading a model during initial deployment.
+
+### Evaluate the expensive fallback before enabling it
+
+The owner suggested Luna or Sol for tricky photos, as in the earlier enrichment
+pipeline. After explicit approval for the evaluation images, we used that same
+Enterprise Codex CLI path with tools and web search disabled. Each request saw
+the supplied Waffles reference and one blinded test photo. The 26-photo set had
+13 confirmed Waffles photos and 13 non-Waffles controls; none were training inputs.
+
+Only `same_dog` with `high` confidence counted as acceptance. Luna accepted zero
+Waffles photos at that confidence; Sol accepted two. Both rejected all 13
+non-Waffles controls. Crucially, neither recovered any of the four photos missed
+by the local classifier. The correct fallback criterion is incremental recovery
+without false positives, not standalone recall or confident wording.
+
+Automatic cloud escalation therefore remains disabled. We did not relax the
+confidence rule after seeing the answers, and the evaluation did not write any
+Immich tags. This tests the single-reference prompt we ran, not every possible
+reference set or prompting strategy. Aggregate results are in the
+[frontier evaluation record](../reference/waffles-frontier-evaluation.json);
+photos and individual model answers stay outside Git.
+
 ## Teaching it what Waffles is—and what Waffles is not
 
 Search results are candidates, not training labels. Numbered contact sheets let

@@ -21,7 +21,17 @@ data:
     CREATE INDEX IF NOT EXISTS waffles_jobs_claim ON waffles.jobs(run_id,status,available_at,ordinal);\n\
     CREATE TABLE IF NOT EXISTS waffles.workers (\n  name text PRIMARY KEY, reported_at\
     \ timestamptz NOT NULL DEFAULT now(), device text,\n  ready boolean NOT NULL DEFAULT\
-    \ false, model_seconds double precision,\n  rss_bytes bigint\n);\n"
+    \ false, model_seconds double precision,\n  rss_bytes bigint\n);\nCREATE TABLE\
+    \ IF NOT EXISTS waffles.instances (\n  id text PRIMARY KEY, worker text NOT NULL,\
+    \ reported_at timestamptz NOT NULL DEFAULT now(),\n  device text, ready boolean\
+    \ NOT NULL DEFAULT false, draining boolean NOT NULL DEFAULT false,\n  rss_bytes\
+    \ bigint NOT NULL DEFAULT 0, exit_code integer\n);\nCREATE TABLE IF NOT EXISTS\
+    \ waffles.tuning_events (\n  id bigserial PRIMARY KEY, worker text NOT NULL, slots\
+    \ integer NOT NULL,\n  changed_at timestamptz NOT NULL DEFAULT now(), note text\
+    \ NOT NULL DEFAULT ''\n);\nINSERT INTO waffles.settings(key,value) VALUES('tuning',\n\
+    \ '{\"mac\":{\"slots\":1},\"pve\":{\"slots\":1},\"still-fawn\":{\"slots\":1},\"\
+    fun-bedbug\":{\"slots\":1},\"chief-horse\":{\"slots\":1}}')\n ON CONFLICT(key)\
+    \ DO NOTHING;\n"
   bootstrap.mjs: "// Same scoped-role bootstrap pattern as immich_sync/bootstrap.mjs\
     \ (#217).\nimport {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
@@ -40,20 +50,32 @@ data:
     } finally {await db.end();}\n"
   queue-core.mjs: "// Fenced claims adapted from photo_enrichment/postgres.py; inference\
     \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];\n\
+    export const SLOT_LIMITS={mac:4,pve:1,'still-fawn':2,'fun-bedbug':1,'chief-horse':1};\n\
     export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
     \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
     \ AND $1=ANY(r.workers)\n AND ((j.status='pending' AND j.available_at<=now())\
-    \ OR (j.status='running' AND j.lease_until<now()))\n AND j.attempts<4\n ORDER\
-    \ BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs\
-    \ j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1\n\
-    \ FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING\
-    \ j.*,\n (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;\n\nexport\
-    \ async function claim(db,worker) {\n  if(!WORKERS.includes(worker))throw Error('Invalid\
-    \ worker');\n  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n\
-    }\n\nexport function validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds)\
-    \ || value.seconds<0 || value.seconds>3600)throw Error('Invalid duration');\n\
-    \  if(!Array.isArray(value.matches) || value.matches.length>100)throw Error('Invalid\
-    \ matches');\n  if(!Array.isArray(value.size) || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
+    \ OR (j.status='running' AND j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT\
+    \ count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.status='running'\
+    \ AND active.lease_until>now())\n     < coalesce((SELECT (value->$1->>'slots')::int\
+    \ FROM waffles.settings WHERE key='tuning'),1)\n ORDER BY r.created_at,j.ordinal\
+    \ FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval\
+    \ '90 seconds',attempts=attempts+1\n FROM candidate c WHERE j.run_id=c.run_id\
+    \ AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT config FROM waffles.runs\
+    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker) {\n\
+    \  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  const db=await\
+    \ pool.connect();\n  try {\n    await db.query('BEGIN');\n    // Separate statements\
+    \ ensure a fresh READ COMMITTED snapshot after waiting\n    // for the per-backend\
+    \ lock. Concurrent processes cannot exceed live slots.\n    await db.query(\"\
+    SELECT pg_advisory_xact_lock(244,hashtext($1))\",[worker]);\n    const job=(await\
+    \ db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n    await\
+    \ db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
+    \ e;}finally{db.release();}\n}\n\nexport function validateTuning(worker,slots)\
+    \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>SLOT_LIMITS[worker])throw\
+    \ Error('Invalid worker slot limit');\n  return {slots};\n}\n\nexport function\
+    \ validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds) || value.seconds<0\
+    \ || value.seconds>3600)throw Error('Invalid duration');\n  if(!Array.isArray(value.matches)\
+    \ || value.matches.length>100)throw Error('Invalid matches');\n  if(!Array.isArray(value.size)\
+    \ || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
     \ Error('Invalid size');\n  for(const match of value.matches) {\n    if(!Number.isFinite(match.probability)||match.probability<0.9||match.probability>1)throw\
     \ Error('Invalid confidence');\n    const b=match.box;\n    if(!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)||v<0||v>1)||b[0]>=b[2]||b[1]>=b[3])throw\
     \ Error('Invalid box');\n  }\n  for(const key of ['unknown','low_confidence','out_of_range'])\n\
@@ -71,10 +93,10 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS} from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\n\
-    const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\nconst pool=new\
-    \ Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\nconst\
-    \ IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
+    \ {claim,finish,WORKERS,SLOT_LIMITS,validateTuning} from './queue-core.mjs';\n\
+    import {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
+    const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
+    const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
     const workerToken=process.env.WORKER_TOKEN,adminToken=process.env.ADMIN_TOKEN;\n\
     const uuid=/^[0-9a-f-]{36}$/i;\nlet report='',healthy=false,tagId=null;\nconst\
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
@@ -120,9 +142,12 @@ data:
     \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
     \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
     \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
-    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const workers=(await pool.query('SELECT\
-    \ *,extract(epoch FROM reported_at)::float8 reported FROM waffles.workers')).rows;\n\
-    \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
+    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const instances=(await pool.query(\"\
+    SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.instances\
+    \ WHERE reported_at>now()-interval '60 seconds'\")).rows;\n    const tuning=(await\
+    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='tuning'\")).rows[0]?.value??{};\n\
+    \    await pool.query(\"DELETE FROM waffles.instances WHERE reported_at<now()-interval\
+    \ '7 days'\");\n    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
     \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
     \ key='discovery'\")).rows[0]?.value;\n    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));\n\
@@ -133,9 +158,11 @@ data:
     \        if(row.finished)lines.push(metric('run_finished_timestamp_seconds',row.finished,labels));\n\
     \      }\n      if(row.status) {\n        const label={...labels,worker:row.worker??'unassigned',state:row.status};\n\
     \        lines.push(metric('jobs',row.count,label),metric('processing_seconds',row.seconds,label),metric('assignments',row.applied,label));\n\
-    \      }\n    }\n    for(const name of WORKERS) {\n      const w=workers.find(w=>w.name===name);\n\
-    \      lines.push(metric('worker_ready',Number(Boolean(w?.ready)&&Date.now()/1000-w.reported<60),{worker:name}));\n\
-    \      if(w)lines.push(metric('worker_report_timestamp_seconds',w.reported,{worker:name}),metric('worker_rss_bytes',w.rss_bytes??0,{worker:name}));\n\
+    \      }\n    }\n    for(const name of WORKERS) {\n      const group=instances.filter(w=>w.worker===name),active=group.filter(w=>w.ready&&!w.draining).length;\n\
+    \      lines.push(metric('worker_ready',Number(active>0),{worker:name}),metric('worker_active_instances',active,{worker:name}),\n\
+    \        metric('worker_desired_instances',tuning[name]?.slots??1,{worker:name}),metric('worker_slot_limit',SLOT_LIMITS[name],{worker:name}));\n\
+    \      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),\n\
+    \        metric('worker_rss_bytes',group.reduce((total,w)=>total+Number(w.rss_bytes??0),0),{worker:name}));\n\
     \    }\n    report=lines.join('\\n')+'\\n';healthy=true;\n  }catch{healthy=false;report='waffles_queue_up{}\
     \ 0\\n';}\n}\n\nhttp.createServer(async(req,res)=>{\n  try {\n    const url=new\
     \ URL(req.url,'http://queue');\n    if(url.pathname==='/healthz'){respond(res,{ready:healthy},healthy?200:503);return;}\n\
@@ -146,16 +173,23 @@ data:
     \    if(url.pathname.startsWith('/admin/')&&!admin){respond(res,{error:'forbidden'},403);return;}\n\
     \    if(req.method==='GET'&&url.pathname==='/api/config') {\n      const row=(await\
     \ pool.query(\"SELECT value FROM waffles.settings WHERE key='config'\")).rows[0];\n\
-    \      respond(res,row?.value??{},row?200:503);return;\n    }\n    if(req.method==='GET'&&/^\\\
-    /immich\\/api\\/assets\\/[0-9a-f-]{36}\\/thumbnail$/.test(url.pathname)) {\n \
-    \     const id=url.pathname.split('/')[4];\n      if(!(await pool.query('SELECT\
-    \ 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT 1',[id])).rowCount){respond(res,{},404);return;}\n\
-    \      const r=await api('/assets/'+id+'/thumbnail?size=preview');\n      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
+    \      respond(res,row?.value??{},row?200:503);return;\n    }\n    if(req.method==='GET'&&url.pathname==='/api/tuning')\
+    \ {\n      const stored=(await pool.query(\"SELECT value FROM waffles.settings\
+    \ WHERE key='tuning'\")).rows[0]?.value??{};\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,stored[w]??{slots:1}])),limits:SLOT_LIMITS});return;\n\
+    \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
+    /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
+    \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
+    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      const r=await api('/assets/'+id+'/thumbnail?size=preview');\n\
+    \      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
     \ r.arrayBuffer()));return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
     \ {\n      if(!WORKERS.includes(body.worker))throw Error('Invalid worker');\n\
+    \      const instance=body.instance??body.worker;\n      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw\
+    \ Error('Invalid instance');\n      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code)\
+    \ VALUES($1,$2,$3,$4,$5,$6,$7)\n        ON CONFLICT(id) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code)`,\n\
+    \        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null]);\n\
     \      await pool.query(`INSERT INTO waffles.workers(name,device,ready,rss_bytes)\
-    \ VALUES($1,$2,$3,$4)\n        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes`,\n\
-    \        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0]);\n\
+    \ VALUES($1,$2,$3,$4)\n        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes\
+    \ WHERE $5<> 'supervisor'`,\n        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0,body.role??'inference']);\n\
     \      if(body.claim)await pool.query(\"UPDATE waffles.jobs SET lease_until=now()+interval\
     \ '90 seconds' WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND worker=$4 AND\
     \ status='running' AND lease_until>now()\",[body.run_id,body.asset_id,body.claim,body.worker]);\n\
@@ -192,12 +226,25 @@ data:
     \ if(!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw\
     \ Error('Invalid workers');\n      await pool.query('UPDATE waffles.runs SET workers=$2\
     \ WHERE id=$1',[body.id,body.workers]);respond(res,{ok:true});return;\n    }\n\
-    \    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const runs=(await\
-    \ pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
+    \    if(req.method==='POST'&&url.pathname==='/admin/tuning') {\n      const value=validateTuning(body.worker,body.slots);\n\
+    \      await transaction(async db=>{\n        await db.query(\"INSERT INTO waffles.settings(key,value)\
+    \ VALUES('tuning',jsonb_build_object($1::text,$2::jsonb)) ON CONFLICT(key) DO\
+    \ UPDATE SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)\"\
+    ,[body.worker,value]);\n        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note)\
+    \ VALUES($1,$2,$3)',[body.worker,body.slots,String(body.note??'').slice(0,200)]);\n\
+    \      });respond(res,{worker:body.worker,...value});return;\n    }\n    if(req.method==='GET'&&url.pathname==='/admin/status')\
+    \ {\n      const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
-    \    respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows,discovery:(await\
+    \    const workers=(await pool.query(`SELECT w.name,w.device,max(i.reported_at)\
+    \ reported_at,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int\
+    \ active_instances,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)>0\
+    \ AS ready,\n        coalesce(sum(i.rss_bytes),0)::bigint rss_bytes,\n       \
+    \ (SELECT count(*)::int FROM waffles.instances dead WHERE dead.worker=w.name AND\
+    \ dead.exit_code<>0 AND NOT dead.draining) unexpected_exits\n        FROM waffles.workers\
+    \ w LEFT JOIN waffles.instances i ON i.worker=w.name AND i.reported_at>now()-interval\
+    \ '60 seconds'\n        GROUP BY w.name,w.device`)).rows;\n      respond(res,{runs,workers,discovery:(await\
     \ pool.query(\"SELECT value FROM waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n\
     \    }\n    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue\
     \ request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
@@ -243,9 +290,9 @@ data:
     \ with fenced PG jobs.\n\nThe coordinator proxies thumbnails and owns all Immich\
     \ writes. This worker gets\nno Immich API credential, does not enroll pets, and\
     \ never writes face metadata.\n\"\"\"\nimport json\nimport logging\nimport os\n\
-    from pathlib import Path\nimport resource\nimport sys\nimport threading\nimport\
-    \ time\nimport urllib.request\n\n\ndef main() -> None:\n    \"\"\"Maintain a heartbeat\
-    \ while processing one independently claimed photo.\"\"\"\n    logging.basicConfig(level=logging.INFO,\
+    from pathlib import Path\nimport resource\nimport signal\nimport sys\nimport threading\n\
+    import time\nimport urllib.request\n\n\ndef main() -> None:\n    \"\"\"Maintain\
+    \ a heartbeat while processing one independently claimed photo.\"\"\"\n    logging.basicConfig(level=logging.INFO,\
     \ format='%(asctime)s %(levelname)s %(message)s')\n    base = os.environ['QUEUE_URL'].rstrip('/')\n\
     \    token = Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    worker\
     \ = os.environ['WORKER_NAME']\n    directory = Path(os.environ.get('DATA_DIR',\
@@ -256,10 +303,13 @@ data:
     \ str(directory / '.cache/torch'))\n    os.environ.setdefault('HF_HOME', str(directory\
     \ / '.cache/huggingface'))\n    os.environ.setdefault('YOLO_CONFIG_DIR', str(directory\
     \ / '.ultralytics'))\n    sys.path.insert(0, os.environ.get('UPSTREAM_APP', '/app'))\n\
-    \    state = dict(worker=worker, ready=False, device='loading')\n\n    def request(path:\
-    \ str, body=None):\n        req = urllib.request.Request(base + path, headers={'Authorization':\
-    \ 'Bearer ' + token, 'Content-Type': 'application/json'},\n                  \
-    \                   data=None if body is None else json.dumps(body).encode())\n\
+    \    state = dict(worker=worker, instance=os.environ.get('WAFFLES_INSTANCE',worker),\
+    \ ready=False, device='loading', draining=False)\n    draining = threading.Event()\n\
+    \    def drain(*_):\n        state['draining'] = True\n        draining.set()\n\
+    \    signal.signal(signal.SIGTERM, drain)\n    signal.signal(signal.SIGINT, drain)\n\
+    \n    def request(path: str, body=None):\n        req = urllib.request.Request(base\
+    \ + path, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},\n\
+    \                                     data=None if body is None else json.dumps(body).encode())\n\
     \        with urllib.request.urlopen(req, timeout=40) as response:\n         \
     \   return json.load(response)\n\n    def heartbeat() -> None:\n        while\
     \ True:\n            try:\n                rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n\
@@ -280,10 +330,10 @@ data:
     \ 'detector', 'immich'):\n        logging.getLogger(name).setLevel(logging.ERROR)\n\
     \    with inference.inference_session():\n        state.update(ready=True, device=pick_device())\n\
     \        logging.info('Worker %s ready on %s', worker, state['device'])\n    \
-    \    while True:\n            job = None\n            try:\n                if\
-    \ os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':\n                    from\
-    \ native_guard import can_run\n                    if not can_run():\n       \
-    \                 state['ready'] = False\n                        request('/api/heartbeat',\
+    \    while not draining.is_set():\n            job = None\n            try:\n\
+    \                if os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':\n     \
+    \               from native_guard import can_run\n                    if not can_run():\n\
+    \                        state['ready'] = False\n                        request('/api/heartbeat',\
     \ state)\n                        logging.info('Native capacity guard: unloading\
     \ models and returning to standby')\n                        return\n        \
     \        job = request('/api/claim', {'worker': worker})\n                if not\
@@ -320,13 +370,58 @@ data:
     \ 'claim')})\n                    except Exception:\n                        pass\
     \  # The lease will expire; stale results cannot commit.\n                time.sleep(5)\n\
     \            finally:\n                for key in ('run_id', 'asset_id', 'claim'):\n\
-    \                    state.pop(key, None)\n\n\nif __name__ == '__main__':\n  \
-    \  main()\n"
+    \                    state.pop(key, None)\n        state['ready'] = False\n  \
+    \      request('/api/heartbeat', state)\n\n\nif __name__ == '__main__':\n    main()\n"
+  supervisor.py: "#!/usr/bin/env python3\n\"\"\"Resize inference processes from durable\
+    \ live tuning, draining work on scale-down.\"\"\"\nimport json\nimport logging\n\
+    import os\nfrom pathlib import Path\nimport resource\nimport signal\nimport socket\n\
+    import subprocess\nimport sys\nimport time\nimport urllib.request\nimport uuid\n\
+    \n\ndef main() -> None:\n    logging.basicConfig(level=logging.INFO,format='%(asctime)s\
+    \ %(levelname)s %(message)s')\n    base=os.environ['QUEUE_URL'].rstrip('/');worker=os.environ['WORKER_NAME']\n\
+    \    token=Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    children=[];stopping=False;target=0;last_heartbeat=0\n\
+    \    def stop(*_):\n        nonlocal stopping\n        stopping=True\n    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)\n\
+    \    def request(path,body=None):\n        req=urllib.request.Request(base+path,headers={'Authorization':'Bearer\
+    \ '+token,'Content-Type':'application/json'},data=None if body is None else json.dumps(body).encode())\n\
+    \        with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)\n\
+    \    try:\n        while not stopping:\n            for item in children:\n  \
+    \              code=item['process'].poll()\n                if code is not None:\n\
+    \                    logging.info('Inference process exited: code=%s planned_drain=%s',code,item['draining'])\n\
+    \                    try:request('/api/heartbeat',{'worker':worker,'instance':item['instance'],'device':'stopped','ready':False,'draining':item['draining'],'exit_code':code})\n\
+    \                    except Exception:pass\n            children=[item for item\
+    \ in children if item['process'].poll() is None]\n            try:\n         \
+    \       tuning=request('/api/tuning')\n                target=int(tuning['workers'][worker]['slots'])\n\
+    \                if not 0<=target<=int(tuning['limits'][worker]):raise ValueError('Invalid\
+    \ tuning')\n            except Exception:\n                logging.warning('Live\
+    \ tuning unavailable; retaining current process target')\n            active=[item\
+    \ for item in children if not item['draining']]\n            for item in active[target:]:\n\
+    \                item['draining']=True;item['process'].terminate()\n         \
+    \       logging.info('Draining one %s process',worker)\n            while len(children)<target:\n\
+    \                if os.environ.get('NATIVE_CAPACITY_GUARD')=='true':\n       \
+    \             from native_guard import can_run\n                    if not can_run(starting=True):break\n\
+    \                instance=worker+'-'+uuid.uuid4().hex[:12]\n                path=Path(__file__).with_name('distributed-worker.py')\n\
+    \                if not path.exists():path=Path(__file__).with_name('worker.py')\n\
+    \                process=subprocess.Popen([sys.executable,'-B',str(path)],env={**os.environ,'WAFFLES_INSTANCE':instance})\n\
+    \                children.append({'process':process,'draining':False,'instance':instance})\n\
+    \                logging.info('Started %s inference process; desired slots=%d',worker,target)\n\
+    \            if time.monotonic()-last_heartbeat>=15:\n                rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n\
+    \                try:request('/api/heartbeat',{'worker':worker,'instance':worker+'-supervisor-'+socket.gethostname(),'role':'supervisor','device':'standby','ready':False,'rss_bytes':rss\
+    \ if sys.platform=='darwin' else rss*1024})\n                except Exception:pass\n\
+    \                last_heartbeat=time.monotonic()\n            time.sleep(3)\n\
+    \    finally:\n        for item in children:\n            if item['process'].poll()\
+    \ is None:item['process'].terminate()\n        deadline=time.monotonic()+60\n\
+    \        for item in children:\n            try:item['process'].wait(timeout=max(0.1,deadline-time.monotonic()))\n\
+    \            except subprocess.TimeoutExpired:item['process'].kill()\n\n\nif __name__=='__main__':main()\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,validateResult} from './queue-core.mjs';\n\
-    const value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
-    assert.equal(validateResult(value).seconds,1.2);\nfor(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
+    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning} from\
+    \ './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
+    assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',4),{slots:4});\n\
+    assert.deepEqual(validateTuning('still-fawn',0),{slots:0});\nfor(const [worker,slots]\
+    \ of [['mac',5],['pve',2],['still-fawn',-1],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
+    const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};\n\
+    assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');\n\
+    assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');\n\
+    for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
     \  assert.throws(()=>validateResult(bad));\nif(process.argv.includes('--postgres'))\
     \ {\n  const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     \  const db=new Pool({max:3});const id='queue-test-'+Date.now();\n  try {\n  \
@@ -373,7 +468,17 @@ data:
     CREATE INDEX IF NOT EXISTS waffles_jobs_claim ON waffles.jobs(run_id,status,available_at,ordinal);\n\
     CREATE TABLE IF NOT EXISTS waffles.workers (\n  name text PRIMARY KEY, reported_at\
     \ timestamptz NOT NULL DEFAULT now(), device text,\n  ready boolean NOT NULL DEFAULT\
-    \ false, model_seconds double precision,\n  rss_bytes bigint\n);\n"
+    \ false, model_seconds double precision,\n  rss_bytes bigint\n);\nCREATE TABLE\
+    \ IF NOT EXISTS waffles.instances (\n  id text PRIMARY KEY, worker text NOT NULL,\
+    \ reported_at timestamptz NOT NULL DEFAULT now(),\n  device text, ready boolean\
+    \ NOT NULL DEFAULT false, draining boolean NOT NULL DEFAULT false,\n  rss_bytes\
+    \ bigint NOT NULL DEFAULT 0, exit_code integer\n);\nCREATE TABLE IF NOT EXISTS\
+    \ waffles.tuning_events (\n  id bigserial PRIMARY KEY, worker text NOT NULL, slots\
+    \ integer NOT NULL,\n  changed_at timestamptz NOT NULL DEFAULT now(), note text\
+    \ NOT NULL DEFAULT ''\n);\nINSERT INTO waffles.settings(key,value) VALUES('tuning',\n\
+    \ '{\"mac\":{\"slots\":1},\"pve\":{\"slots\":1},\"still-fawn\":{\"slots\":1},\"\
+    fun-bedbug\":{\"slots\":1},\"chief-horse\":{\"slots\":1}}')\n ON CONFLICT(key)\
+    \ DO NOTHING;\n"
   bootstrap.mjs: "// Same scoped-role bootstrap pattern as immich_sync/bootstrap.mjs\
     \ (#217).\nimport {createRequire} from 'node:module';\nimport fs from 'node:fs/promises';\n\
     const {Client}=createRequire('/usr/src/app/server/package.json')('pg');\nconst\
@@ -392,20 +497,32 @@ data:
     } finally {await db.end();}\n"
   queue-core.mjs: "// Fenced claims adapted from photo_enrichment/postgres.py; inference\
     \ is outside transactions.\nimport crypto from 'node:crypto';\nexport const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];\n\
+    export const SLOT_LIMITS={mac:4,pve:1,'still-fawn':2,'fun-bedbug':1,'chief-horse':1};\n\
     export const CLAIM_SQL=`WITH candidate AS (\n SELECT j.run_id,j.asset_id FROM\
     \ waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id\n WHERE r.state='running'\
     \ AND $1=ANY(r.workers)\n AND ((j.status='pending' AND j.available_at<=now())\
-    \ OR (j.status='running' AND j.lease_until<now()))\n AND j.attempts<4\n ORDER\
-    \ BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs\
-    \ j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1\n\
-    \ FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING\
-    \ j.*,\n (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;\n\nexport\
-    \ async function claim(db,worker) {\n  if(!WORKERS.includes(worker))throw Error('Invalid\
-    \ worker');\n  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n\
-    }\n\nexport function validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds)\
-    \ || value.seconds<0 || value.seconds>3600)throw Error('Invalid duration');\n\
-    \  if(!Array.isArray(value.matches) || value.matches.length>100)throw Error('Invalid\
-    \ matches');\n  if(!Array.isArray(value.size) || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
+    \ OR (j.status='running' AND j.lease_until<now()))\n AND j.attempts<4\n AND (SELECT\
+    \ count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.status='running'\
+    \ AND active.lease_until>now())\n     < coalesce((SELECT (value->$1->>'slots')::int\
+    \ FROM waffles.settings WHERE key='tuning'),1)\n ORDER BY r.created_at,j.ordinal\
+    \ FOR UPDATE OF j SKIP LOCKED LIMIT 1)\n UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval\
+    \ '90 seconds',attempts=attempts+1\n FROM candidate c WHERE j.run_id=c.run_id\
+    \ AND j.asset_id=c.asset_id RETURNING j.*,\n (SELECT config FROM waffles.runs\
+    \ WHERE id=j.run_id) AS config`;\n\nexport async function claim(pool,worker) {\n\
+    \  if(!WORKERS.includes(worker))throw Error('Invalid worker');\n  const db=await\
+    \ pool.connect();\n  try {\n    await db.query('BEGIN');\n    // Separate statements\
+    \ ensure a fresh READ COMMITTED snapshot after waiting\n    // for the per-backend\
+    \ lock. Concurrent processes cannot exceed live slots.\n    await db.query(\"\
+    SELECT pg_advisory_xact_lock(244,hashtext($1))\",[worker]);\n    const job=(await\
+    \ db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;\n    await\
+    \ db.query('COMMIT');return job;\n  }catch(e){await db.query('ROLLBACK');throw\
+    \ e;}finally{db.release();}\n}\n\nexport function validateTuning(worker,slots)\
+    \ {\n  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>SLOT_LIMITS[worker])throw\
+    \ Error('Invalid worker slot limit');\n  return {slots};\n}\n\nexport function\
+    \ validateResult(value) {\n  if(!value || !Number.isFinite(value.seconds) || value.seconds<0\
+    \ || value.seconds>3600)throw Error('Invalid duration');\n  if(!Array.isArray(value.matches)\
+    \ || value.matches.length>100)throw Error('Invalid matches');\n  if(!Array.isArray(value.size)\
+    \ || value.size.length!==2 || value.size.some(v=>!Number.isInteger(v)||v<1||v>100000))throw\
     \ Error('Invalid size');\n  for(const match of value.matches) {\n    if(!Number.isFinite(match.probability)||match.probability<0.9||match.probability>1)throw\
     \ Error('Invalid confidence');\n    const b=match.box;\n    if(!Array.isArray(b)||b.length!==4||b.some(v=>!Number.isFinite(v)||v<0||v>1)||b[0]>=b[2]||b[1]>=b[3])throw\
     \ Error('Invalid box');\n  }\n  for(const key of ['unknown','low_confidence','out_of_range'])\n\
@@ -423,10 +540,10 @@ data:
   coordinator.mjs: "// Single API writer + PostgreSQL queue. Workers perform inference\
     \ only.\nimport http from 'node:http';\nimport crypto from 'node:crypto';\nimport\
     \ fs from 'node:fs/promises';\nimport {createRequire} from 'node:module';\nimport\
-    \ {claim,finish,WORKERS} from './queue-core.mjs';\nimport {discover} from './discovery.mjs';\n\
-    const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\nconst pool=new\
-    \ Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\nconst\
-    \ IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
+    \ {claim,finish,WORKERS,SLOT_LIMITS,validateTuning} from './queue-core.mjs';\n\
+    import {discover} from './discovery.mjs';\nconst {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
+    const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
+    const IMMICH=process.env.IMMICH_URL??'http://immich-server.immich-pilot.svc.cluster.local:2283';\n\
     const workerToken=process.env.WORKER_TOKEN,adminToken=process.env.ADMIN_TOKEN;\n\
     const uuid=/^[0-9a-f-]{36}$/i;\nlet report='',healthy=false,tagId=null;\nconst\
     \ safeEqual=(a,b)=>typeof a==='string'&&typeof b==='string'&&a.length===b.length&&crypto.timingSafeEqual(Buffer.from(a),Buffer.from(b));\n\
@@ -472,9 +589,12 @@ data:
     \ FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int\
     \ count,\n      coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int\
     \ applied\n      FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id\
-    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const workers=(await pool.query('SELECT\
-    \ *,extract(epoch FROM reported_at)::float8 reported FROM waffles.workers')).rows;\n\
-    \    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
+    \ GROUP BY r.id,j.worker,j.status`)).rows;\n    const instances=(await pool.query(\"\
+    SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.instances\
+    \ WHERE reported_at>now()-interval '60 seconds'\")).rows;\n    const tuning=(await\
+    \ pool.query(\"SELECT value FROM waffles.settings WHERE key='tuning'\")).rows[0]?.value??{};\n\
+    \    await pool.query(\"DELETE FROM waffles.instances WHERE reported_at<now()-interval\
+    \ '7 days'\");\n    const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'}\
     \ '+Number(value);\n    const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];\n\
     \    const discovery=(await pool.query(\"SELECT value FROM waffles.settings WHERE\
     \ key='discovery'\")).rows[0]?.value;\n    lines.push(metric('discovery_enabled',Number(Boolean(discovery?.enabled))),metric('discovery_error',Number(Boolean(discovery?.error))));\n\
@@ -485,9 +605,11 @@ data:
     \        if(row.finished)lines.push(metric('run_finished_timestamp_seconds',row.finished,labels));\n\
     \      }\n      if(row.status) {\n        const label={...labels,worker:row.worker??'unassigned',state:row.status};\n\
     \        lines.push(metric('jobs',row.count,label),metric('processing_seconds',row.seconds,label),metric('assignments',row.applied,label));\n\
-    \      }\n    }\n    for(const name of WORKERS) {\n      const w=workers.find(w=>w.name===name);\n\
-    \      lines.push(metric('worker_ready',Number(Boolean(w?.ready)&&Date.now()/1000-w.reported<60),{worker:name}));\n\
-    \      if(w)lines.push(metric('worker_report_timestamp_seconds',w.reported,{worker:name}),metric('worker_rss_bytes',w.rss_bytes??0,{worker:name}));\n\
+    \      }\n    }\n    for(const name of WORKERS) {\n      const group=instances.filter(w=>w.worker===name),active=group.filter(w=>w.ready&&!w.draining).length;\n\
+    \      lines.push(metric('worker_ready',Number(active>0),{worker:name}),metric('worker_active_instances',active,{worker:name}),\n\
+    \        metric('worker_desired_instances',tuning[name]?.slots??1,{worker:name}),metric('worker_slot_limit',SLOT_LIMITS[name],{worker:name}));\n\
+    \      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),\n\
+    \        metric('worker_rss_bytes',group.reduce((total,w)=>total+Number(w.rss_bytes??0),0),{worker:name}));\n\
     \    }\n    report=lines.join('\\n')+'\\n';healthy=true;\n  }catch{healthy=false;report='waffles_queue_up{}\
     \ 0\\n';}\n}\n\nhttp.createServer(async(req,res)=>{\n  try {\n    const url=new\
     \ URL(req.url,'http://queue');\n    if(url.pathname==='/healthz'){respond(res,{ready:healthy},healthy?200:503);return;}\n\
@@ -498,16 +620,23 @@ data:
     \    if(url.pathname.startsWith('/admin/')&&!admin){respond(res,{error:'forbidden'},403);return;}\n\
     \    if(req.method==='GET'&&url.pathname==='/api/config') {\n      const row=(await\
     \ pool.query(\"SELECT value FROM waffles.settings WHERE key='config'\")).rows[0];\n\
-    \      respond(res,row?.value??{},row?200:503);return;\n    }\n    if(req.method==='GET'&&/^\\\
-    /immich\\/api\\/assets\\/[0-9a-f-]{36}\\/thumbnail$/.test(url.pathname)) {\n \
-    \     const id=url.pathname.split('/')[4];\n      if(!(await pool.query('SELECT\
-    \ 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT 1',[id])).rowCount){respond(res,{},404);return;}\n\
-    \      const r=await api('/assets/'+id+'/thumbnail?size=preview');\n      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
+    \      respond(res,row?.value??{},row?200:503);return;\n    }\n    if(req.method==='GET'&&url.pathname==='/api/tuning')\
+    \ {\n      const stored=(await pool.query(\"SELECT value FROM waffles.settings\
+    \ WHERE key='tuning'\")).rows[0]?.value??{};\n      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,stored[w]??{slots:1}])),limits:SLOT_LIMITS});return;\n\
+    \    }\n    if(req.method==='GET'&&/^\\/immich\\/api\\/assets\\/[0-9a-f-]{36}\\\
+    /thumbnail$/.test(url.pathname)) {\n      const id=url.pathname.split('/')[4];\n\
+    \      if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT\
+    \ 1',[id])).rowCount){respond(res,{},404);return;}\n      const r=await api('/assets/'+id+'/thumbnail?size=preview');\n\
+    \      res.writeHead(200,{'Content-Type':r.headers.get('content-type')??'image/jpeg'});res.end(Buffer.from(await\
     \ r.arrayBuffer()));return;\n    }\n    const body=await jsonBody(req);\n    if(req.method==='POST'&&url.pathname==='/api/heartbeat')\
     \ {\n      if(!WORKERS.includes(body.worker))throw Error('Invalid worker');\n\
+    \      const instance=body.instance??body.worker;\n      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw\
+    \ Error('Invalid instance');\n      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code)\
+    \ VALUES($1,$2,$3,$4,$5,$6,$7)\n        ON CONFLICT(id) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code)`,\n\
+    \        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null]);\n\
     \      await pool.query(`INSERT INTO waffles.workers(name,device,ready,rss_bytes)\
-    \ VALUES($1,$2,$3,$4)\n        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes`,\n\
-    \        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0]);\n\
+    \ VALUES($1,$2,$3,$4)\n        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes\
+    \ WHERE $5<> 'supervisor'`,\n        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0,body.role??'inference']);\n\
     \      if(body.claim)await pool.query(\"UPDATE waffles.jobs SET lease_until=now()+interval\
     \ '90 seconds' WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND worker=$4 AND\
     \ status='running' AND lease_until>now()\",[body.run_id,body.asset_id,body.claim,body.worker]);\n\
@@ -544,12 +673,25 @@ data:
     \ if(!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw\
     \ Error('Invalid workers');\n      await pool.query('UPDATE waffles.runs SET workers=$2\
     \ WHERE id=$1',[body.id,body.workers]);respond(res,{ok:true});return;\n    }\n\
-    \    if(req.method==='GET'&&url.pathname==='/admin/status') {\n      const runs=(await\
-    \ pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
+    \    if(req.method==='POST'&&url.pathname==='/admin/tuning') {\n      const value=validateTuning(body.worker,body.slots);\n\
+    \      await transaction(async db=>{\n        await db.query(\"INSERT INTO waffles.settings(key,value)\
+    \ VALUES('tuning',jsonb_build_object($1::text,$2::jsonb)) ON CONFLICT(key) DO\
+    \ UPDATE SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)\"\
+    ,[body.worker,value]);\n        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note)\
+    \ VALUES($1,$2,$3)',[body.worker,body.slots,String(body.note??'').slice(0,200)]);\n\
+    \      });respond(res,{worker:body.worker,...value});return;\n    }\n    if(req.method==='GET'&&url.pathname==='/admin/status')\
+    \ {\n      const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int\
     \ jobs,\n        sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int\
     \ assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY\
     \ r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;\n  \
-    \    respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows,discovery:(await\
+    \    const workers=(await pool.query(`SELECT w.name,w.device,max(i.reported_at)\
+    \ reported_at,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int\
+    \ active_instances,\n        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)>0\
+    \ AS ready,\n        coalesce(sum(i.rss_bytes),0)::bigint rss_bytes,\n       \
+    \ (SELECT count(*)::int FROM waffles.instances dead WHERE dead.worker=w.name AND\
+    \ dead.exit_code<>0 AND NOT dead.draining) unexpected_exits\n        FROM waffles.workers\
+    \ w LEFT JOIN waffles.instances i ON i.worker=w.name AND i.reported_at>now()-interval\
+    \ '60 seconds'\n        GROUP BY w.name,w.device`)).rows;\n      respond(res,{runs,workers,discovery:(await\
     \ pool.query(\"SELECT value FROM waffles.settings WHERE key='discovery'\")).rows[0]?.value});return;\n\
     \    }\n    respond(res,{error:'not found'},404);\n  }catch(e){console.error('Queue\
     \ request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}\n\
@@ -595,9 +737,9 @@ data:
     \ with fenced PG jobs.\n\nThe coordinator proxies thumbnails and owns all Immich\
     \ writes. This worker gets\nno Immich API credential, does not enroll pets, and\
     \ never writes face metadata.\n\"\"\"\nimport json\nimport logging\nimport os\n\
-    from pathlib import Path\nimport resource\nimport sys\nimport threading\nimport\
-    \ time\nimport urllib.request\n\n\ndef main() -> None:\n    \"\"\"Maintain a heartbeat\
-    \ while processing one independently claimed photo.\"\"\"\n    logging.basicConfig(level=logging.INFO,\
+    from pathlib import Path\nimport resource\nimport signal\nimport sys\nimport threading\n\
+    import time\nimport urllib.request\n\n\ndef main() -> None:\n    \"\"\"Maintain\
+    \ a heartbeat while processing one independently claimed photo.\"\"\"\n    logging.basicConfig(level=logging.INFO,\
     \ format='%(asctime)s %(levelname)s %(message)s')\n    base = os.environ['QUEUE_URL'].rstrip('/')\n\
     \    token = Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    worker\
     \ = os.environ['WORKER_NAME']\n    directory = Path(os.environ.get('DATA_DIR',\
@@ -608,10 +750,13 @@ data:
     \ str(directory / '.cache/torch'))\n    os.environ.setdefault('HF_HOME', str(directory\
     \ / '.cache/huggingface'))\n    os.environ.setdefault('YOLO_CONFIG_DIR', str(directory\
     \ / '.ultralytics'))\n    sys.path.insert(0, os.environ.get('UPSTREAM_APP', '/app'))\n\
-    \    state = dict(worker=worker, ready=False, device='loading')\n\n    def request(path:\
-    \ str, body=None):\n        req = urllib.request.Request(base + path, headers={'Authorization':\
-    \ 'Bearer ' + token, 'Content-Type': 'application/json'},\n                  \
-    \                   data=None if body is None else json.dumps(body).encode())\n\
+    \    state = dict(worker=worker, instance=os.environ.get('WAFFLES_INSTANCE',worker),\
+    \ ready=False, device='loading', draining=False)\n    draining = threading.Event()\n\
+    \    def drain(*_):\n        state['draining'] = True\n        draining.set()\n\
+    \    signal.signal(signal.SIGTERM, drain)\n    signal.signal(signal.SIGINT, drain)\n\
+    \n    def request(path: str, body=None):\n        req = urllib.request.Request(base\
+    \ + path, headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},\n\
+    \                                     data=None if body is None else json.dumps(body).encode())\n\
     \        with urllib.request.urlopen(req, timeout=40) as response:\n         \
     \   return json.load(response)\n\n    def heartbeat() -> None:\n        while\
     \ True:\n            try:\n                rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n\
@@ -632,10 +777,10 @@ data:
     \ 'detector', 'immich'):\n        logging.getLogger(name).setLevel(logging.ERROR)\n\
     \    with inference.inference_session():\n        state.update(ready=True, device=pick_device())\n\
     \        logging.info('Worker %s ready on %s', worker, state['device'])\n    \
-    \    while True:\n            job = None\n            try:\n                if\
-    \ os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':\n                    from\
-    \ native_guard import can_run\n                    if not can_run():\n       \
-    \                 state['ready'] = False\n                        request('/api/heartbeat',\
+    \    while not draining.is_set():\n            job = None\n            try:\n\
+    \                if os.environ.get('NATIVE_CAPACITY_GUARD') == 'true':\n     \
+    \               from native_guard import can_run\n                    if not can_run():\n\
+    \                        state['ready'] = False\n                        request('/api/heartbeat',\
     \ state)\n                        logging.info('Native capacity guard: unloading\
     \ models and returning to standby')\n                        return\n        \
     \        job = request('/api/claim', {'worker': worker})\n                if not\
@@ -672,13 +817,58 @@ data:
     \ 'claim')})\n                    except Exception:\n                        pass\
     \  # The lease will expire; stale results cannot commit.\n                time.sleep(5)\n\
     \            finally:\n                for key in ('run_id', 'asset_id', 'claim'):\n\
-    \                    state.pop(key, None)\n\n\nif __name__ == '__main__':\n  \
-    \  main()\n"
+    \                    state.pop(key, None)\n        state['ready'] = False\n  \
+    \      request('/api/heartbeat', state)\n\n\nif __name__ == '__main__':\n    main()\n"
+  supervisor.py: "#!/usr/bin/env python3\n\"\"\"Resize inference processes from durable\
+    \ live tuning, draining work on scale-down.\"\"\"\nimport json\nimport logging\n\
+    import os\nfrom pathlib import Path\nimport resource\nimport signal\nimport socket\n\
+    import subprocess\nimport sys\nimport time\nimport urllib.request\nimport uuid\n\
+    \n\ndef main() -> None:\n    logging.basicConfig(level=logging.INFO,format='%(asctime)s\
+    \ %(levelname)s %(message)s')\n    base=os.environ['QUEUE_URL'].rstrip('/');worker=os.environ['WORKER_NAME']\n\
+    \    token=Path(os.environ['WORKER_TOKEN_FILE']).read_text().strip()\n    children=[];stopping=False;target=0;last_heartbeat=0\n\
+    \    def stop(*_):\n        nonlocal stopping\n        stopping=True\n    signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)\n\
+    \    def request(path,body=None):\n        req=urllib.request.Request(base+path,headers={'Authorization':'Bearer\
+    \ '+token,'Content-Type':'application/json'},data=None if body is None else json.dumps(body).encode())\n\
+    \        with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)\n\
+    \    try:\n        while not stopping:\n            for item in children:\n  \
+    \              code=item['process'].poll()\n                if code is not None:\n\
+    \                    logging.info('Inference process exited: code=%s planned_drain=%s',code,item['draining'])\n\
+    \                    try:request('/api/heartbeat',{'worker':worker,'instance':item['instance'],'device':'stopped','ready':False,'draining':item['draining'],'exit_code':code})\n\
+    \                    except Exception:pass\n            children=[item for item\
+    \ in children if item['process'].poll() is None]\n            try:\n         \
+    \       tuning=request('/api/tuning')\n                target=int(tuning['workers'][worker]['slots'])\n\
+    \                if not 0<=target<=int(tuning['limits'][worker]):raise ValueError('Invalid\
+    \ tuning')\n            except Exception:\n                logging.warning('Live\
+    \ tuning unavailable; retaining current process target')\n            active=[item\
+    \ for item in children if not item['draining']]\n            for item in active[target:]:\n\
+    \                item['draining']=True;item['process'].terminate()\n         \
+    \       logging.info('Draining one %s process',worker)\n            while len(children)<target:\n\
+    \                if os.environ.get('NATIVE_CAPACITY_GUARD')=='true':\n       \
+    \             from native_guard import can_run\n                    if not can_run(starting=True):break\n\
+    \                instance=worker+'-'+uuid.uuid4().hex[:12]\n                path=Path(__file__).with_name('distributed-worker.py')\n\
+    \                if not path.exists():path=Path(__file__).with_name('worker.py')\n\
+    \                process=subprocess.Popen([sys.executable,'-B',str(path)],env={**os.environ,'WAFFLES_INSTANCE':instance})\n\
+    \                children.append({'process':process,'draining':False,'instance':instance})\n\
+    \                logging.info('Started %s inference process; desired slots=%d',worker,target)\n\
+    \            if time.monotonic()-last_heartbeat>=15:\n                rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n\
+    \                try:request('/api/heartbeat',{'worker':worker,'instance':worker+'-supervisor-'+socket.gethostname(),'role':'supervisor','device':'standby','ready':False,'rss_bytes':rss\
+    \ if sys.platform=='darwin' else rss*1024})\n                except Exception:pass\n\
+    \                last_heartbeat=time.monotonic()\n            time.sleep(3)\n\
+    \    finally:\n        for item in children:\n            if item['process'].poll()\
+    \ is None:item['process'].terminate()\n        deadline=time.monotonic()+60\n\
+    \        for item in children:\n            try:item['process'].wait(timeout=max(0.1,deadline-time.monotonic()))\n\
+    \            except subprocess.TimeoutExpired:item['process'].kill()\n\n\nif __name__=='__main__':main()\n"
   test-queue.mjs: "// Pure validation checks run locally; --postgres also exercises\
     \ real concurrent claims.\nimport assert from 'node:assert/strict';\nimport {createRequire}\
-    \ from 'node:module';\nimport {claim,finish,validateResult} from './queue-core.mjs';\n\
-    const value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
-    assert.equal(validateResult(value).seconds,1.2);\nfor(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
+    \ from 'node:module';\nimport {claim,finish,validateResult,validateTuning} from\
+    \ './queue-core.mjs';\nconst value={seconds:1.2,size:[100,80],matches:[{box:[0.1,0.1,0.8,0.9],probability:0.95}],unknown:0,low_confidence:0,out_of_range:0};\n\
+    assert.equal(validateResult(value).seconds,1.2);\nassert.deepEqual(validateTuning('mac',4),{slots:4});\n\
+    assert.deepEqual(validateTuning('still-fawn',0),{slots:0});\nfor(const [worker,slots]\
+    \ of [['mac',5],['pve',2],['still-fawn',-1],['rtx',1],['mac',1.5]])assert.throws(()=>validateTuning(worker,slots));\n\
+    const calls=[];\nconst connection={query:async(sql)=>{calls.push(sql);return {rows:sql.includes('RETURNING')?[{asset_id:'test'}]:[]};},release:()=>calls.push('release')};\n\
+    assert.equal((await claim({connect:async()=>connection},'mac')).asset_id,'test');\n\
+    assert.equal(calls[0],'BEGIN');assert(calls[1].includes('pg_advisory_xact_lock'));assert(calls[2].includes('count(*)'));assert.equal(calls[3],'COMMIT');assert.equal(calls[4],'release');\n\
+    for(const bad of [{...value,seconds:NaN},{...value,matches:[{box:[0.8,0,0.1,1],probability:0.95}]},{...value,matches:[{box:[0,0,1,1],probability:0.89}]}])\n\
     \  assert.throws(()=>validateResult(bad));\nif(process.argv.includes('--postgres'))\
     \ {\n  const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');\n\
     \  const db=new Pool({max:3});const id='queue-test-'+Date.now();\n  try {\n  \
@@ -705,7 +895,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: waffles-schema-v1
+  name: waffles-schema-v2
   namespace: database
 spec:
   backoffLimit: 3
@@ -781,7 +971,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 7ead1769f4095f6a8f0f9286e546c4525ecd5f384ea34724200180384f7590fb
+        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -939,7 +1129,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 7ead1769f4095f6a8f0f9286e546c4525ecd5f384ea34724200180384f7590fb
+        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -967,13 +1157,14 @@ spec:
           sizeLimit: 256Mi
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-still-fawn
+      terminationGracePeriodSeconds: 90
       containers:
       - name: worker
         image: ghcr.io/tedornitier/immich-pet-tagger:v1.10.0-cpu@sha256:535b4664511db709b1069a7eac789339af05264585511feeea24f68430edf7e6
         command:
         - python
         - -B
-        - /code/distributed-worker.py
+        - /code/supervisor.py
         env:
         - name: QUEUE_URL
           value: http://waffles-queue.immich-pilot.svc.cluster.local:9200
@@ -1048,7 +1239,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 7ead1769f4095f6a8f0f9286e546c4525ecd5f384ea34724200180384f7590fb
+        checksum/code: 488308793dc3f000c8e55bdb456639a87d4cdc108ece09255ae0446c80bfc40f
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -1076,13 +1267,14 @@ spec:
           sizeLimit: 256Mi
       nodeSelector:
         kubernetes.io/hostname: k3s-vm-pve
+      terminationGracePeriodSeconds: 90
       containers:
       - name: worker
         image: ghcr.io/tedornitier/immich-pet-tagger:v1.10.0-cpu@sha256:535b4664511db709b1069a7eac789339af05264585511feeea24f68430edf7e6
         command:
         - python
         - -B
-        - /code/distributed-worker.py
+        - /code/supervisor.py
         env:
         - name: QUEUE_URL
           value: http://waffles-queue.immich-pilot.svc.cluster.local:9200

@@ -55,12 +55,13 @@ def main() -> None:
     if not (ROOT / 'venv/bin/python').exists():
         raise RuntimeError('Prepare the native runtime first')
     shutil.copy2(HERE / 'distributed-worker.py', ROOT / 'worker.py')
+    shutil.copy2(HERE / 'supervisor.py', ROOT / 'supervisor.py')
     (ROOT / 'worker-token').write_text(secret('worker-token'))
     (ROOT / 'worker-token').chmod(0o600)
     data = ROOT / 'data'; data.mkdir(exist_ok=True)
     # Match the existing native-worker pattern: prevent system sleep on AC power
     # only while this dedicated worker is running; battery sleep remains allowed.
-    config = {'Label': LABEL, 'ProgramArguments': ['/usr/bin/caffeinate', '-s', str(ROOT / 'venv/bin/python'), '-B', str(ROOT / 'worker.py')],
+    config = {'Label': LABEL, 'ProgramArguments': ['/usr/bin/caffeinate', '-s', str(ROOT / 'venv/bin/python'), '-B', str(ROOT / 'supervisor.py')],
               'RunAtLoad': True, 'KeepAlive': True, 'ThrottleInterval': 30,
               'WorkingDirectory': str(data), 'StandardOutPath': str(ROOT / 'worker.log'), 'StandardErrorPath': str(ROOT / 'worker.log'),
               'EnvironmentVariables': {'QUEUE_URL': 'https://pets-queue.app.home.panderosystems.com', 'WORKER_NAME': 'mac',

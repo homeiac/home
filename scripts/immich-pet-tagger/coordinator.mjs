@@ -3,7 +3,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
-import {claim,finish,WORKERS} from './queue-core.mjs';
+import {claim,finish,WORKERS,SLOT_LIMITS,validateTuning} from './queue-core.mjs';
 import {discover} from './discovery.mjs';
 const {Pool}=createRequire('/usr/src/app/server/package.json')('pg');
 const pool=new Pool({max:6,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
@@ -71,7 +71,9 @@ async function refresh() {
       CASE WHEN r.state='complete' THEN (SELECT extract(epoch FROM max(done.completed_at))::float8 FROM waffles.jobs done WHERE done.run_id=r.id) END finished,j.worker,j.status,count(j.asset_id)::int count,
       coalesce(sum(j.processing_seconds),0)::float8 seconds,coalesce(sum(j.applied),0)::int applied
       FROM waffles.runs r LEFT JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status`)).rows;
-    const workers=(await pool.query('SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.workers')).rows;
+    const instances=(await pool.query("SELECT *,extract(epoch FROM reported_at)::float8 reported FROM waffles.instances WHERE reported_at>now()-interval '60 seconds'")).rows;
+    const tuning=(await pool.query("SELECT value FROM waffles.settings WHERE key='tuning'")).rows[0]?.value??{};
+    await pool.query("DELETE FROM waffles.instances WHERE reported_at<now()-interval '7 days'");
     const metric=(name,value,labels={})=>'waffles_'+name+'{'+Object.entries(labels).map(([k,v])=>k+'='+JSON.stringify(v)).join(',')+'} '+Number(value);
     const lines=[metric('queue_up',1),metric('queue_report_timestamp_seconds',Date.now()/1000)];
     const discovery=(await pool.query("SELECT value FROM waffles.settings WHERE key='discovery'")).rows[0]?.value;
@@ -91,9 +93,11 @@ async function refresh() {
       }
     }
     for(const name of WORKERS) {
-      const w=workers.find(w=>w.name===name);
-      lines.push(metric('worker_ready',Number(Boolean(w?.ready)&&Date.now()/1000-w.reported<60),{worker:name}));
-      if(w)lines.push(metric('worker_report_timestamp_seconds',w.reported,{worker:name}),metric('worker_rss_bytes',w.rss_bytes??0,{worker:name}));
+      const group=instances.filter(w=>w.worker===name),active=group.filter(w=>w.ready&&!w.draining).length;
+      lines.push(metric('worker_ready',Number(active>0),{worker:name}),metric('worker_active_instances',active,{worker:name}),
+        metric('worker_desired_instances',tuning[name]?.slots??1,{worker:name}),metric('worker_slot_limit',SLOT_LIMITS[name],{worker:name}));
+      if(group.length)lines.push(metric('worker_report_timestamp_seconds',Math.max(...group.map(w=>w.reported)),{worker:name}),
+        metric('worker_rss_bytes',group.reduce((total,w)=>total+Number(w.rss_bytes??0),0),{worker:name}));
     }
     report=lines.join('\n')+'\n';healthy=true;
   }catch{healthy=false;report='waffles_queue_up{} 0\n';}
@@ -112,6 +116,10 @@ http.createServer(async(req,res)=>{
       const row=(await pool.query("SELECT value FROM waffles.settings WHERE key='config'")).rows[0];
       respond(res,row?.value??{},row?200:503);return;
     }
+    if(req.method==='GET'&&url.pathname==='/api/tuning') {
+      const stored=(await pool.query("SELECT value FROM waffles.settings WHERE key='tuning'")).rows[0]?.value??{};
+      respond(res,{workers:Object.fromEntries(WORKERS.map(w=>[w,stored[w]??{slots:1}])),limits:SLOT_LIMITS});return;
+    }
     if(req.method==='GET'&&/^\/immich\/api\/assets\/[0-9a-f-]{36}\/thumbnail$/.test(url.pathname)) {
       const id=url.pathname.split('/')[4];
       if(!(await pool.query('SELECT 1 FROM waffles.jobs WHERE asset_id=$1 LIMIT 1',[id])).rowCount){respond(res,{},404);return;}
@@ -121,9 +129,14 @@ http.createServer(async(req,res)=>{
     const body=await jsonBody(req);
     if(req.method==='POST'&&url.pathname==='/api/heartbeat') {
       if(!WORKERS.includes(body.worker))throw Error('Invalid worker');
+      const instance=body.instance??body.worker;
+      if(typeof instance!=='string'||!/^[-a-zA-Z0-9._]{1,120}$/.test(instance))throw Error('Invalid instance');
+      await pool.query(`INSERT INTO waffles.instances(id,worker,device,ready,draining,rss_bytes,exit_code) VALUES($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT(id) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,draining=excluded.draining,rss_bytes=excluded.rss_bytes,exit_code=coalesce(excluded.exit_code,waffles.instances.exit_code)`,
+        [instance,body.worker,String(body.device??'loading').slice(0,20),body.ready===true,body.draining===true,Number(body.rss_bytes)||0,Number.isInteger(body.exit_code)?body.exit_code:null]);
       await pool.query(`INSERT INTO waffles.workers(name,device,ready,rss_bytes) VALUES($1,$2,$3,$4)
-        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes`,
-        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0]);
+        ON CONFLICT(name) DO UPDATE SET reported_at=now(),device=excluded.device,ready=excluded.ready,rss_bytes=excluded.rss_bytes WHERE $5<> 'supervisor'`,
+        [body.worker,String(body.device??'loading').slice(0,20),body.ready===true,Number(body.rss_bytes)||0,body.role??'inference']);
       if(body.claim)await pool.query("UPDATE waffles.jobs SET lease_until=now()+interval '90 seconds' WHERE run_id=$1 AND asset_id=$2 AND claim=$3 AND worker=$4 AND status='running' AND lease_until>now()",[body.run_id,body.asset_id,body.claim,body.worker]);
       respond(res,{ok:true});return;
     }
@@ -164,10 +177,24 @@ http.createServer(async(req,res)=>{
       if(!Array.isArray(body.workers)||!body.workers.length||body.workers.some(w=>!WORKERS.includes(w)))throw Error('Invalid workers');
       await pool.query('UPDATE waffles.runs SET workers=$2 WHERE id=$1',[body.id,body.workers]);respond(res,{ok:true});return;
     }
+    if(req.method==='POST'&&url.pathname==='/admin/tuning') {
+      const value=validateTuning(body.worker,body.slots);
+      await transaction(async db=>{
+        await db.query("INSERT INTO waffles.settings(key,value) VALUES('tuning',jsonb_build_object($1::text,$2::jsonb)) ON CONFLICT(key) DO UPDATE SET value=jsonb_set(waffles.settings.value,ARRAY[$1::text],$2::jsonb,true)",[body.worker,value]);
+        await db.query('INSERT INTO waffles.tuning_events(worker,slots,note) VALUES($1,$2,$3)',[body.worker,body.slots,String(body.note??'').slice(0,200)]);
+      });respond(res,{worker:body.worker,...value});return;
+    }
     if(req.method==='GET'&&url.pathname==='/admin/status') {
       const runs=(await pool.query(`SELECT r.id,r.mode,r.state,r.workers,r.started_at,r.finished_at,j.worker,j.status,count(*)::int jobs,
         sum(j.processing_seconds)::float8 processing_seconds,sum(j.applied)::int assignments FROM waffles.runs r JOIN waffles.jobs j ON j.run_id=r.id GROUP BY r.id,j.worker,j.status ORDER BY r.created_at,j.worker,j.status`)).rows;
-      respond(res,{runs,workers:(await pool.query('SELECT * FROM waffles.workers')).rows,discovery:(await pool.query("SELECT value FROM waffles.settings WHERE key='discovery'")).rows[0]?.value});return;
+      const workers=(await pool.query(`SELECT w.name,w.device,max(i.reported_at) reported_at,
+        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)::int active_instances,
+        count(i.id) FILTER(WHERE i.ready AND NOT i.draining)>0 AS ready,
+        coalesce(sum(i.rss_bytes),0)::bigint rss_bytes,
+        (SELECT count(*)::int FROM waffles.instances dead WHERE dead.worker=w.name AND dead.exit_code<>0 AND NOT dead.draining) unexpected_exits
+        FROM waffles.workers w LEFT JOIN waffles.instances i ON i.worker=w.name AND i.reported_at>now()-interval '60 seconds'
+        GROUP BY w.name,w.device`)).rows;
+      respond(res,{runs,workers,discovery:(await pool.query("SELECT value FROM waffles.settings WHERE key='discovery'")).rows[0]?.value});return;
     }
     respond(res,{error:'not found'},404);
   }catch(e){console.error('Queue request failed:',e.code??e.constructor.name);respond(res,{error:'request failed'},400);}

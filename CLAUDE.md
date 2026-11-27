@@ -376,6 +376,22 @@ When memory helps: `openmemory_reinforce(id="...", boost=0.1)`
 ### Namespace
 Always use `namespace="home"` for this repo.
 
+## Live Tuning and Experiment Journals
+
+Worker and pipeline designs must include live tuning from the start: per-backend
+concurrency, pause/drain controls, persisted runtime policy, hard resource bounds,
+and desired-versus-active telemetry. Routine tuning must not require redeployment
+or lose in-flight work. Keep defaults and safety bounds in IaC.
+
+Optimize by pushing measured throughput while preserving quality. Before trials,
+record hypotheses, fixed input hashes, settings, acceptance criteria, and resource
+conditions in a timestamped experiment journal. Record every change, raw aggregate
+measurement, quality check, failed trial, rollback, and selection decision. Use
+matched inputs and counterbalanced order; do not change success criteria after
+seeing results. Keep private inputs, credentials, and per-photo identifiers out
+of Git. Prefer the fastest reproducibly correct configuration, not the highest
+worker count.
+
 ## Performance Diagnosis - USE Method
 
 **TRIGGER**: When user reports: slow, latency, performance degraded, timeout, lag, unresponsive

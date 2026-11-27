@@ -204,6 +204,54 @@ The live PostgreSQL concurrency test (`test-queue.mjs --postgres` inside the que
 pod) was run before publishing the classifier. Do not rerun it while workers are
 claiming jobs: it inserts short-lived synthetic jobs with the real worker names.
 
+## Native hosts outside Kubernetes
+
+`install-native.py` manages `waffles-worker.service` and its capacity recheck timer
+on inventory-verified fun-bedbug and chief-horse. It verifies pinned upstream and
+uv archives, installs an isolated Python 3.12.14 CPU environment, and uses a
+dedicated unprivileged account. Only its queue token is installed on the host.
+The OpenCV wheel is replaced with the same-version headless build so graphics
+packages need not be added to the hypervisor.
+
+fun-bedbug is capped at 50% of one CPU; chief-horse at 100%. Both have 1536 MiB
+memory limits, no process swap, low scheduling priority, and a read-only system
+filesystem. Models start only with at least 1800 MiB available and CPU temperature
+below 65°C. Running workers unload models if available memory falls below 512 MiB
+or CPU temperature reaches 68°C. Missing thermal telemetry prevents startup.
+Chief-horse initially remains on standby with only 933 MiB available; the Home
+Assistant VM allocation is unchanged. Standby is not a failed classification.
+
+```bash
+bash scripts/immich-pet-tagger/inspect-native-hosts.sh
+python3 scripts/immich-pet-tagger/install-native.py fun-bedbug prepare
+python3 scripts/immich-pet-tagger/install-native.py fun-bedbug start
+python3 scripts/immich-pet-tagger/install-native.py fun-bedbug status
+python3 scripts/immich-pet-tagger/check-backend-accuracy.py /private/holdout.json /private/inventory.json --workers fun-bedbug
+# Admit a backend only after its holdout completes without false positives:
+python3 scripts/immich-pet-tagger/distributed.py workers historical-waffles mac pve still-fawn fun-bedbug
+python3 scripts/immich-pet-tagger/distributed.py workers new-uploads mac pve still-fawn fun-bedbug
+```
+
+The same commands accept `chief-horse`. Do not lower guards to force startup on
+a busy host. When headroom becomes available, validate it before adding it to a
+production run's worker list. These native services are IaC-managed by the
+versioned installer, not Flux resources or Kubernetes nodes.
+
+## Luna/Sol fallback evaluation
+
+Cloud fallback remains **disabled**. The approved 26-photo pilot used the supplied
+reference photo, Enterprise Codex, blinded test targets, and a strict high-confidence
+same-dog acceptance rule. Luna accepted 0/13 positives and Sol 2/13; neither added
+a false positive, but neither recovered any of the four local misses. See
+[aggregate results](../reference/waffles-frontier-evaluation.json).
+
+`evaluate-frontier.py` performs bounded, read-only evaluations. It persists a
+submission marker before calling the model and does not automatically resubmit
+an uncertain failure. Inputs and answers remain in the private output directory.
+`compare-frontier.py` measures incremental recovery against the CPU holdout. It
+does not enable a production route. Any future evaluation must preserve the
+training/holdout separation and the approved photo-sharing scope.
+
 ## Verification record
 
 Deployment and reference-validation results are recorded in the accompanying

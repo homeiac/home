@@ -1,19 +1,35 @@
 // Fenced claims adapted from photo_enrichment/postgres.py; inference is outside transactions.
 import crypto from 'node:crypto';
 export const WORKERS=['mac','pve','still-fawn','fun-bedbug','chief-horse'];
+export const SLOT_LIMITS={mac:4,pve:1,'still-fawn':2,'fun-bedbug':1,'chief-horse':1};
 export const CLAIM_SQL=`WITH candidate AS (
  SELECT j.run_id,j.asset_id FROM waffles.jobs j JOIN waffles.runs r ON r.id=j.run_id
  WHERE r.state='running' AND $1=ANY(r.workers)
  AND ((j.status='pending' AND j.available_at<=now()) OR (j.status='running' AND j.lease_until<now()))
  AND j.attempts<4
+ AND (SELECT count(*) FROM waffles.jobs active WHERE active.worker=$1 AND active.status='running' AND active.lease_until>now())
+     < coalesce((SELECT (value->$1->>'slots')::int FROM waffles.settings WHERE key='tuning'),1)
  ORDER BY r.created_at,j.ordinal FOR UPDATE OF j SKIP LOCKED LIMIT 1)
  UPDATE waffles.jobs j SET status='running',claim=$2,worker=$1,lease_until=now()+interval '90 seconds',attempts=attempts+1
  FROM candidate c WHERE j.run_id=c.run_id AND j.asset_id=c.asset_id RETURNING j.*,
  (SELECT config FROM waffles.runs WHERE id=j.run_id) AS config`;
 
-export async function claim(db,worker) {
+export async function claim(pool,worker) {
   if(!WORKERS.includes(worker))throw Error('Invalid worker');
-  return (await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;
+  const db=await pool.connect();
+  try {
+    await db.query('BEGIN');
+    // Separate statements ensure a fresh READ COMMITTED snapshot after waiting
+    // for the per-backend lock. Concurrent processes cannot exceed live slots.
+    await db.query("SELECT pg_advisory_xact_lock(244,hashtext($1))",[worker]);
+    const job=(await db.query(CLAIM_SQL,[worker,crypto.randomUUID()])).rows[0]??null;
+    await db.query('COMMIT');return job;
+  }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
+}
+
+export function validateTuning(worker,slots) {
+  if(!WORKERS.includes(worker)||!Number.isInteger(slots)||slots<0||slots>SLOT_LIMITS[worker])throw Error('Invalid worker slot limit');
+  return {slots};
 }
 
 export function validateResult(value) {

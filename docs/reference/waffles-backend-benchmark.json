@@ -70,6 +70,29 @@
       }
     },
     {
+      "run": "holdout-fun-bedbug",
+      "photos": 26,
+      "wall_seconds": 257.25,
+      "photos_per_minute": 6.06,
+      "sample_sha256": "eaa521acd532c829e0b8307c8e1a3e4b9f23b891949d55647c48215d713cd12a",
+      "backends": {
+        "fun-bedbug": {
+          "photos": 26,
+          "mean_processing_seconds": 5.899
+        }
+      },
+      "accuracy": {
+        "positive": {
+          "total": 13,
+          "matched": 9
+        },
+        "negative": {
+          "total": 13,
+          "matched": 0
+        }
+      }
+    },
+    {
       "run": "holdout-mac",
       "photos": 26,
       "wall_seconds": 9.457,

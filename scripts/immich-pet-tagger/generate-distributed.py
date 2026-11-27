@@ -21,7 +21,7 @@ def obj(kind, name, namespace='immich-pilot', api='v1', **values):
 
 
 def resources():
-    files = {name: (HERE / name).read_text() for name in ['schema.sql', 'bootstrap.mjs', 'queue-core.mjs', 'coordinator.mjs', 'discovery.mjs', 'distributed-worker.py', 'test-queue.mjs']}
+    files = {name: (HERE / name).read_text() for name in ['schema.sql', 'bootstrap.mjs', 'queue-core.mjs', 'coordinator.mjs', 'discovery.mjs', 'distributed-worker.py', 'supervisor.py', 'test-queue.mjs']}
     digest = hashlib.sha256(''.join(files.values()).encode()).hexdigest()
     for namespace in ('database', 'immich-pilot'):
         yield obj('ConfigMap', 'waffles-code', namespace, data=files)
@@ -31,7 +31,7 @@ def resources():
     container = {'name': 'queue', 'image': NODE_IMAGE, 'securityContext': CONTAINER_SECURITY,
                  'volumeMounts': [{'name': 'code', 'mountPath': '/code', 'readOnly': True}],
                  'resources': {'requests': {'cpu': '25m', 'memory': '64Mi'}, 'limits': {'cpu': '500m', 'memory': '256Mi'}}}
-    yield obj('Job', 'waffles-schema-v1', 'database', api='batch/v1', spec={'backoffLimit': 3, 'template': {'spec': {
+    yield obj('Job', 'waffles-schema-v2', 'database', api='batch/v1', spec={'backoffLimit': 3, 'template': {'spec': {
         **base, 'restartPolicy': 'Never', 'containers': [{**container, 'command': ['node', '/code/bootstrap.mjs'],
          'env': pg + [env('PGUSER', 'postgres'), env('PGPASSWORD', secret='postgres-credentials', key='postgres-password'), env('ROLE_PASSWORD', secret='waffles-queue', key='password')]}]}}})
     app = {'app': 'waffles-queue'}
@@ -63,7 +63,8 @@ def resources():
         yield obj('Deployment', name, api='apps/v1', spec={'replicas': 1, 'strategy': {'type': 'Recreate'}, 'selector': {'matchLabels': labels},
             'template': {'metadata': {'labels': labels, 'annotations': {'checksum/code': digest}}, 'spec': {**base,
                 'nodeSelector': {'kubernetes.io/hostname': 'k3s-vm-' + worker},
-                'containers': [{'name': 'worker', 'image': CPU_IMAGE, 'command': ['python', '-B', '/code/distributed-worker.py'],
+                'terminationGracePeriodSeconds': 90,
+                'containers': [{'name': 'worker', 'image': CPU_IMAGE, 'command': ['python', '-B', '/code/supervisor.py'],
                     'env': [env('QUEUE_URL', 'http://waffles-queue.immich-pilot.svc.cluster.local:9200'), env('WORKER_NAME', worker),
                             env('WORKER_TOKEN_FILE', '/credentials/worker-token'), env('MODEL_WORKERS', '1'), env('SCAN_WORKERS', '1'),
                             env('OMP_NUM_THREADS', cpu), env('MKL_NUM_THREADS', cpu), env('OPENBLAS_NUM_THREADS', cpu)],

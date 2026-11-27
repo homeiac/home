@@ -64,7 +64,7 @@ for directory in [root/'python',root/'venv',root/'upstream']:
  for path in [directory,*directory.rglob('*')]:
   if path.is_symlink():continue
   path.chmod(0o755 if path.is_dir() or os.access(path,os.X_OK) else 0o644)
-for name in ['worker.py','native_guard.py']:(root/name).chmod(0o644)
+for name in ['worker.py','native_guard.py','supervisor.py']:(root/name).chmod(0o644)
 unit=p['unit'].replace('@WORKER@',p['worker']).replace('@CPU@','50%' if p['worker']=='fun-bedbug' else '100%')
 pathlib.Path('/etc/systemd/system/waffles-worker.service').write_text(unit)
 pathlib.Path('/etc/systemd/system/waffles-worker.timer').write_text(p['timer'])
@@ -82,11 +82,10 @@ Type=simple
 User=waffles-worker
 Group=waffles-worker
 WorkingDirectory=/var/lib/waffles-worker
-ExecCondition=/opt/waffles-worker/venv/bin/python /opt/waffles-worker/native_guard.py
-ExecStart=/opt/waffles-worker/venv/bin/python -B /opt/waffles-worker/worker.py
+ExecStart=/opt/waffles-worker/venv/bin/python -B /opt/waffles-worker/supervisor.py
 Restart=always
 RestartSec=60
-TimeoutStopSec=30
+TimeoutStopSec=90
 Environment=QUEUE_URL=https://pets-queue.app.home.panderosystems.com
 Environment=WORKER_NAME=@WORKER@
 Environment=WORKER_TOKEN_FILE=/var/lib/waffles-worker/worker-token
@@ -130,15 +129,29 @@ WantedBy=timers.target
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('worker',choices=HOSTS)
-    parser.add_argument('action',choices=['prepare','start','status','stop'])
+    parser.add_argument('action',choices=['prepare','refresh','start','status','stop'])
     args=parser.parse_args()
     ssh=['ssh','-T','-o','BatchMode=yes','-o','ConnectTimeout=10','root@'+HOSTS[args.worker]]
-    if args.action=='prepare':
+    if args.action in ('prepare','refresh'):
         payload={'worker':args.worker,'lock':json.loads((HERE/'native-lock.json').read_text()),'upstream':json.loads((HERE/'upstream-lock.json').read_text()),
                  'requirements':(HERE/'mac-requirements.txt').read_text(),'token':secret('worker-token'),
-                 'files':{'worker.py':(HERE/'distributed-worker.py').read_text(),'native_guard.py':(HERE/'native_guard.py').read_text()},'unit':UNIT,'timer':TIMER}
+                 'files':{'worker.py':(HERE/'distributed-worker.py').read_text(),'native_guard.py':(HERE/'native_guard.py').read_text(),'supervisor.py':(HERE/'supervisor.py').read_text()},'unit':UNIT,'timer':TIMER}
         import shlex
-        subprocess.run(ssh+['/usr/bin/python3 -c '+shlex.quote(REMOTE)],input=json.dumps(payload),text=True,check=True)
+        code=REMOTE
+        if args.action=='refresh':
+            code='''import json,pathlib,shutil,subprocess,sys,time
+p=json.load(sys.stdin);root=pathlib.Path('/opt/waffles-worker');backup=root/('backup-'+str(int(time.time())));backup.mkdir(mode=0o700)
+for name,content in p['files'].items():
+ if (root/name).exists():shutil.copy2(root/name,backup/name)
+ (root/name).write_text(content);(root/name).chmod(0o644)
+unit=p['unit'].replace('@WORKER@',p['worker']).replace('@CPU@','50%' if p['worker']=='fun-bedbug' else '100%')
+shutil.copy2('/etc/systemd/system/waffles-worker.service',backup/'service')
+pathlib.Path('/etc/systemd/system/waffles-worker.service').write_text(unit)
+subprocess.run(['systemctl','daemon-reload'],check=True)
+subprocess.run(['systemctl','restart','waffles-worker.service'],check=True)
+print('Refreshed native supervisor:',p['worker'])'''
+            payload.pop('token')  # Existing scoped credential remains on its host.
+        subprocess.run(ssh+['/usr/bin/python3 -c '+shlex.quote(code)],input=json.dumps(payload),text=True,check=True)
     else:
         commands={'start':'systemctl enable --now waffles-worker.timer; systemctl start waffles-worker.service',
                   'stop':'systemctl disable --now waffles-worker.timer; systemctl stop waffles-worker.service',

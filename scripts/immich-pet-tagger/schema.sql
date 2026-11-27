@@ -24,3 +24,15 @@ CREATE TABLE IF NOT EXISTS waffles.workers (
   ready boolean NOT NULL DEFAULT false, model_seconds double precision,
   rss_bytes bigint
 );
+CREATE TABLE IF NOT EXISTS waffles.instances (
+  id text PRIMARY KEY, worker text NOT NULL, reported_at timestamptz NOT NULL DEFAULT now(),
+  device text, ready boolean NOT NULL DEFAULT false, draining boolean NOT NULL DEFAULT false,
+  rss_bytes bigint NOT NULL DEFAULT 0, exit_code integer
+);
+CREATE TABLE IF NOT EXISTS waffles.tuning_events (
+  id bigserial PRIMARY KEY, worker text NOT NULL, slots integer NOT NULL,
+  changed_at timestamptz NOT NULL DEFAULT now(), note text NOT NULL DEFAULT ''
+);
+INSERT INTO waffles.settings(key,value) VALUES('tuning',
+ '{"mac":{"slots":1},"pve":{"slots":1},"still-fawn":{"slots":1},"fun-bedbug":{"slots":1},"chief-horse":{"slots":1}}')
+ ON CONFLICT(key) DO NOTHING;
