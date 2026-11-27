@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: caption-worker-4e290b9b6059
+  name: caption-worker-dbd99796a008
   namespace: monitoring
 data:
   bundle.json: '{"canon_raw.py": "\"\"\"Read Canon RAW caption inputs on the index host. Never upload a derivative.\"\"\"\nimport
@@ -748,11 +748,11 @@ data:
     = defaultdict(int)\n        self.persisted = defaultdict(int)\n        self.mac_cache = {mib: MediaCacheProbe(mib * 1024**2)
     for mib in (64, 256, 1024)}\n        self.mac_bytes = 0\n        self.mac_seconds = defaultdict(float)\n        self.mac_counts
     = defaultdict(int)\n        self.backend_active = {\"primary\": 0, \"metal\": 0}\n        self.mac_limit = 0\n        self.mac_video_limit
-    = 0\n        self.dispatch = None\n        self.backend_saved = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0)\n        self.video_seconds
-    = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0.0)\n        self.video_counts = dict.fromkeys((\"primary\", \"metal\",
-    \"cache\"), 0)\n        self.ollama_seconds = defaultdict(float)\n        self.ollama_observations = defaultdict(int)\n        self.tokens
-    = defaultdict(int)\n        self.cache_hits = {\"photo\": 0, \"video\": 0}\n        for stage in TITLES:\n            for
-    kind in ((\"batch\",) if stage in (\"queue\", \"write\") else (\"photo\", \"video\")):\n                self.seconds[stage,
+    = 0\n        self.dispatch = None\n        self.backend_saved = dict.fromkeys((\"primary\", \"metal\", \"cache\", \"reuse\"),
+    0)\n        self.video_seconds = dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0.0)\n        self.video_counts =
+    dict.fromkeys((\"primary\", \"metal\", \"cache\"), 0)\n        self.ollama_seconds = defaultdict(float)\n        self.ollama_observations
+    = defaultdict(int)\n        self.tokens = defaultdict(int)\n        self.cache_hits = {\"photo\": 0, \"video\": 0}\n        for
+    stage in TITLES:\n            for kind in ((\"batch\",) if stage in (\"queue\", \"write\") else (\"photo\", \"video\")):\n                self.seconds[stage,
     kind] = 0.0\n                self.operations[stage, kind] = 0\n        for kind in (\"photo\", \"video\"):\n            for
     status in (\"ok\", \"error\"):\n                self.items[kind, status] = self.persisted[kind, status] = 0\n        self.active
     = {}\n        self.stage = \"idle\"\n        self.pending = None\n        self.started = time.time()\n        self.running
@@ -822,13 +822,14 @@ data:
     cache.reusable, capacity_mib=mib)\n            for (phase, kind), seconds in self.mac_seconds.items():\n                add(\"media_pipeline_mac_phase_seconds_total\",
     seconds, phase=phase, kind=kind)\n                add(\"media_pipeline_mac_phase_observations_total\", self.mac_counts[phase,
     kind], phase=phase, kind=kind)\n            for backend, count in self.backend_saved.items():\n                add(\"media_pipeline_backend_saved_total\",
-    count, backend=backend)\n                add(\"media_pipeline_video_saved_total\", self.video_counts[backend], backend=backend)\n                add(\"media_pipeline_video_saved_seconds_total\",
-    self.video_seconds[backend], backend=backend)\n            if self.pending is not None:\n                add(\"media_pipeline_queue\",
-    self.pending)\n            for name, value in ((\"worker_stage\", STAGES[stage_now]), (\"stage_started_timestamp_seconds\",
-    stage_started),\n                                (\"heartbeat_timestamp_seconds\", time.time()), (\"running\", self.running)):\n                add(\"media_pipeline_\"
-    + name, value)\n            for name, values in ((\"seconds\", self.ollama_seconds), (\"observations\", self.ollama_observations),
-    (\"tokens\", self.tokens)):\n                for (phase, kind), value in sorted(values.items()):\n                    add(f\"media_pipeline_ollama_{name}_total\",
-    value, phase=phase, kind=kind)\n            for kind, count in self.cache_hits.items():\n                add(\"media_pipeline_cache_hits_total\",
+    count, backend=backend)\n            for backend, count in self.video_counts.items():\n                add(\"media_pipeline_video_saved_total\",
+    count, backend=backend)\n                add(\"media_pipeline_video_saved_seconds_total\", self.video_seconds[backend],
+    backend=backend)\n            if self.pending is not None:\n                add(\"media_pipeline_queue\", self.pending)\n            for
+    name, value in ((\"worker_stage\", STAGES[stage_now]), (\"stage_started_timestamp_seconds\", stage_started),\n                                (\"heartbeat_timestamp_seconds\",
+    time.time()), (\"running\", self.running)):\n                add(\"media_pipeline_\" + name, value)\n            for name,
+    values in ((\"seconds\", self.ollama_seconds), (\"observations\", self.ollama_observations), (\"tokens\", self.tokens)):\n                for
+    (phase, kind), value in sorted(values.items()):\n                    add(f\"media_pipeline_ollama_{name}_total\", value,
+    phase=phase, kind=kind)\n            for kind, count in self.cache_hits.items():\n                add(\"media_pipeline_cache_hits_total\",
     count, kind=kind)\n            for source, target in EDGES:\n                add(\"media_pipeline_edge_info\", 1, id=source
     + \"-\" + target, source=source, target=target)\n            lines = []\n            for name, samples in sorted(rows.items()):\n                typ,
     help_text = PIPELINE_HELP[name]\n                lines.extend([f\"# HELP {name} {help_text}\", f\"# TYPE {name} {typ}\",
@@ -889,7 +890,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: caption-worker-4e290b9b6059
+  name: caption-worker-dbd99796a008
   namespace: monitoring
 spec:
   backoffLimit: 2
@@ -944,7 +945,7 @@ spec:
       volumes:
       - name: bundle
         configMap:
-          name: caption-worker-4e290b9b6059
+          name: caption-worker-dbd99796a008
       - name: credentials
         secret:
           secretName: caption-worker-deploy
@@ -1019,7 +1020,7 @@ spec:
           volumes:
           - name: bundle
             configMap:
-              name: caption-worker-4e290b9b6059
+              name: caption-worker-dbd99796a008
           - name: credentials
             secret:
               secretName: caption-worker-deploy

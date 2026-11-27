@@ -58,6 +58,10 @@ class CanonTests(unittest.TestCase):
                     self.assertEqual([r['status'] for r in results], ['ok','ok'])
                 with SummaryCache(cachefile) as cache:
                     self.assertEqual(run(names[0],cache)['inference_backend'],'reuse')
+                with media_summary.PipelineMetrics(None,args.enricher) as metrics:
+                    batch=[(dict(path=n,ext='cr2'),r) for n,r in zip(names,results)]
+                    media_summary.persist(batch,args,metrics,set(names))
+                    self.assertEqual(metrics.backend_saved['reuse'],1)
                 self.assertEqual(model.call_count,1)
 
     def test_album_copy_requires_identical_bytes_and_rechecks_changes(self):

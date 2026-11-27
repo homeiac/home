@@ -128,7 +128,8 @@ class PipelineTests(unittest.TestCase):
             path = str(Path(td) / "pipeline.prom")
             args = SimpleNamespace(min_free_mib=0, limit=1, batch_size=1, index=td, library=td,
                                    enricher="e1", dry_run=False, prom=path, parallel=1)
-            with patch.object(media_summary, "queue", return_value=[{"path": "private.jpg", "ext": "jpg"}]), \
+            with patch("canon_raw.album_copies", return_value=[]), \
+                 patch.object(media_summary, "queue", return_value=[{"path": "private.jpg", "ext": "jpg"}]), \
                  patch.object(media_summary, "summarize", return_value={"status": "ok"}), \
                  patch.object(media_summary, "write_batch", side_effect=OSError("disk full")):
                 with self.assertRaises(OSError):

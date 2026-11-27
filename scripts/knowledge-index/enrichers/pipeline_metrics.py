@@ -98,7 +98,7 @@ class PipelineMetrics:
         self.mac_limit = 0
         self.mac_video_limit = 0
         self.dispatch = None
-        self.backend_saved = dict.fromkeys(("primary", "metal", "cache"), 0)
+        self.backend_saved = dict.fromkeys(("primary", "metal", "cache", "reuse"), 0)
         self.video_seconds = dict.fromkeys(("primary", "metal", "cache"), 0.0)
         self.video_counts = dict.fromkeys(("primary", "metal", "cache"), 0)
         self.ollama_seconds = defaultdict(float)
@@ -288,7 +288,8 @@ class PipelineMetrics:
                 add("media_pipeline_mac_phase_observations_total", self.mac_counts[phase, kind], phase=phase, kind=kind)
             for backend, count in self.backend_saved.items():
                 add("media_pipeline_backend_saved_total", count, backend=backend)
-                add("media_pipeline_video_saved_total", self.video_counts[backend], backend=backend)
+            for backend, count in self.video_counts.items():
+                add("media_pipeline_video_saved_total", count, backend=backend)
                 add("media_pipeline_video_saved_seconds_total", self.video_seconds[backend], backend=backend)
             if self.pending is not None:
                 add("media_pipeline_queue", self.pending)

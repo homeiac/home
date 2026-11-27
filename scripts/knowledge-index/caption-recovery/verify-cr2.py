@@ -38,7 +38,11 @@ def main() -> None:
                 side_effect=AssertionError('existing caption triggered inference')) as model:
             stored = media_summary.summarize(row, str(library), args)
             assert stored['status']=='ok' and stored['inference_backend']=='reuse', stored['error']
-            table = media_summary.write_batch([stored],index,args.enricher)
+            args.index = index
+            with media_summary.PipelineMetrics(None,args.enricher) as metrics:
+                media_summary.persist([(row,stored)],args,metrics,{row['path']})
+                assert metrics.backend_saved['reuse'] == 1
+            table = str(next((Path(index)/'summaries'/args.enricher).glob('*.parquet')))
             with duckdb.connect() as con:
                 count, summary = con.execute('SELECT count(*),min(summary) FROM read_parquet(?)',[table]).fetchone()
             assert count == 1 and stored['summary'] == summary and model.call_count == 0

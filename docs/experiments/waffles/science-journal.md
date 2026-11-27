@@ -133,3 +133,7 @@ At 06:25 Pacific, Flux installed the importer and restarted the caption worker. 
 - 2026-11-27T06:28-08:00 · 106 read back from Immich, 70 submitted, 0 independently filled, 2,016 pending, 0 unresolved.
 
 The first production batch exposed 551 external CR2 assets already in Immich's trash. The worker now filters trash, offline assets, and explicit media-health exclusions before inference and refreshes that selection every five minutes during a run. A restored file becomes eligible again. For CR2 album paths it compares candidate originals by SHA-256. Equal filenames and sizes alone cannot suppress work.
+
+All **111** album candidates matched their year-folder originals byte-for-byte. The catalog accounts for 2,782 paths as 2,120 active originals, 551 trashed originals and 111 copies. Four album captions were written during rollout before the new exclusion. Two matched active originals in the recovery cohort and were submitted through the normal publisher for reuse. The other two matched paths outside the recovery cohort. The first 20 successful CR2 Parquet rows had zero repeated source/path/size/enricher keys.
+
+A production batch also exposed a missing telemetry counter for saved-caption reuse. Parquet had already committed the batch when the counter raised an exception. The counter and canary now cover the full persistence step. Reused text is counted separately from model inference.
