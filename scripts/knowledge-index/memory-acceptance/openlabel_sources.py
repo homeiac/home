@@ -59,6 +59,15 @@ def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str, sync_journ
         if assets != set(live["members"]) or assets != set(read(root/"album-after-owner-correction.json")["members"]):
             raise ValueError("Refresh the private album membership and span review")
     asset_list = ",".join("'" + a + "'" for a in sorted(assets))
+    ocr = {asset: [] for asset in assets}
+    rows = pg(f"""SELECT json_build_array(a.id, o.id, o.text,
+                    ARRAY[o.x1,o.y1,o.x2,o.y2,o.x3,o.y3,o.x4,o.y4])
+                FROM asset_ocr o JOIN asset a ON a.id=o."assetId"
+                WHERE a.id IN ({asset_list}) AND a."ownerId"='{owner}' AND a."libraryId"='{library}'
+                AND a."deletedAt" IS NULL AND NOT a."isOffline" AND o."isVisible" AND btrim(o.text)<>''
+                ORDER BY a.id, o.y1, o.x1, o.id""")
+    for asset, region, text, polygon in rows:
+        ocr[asset].append({"id": region, "text": text, "polygon": polygon})
     native = pg(f"""SELECT json_build_array(a.id, substr(a."originalPath",19), e."fileSizeInByte", f.id,
         p."personGroupId", p.name, f."boundingBoxX1"::float/f."imageWidth",
         f."boundingBoxY1"::float/f."imageHeight", f."boundingBoxX2"::float/f."imageWidth",
@@ -105,7 +114,7 @@ def snapshot(root: Path, pg, api_js, photo_url: str, immich_url: str, sync_journ
                 regions[asset].append(dict(namespace="photo-index", face_id=fid,
                                            person_id=ref["person_id"], box=face["box"]))
     return dict(album=album, album_url=immich_url.rstrip("/")+"/albums/"+album,
-                regions=regions, names=names, **live)
+                regions=regions, names=names, ocr=ocr, **live)
 
 
 if __name__ == "__main__":

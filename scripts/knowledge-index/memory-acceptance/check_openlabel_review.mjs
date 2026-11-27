@@ -1,4 +1,5 @@
 // Exercise the rendered private album. Print aggregate results only.
+import {checkOcrTags} from './check_ocr_tags.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -38,6 +39,7 @@ try {
     }
     await Promise.all(photos.map(photo => photo.decode()));
   });
+  const journeyOcr = await checkOcrTags(page, current.ocr);
   const coverage = await page.evaluate(({current, groupReview}) => {
     const scenes = JSON.parse(document.getElementById('journey-scenes').textContent);
     let groups = 0, nativeFaces = 0, added = 0, dispositions = 0, clicks = 0, aliases = 0;
@@ -82,7 +84,7 @@ try {
           }
         }
       }
-      for (const button of block.querySelectorAll('button')) {
+      for (const button of block.querySelectorAll('button:not([data-immich-ocr-id])')) {
         button.click();
         const rect = photo.getBoundingClientRect();
         const boxes = [...card.querySelectorAll('.journey-photo .box')];
@@ -329,7 +331,7 @@ try {
       }
     }
   }
-  console.log(JSON.stringify({journey: coverage, photos: articles.length, name_clicks: names, verb_clicks: verbs, date_conflicts: conflicts, participant_clicks: participantClicks, component_photos: panelCount, component_face_clicks:panelFaceClicks, component_action_clicks:panelActionClicks}));
+  console.log(JSON.stringify({journey: coverage, journey_ocr_clicks: journeyOcr, ocr_clicks: await checkOcrTags(page, current.ocr), photos: articles.length, name_clicks: names, verb_clicks: verbs, date_conflicts: conflicts, participant_clicks: participantClicks, component_photos: panelCount, component_face_clicks:panelFaceClicks, component_action_clicks:panelActionClicks}));
 } finally {
   await browser.close();
 }

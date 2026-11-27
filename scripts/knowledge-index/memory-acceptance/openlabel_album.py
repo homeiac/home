@@ -268,6 +268,29 @@ def build_scene(asset: str, actions: list, regions: dict, width: int, height: in
                           "objects": objects, "actions": observations, "relations": relations}}
 
 
+def attach_ocr(scene: dict, regions: list[dict]) -> None:
+    """Attach each visible native OCR result as an image-level OpenLABEL tag."""
+    for region in regions:
+        tags = scene["openlabel"].setdefault("tags", {})
+        uid = region["id"]
+        if uid in tags:
+            raise ValueError("Duplicate OCR region")
+        polygon = region["polygon"]
+        if len(polygon) != 8 or not all(isinstance(v, (float, int)) and 0 <= v <= 1 for v in polygon):
+            raise ValueError("Invalid normalized Immich OCR quadrilateral")
+        tags[uid] = {"type": "immich_ocr", "tag_data": {
+            "text": [text_value("recognized_text", region["text"])],
+            "vec": [{"name": "normalized_polygon", "val": polygon}]}}
+
+
+def ocr_regions(data: dict) -> list[dict]:
+    """Recover reading order after PostgreSQL JSONB reorders tag keys."""
+    regions = [{"id": uid, "text": fields(tag["tag_data"])["recognized_text"],
+                "polygon": tag["tag_data"]["vec"][0]["val"]}
+               for uid, tag in data.get("tags", {}).items() if tag["type"] == "immich_ocr"]
+    return sorted(regions, key=lambda r: (r["polygon"][1], r["polygon"][0], r["id"]))
+
+
 def card(scene: dict, names: dict) -> dict:
     """Derive display words and click targets from the stored OpenLABEL document."""
     from collage_catalogue import project
@@ -276,6 +299,7 @@ def card(scene: dict, names: dict) -> dict:
     data, individual = project_actions(data)
     details = {"width": data["metadata"]["image_width"], "height": data["metadata"]["image_height"]}
     details["individual"] = individual
+    details["ocr"] = ocr_regions(data)
     if panels:
         details["panels"] = panels
     for context in data.get("contexts", {}).values():

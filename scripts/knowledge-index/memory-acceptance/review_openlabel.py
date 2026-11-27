@@ -21,7 +21,7 @@ from PIL import Image, ImageOps
 from journey_faces import complete_faces
 from collage_catalogue import catalogue, filter_timeline, regular_grid
 from caption_participants import age_status, attach, fingerprint
-from openlabel_album import build_scene, card, link_depicted_faces, persist, stable_id, validate_scenes
+from openlabel_album import attach_ocr, build_scene, card, link_depicted_faces, persist, stable_id, validate_scenes
 
 
 def read(path: Path):
@@ -138,10 +138,13 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
     group_reviews = read(group_path) if group_path.exists() else {}
     if group_reviews.keys() - set(current["members"]):
         raise ValueError("Per-person review contains assets outside this album")
+    if set(current.get("ocr", {})) != {row["asset"] for row in reviewed}:
+        raise ValueError("Refresh the source snapshot to read current Immich OCR for this album")
     ledger = root / "nikhil-life-stage-backfill/jobs.sqlite3"
     scenes, cards, expected = {}, {}, {}
     build_durations = []
     group_durations = []
+    ocr_durations = []
     jobs = []
     with closing(sqlite3.connect(ledger.resolve().as_uri()+"?mode=ro", uri=True)) as db:
         db.execute("BEGIN")
@@ -228,6 +231,9 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
                 media = read(media_path)
                 validate_scenes({asset: media}, schema)
                 link_depicted_faces(scenes[asset], media)
+            ocr_started = time.perf_counter()
+            attach_ocr(scenes[asset], current["ocr"][asset])
+            ocr_durations.append(time.perf_counter() - ocr_started)
             status = age_status(prior, birth_year)
             if status == "conflict":
                 if prior["date"] != row["date"]:
@@ -246,6 +252,8 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
     validate_scenes(scenes, schema)
     def check_caption(asset: str, scene: dict) -> None:
         cards[asset].update(card(scene, current["names"]))
+        if cards[asset]["ocr"] != current["ocr"][asset]:
+            raise ValueError("Stored OCR tags differ from the Immich snapshot")
         captions = ["".join(s.get("source_words", cards[asset]["faces"][s["face"]]["name"]) if "face" in s else
                             s.get("text", s.get("verb")) for s in claim["spans"])
                     for claim in cards[asset]["claims"]]
@@ -287,7 +295,9 @@ def publish(root: Path, schema: Path, current: dict, conn, jobs_path: Path | Non
     groups = [c for a, c in cards.items() if c["media_type"] != "Collage" and
               sum(r["namespace"] == "immich" for r in current["regions"].get(a, [])) > 1]
     partial = sum(any("action_withheld" in face for face in c["faces"].values()) for c in groups)
-    return {**pair_result, "album_highlights": len(album["members"]), "reviewed_photos": len(stored),
+    return {**pair_result, "ocr_p95": sorted(ocr_durations)[math.ceil(.95*len(ocr_durations))-1],
+            "ocr_photos": sum(bool(c["ocr"]) for c in cards.values()),
+            "ocr_regions": sum(len(c["ocr"]) for c in cards.values()), "album_highlights": len(album["members"]), "reviewed_photos": len(stored),
             "faces": sum(len(c["faces"]) for c in cards.values()),
             "scene_only": sum("scene" in c for c in cards.values()),
             "actions": sum(len(scene["openlabel"].get("actions", {})) for scene in stored.values()),
@@ -317,7 +327,8 @@ if __name__ == "__main__":
     if args.metrics_host:
         metrics = runpy.run_path(str(Path(__file__).resolve().parents[1] / "photo-stage-metrics.py"))
         stages = [("openlabel-pilot", result["reviewed_photos"], result["scene_only"], result["build_p95"]),
-                  ("journey-group-actions", result["group_photos"], result["group_partial"], result["group_p95"])]
+                  ("journey-group-actions", result["group_photos"], result["group_partial"], result["group_p95"]),
+                  ("immich-ocr-tags", result["reviewed_photos"], 0, result["ocr_p95"])]
         for name, total, partial, duration in stages:
             stage = f'stage="{name}"'
             counts = {"complete": total - partial, "withheld": partial}

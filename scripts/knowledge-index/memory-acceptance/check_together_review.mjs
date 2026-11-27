@@ -1,4 +1,5 @@
 // Check a private same-photo album against independently frozen subject and asset IDs.
+import {checkOcrTags} from './check_ocr_tags.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
@@ -24,7 +25,7 @@ try {
     assert.equal(await article.$eval('a', e=>e.href), source.album_url+'/photos/'+scene.asset);
     const subjects = await article.$$eval('p[data-subject]', ps=>ps.map(p=>p.dataset.subject));
     assert.ok(expected.people.every(id=>subjects.some(s=>scene.faces[s].person_id===id)));
-    for (const button of await article.$$('button')) {
+    for (const button of await article.$$('button:not([data-immich-ocr-id])')) {
       await button.click();
       const boxes = await article.$$eval('.box', els=>els.map(el=>({id:el.dataset.face,
         rect:['left','top','width','height'].map(k=>parseFloat(el.style[k])/100)})));
@@ -51,7 +52,7 @@ try {
       clicks++;
     }
   }
-  console.log(JSON.stringify({verified_photos: assets.length, clicks}));
+  console.log(JSON.stringify({verified_photos: assets.length, ocr_clicks: await checkOcrTags(page, source.ocr), clicks}));
 } finally {
   await browser.close();
 }

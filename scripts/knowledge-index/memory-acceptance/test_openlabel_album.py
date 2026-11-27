@@ -1,7 +1,7 @@
 """Regression cases for grounding and rendering saved OpenLABEL scenes."""
 import unittest
 
-from openlabel_album import build_scene, card
+from openlabel_album import attach_ocr, build_scene, card
 
 
 class OpenLabelAlbumTests(unittest.TestCase):
@@ -15,6 +15,19 @@ class OpenLabelAlbumTests(unittest.TestCase):
 
     def scene(self):
         return build_scene("a", [self.parts], self.regions, 200, 100)
+
+    def test_ocr_matches_source_order_and_preserves_literal_text(self):
+        scene = self.scene()
+        region = {"id": "2", "text": "<a> A & B", "polygon": [.1,.1,.7,.1,.7,.2,.1,.2]}
+        other = dict(region, id="1", text="A second occurrence",
+                     polygon=[.1,.5,.7,.5,.7,.6,.1,.6])
+        attach_ocr(scene, [other, region])
+        self.assertEqual(card(scene, self.names)["ocr"], [region, other])
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            attach_ocr(scene, [region])
+        with self.assertRaisesRegex(ValueError, "quadrilateral"):
+            attach_ocr(scene, [dict(region, id="3", polygon=[1, 2])])
+        self.assertEqual(card(self.scene(), self.names)["ocr"], [])
 
     def test_rename_and_local_face_keep_roles_and_geometry(self):
         scene = self.scene()

@@ -33,6 +33,8 @@ flowchart TD
 
 **When descriptions disagree.** A saved face action can contain several claims. A later participant review may correct just one. For example, a reviewer can confirm someone is sitting on the steps with a group while finding no evidence that they are friends. Keep the sitting, the steps and the group. Resolve only the disputed relationship. Use the accepted reading for the caption, action links and album query, and keep both sources available on the card.
 
+**Text in the image.** OCR is a source of scene tags. Each visible Immich OCR region supplies its own stable ID, verbatim text and four corners on the original asset. The reader can open the transcription and select a line to locate it in the photo. Text on a card or collage belongs to the whole image unless there is separate evidence for a component. A pet name in a dedication is evidence of a mention. Identifying the pictured pet requires its own observation.
+
 **Depicted people.** A video call can be part of a family story. Attach the screen context to the face on the display. The caption can describe what that person visibly does on screen. A query for people physically together uses the face context to distinguish the people in the room from the remote participant. The carrier and face are OpenLABEL objects connected by the Wikidata *depicts* relation. A reviewer confirms the relation, and the importer checks the geometry. Overlap alone cannot establish depiction. [Wikidata depicts (P180)](https://www.wikidata.org/wiki/Property:P180)
 
 ## What the platform should answer

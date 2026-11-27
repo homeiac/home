@@ -82,7 +82,7 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
   const feedback = document.createElement('output');
   feedback.setAttribute('aria-live','polite');
   function select(button, roles, message) {
-    figure.querySelectorAll('.box').forEach(box => box.remove());
+    figure.querySelectorAll('.box, .ocr-region').forEach(box => box.remove());
     article.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
     for (const [role, id] of Object.entries(roles)) {
       const [cx, cy, w, h] = item.faces[id].box;
@@ -252,6 +252,39 @@ for (const item of JSON.parse((journey || document.getElementById('scenes')).tex
     line.append(' · ' + face.action_withheld);
   }
   block.append(feedback);
+  if (item.ocr?.length) {
+    const details = element('details', block);
+    details.className = 'ocr-tags';
+    const summary = element('summary', details);
+    element('strong', summary, 'OCR');
+    summary.append(' · ' + item.ocr[0].text);
+    element('small', details, 'Text recognized by Immich. Select a line to highlight it.');
+    for (const region of item.ocr) {
+      const button = element('button', details, region.text);
+      button.type = 'button';
+      button.dataset.immichOcrId = region.id;
+      button.setAttribute('aria-pressed', 'false');
+      button.onclick = () => {
+        select(button, {}, region.text);
+        const overlay = element('span', figure);
+        overlay.className = 'ocr-region';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.dataset.immichOcrId = region.id;
+        const points = [];
+        for (let i = 0; i < region.polygon.length; i += 2) {
+          points.push(region.polygon[i] * 100 + '% ' + region.polygon[i + 1] * 100 + '%');
+        }
+        overlay.style.clipPath = 'polygon(' + points.join(',') + ')';
+      };
+    }
+    details.addEventListener('toggle', () => {
+      if (!details.open && figure.querySelector('.ocr-region')) {
+        figure.querySelector('.ocr-region').remove();
+        details.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed', 'false');
+        feedback.textContent = '';
+      }
+    });
+  }
   if (item.caption_sources) {
     const history = element('details', block);
     element('summary', history, 'Caption sources');

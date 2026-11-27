@@ -9,3 +9,9 @@ button[data-short-face-id]::after{content:" · face " attr(data-short-face-id);f
 .photo-action output{display:block;overflow-wrap:anywhere}
 .photo-action .mention button{margin:0 .1em}
 .photo-action .date-conflict{border-left:4px solid #9a5a05;padding:.4rem .65rem;margin:.4rem 0;background:#fff1cf}
+
+.ocr-tags{margin:.5rem 0}
+.ocr-tags summary{cursor:pointer;color:#145744;overflow-wrap:anywhere}
+.ocr-tags summary strong{background:#e5f1eb;border-radius:.25rem;padding:.1em .35em}
+.ocr-tags button{display:block;margin:.2em 0;text-align:left;overflow-wrap:anywhere;max-width:100%}
+.ocr-region{position:absolute;inset:0;pointer-events:none;background:rgba(255,205,40,.55)}
