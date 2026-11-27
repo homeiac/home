@@ -60,6 +60,23 @@ class CanonTests(unittest.TestCase):
                     self.assertEqual(run(names[0],cache)['inference_backend'],'reuse')
                 self.assertEqual(model.call_count,1)
 
+    def test_album_copy_requires_identical_bytes_and_rechecks_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root/'album').mkdir()
+            annual, album = root/'image.cr2', root/'album/image.cr2'
+            annual.write_bytes(b'ABCD')
+            album.write_bytes(b'ABCD')
+            with duckdb.connect(str(root/'knowledge.duckdb')) as db:
+                db.execute("""CREATE VIEW gphotos_media AS SELECT * FROM (VALUES
+                    ('image.cr2',NULL,'image.cr2',4,'cr2'),('album/image.cr2','album','image.cr2',4,'cr2'))
+                    AS t(path,album,name,size_bytes,ext)""")
+                db.execute("CREATE VIEW gphotos_album_dup AS SELECT * FROM gphotos_media WHERE album IS NOT NULL")
+            with SummaryCache(str(root/'hash.sqlite')) as cache:
+                self.assertEqual(canon_raw.album_copies(folder,folder,cache),[dict(path='album/image.cr2',size_bytes=4)])
+                album.write_bytes(b'WXYZ')
+                self.assertEqual(canon_raw.album_copies(folder,folder,cache),[])
+
     def test_recovery_claim_is_exact_and_expires(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

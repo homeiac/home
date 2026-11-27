@@ -1,5 +1,6 @@
 """Read Canon RAW caption inputs on the index host. Never upload a derivative."""
 import base64
+from functools import lru_cache
 import hashlib
 import io
 import json
@@ -26,6 +27,27 @@ def guest(*command: str) -> str:
         time.sleep(2 ** attempt)
 
 
+def query(sql: str) -> list:
+    rows = guest('/usr/local/bin/k3s', 'kubectl', '-n', 'immich-pilot', 'exec', 'deploy/immich-postgres',
+                 '--', 'psql', '-XAt', '-v', 'ON_ERROR_STOP=1', '-U', 'immich', '-d', 'immich', '-c', sql)
+    return [json.loads(line) for line in rows.splitlines()]
+
+
+@lru_cache(maxsize=1)
+def unavailable(recheck_period: int) -> list:
+    """Refresh reversible Immich exclusions once per five-minute period."""
+    return query("""SELECT json_build_object('path',substr(a."originalPath",length('/external/gphotos/')+1),
+                                              'size_bytes',e."fileSizeInByte")
+        FROM asset a JOIN library l ON l.id=a."libraryId" AND l."ownerId"=a."ownerId"
+        JOIN asset_exif e ON e."assetId"=a.id
+        LEFT JOIN asset_metadata h ON h."assetId"=a.id AND h.key='home.media-health.v1'
+        WHERE l.name='Existing Google Photos' AND a."isExternal" AND a."originalPath" LIKE '/external/gphotos/%'
+          AND lower(right(a."originalPath",4))='.cr2'
+        GROUP BY a."originalPath",e."fileSizeInByte"
+        HAVING bool_and(a."deletedAt" IS NOT NULL OR a."isOffline" OR
+                        coalesce(h.value->>'excludeFromProcessing','false')='true')""")
+
+
 def lookup(path: str, size: int) -> dict:
     """Match the exact external path and owner of the configured library."""
     relative = PurePosixPath(path)
@@ -36,7 +58,9 @@ def lookup(path: str, size: int) -> dict:
     sql = f"""
       SELECT json_build_object('id',a.id,'size',e."fileSizeInByte",'native',e.description,
         'unavailable',a."deletedAt" IS NOT NULL OR a."isOffline" OR a.type<>'IMAGE',
-        'excluded',h.value->>'excludeFromProcessing','packet',m.value,
+        'excluded',h.value->>'excludeFromProcessing','packet',json_build_object(
+          'summary',m.value->>'summary','summaryModel',m.value->>'summaryModel',
+          'contentSha256',m.value->>'contentSha256','tags',m.value->'tags'),
         'preview',f.path)
       FROM asset a JOIN library l ON l.id=a."libraryId" AND l."ownerId"=a."ownerId"
       LEFT JOIN asset_exif e ON e."assetId"=a.id
@@ -45,15 +69,15 @@ def lookup(path: str, size: int) -> dict:
       LEFT JOIN asset_file f ON f."assetId"=a.id AND f.type='preview'
       WHERE l.name='Existing Google Photos' AND a."isExternal"
         AND a."originalPath"=convert_from(decode('{encoded}','hex'),'UTF8')"""
-    rows = guest('/usr/local/bin/k3s','kubectl','-n','immich-pilot','exec','deploy/immich-postgres','--','psql','-XAt','-v','ON_ERROR_STOP=1',
-                 '-U','immich','-d','immich','-c',sql).splitlines()
+    rows = query(sql)
     if not rows:
         return {}
-    if len(rows) != 1:
-        raise ValueError('Ambiguous Immich RAW asset')
-    asset = json.loads(rows[0])
-    if asset['unavailable'] or asset['excluded'] == 'true' or asset['size'] != size:
-        raise ValueError('Immich RAW asset unavailable, excluded or changed')
+    active = [asset for asset in rows if not asset['unavailable'] and asset['excluded'] != 'true']
+    if not active:
+        return {'skip': 'Immich asset is trashed, offline or excluded'}
+    if len(active) != 1 or active[0]['size'] != size:
+        raise ValueError('Immich RAW mapping is ambiguous or its original size changed')
+    asset = active[0]
     return asset
 
 
@@ -69,6 +93,29 @@ def original_path(library: str, path: str, size: int) -> Path:
 def sha256(original: Path) -> str:
     with original.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def album_copies(index: str, library: str, cache) -> list:
+    """Only omit album paths when a current year-folder original has identical bytes."""
+    import duckdb
+    with duckdb.connect(str(Path(index) / 'knowledge.duckdb'), read_only=True) as con:
+        rows = con.execute("""SELECT a.path, y.path, a.size_bytes
+            FROM gphotos_album_dup a JOIN gphotos_media y
+            ON y.album IS NULL AND y.name=a.name AND y.size_bytes=a.size_bytes
+            WHERE lower(a.ext)='cr2'""").fetchall()
+    duplicates = {}
+    fingerprint = cache.file_digest if cache is not None else sha256
+    for album, annual, size in rows:
+        if album in duplicates:
+            continue
+        try:
+            first = original_path(library, album, size)
+            second = original_path(library, annual, size)
+            if fingerprint(first) == fingerprint(second):
+                duplicates[album] = {'path': album, 'size_bytes': size}
+        except (FileNotFoundError, PermissionError, ValueError):
+            continue
+    return list(duplicates.values())
 
 
 def match_catalog(index: str, library: str, row: dict, enricher: str, fingerprint: str) -> tuple | None:

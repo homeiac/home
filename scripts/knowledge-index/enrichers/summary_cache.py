@@ -5,6 +5,7 @@ inference settings must match. No filename/size heuristic can cause a hit.
 """
 import hashlib
 import json
+import os
 import sqlite3
 from pathlib import Path
 from threading import Lock
@@ -17,10 +18,30 @@ class SummaryCache:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(path, check_same_thread=False)
         self.lock = Lock()
+        self.connection.execute("""CREATE TABLE IF NOT EXISTS raw_file_hashes
+            (path TEXT PRIMARY KEY, revision TEXT NOT NULL, digest TEXT NOT NULL)""")
         self.raw_locks = [Lock() for _ in range(64)]
         self.connection.execute("""CREATE TABLE IF NOT EXISTS raw_answers
             (enricher TEXT, sha256 TEXT, answer TEXT NOT NULL, PRIMARY KEY(enricher,sha256))""")
         self.connection.execute("CREATE TABLE IF NOT EXISTS answers (key TEXT PRIMARY KEY, answer TEXT NOT NULL)")
+
+    def file_digest(self, path: Path) -> str:
+        """Avoid rereading known album copies while their filesystem revision is intact."""
+        with path.open('rb') as stream:
+            stat = os.fstat(stream.fileno())
+            revision = json.dumps([stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns])
+            with self.lock:
+                row = self.connection.execute("SELECT digest FROM raw_file_hashes WHERE path=? AND revision=?",
+                                              (str(path), revision)).fetchone()
+            if row:
+                return row[0]
+            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+            if os.fstat(stream.fileno()).st_ctime_ns != stat.st_ctime_ns:
+                raise ValueError('File changed while checking album copy')
+        with self.lock, self.connection:
+            self.connection.execute("INSERT OR REPLACE INTO raw_file_hashes VALUES (?,?,?)",
+                                    (str(path), revision, digest))
+        return digest
 
     def raw_lock(self, fingerprint: str):
         """The Mac and RTX dispatch threads share this worker and cache."""

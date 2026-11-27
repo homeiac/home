@@ -244,6 +244,10 @@ def _summarize(row, library, a, metrics=None, cache=None, fingerprint=None):
                 import canon_raw
                 original = canon_raw.original_path(library, row["path"], row["size_bytes"])
                 asset = canon_raw.lookup(row["path"], row["size_bytes"])
+                if asset.get("skip"):
+                    base.update(status="excluded", error=asset["skip"])
+                    metrics.item(kind, "excluded")
+                    return base
                 existing = canon_raw.saved_caption(asset, original, fingerprint)
                 if not existing and fingerprint:
                     existing = cache.raw_caption(a.enricher, fingerprint)
@@ -323,7 +327,7 @@ def write_batch(rows, out_dir, enricher):
     return target
 
 
-def queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):
+def queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False, unavailable=()):
     """Select pending work while skipping paths already attempted in this run."""
     priority = "coalesce(list_contains(?, lower(ext)), false), " if photos_first else ""
     params = [enricher, sorted(VIDEO_EXTS), limit + len(seen)] if photos_first else [enricher, limit + len(seen)]
@@ -340,13 +344,16 @@ def queue(index, enricher, limit, seen=(), metrics=None, *, photos_first=False):
         params.insert(1, paths)
     # A separate recovery run can own an exact source revision until its lease expires.
     reservation = Path(index, '_caption_reservations.json')
+    omitted = list(unavailable)
     available = ""
     if reservation.exists():
         claims = json.loads(reservation.read_text())
         if claims["expires"] > time.time() and claims["items"]:
-            available = ("WHERE NOT EXISTS (SELECT 1 FROM unnest(?::STRUCT(path VARCHAR, size_bytes BIGINT)[]) "
-                         "AS claims(item) WHERE item.path=q.path AND item.size_bytes=q.size_bytes) ")
-            params.insert(1, claims["items"])
+            omitted.extend(claims["items"])
+    if omitted:
+        available = ("WHERE NOT EXISTS (SELECT 1 FROM unnest(?::STRUCT(path VARCHAR, size_bytes BIGINT)[]) "
+                     "AS claims(item) WHERE item.path=q.path AND item.size_bytes=q.size_bytes) ")
+        params.insert(1, omitted)
     with duckdb.connect(os.path.join(index, "knowledge.duckdb"), read_only=True) as con:
         cur = con.execute("SELECT *, count(*) OVER () AS pending_count FROM gphotos_to_summarize(?) AS q "
                           f"{available}ORDER BY {priority}taken_ts DESC NULLS LAST, path LIMIT ?", params)
@@ -525,6 +532,8 @@ def run(a):
     seen = set()
     cache_context = nullcontext(None) if a.dry_run else SummaryCache(os.path.join(a.index, "summary-cache.sqlite3"))
     with cache_context as cache, PipelineMetrics(None if a.dry_run else getattr(a, "prom", None), a.enricher) as metrics:
+        import canon_raw
+        duplicates = canon_raw.album_copies(a.index, a.library, cache)
         primary = partial(summarize, library=a.library, a=a, metrics=metrics, cache=cache)
         metal_args = copy(a)
         metal_args.model = "bonsai-27b-metal"
@@ -550,8 +559,16 @@ def run(a):
                 if remaining <= 0:
                     return []
                 with metrics.measure("queue"):
+                    unavailable = ()
+                    if Path("/usr/sbin/qm").is_file():
+                        import canon_raw
+                        try:
+                            unavailable = canon_raw.unavailable(int(time.time()) // 300)
+                        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+                            # The exact asset lookup still checks eligibility before inference.
+                            pass
                     rows = queue(a.index, a.enricher, min(fetch_size, remaining), seen, metrics,
-                                 photos_first=queue_order == "photos-first")
+                                 photos_first=queue_order == "photos-first", unavailable=[*duplicates, *unavailable])
                 seen.update(r["path"] for r in rows)
                 remaining -= len(rows)
                 return rows
@@ -574,7 +591,7 @@ def run(a):
                 mac_video_slots=mac_video_limit,
             ):
                 done += result["status"] == "ok"
-                errors += result["status"] != "ok"
+                errors += result["status"] == "error"
                 if a.dry_run:
                     print("%s\t%s\t%s\t%s" % (result["status"], row["path"], result["summary"] or result["error"], ",".join(result["tags"] or [])))
                     continue
