@@ -57,6 +57,27 @@ files from Downloads. Keep the age key and its existing recovery process.
 
 ## Verification and rollback
 
+Verified November 26, 2026: Helm revision 12 is Ready; public features report
+OAuth and password login enabled. The existing administrator linked Google and
+then completed a fresh Google login in Chrome, retaining the original library
+and administrator role. Linking preserved the original account email; Google
+login uses the linked provider identity. No duplicate owner was created.
+The Google project is External and In production. Both plaintext JSON downloads
+were removed only after comparison with the successfully decrypted SOPS values.
+
+Useful checks:
+
+```bash
+bash scripts/immich-wifi/check-google-oauth-rollout.sh
+bash scripts/immich-wifi/reconcile-google-oauth.sh
+python3 scripts/immich-wifi/clean-google-oauth-downloads.py
+```
+
+The reconciliation script requests controller reconciliation using annotations;
+it does not require a local Flux CLI or manually apply resource manifests.
+Google family account provisioning and physical iPhone testing remain separate
+from the verified administrator browser flow.
+
 Verify browser login reaches the existing administrator account. Verify family
 members see the intended shared albums. Test the mobile callback on an actual
 iPhone; successful browser login alone does not establish app callback success.

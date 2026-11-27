@@ -229,6 +229,10 @@ access away from home still needs the private network connection.
 *Captured before credential creation. No client secret, client ID, personal email,
 or authorization code is included.*
 
+![Immich login with Google and password options](assets/immich-google-login/immich-login.jpg)
+
+*The deployed login screen, captured with both credential fields empty.*
+
 The client secret and deployment-specific URL live in SOPS-encrypted Helm values.
 The chart renders configuration into a Kubernetes Secret. Password login stays
 available, automatic Google registration is disabled, and family accounts must be
@@ -240,6 +244,11 @@ resolver. If a device uses that resolver, the private callback may fail, just as
 opening Immich may fail. The accepted photo availability tradeoff and PVE failure
 behavior are recorded in the [network architecture](../reference/google-wifi-immich-architecture.md).
 The [sign-in runbook](../runbooks/immich-google-login.md) covers deployment and rollback.
+
+On November 26, the Helm rollout completed, Google linked to the existing
+administrator, and a fresh sign-out/sign-in returned to that same library.
+The administrator role remained intact. This verifies the web flow from the
+setup laptop; the family phone and iPhone app still need their own device tests.
 
 ### 3. Verify backup and restoration before cloud reclamation
 
