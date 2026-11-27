@@ -12,3 +12,16 @@ resources:
 - preview-preflight.yaml
 - preview-preflight-v2.yaml
 - media-fallback.yaml
+# Historical work and owner-confirmed recovery complete. Keep queue, UI,
+# reference storage and dashboard available; release all inference capacity.
+replicas:
+- name: waffles-worker-still-fawn
+  count: 0
+- name: waffles-worker-pve
+  count: 0
+- name: waffles-burst-still-fawn
+  count: 0
+- name: waffles-burst-pve
+  count: 0
+- name: waffles-media
+  count: 0

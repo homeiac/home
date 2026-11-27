@@ -465,3 +465,32 @@ original review history, and waits for bounded API readback. Reusing the same
 run and manifest resumes idempotently; a changed manifest is rejected. Do not
 represent owner-confirmed recovery as a model prediction or silently add it to
 training/evaluation sets.
+
+### Shut down completed Waffles processing
+
+After the historical and owner-confirmed recovery work, the owner requested
+worker shutdown. The Kustomization now sets both Kubernetes baseline and both
+burst deployments, plus the media decoder, to zero replicas. The queue, UI,
+metrics, database, dashboard and retained PVCs remain available. Automatic UI
+scans remain disabled. Native caption/indexing services are separate and must
+not be stopped by this procedure.
+
+`shutdown-workers.py status PRIVATE_DIRECTORY` reads queue status.
+`prepare` snapshots discovery and capacity settings, checks that no production
+jobs or in-flight work remain, then disables discovery under its advisory lock
+without losing the cursor. It pauses only still-running queues; completed run
+history and unresolved/failed records remain intact. `native` disables and
+unloads both Waffles Mac launch agents and disables/stops the Waffles service
+and timer on fun-bedbug and chief-horse. The Kubernetes replica settings must
+be committed, pushed and reconciled through `reconcile.sh`.
+
+Finally, `shutdown-workers.py verify PRIVATE_DIRECTORY --output REPORT.json`
+checks disabled native services, absent Mac processes, zero Kubernetes replicas
+and absent worker pods. A pending job or enabled discovery prevents shutdown.
+Runtime snapshots are private; the final report contains aggregates only.
+
+To resume deliberately, restore the desired replica counts in Git and reconcile,
+use the native installers' `start` actions (Mac start re-enables its launch agent),
+then resume the selected queues and discovery using the preserved cursor. Saved
+burst settings remain in PostgreSQL, so review them before starting supervisors.
+Future uploads are **not automatically tagged while discovery/workers are off**.

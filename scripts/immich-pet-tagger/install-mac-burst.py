@@ -37,5 +37,6 @@ if plist.exists():
         if time.monotonic()>deadline:raise RuntimeError('Previous burst supervisor still stopping')
         time.sleep(.25)
 plist.write_bytes(plistlib.dumps(config))
+subprocess.run(['launchctl','enable',identity],check=True)
 subprocess.run(['launchctl','bootstrap',f'gui/{os.getuid()}',str(plist)],check=True)
 print('Started separate burst supervisor; baseline LaunchAgent remains running')

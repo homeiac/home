@@ -79,6 +79,7 @@ def main() -> None:
                 raise RuntimeError('Previous Waffles agent is still stopping')
             time.sleep(0.25)
     PLIST.write_bytes(plistlib.dumps(config))
+    subprocess.run(['launchctl', 'enable', identity], check=True)
     subprocess.run(['launchctl', 'bootstrap', f'gui/{os.getuid()}', str(PLIST)], check=True)
     logging.info('Started isolated Waffles Mac worker; existing Mac/RTX workers unchanged')
 
