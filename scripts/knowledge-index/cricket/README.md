@@ -83,3 +83,17 @@ Repeat imports preserve jobs and corrections. Role classification applies the
 default person only to a featured batter; bowling identity requires separate
 matching evidence. Visual role extraction is connected with the evidence/model
 worker in the next PRs, rather than guessing roles from album membership.
+
+## Timed evidence
+
+`python3 -m cricket.prepare --ledger PRIVATE.sqlite3 --runtime PRIVATE.json
+--folder PRIVATE_CACHE --host INVENTORY_HOST --workers 4 --limit 32` selects
+duration-stratified video inputs and prepares low-priority, single-threaded frames
+on the media host. Thirty-second windows overlap by ten seconds; every window
+has eight timestamped frames. Cached audio-story segments retain source-relative
+times. Missing audio is explicit and never prevents visual analysis.
+
+Preparation caches include source fingerprint, extraction version and audio
+evidence. Completed assets survive restarts; failed assets can be retried. The
+pilot does not mutate original media or the existing backfill. `--limit 0`
+prepares the full chosen media kind; do that only after the live capacity trials.
