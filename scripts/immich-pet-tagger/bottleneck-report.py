@@ -37,6 +37,7 @@ def calculate(queue,claim,network):
         if not isinstance(rows,list) or not rows:continue
         plan=rows[0];node=plan['Plan']
         plans[name]={'candidate_ms':plan.get('Execution Time'),'returned_rows':node.get('Actual Rows'),
+                     'comparable_ready_lookup':node.get('Actual Rows')==1,
                      'shared_hits':node.get('Shared Hit Blocks'),'shared_reads':node.get('Shared Read Blocks'),
                      'plan':node}
     return {'baseline_cycles':cycles,'candidate_plans':plans,'queue_version':claim['version'],
@@ -51,7 +52,10 @@ def markdown(report):
     for r in c['baseline_cycles']:
         lines.append(f"| {r['worker']} | {r['samples']} | {r['processing_seconds']:.4f} | {r['completion_interval_seconds']:.4f} | {r['estimated_nonprocessing_seconds']:.4f} |")
     for name,p in c['candidate_plans'].items():
+        if p['returned_rows']!=1:lines.append(f'\n{name}: no ready row returned; do not compare this as successful dequeue speed.')
         lines.append(f"\nCandidate {name}: {p['candidate_ms']} ms; returned {p['returned_rows']} row(s); shared hits {p['shared_hits']}, physical reads {p['shared_reads']}.")
+    if 'coordinator' in c:
+        lines+=['','Coordinator resource measurements (three-minute rates):',json.dumps(c['coordinator'],sort_keys=True)]
     lines+=['','Interpretation limits:','']+['- '+s for s in LIMITS]
     return '\n'.join(lines)+'\n'
 
@@ -59,17 +63,28 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest='command',required=True)
     cap=sub.add_parser('capture');cap.add_argument('label');cap.add_argument('--directory',type=Path,required=True);cap.add_argument('--sample-mac',action='store_true');cap.add_argument('--settle-seconds',type=int,default=0,help='Require unchanged extra policy and admitted baseline readiness before capture')
-    comp=sub.add_parser('compare');comp.add_argument('before',type=Path);comp.add_argument('after',type=Path)
+    comp=sub.add_parser('compare');comp.add_argument('before',type=Path);comp.add_argument('after',type=Path);comp.add_argument('--output',type=Path,help='Write aggregate Markdown and JSON comparison')
     args=parser.parse_args()
     if args.command=='compare':
         reports=[json.loads(p.read_text()) for p in [args.before,args.after]]
-        print('| Capture | Backend | Processing s | Completion interval s | Estimated residual s |\n|---|---|---:|---:|---:|')
+        lines=['| Capture | Backend | Processing s | Completion interval s | Estimated residual s |','|---|---|---:|---:|---:|']
         for report in reports:
             for row in report['calculated']['baseline_cycles']:
-                print(f"| {report['label']} | {row['worker']} | {row['processing_seconds']:.4f} | {row['completion_interval_seconds']:.4f} | {row['estimated_nonprocessing_seconds']:.4f} |")
+                lines.append(f"| {report['label']} | {row['worker']} | {row['processing_seconds']:.4f} | {row['completion_interval_seconds']:.4f} | {row['estimated_nonprocessing_seconds']:.4f} |")
+        lines+=['','| Capture | Backend | Committed photos/min over three minutes |','|---|---|---:|']
         for report in reports:
-            print(f"\n{report['label']} candidate timings: "+', '.join(f"{k}={v['candidate_ms']} ms ({v['returned_rows']} rows)" for k,v in report['calculated']['candidate_plans'].items()))
-        print('\n'+'\n'.join('- '+s for s in LIMITS));return
+            totals={}
+            for row in report['calculated']['production_last_3m']:totals[row['worker']]=totals.get(row['worker'],0)+row['completed']
+            for worker,count in sorted(totals.items()):lines.append(f"| {report['label']} | {worker} | {count/3:.1f} |")
+        for report in reports:
+            if any(v['returned_rows']!=1 for v in report['calculated']['candidate_plans'].values()):lines.append('\nNo ready row was returned by at least one candidate probe; that timing is not comparable to a successful lookup.')
+            lines.append(f"\n{report['label']} candidate timings: "+', '.join(f"{k}={v['candidate_ms']} ms ({v['returned_rows']} rows)" for k,v in report['calculated']['candidate_plans'].items()))
+        lines+=['']+['- '+s for s in LIMITS]
+        output='\n'.join(lines)+'\n';print(output)
+        if args.output:
+            args.output.write_text(output)
+            args.output.with_suffix('.json').write_text(json.dumps([{k:r[k] for k in ['label','at','source_revision','calculated','limits']} for r in reports],indent=2)+'\n')
+        return
     if not re.fullmatch(r'[a-zA-Z0-9_-]+',args.label):parser.error('Use a simple alphanumeric label')
     os.umask(0o077);args.directory.mkdir(parents=True,exist_ok=True)
     path=args.directory/(args.label+'.json')
@@ -90,15 +105,16 @@ def main():
     def probe(name):
         proc=subprocess.run([sys.executable,str(HERE/name)],capture_output=True,text=True,timeout=90,check=True)
         return json.loads(proc.stdout)
-    names=['diagnose-queue.py','diagnose-claim.py','diagnose-network.py']
-    with ThreadPoolExecutor(max_workers=3) as pool:queue,claim,network=list(pool.map(probe,names))
+    names=['diagnose-queue.py','diagnose-claim.py','diagnose-network.py','diagnose-coordinator.py']
+    with ThreadPoolExecutor(max_workers=4) as pool:queue,claim,network,coordinator=list(pool.map(probe,names))
     report={'label':args.label,'at':datetime.now(timezone.utc).isoformat(),
             'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=HERE,text=True).strip(),
-            'queue':queue,'claim':claim,'network':network,'limits':LIMITS,'calculated':calculate(queue,claim,network)}
+            'queue':queue,'claim':claim,'network':network,'coordinator':coordinator,'limits':LIMITS,'calculated':calculate(queue,claim,network)}
     if args.sample_mac:
         python=Path.home()/'Library/Application Support/immich-pet-tagger/venv/bin/python'
         proc=subprocess.run([str(python),str(HERE/'diagnose-mac.py'),str(args.directory/'native')],capture_output=True,text=True,timeout=90,check=True)
         report['mac']=json.loads(proc.stdout)
+    report['calculated']['coordinator']=coordinator
     path.write_text(json.dumps(report,indent=2)+'\n');path.with_suffix('.md').write_text(markdown(report))
     print(markdown(report));print('Saved '+str(path))
 

@@ -366,6 +366,15 @@ Mac stack sampling is available with `--sample-mac`. The
 [FIFO capacity journal](../experiments/waffles/2026-11-26-fifo-capacity.md) records
 the migration and subsequent CPU/Metal concurrency trials.
 
+With worker counts unchanged, the stable before/after captures show Mac production
+at 68.0 then 250.7 committed photos/minute, and still-fawn at 61.7 then 144.0.
+The Mac baseline's completion interval fell from 2.60 to 0.72 seconds; its estimated
+nonprocessing residual fell from 2.22 to 0.27 seconds. Candidate selection fell from
+1,600–1,662 ms to 0.286 ms. These production windows contain different photos, so
+these are observed operational changes, not a controlled hardware speedup claim.
+The [generated comparison](../experiments/waffles/2026-11-26-fifo-before-after.md)
+retains the measurements and caveats.
+
 ### Auditing an apparent throughput cliff
 
 The dashboard briefly showed a simultaneous backend throughput drop around

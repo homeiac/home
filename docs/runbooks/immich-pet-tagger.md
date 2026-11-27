@@ -354,7 +354,7 @@ a matched hardware benchmark.
 ```bash
 python3 scripts/immich-pet-tagger/bottleneck-report.py capture before --directory /private/tmp/waffles-bottleneck
 # After a change, allow at least three stable production minutes:
-python3 scripts/immich-pet-tagger/bottleneck-report.py capture after --directory /private/tmp/waffles-bottleneck --sample-mac
+python3 scripts/immich-pet-tagger/bottleneck-report.py capture after --directory /private/tmp/waffles-bottleneck --settle-seconds 180 --sample-mac
 python3 scripts/immich-pet-tagger/bottleneck-report.py compare /private/tmp/waffles-bottleneck/before.json /private/tmp/waffles-bottleneck/after.json
 ```
 
