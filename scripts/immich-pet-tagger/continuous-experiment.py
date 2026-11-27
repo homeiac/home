@@ -40,7 +40,16 @@ def guard(force=False):
         observed=capacity.observe();last_observed=time.monotonic()
         record('resource_sample',observation=observed,production=totals(status),workers=status['workers'])
         if not observed['queue_healthy'] or observed['queue_health_seconds']>5:raise RuntimeError('Queue health guard')
-        if observed['mac']['pressure']!=1:raise RuntimeError('Mac memory pressure guard')
+        if observed['mac']['pressure']>=4:raise RuntimeError('Mac critical memory pressure guard')
+        if observed['mac']['pressure']!=1:
+            # Match the deployed worker's six-second sustained-warning rule.
+            # Record every follow-up; never discard a critical observation.
+            started=time.monotonic()
+            while True:
+                time.sleep(2)
+                followup=capacity.mac();record('memory_warning_followup',observation=followup)
+                if followup['pressure']==1:break
+                if followup['pressure']>=4 or time.monotonic()-started>=6:raise RuntimeError('Mac sustained memory pressure guard')
         host=observed['still-fawn']
         if host['temperature_c'] is None or host['temperature_c']>=68:raise RuntimeError('Host thermal guard')
         if host['available_bytes']<512*1024**2:raise RuntimeError('Host memory guard')
@@ -110,7 +119,7 @@ def main():
     assert all(v['slots']==0 for v in original.values()),'Begin with extra pools drained'
     initial_health=capacity.observe()['other_pods']['healthy_restarts']
     session=datetime.now(timezone.utc).strftime('%m%d%H%M%S')
-    plan=[('mac',n,d,None) for n in (1,3,5,7) for d in ('mps','cpu')]
+    plan=[('mac',n,d,None) for n in (1,3,5,7) for d in ('cpu','mps')]
     plan+=list(reversed(plan))
     sf_plan=[('still-fawn',2,'cpu',n) for n in (1,2,3,3,2,1)]
     record('protocol',session=session,sample_count=len(assets),sample_sha256=digest,

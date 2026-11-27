@@ -47,7 +47,7 @@ Higher CPU allocations must have their own recorded settings and warm-up.
 ## Preregistered schedule and resource gates
 
 The user explicitly approved comparing CPU-only and Metal extras. For each of
-1, 3, 5 and 7 extra Mac processes, test Metal then CPU, then repeat the entire
+1, 3, 5 and 7 extra Mac processes, test CPU then Metal, then repeat the entire
 sequence in reverse. Reverse photo order in the second half. A permanent Metal
 baseline continues production. Each process has two OpenMP/BLAS threads, matching
 the existing adapter. At most eight model processes run in this initial sweep;
@@ -66,8 +66,8 @@ photos/minute, preferring fewer processes/CPU lanes within 5% of fastest. Report
 both repeat rates. No guarantee of increasing throughput is assumed.
 
 Sample resources at least every 15 seconds and at trial boundaries. Require all
-four admitted baseline workers ready. Stop extras if macOS memory pressure leaves
-normal (1), still-fawn host temperature reaches 68°C or thermal telemetry is
+four admitted baseline workers ready. Stop extras if macOS memory pressure reaches
+critical (4) or stays at warning (2) for six seconds, still-fawn host temperature reaches 68°C or thermal telemetry is
 missing, host available memory falls below 512 MiB, queue health fails, or a
 previously healthy still-fawn workload becomes unready/restarts. A preexisting
 unready Frigate IP webhook is recorded but is not attributed to this experiment.
@@ -82,3 +82,16 @@ state changes or baseline restarts are allowed in the runner or cleanup.
 
 These settings and code must be committed before execution. This preregistration
 does not claim that the new trials have run.
+
+## Amendment before measured trials, 05:37 UTC
+
+The first attempt was interrupted to investigate three production failures:
+existing VIDEO assets returned preview-thumbnail 404, while asset metadata was
+available. They remain failed and are not counted as successful classifications.
+The second attempt stopped during Metal model startup on one OS warning sample,
+before any measured trial finished. The deployment already uses a six-second
+sustained-warning guard. Align the experiment with that rule, sample warning
+follow-ups every two seconds, retain each observation and stop critical pressure
+immediately. New processes still refuse startup outside normal pressure. Start
+with CPU then Metal at each concurrency, and reverse the complete order for the
+second pass. Prior attempts remain in the journal; no completed result is reused.
