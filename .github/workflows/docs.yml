@@ -34,8 +34,15 @@ jobs:
           pip install -r docs/requirements.txt
       - name: Build docs
         run: |
+          python -m unittest discover -s scripts/docs/tests -v
           make -C docs html
-          python scripts/docs/check-blog-build.py
+          python scripts/docs/check-blog-build.py --revision "$GITHUB_SHA"
+      - name: Save expected publication manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-publication-manifest
+          path: docs/build/html/blog-publication.json
+          if-no-files-found: error
       - name: Setup Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         uses: actions/configure-pages@v5
@@ -47,13 +54,36 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download expected publication manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: blog-publication-manifest
+          path: publication-check
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify every live blog page matches this deployment
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: >-
+          python scripts/docs/check-blog-live.py
+          --url "$PAGE_URL"
+          --manifest publication-check/blog-publication.json
+      - name: Report publication failure
+        if: failure()
+        run: |
+          echo '## Blog publication failed' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Deployment or live verification failed. Do not treat this run as published; inspect the failed step above.' >> "$GITHUB_STEP_SUMMARY"

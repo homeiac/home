@@ -11,7 +11,7 @@ Recent posts
    :glob:
    :reversed:
 
-   blog/*
+   blog/**
 
 Earlier posts
 -------------
