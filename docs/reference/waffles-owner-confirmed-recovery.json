@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-27T17:53:21.308786+00:00",
+  "run": "waffles-owner-confirmed-20261127",
+  "state": "complete",
+  "owner_confirmed": 2,
+  "verified_unique_assignments": 2,
+  "duplicate_faces": 0,
+  "new_faces_added": 2,
+  "media": {
+    "VIDEO": 1,
+    "IMAGE": 1
+  },
+  "source": "Explicit owner confirmation; not model evaluation or training data"
+}

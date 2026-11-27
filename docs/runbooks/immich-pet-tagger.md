@@ -454,3 +454,14 @@ The model runner stores submission intent before each call, bounds concurrency
 and deadlines, and does not retry ambiguous submissions automatically. Resuming
 settled work reuses its frozen records. Batched production review is disabled
 because visually detected cross-target misassociation invalidated that trial.
+
+For later explicit owner confirmations, use `apply-owner-confirmations.py
+PRIVATE_DIRECTORY PRIVATE_MANIFEST` to validate without writes, then add `--apply
+--output PUBLIC_AGGREGATE.json`. The private manifest records a unique `run_id`,
+the existing review `source_run`, `confirmation` (`confirmed_by: owner`, statement,
+UTC timestamp), and `assets` (asset ID, exact image SHA-256, normalized face box).
+The script snapshots prior decisions and faces before enqueueing, retains the
+original review history, and waits for bounded API readback. Reusing the same
+run and manifest resumes idempotently; a changed manifest is rejected. Do not
+represent owner-confirmed recovery as a model prediction or silently add it to
+training/evaluation sets.

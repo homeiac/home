@@ -647,3 +647,10 @@ videos are already in the 833 baseline and are not counted again. Medium-confide
 and deferred cases remain unresolved, so this does not establish complete recall.
 The [experiment journal](../experiments/waffles/2026-11-27-reject-review.md) keeps
 the failed batch trial, unchanged quality gates, final counts and readback evidence.
+
+The owner then reviewed the railing and flower views and confirmed both were
+Waffles. A separate owner-confirmation run tagged and verified those two assets,
+one photo and one video. The known total is now **999: 879 photos and 120 videos**,
+and all nine sampled misses are recovered. The journal preserves the original
+uncertain model decisions alongside this new owner evidence; neither the model
+threshold nor the evaluation labels were changed.

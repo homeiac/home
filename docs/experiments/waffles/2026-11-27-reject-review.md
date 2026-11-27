@@ -166,3 +166,33 @@ query agreement against known assignments, not proof of collection-wide recall.
 The untouched 896 review rows remain available for future evidence or owner
 review. Do not silently treat their `complete` processing status as a confirmed
 negative identity label.
+
+## Owner confirmation of the final two original misses
+
+On November 27, the owner viewed the exact railing-obscured and flower-obscured
+images and confirmed: "both are Waffles. tag them and update the science journal".
+That is new identity evidence, rather than a change to the model acceptance gate.
+The two original medium-confidence Sol decisions and the historical classifier
+rejects remain intact. Neither image was added to training or evaluation sets.
+
+`apply-owner-confirmations.py` validates the private confirmation manifest,
+image hashes and normalized tag boxes, snapshots prior queue decisions and face
+state, and submits a separate idempotent run to the existing single writer.
+The existing verified full backup remains available. No model call or native
+worker change was needed. The manifest and before/after per-asset records stay
+private; the [aggregate readback](../../reference/waffles-owner-confirmed-recovery.json)
+is committed.
+
+At 17:53:21 UTC (09:53 Pacific), `waffles-owner-confirmed-20261127` was complete.
+Immich readback verified exactly one Waffles face on each asset: **two new
+assignments, one photo and one video, zero duplicates**. All nine originally
+sampled misses are now recovered: seven through Sol plus independent visual
+review and two through explicit owner confirmation. The known collection total
+is **999 unique Waffles assets: 879 photos and 120 videos**. The combined reject
+recovery added 166 assets beyond the 833 baseline. The broad frozen dog-term
+cohort now accounts for 978 known assignments, with 21 outside it.
+
+This resolves the original nine; it does not resolve every ambiguous image in
+the larger cohort. Of the original 896 rows with no assignment after model
+review, 894 have no recovery from this study. Their processing status still does
+not establish a negative identity label or complete population recall.
