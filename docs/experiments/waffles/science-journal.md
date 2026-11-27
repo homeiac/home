@@ -114,6 +114,14 @@ The [matched benchmark results](../../../scripts/knowledge-index/caption-recover
 
 The [CPU trial](../../../scripts/knowledge-index/caption-recovery/still-fawn-cpu-canary.sh) ran inside still-fawn's K3s VM with three CPU threads, one model slot and no GPU. It used the pinned Bonsai 27B Q1_0 weights and Q8_0 vision projector. On the first photo, prompt and image processing took 192 seconds of the 232-second request. The actual caption took 38 seconds to generate. The trial kept its results outside the production ledger.
 
+#### Additive Mac slot trial protocol · 27 November 2026
+
+Keep the current Mac server, RTX and recovery dispatcher running. Start with eight additional Metal slots on a separate loopback server using the same weights, prompt and per-slot context. Replay verified photos outside the production ledger. Sample occupied slots and request turnovers on the original server alongside the recovery ledger, compare each caption against its image, and reduce only the extra capacity if quality or throughput declines. Keep the production queue moving throughout.
+
+The [additive trial runner](../../../scripts/knowledge-index/caption-recovery/additive-mac-trial.py) starts its own loopback server, checks the reported slot count, and releases that process after measuring it. To reproduce, run the [benchmark](../../../scripts/knowledge-index/caption-recovery/benchmark.py) in `prepare` mode with `--count 16` and a private folder. Start the [slot observer](../../../scripts/knowledge-index/caption-recovery/observe-mac-trial.py) in `observe` mode with the same folder and the read-only ledger. Collect 90 seconds before starting the trial runner. Its `--slots` parameter sets both the number of added model slots and the number of clients. The observer's `report` mode summarizes the original server over each trial's exact start and end times.
+
+During 927 one-second samples the original Mac server answered every probe. Its PID and the active recovery dispatcher's PID survived all four trials. Immich readback advanced from 1,322 to 1,406 verified assets. Each trial returned 16 valid captions; visual review found the same dark-frame error in all four. With eight extra slots, the original server slowed to 9.03 requests/min. The extra server added 6.81 captions/min, giving 15.84 combined compared with 16.79 and 15.40 in the two baseline windows. No tested addition demonstrated a reliable overall gain. The baseline workers continue to own the queue. The [full table in Grafana](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&viewPanel=288) includes all four settings.
+
 #### Canon RAW importer verification plan
 
 Classify mixed-case CR2 extensions on import and check older catalog rows. Use the existing Immich asset and its saved caption when available. Otherwise try the Immich preview before developing the original into a temporary JPEG. Exercise both image paths on the same private sample, repeat the lookup, and check asset and caption counts. Keep identifiers and image bytes out of Git.
@@ -171,3 +179,5 @@ A production batch also exposed a missing telemetry counter for saved-caption re
 - 2026-11-27T09:30-08:00 · 1,166 read back from Immich, 445 submitted, 0 independently filled, 576 pending, 5 unresolved.
 
 - 2026-11-27T09:50-08:00 · 1,226 read back from Immich, 505 submitted, 0 independently filled, 456 pending, 5 unresolved.
+
+- 2026-11-27T10:07-08:00 · 1,310 read back from Immich, 541 submitted, 0 independently filled, 336 pending, 5 unresolved.

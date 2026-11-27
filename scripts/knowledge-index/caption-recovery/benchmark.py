@@ -14,7 +14,7 @@ import process
 
 SAMPLE_SQL = """
 WITH photos AS (
-    SELECT id, size, answer, ntile(6) OVER (ORDER BY size, id) AS bucket
+    SELECT id, size, answer, ntile(?) OVER (ORDER BY size, id) AS bucket
     FROM cohort JOIN work USING (id)
     WHERE media_type = 'IMAGE' AND state = 'verified' AND answer IS NOT NULL
 ), ranked AS (
@@ -43,12 +43,12 @@ for (const id of ids) {
 """
 
 
-def prepare(ledger: Path, folder: Path) -> None:
+def prepare(ledger: Path, folder: Path, count: int = 6) -> None:
     """Get one previously verified photo per size bucket, retaining captions for review."""
     with sqlite3.connect(ledger.resolve().as_uri() + '?mode=ro', uri=True) as db:
-        rows = db.execute(SAMPLE_SQL).fetchall()
-    if len(rows) != 6:
-        raise ValueError('Six verified photos are required')
+        rows = db.execute(SAMPLE_SQL, (count,)).fetchall()
+    if len(rows) != count:
+        raise ValueError(f'{count} verified photos are required')
     ids = [row[0] for row in rows]
     frames = process.kubectl_output(
         process.KUBE + ['deploy/immich-sync', '--', 'node', '--input-type=module', '-'],
@@ -95,9 +95,14 @@ def main() -> None:
     parser.add_argument('--ledger', type=Path, help='Private recovery SQLite database')
     parser.add_argument('--host', help='Inventory SSH destination for the Proxmox host of VM 108')
     parser.add_argument('--rtx', help='Existing RTX Ollama endpoint')
-    parser.add_argument('--slots', type=int, choices=range(1, 9), default=1)
-    parser.add_argument('--count', type=int, choices=range(1, 7), default=6)
+    parser.add_argument('--slots', type=int, choices=range(1, 21), default=1)
+    parser.add_argument('--count', type=int, choices=range(1, 65), default=6)
+    parser.add_argument('--mac-port', type=int, help='Separate loopback Metal server to benchmark')
     args = parser.parse_args()
+    if args.mac_port is not None:
+        if args.action != 'mac' or not 1 <= args.mac_port <= 65535:
+            parser.error('--mac-port requires a valid loopback port and the mac action')
+        process.LOCAL = f'http://127.0.0.1:{args.mac_port}'
     required = {'cpu': 'host', 'rtx': 'rtx', 'prepare': 'ledger'}.get(args.action)
     if required and not getattr(args, required):
         parser.error(f'{args.action} requires --{required}')
@@ -106,7 +111,7 @@ def main() -> None:
     if args.folder.stat().st_mode & 0o077:
         parser.error('Use a private folder (mode 0700) for the actual photos and captions')
     if args.action == 'prepare':
-        prepare(args.ledger, args.folder)
+        prepare(args.ledger, args.folder, args.count)
         return
     key = None
     if args.action == 'mac':

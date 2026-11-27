@@ -488,7 +488,7 @@ def caption_recovery_panels():
             {"id":"custom.lineStyle","value":{"fill":"dash","dash":[8,8]}}]},
     ]
     tuning_notes = Path(__file__).with_name('caption-recovery') / 'tuning-results.md'
-    panels.append(_panel('text', 'Basic-caption recovery · matched backend trials', [], 0, 12, 24, 7,
+    panels.append(_panel('text', 'Basic-caption recovery · matched backend trials', [], 0, 12, 24, 15,
                          extra={'options': {'mode': 'markdown', 'content': tuning_notes.read_text().strip()}}))
     for panel in panels:
         if panel["type"] == "stat":
