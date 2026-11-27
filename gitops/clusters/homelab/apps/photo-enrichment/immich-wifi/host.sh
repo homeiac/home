@@ -33,9 +33,15 @@ if [[ $action == rollback ]]; then rollback; exit; fi
 [[ $action == apply ]] || exit 2
 ip -4 addr show dev "$WAN_INTERFACE" | grep -F "$RELAY_ADDRESS/24" >/dev/null
 ip -4 addr show dev "$LAB_INTERFACE" | grep -F "$PVE_ADDRESS/24" >/dev/null
-# Fail closed if Google Wi-Fi's DHCP WAN address has changed since discovery.
-curl --fail --connect-timeout 3 --max-time 10 -sS "http://$GOOGLE_GATEWAY_ADDRESS/api/v1/status" |
-  python3 -c 'import json,os,sys; assert json.load(sys.stdin)["wan"]["localIpAddress"] == os.environ["GOOGLE_WAN_ADDRESS"], "Google Wi-Fi WAN changed: update the Git ACL before deployment"'
+# Verify the known router identity without depending on Google's optional HTTP
+# status endpoint, which can stop responding after a DNS configuration change.
+# A targeted ping primes ARP even when the router declines ICMP replies.
+ping -c 1 -W 1 "$GOOGLE_WAN_ADDRESS" >/dev/null 2>&1 || true
+neighbor=$(ip neigh show dev "$WAN_INTERFACE" to "$GOOGLE_WAN_ADDRESS")
+router_mac=$(awk '{for(i=1;i<=NF;i++) if($i=="lladdr") {print $(i+1);exit}}' <<< "$neighbor")
+[[ $router_mac == "$GOOGLE_WAN_MAC" && $neighbor != *FAILED* ]] || {
+  echo 'Google Wi-Fi router identity changed: update the encrypted inventory'; exit 1;
+}
 
 if [[ ! -f "$state/initial-backup/complete" ]]; then
   for unit in "${units[@]}"; do

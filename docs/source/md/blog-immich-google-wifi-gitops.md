@@ -107,7 +107,10 @@ host Job completed in 18 seconds. The Wi-Fi-bound DNS, HTTPS, and hostname rejec
 checks passed. The remaining handoff was selecting the tested resolver in Google
 Home, followed by opening a real album on the family's devices. That distinction
 matters: a working server path and a completed router configuration are separate
-results.
+results. After the owner saved the setting, queries to Google Wi-Fi's own resolver
+returned the relay address over UDP and TCP, while ordinary internet names still
+resolved. That completed the DNS handoff; the final human check is opening a real
+album in a phone or laptop browser.
 
 Implementation and current verification results are in the
 [runbook](../../runbooks/immich-google-wifi.md). Vendor references:

@@ -90,7 +90,9 @@ the album's API calls and thumbnails loaded.
 Because Google Wi-Fi's WAN lease supplies the encrypted `GOOGLE_WAN_ADDRESS`, reserve that
 existing lease on the upstream router when practical. If it changes, this setup
 fails closed: update `GOOGLE_WAN_ADDRESS` in the SOPS-encrypted settings, refresh the
-network revision, and commit through Git. The installer refuses an unexpected WAN address.
+network revision, and commit through Git. The installer checks the router's
+encrypted MAC identity at that address using ARP; it does not depend on Google's
+optional HTTP status endpoint.
 
 ## Backups and rollback
 
@@ -124,4 +126,13 @@ SNI was rejected; an accepted Immich TLS name with an unrelated HTTP Host return
 421. IPv6 queries did not leak an upstream address. A request deliberately bound
 to the laptop's lab Ethernet interface was rejected by the new relay's source
 rules. Google Wi-Fi's own resolver still used automatic DNS at this checkpoint;
-the owner-facing Google Home DNS handoff and real album browser check are pending.
+the owner-facing Google Home DNS handoff was pending at that checkpoint.
+
+After the owner saved Custom DNS in Google Home, queries sent to Google Wi-Fi's
+resolver over both UDP and TCP returned the relay address, and public internet
+name resolution still worked. The relay also continued returning Immich's `pong`
+over certificate-verified HTTPS. The laptop had moved to a different Wi-Fi subnet,
+so the post-change DNS checks ran from PVE's Google Wi-Fi connection. The earlier
+laptop Wi-Fi HTTPS tests remain the full client-path evidence; a real album in a
+phone/laptop browser has not been observed by the agent. Re-run
+`bash scripts/immich-wifi/verify-google-dns.sh` for the router-side checks.
