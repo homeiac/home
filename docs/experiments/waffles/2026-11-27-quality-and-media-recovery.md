@@ -141,3 +141,8 @@ Production recovery was then submitted as `waffles-media-recovery-20261127`,
 with all 3,178 original failed assets. Original historical results and the old
 preview audit remain intact. Recovery completion and any residual media errors
 must be measured separately from this successful validation.
+
+The seven residual failures received a separate
+[source-integrity investigation](2026-11-27-residual-media-recovery.md).
+Two motion-video jobs completed on a follow-up run; four invalid generated clips
+and one corrupted PNG remain unresolved. Historical failure records are retained.

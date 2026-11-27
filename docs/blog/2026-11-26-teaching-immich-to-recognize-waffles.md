@@ -603,3 +603,12 @@ Historical failure records are preserved, and recovery runs separately with
 dog-described assets first. A first-frame classifier can still miss a dog appearing
 later in the video. The [follow-up science record](../experiments/waffles/2026-11-27-quality-and-media-recovery.md)
 separates measured quality, query/model agreement and recovery results.
+
+The final seven failures also showed why HTTP status alone is insufficient.
+Six generated motion-photo clips returned HTTP 200 but failed video decoding.
+Two original photos still contained intact embedded video at different offsets;
+validated first frames let those two classification jobs finish. Four had no
+recognizable embedded stream. The remaining PNG had a readable header but broken
+compressed pixels. A tolerant decoder produced a damaged image, so it failed the
+quality gate. The [residual recovery journal](../experiments/waffles/2026-11-27-residual-media-recovery.md)
+records the successful retries, rejected reconstruction, and source-copy checks.
