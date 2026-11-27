@@ -8,3 +8,9 @@ resources:
   - release.yaml
   - ingress.yaml
   - piglet-storage.yaml
+  - family-viewers.yaml
+  - family-viewers.sops.yaml
+configMapGenerator:
+  - name: immich-family-viewer-script
+    namespace: immich-pilot
+    files: [family-viewers.mjs]

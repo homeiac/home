@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: immich-family-viewers
+    namespace: immich-pilot
+stringData:
+    api-key: ENC[AES256_GCM,data:GnCJ5k8QcHqzlynCDHzW9KV5YlarXtR+YqEzoavZG2lxMqM2DLnnNw==,iv:5a9H7m2zFJL6iCV+Q95aHW5YOi2XsiAbX7qFoCz7P8w=,tag:fexx/vBRp9yP89dYsb+C0A==,type:str]
+    owner: ENC[AES256_GCM,data:8tS2bI+xKwrRMQ7gR1jsdIRA9j/KuM9/Ykvq5z+9TBrMc/wC,iv:IMbPj5UDR2i/A7ymmPwXo5Gm2GTQd81dLh/uWPo8e8c=,tag:55mM4R8DeqUg/H2xjzOn+g==,type:str]
+    viewers: ENC[AES256_GCM,data:4IRCoYwZjsbdXGNxiXii6vFZuPAXk9xJAwa8p7EVoOG8pYYMw3WD5Ua6Ce4X25/gCMPsv6k+hvkLcoBCFxVdpy7PI3jRHTUSNg==,iv:V+93BrDeZdD+DUSHItMwzHP8Ue+V4IMp0GRhxKLjnkc=,tag:oalCxoX21Q01QS4kcBx4DA==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBiT0pWZk9ocDk3ZW9QbjNO
+            VC9MS2U2VGF0citDK21tZVBzTGJaM05tL24wCk9CaUwwU3lBMHZGNTZhbXQrZUZU
+            Tll4LzlnbHNlbUZUM1lsdWF4TEd3dkEKLS0tIG4rai8zc3RUU1RvdVpFV1BmbTlw
+            MEl1MFVQYlBaT3hOM3J3Y1lUUE04bm8KguG94ddcVVXRTXCQceDRKTqjOyJATFSa
+            WMfKRqq3Afvs/utVieblF26FajR8B6p4kS82Kryw8CMGsUF74j2XKw==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1uwvq3llqjt666t4ckls9wv44wcpxxwlu8svqwx5kc7v76hncj94qg3tsna
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-11-27T03:13:36Z"
+    mac: ENC[AES256_GCM,data:cDqsh+1QfrjXeZ9jEw0z2LjAC7IaocrdwPo5XjTz/bDeFCq6YwxX+Hg5ERvd0h6uez1mlSWsKkEse8bMQN2nvtCLm2Ahnays2P4DQIxjrIPkKuqCUbPDdtohJO3sBuQ3CujfaiEoE765Y5AA/8pq+6uOuPJXQZWXSICBDeHw1p4=,iv:P8C3ugd+n6HXXWCdvYJ3QWMacKr6wFQpWxWgwplcuPc=,tag:EY4AZjRqGvzHA8LrVSX33A==,type:str]
+    version: 3.13.1

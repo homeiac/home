@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-family-viewer-state
+  namespace: immich-pilot
+spec:
+  storageClassName: local-path
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 16Mi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: immich-family-viewers
+  namespace: immich-pilot
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 110
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: share
+              image: ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd
+              command: [node, /app/family-viewers.mjs]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 10m, memory: 48Mi}
+                limits: {memory: 128Mi}
+              volumeMounts:
+                - {name: app, mountPath: /app, readOnly: true}
+                - {name: policy, mountPath: /policy, readOnly: true}
+                - {name: state, mountPath: /state}
+          volumes:
+            - name: app
+              configMap: {name: immich-family-viewer-script}
+            - name: policy
+              secret: {secretName: immich-family-viewers}
+            - name: state
+              persistentVolumeClaim: {claimName: immich-family-viewer-state}

@@ -266,7 +266,9 @@ The phone test exposed the missing album memberships: partner-library access was
 working, but the named albums did not appear. The fix was to add both family users
 as viewers to all four existing albums. A live read-only check verified all eight
 memberships. After refreshing Immich, the same signed-in accounts can use the
-direct album URLs. Future albums need their own sharing configuration.
+direct album URLs. A small job now checks for new owner-created albums every two minutes and adds
+both family members as viewers. Once it has shared an album, the owner can
+change its membership in Immich.
 
 ### 3. Verify backup and restoration before cloud reclamation
 

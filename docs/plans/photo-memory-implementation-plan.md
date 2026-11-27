@@ -94,3 +94,11 @@ The stories below are ordered by the first useful album. Only S1 is ready to sta
 ## Platform sign-off
 
 Run the platform checker against all three live rollout bundles on the same release. Close the epic when that check passes. Keep captures, identifiers, captions, relationship facts and private baselines outside GitHub. Publish the journey, scope, release, gate result and failed field names as needed. The [executable contract](../../scripts/knowledge-index/memory-acceptance/check.py) defines the result.
+
+### Household album viewers (#243)
+
+1. Select growing-up highlights by native person ID and corroborated dates.
+2. Use the owner’s album API to grant the two configured household viewers access
+   to owner-created albums. Deliver this through Flux with encrypted configuration.
+3. Verify the new album’s exact assets and both roles, then check a second pass
+   leaves the memberships intact.
