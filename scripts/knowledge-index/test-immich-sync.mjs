@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import {ROOT,sourcePacket,digest,mapAsset,metadataDecision,faceCandidate} from './immich_sync/core.mjs';
+import {ROOT,sourcePacket,retainRecoveryCaption,digest,mapAsset,metadataDecision,faceCandidate} from './immich_sync/core.mjs';
 const source={path:'Google Photos/Photos from 2025/a.jpg',size_bytes:123,summary:'first',faces:[],groups:[]};
 const asset={id:'asset',ownerId:'owner',libraryId:'library',isExternal:true,originalPath:ROOT+source.path,exifInfo:{fileSizeInByte:123}};
 asset.checksum=crypto.createHash('sha1').update('path:'+asset.originalPath).digest('base64');
@@ -39,4 +39,20 @@ test('spatial transfer only uses unambiguous confirmed labels, never model sugge
  assert.equal(faceCandidate({...old,label_source:'automatic'},[f]).reason,'not_human_confirmed');
  assert.equal(faceCandidate(old,[f,{...f,id:'other'}]).reason,'ambiguous_spatial_match');
  assert.equal(faceCandidate(old,[f],new Set(['target'])).reason,'no_spatial_match');
+});
+
+test('catalog discoveries retain a recovery caption only for the same original',()=>{
+ const mtime='2026-01-02T03:04:05Z';
+ const packet=sourcePacket({...source,summary:null,mtime,summary_tags:['new']});
+ const saved={asset_id:'a',payload:{...packet,summary:'saved scene',summaryModel:'local',
+   summaryCreatedAt:mtime,tags:['original'],recovery:{run:'recovery'}}};
+ const retained=retainRecoveryCaption(packet,{id:'a'},saved);
+ assert.equal(retained.summary,'saved scene');
+ assert.deepEqual(retained.tags,['new','original']);
+ assert.equal(retained.recovery,saved.payload.recovery);
+ assert.equal(retainRecoveryCaption(packet,{id:'b'},saved),packet);
+ for(const modified of [{...packet,summary:'catalog scene'},{...packet,sourceMtime:null},{...packet,sizeBytes:100},
+                         {...packet,sourceMtime:'2025-01-01T00:00:00Z'}]){
+   assert.equal(retainRecoveryCaption(modified,{id:'a'},saved),modified);
+ }
 });

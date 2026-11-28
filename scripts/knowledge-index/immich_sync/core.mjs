@@ -17,6 +17,17 @@ export function sourcePacket(source) {
     gps:{latitude:source.latitude,longitude:source.longitude,source:source.gps_source},
     faces,groups:source.groups??[]};
 }
+// When only faces/groups come from the catalog, retain the independent saved caption.
+export function retainRecoveryCaption(packet, asset, saved) {
+  if (!saved || !asset || saved.asset_id !== asset.id || packet.summary ||
+      Number(saved.payload.sizeBytes) !== packet.sizeBytes ||
+      Math.abs(Date.parse(saved.payload.sourceMtime) - Date.parse(packet.sourceMtime)) > 1500 ||
+      !Number.isFinite(Date.parse(saved.payload.sourceMtime)) || !Number.isFinite(Date.parse(packet.sourceMtime))) return packet;
+  const previous=saved.payload;
+  return {...packet, summary:previous.summary, summaryModel:previous.summaryModel,
+    summaryCreatedAt:previous.summaryCreatedAt, recovery:previous.recovery,
+    tags:[...new Set([...packet.tags,...previous.tags])].sort()};
+}
 export function eligible(source) {
   return Boolean(source.summary || source.context_summary || source.faces?.length || source.groups?.length);
 }

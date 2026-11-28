@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {META_KEY,ROOT,stable,digest,sourcePacket,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap} from './core.mjs';
+import {META_KEY,ROOT,stable,digest,sourcePacket,retainRecoveryCaption,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap} from './core.mjs';
 const require=createRequire('/usr/src/app/server/package.json');
 const {Pool}=require('pg');
 const sharp=require('sharp');
@@ -70,13 +70,15 @@ async function discover(db) {
     // Source tables are SELECT-only for this role. Job discovery commits with its checkpoint.
     const result=await measured('source_query',()=>db.query(query));
     phase='enqueue';
+    const savedRecovery=new Map((await db.query("SELECT source_path,asset_id,payload FROM immich_sync.jobs WHERE payload ? 'recovery'")).rows.map(job=>[job.source_path,job]));
     const cycle=crypto.randomUUID();
     counters.source=result.rows.length;counters.available_summaries=result.rows.filter(x=>x.summary).length;
     for(let offset=0;offset<result.rows.length;offset+=250){
       const jobs=[];
       for(const source of result.rows.slice(offset,offset+250)){
         if(!eligible(source))continue;
-        const packet=sourcePacket(source), match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);
+        const match=mapAsset(source,targets.get(ROOT+source.path)??[],me.id,libraryId);
+        const packet=retainRecoveryCaption(sourcePacket(source),match.asset,savedRecovery.get(source.path));
         jobs.push({source_path:source.path,source_hash:digest(packet),payload:packet,asset_id:match.asset?.id??null,
           state:match.asset?'pending':!scope(source)?'excluded':match.reason==='missing_asset'?'missing':'conflict',reason:match.reason??null,cycle_id:cycle});
       }
@@ -88,9 +90,10 @@ async function discover(db) {
         state=CASE WHEN immich_sync.jobs.asset_id IS NOT NULL AND immich_sync.jobs.asset_id IS DISTINCT FROM excluded.asset_id THEN 'conflict'
           WHEN immich_sync.jobs.source_hash<>excluded.source_hash OR immich_sync.jobs.state IN ('missing','excluded') THEN excluded.state ELSE immich_sync.jobs.state END,
         reason=CASE WHEN immich_sync.jobs.asset_id IS NOT NULL AND immich_sync.jobs.asset_id IS DISTINCT FROM excluded.asset_id THEN 'asset_identity_changed' WHEN immich_sync.jobs.state='conflict' THEN immich_sync.jobs.reason ELSE excluded.reason END,
-        updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at END`,[JSON.stringify(jobs)]);
+        updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at END
+        WHERE NOT (immich_sync.jobs.payload ? 'recovery') OR immich_sync.jobs.state='applied'`,[JSON.stringify(jobs)]);
     }
-    await db.query("UPDATE immich_sync.jobs SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded'",[cycle]);
+    await db.query("UPDATE immich_sync.jobs SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded' AND NOT (payload ? 'recovery')",[cycle]);
     await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new Date().toISOString()});
     await db.query('COMMIT');counters.last_discovery=Date.now()/1000;
     log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});
@@ -211,6 +214,15 @@ async function cycle() {
     const lock=(await db.query('SELECT pg_try_advisory_lock(217,8001) locked')).rows[0].locked;
     if(!lock)return;
     phase='connect';await api('/users/me');counters.api_ready=1;
+    // Repair only false removals made by earlier catalog sweeps. Applied snapshots
+    // keep their edit protection and are scheduled for a fresh readback audit.
+    if (MODE==='apply' && !counters.last_discovery) {
+      await db.query(`UPDATE immich_sync.jobs
+        SET state=CASE WHEN applied->>'sourceRevision'=source_hash AND intent IS NULL THEN 'applied' ELSE 'pending' END,
+            reason=NULL, available_at=now(), verified_at=NULL, updated_at=now()
+        WHERE state='conflict' AND reason='source_removed' AND payload ? 'recovery'
+          AND asset_id IS NOT NULL AND length(trim(payload->>'summary'))>0`);
+    }
     if(!counters.last_discovery){
       const checkpoint=await state(db,'checkpoint');
       if(checkpoint && (checkpoint.version??1)===DISCOVERY_VERSION){
