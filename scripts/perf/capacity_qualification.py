@@ -80,6 +80,10 @@ class CandidateContext:
             0 if self.idle_target else before["terminal_error_rate"]
         ):
             losses.append("target terminal-error rate increased")
+        if any(not number(r.get("p95_s")) for r in measured):
+            missing.append("target workload latency is missing")
+        elif not self.idle_target and trial["p95_s"] > before["p95_s"] * (1 + self.max_peer_p95_growth):
+            losses.append("target workload latency budget exceeded")
         change = None
         if (
             not self.idle_target
@@ -275,8 +279,10 @@ def qualify(session: dict, receipt: dict, comparison: dict, watermark: int,
     if objective is not None:
         require(objective["workload"] == session["workload"],
                 "completion objective belongs to another workload")
+        basis = objective.get("baseline_scope", "comparison")
+        require(basis in {"comparison", "protected"}, "unknown completion baseline scope")
         for name in ("baseline", "trial"):
-            phase = comparison[name]
+            phase = comparison["peer_baseline"] if name == "baseline" and basis == "protected" else comparison[name]
             require(all(objective[name][k] == phase[k] for k in ("start_ns", "end_ns"))
                     and objective["unit"] == phase["workloads"][session["workload"]]["unit"],
                     "completion objective window or output unit differs from comparison")

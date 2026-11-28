@@ -77,6 +77,13 @@ missing verification. It never infers CPU, memory-bandwidth or GPU contention fr
 rate/utilization alone. A structurally complete result is
 `evidence_ready_not_admitted`, not promotion.
 
+For descending candidates, set `baseline_scope: protected` to compare completion
+time with the original protected control, rather than requiring each lower-worker
+candidate to beat the preceding fastest candidate. This preserves the fewest-workers
+within 5% rule. The default `comparison` scope uses the supplied adjacent baseline.
+The reviewer binds the chosen window/count/unit to that exact comparison phase;
+it does not accept an unrelated convenient control.
+
 The existing `qualify-capacity` path consumes that exact object inside
 `comparison.json`. It binds workload, windows, unit and verified totals, compares
 added backend identities with registration, and checks backend maps against typed
@@ -110,7 +117,7 @@ At `start --output-kind other --native-adapter FILE`, freeze a version-1 adapter
   locally so replay cannot fetch a changed remote schema.
 - `identity_paths` JSON Pointers for native `source_id`, `source_version`,
   `output_id`, and `revision`. Integer revisions remain integers.
-- `logical_first_commit_path` and `backend_path` point to authoritative logical
+- `logical_first_commit_path` and `backend_path` point to authoritative logical source/version/output
   creation and original backend provenance in the native readback bundle.
 - Optional `amount_path` binds source minutes or another measured amount to saved
   native data. Without it, each logical output amount is one.
@@ -125,7 +132,8 @@ The reader also exports saved `execution_provenance` from the declared existing
 execution authority: the identities, workload, originating run, purpose, backend,
 content hash, `recorded_ns`, and source artifact `evidence_ref`/`evidence_sha256`.
 These are readback evidence fields, not new performance fields to insert into
-arbitrary business payloads. Reuse native execution receipts or ledger lineage.
+arbitrary business payloads. Native timestamps may be normalized in the reader
+export with the source query/conversion pinned; do not alter native ID types. Reuse native execution receipts or ledger lineage.
 If that authority was not recorded, keep verification missing; do not manufacture
 it after the trial.
 
