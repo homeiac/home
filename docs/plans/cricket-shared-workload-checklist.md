@@ -690,6 +690,108 @@ ordered phase receipts and shared lease execution remain pending. CPU canaries
 continue to be coordinated by the Knowledge Index chat, with no overlapping Cricket
 model instance or trial ownership.
 
+### E23 — Live CPU tuning is active, first Mac ceiling rejected
+
+See the [live CPU journal](../experiments/cricket-cpu-tuning-20261127.md) for the
+ownership handoff, measured ceilings, immutable private receipts and remaining
+completion gates. The Mac10-thread/1000% quota arm failed a closed warmed window:
+Combined workload p95 was 37.434 → 42.503 seconds. Independent peer review
+reproduced the aggregate latency loss. The isolated model was stopped; process/listener cleanup and
+released ownership were verified at `1795847358556469000` ns. Five completed cases
+have partial reviewed quality only. Recovery precedes the next lower setting.
+
+Still-fawn's measured maximum is 75% of one core after existing host demand and
+system margin. A separate Lease and transient cgroup enforce that bound; its first
+request exceeded its 900-second diagnostic bound without a completed output.
+Cleanup and released ownership were verified. This bounds that tested profile; it
+does not establish a user latency requirement or reject every CPU candidate. Neither backend is
+selected or production-qualified. Protected four Mac/three RTX photo lanes and
+current Cricket corrections remain intact. The knowledge chat owns independent
+quality/readback verification and Grafana publication; Cricket owns CPU actuation.
+
+Three operational Lease tests and four request-boundary/parser tests passed with
+mocked actuation; saved production-parser parity passed seven stored responses.
+These focused checks do not replace live peer, quality, publication or recovery
+gates. No full application suite was repeated for the documentation-only journal.
+
+Subsequent correction: backend rates within the same face workload are diagnostic,
+not separate undeclared peer floors. Aggregate recomputation retains the ten-thread
+stop for combined p95 37.434 → 42.503 s, but withdraws the six-thread rejection:
+130 → 137 unique production completions, combined p95 37.434 → 36.111 s. Six-thread
+quality and unique-source CPU canary remain open. Historical stop receipts are kept.
+
+The SDK journal now requires an explicit matching non-Cricket evaluation caller
+and refuses to import Cricket production receipts for that caller. This prevents
+misattributed face-evaluation traces or inflated production counts. The full E02
+command passed **275 tests and 43 subtests in 23.57 seconds**, no skips, at
+`/private/tmp/cricket-cpu-caller-identity-tests.log`; scoped Ruff and diff checks pass.
+New tests cover caller mismatch, actual resource/header identity and zero production
+counts/refused receipt import. Integrated #289's aggregate-workload clarification
+before the next arm.
+
+### E24 — Smaller CPU profile fails the full reviewed quality pass
+
+The pinned Bonsai 2 2B two-call profile at the revised maximum Mac allowance
+(seven threads, aggregate 700% quota, one context) completed all twelve paired
+cases. Independent first-pass review found **2/10 exact known stages, 8/12 supported
+whole actions, 1/10 both correct, one invalid action and zero stage abstentions**.
+This fails the historical reference of 21/40 stages, 35/48 actions and 16/40 both.
+Do not promote the smaller model on speed. Partial timing repetitions are excluded
+from this quality denominator. The invalid action was preserved as a failed case;
+the evaluator continued without counting it as supported output.
+
+Independent cleanup at `1795849697000714000` ns confirmed zero trial model processes
+and released ownership. Private quality receipt:
+`/private/tmp/cricket-bonsai2-mac-t7-quality-forward-v2/independent-quality-review.json`.
+Seven request-boundary tests, four guest-boundary tests and three workload-aggregate
+gate regressions pass with synthetic inputs and no actuation. Linux compatibility
+is being checked under its 75% cgroup allowance; a correct readiness case does not
+reopen the failed profile. The original 27B separate AGE/ACTION profile, fresh
+baseline, descending/reverse outcomes, genuine queue canary and final configuration
+remain open. The Knowledge Index queue adapter is prepared in #294 with CPU lanes
+zero by default; no unique-source CPU claim or production publication is asserted.
+
+### E25 — Linux retains zero; original-model Mac seven-core arm rejected
+
+Still-fawn remains at **zero CPU production lanes** for the finite tested profiles.
+The smaller-model known-failing case 02 diagnostic reproduced the incorrect
+school-age/high stage for the reviewed preschool face; its gaze action was supported.
+Requests took 131.645/134.840 seconds, zero cache. Independent process/listener/Lease
+cleanup passed at `1795850409849502000` ns. Knowledge Index independently confirmed
+both Linux paired reviews and agrees no reviewed-quality hypothesis reopens the
+smaller profile. The original 27B maximum-allowance diagnostic produced no output
+within its declared bound. This is a tested-route rejection with an explicit
+revisit on changed shared allowance, runtime or reviewed-quality profile.
+
+Original 27B separate AGE/ACTION at Mac seven threads / 700% quota failed the fresh
+whole-workload latency budget over 300.236 seconds: **156→147 production checkpoints,
+combined p95 32.028→38.220 seconds**. Independent recomputation matches. Only two
+frozen CPU pairs completed; partial independent quality is stage 2/2, action 1/2,
+both 1/2. Evaluation replays are excluded from production progress. Cleanup passed;
+four cores follows only after verified zero-CPU recovery. The seven-core older
+baseline comparison passed, which is why both original and fresh references are
+retained. Mac descending outcomes and final selection remain open.
+
+### E26 — Finite selection, cleanup, served readback and private archive
+
+Selected the best supported measured setup: **four Mac Metal, three RTX, zero
+production CPU lanes on either host**. Knowledge Index independently agrees. This
+retains production and claims no global optimum. Four/two-thread separate-call and
+fresh joint-six arms remain unmeasured. The final control has only 290.168 seconds
+of retained samples and is diagnostic, not an equal five-minute qualification.
+
+Both CPU processes/listeners are stopped and Leases released. Authenticated Mac
+readback reports four processing contexts; the photo worker is running with four
+Mac/three RTX lanes. Served Grafana version 88 (#218 `f54c23a`) passed independent
+API and rendered UI checks. Panels 294/298 clearly distinguish GPU performance
+during added Mac CPU from rejection of the CPU addition; RTX remains selected.
+
+The private persistent archive holds 295 files / 7,718,854 bytes with verified
+SHA-256 and permissions. Its manifest digest and location are recorded in the
+[live journal](../experiments/cricket-cpu-tuning-20261127.md). No credential files
+or auth helpers were archived. Future generic-playbook implementation is separate
+from these completed finite measurements and makes no new live-capacity claim.
+
 ## Updating evidence
 
 For each new receipt record date/time, task ID, source/PR, environment, exact

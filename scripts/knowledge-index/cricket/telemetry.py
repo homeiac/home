@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import re
 import socket
 import sqlite3
 import tempfile
@@ -93,15 +94,24 @@ class JournalExporter(SpanExporter):
 class RunTelemetry:
     """One fixed session and actual host; callers pass context across worker threads."""
 
-    def __init__(self, session: Path, *, host: str | None = None) -> None:
+    def __init__(
+        self,
+        session: Path,
+        *,
+        host: str | None = None,
+        workload: str = "cricket-indexer",
+    ) -> None:
         self.session_path = session
         self.session = json.loads(session.read_text())
         if (
-            self.session["workload"] != "cricket-indexer"
+            not isinstance(workload, str)
+            or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", workload)
+            or self.session["workload"] != workload
             or self.session["output_kind"] != "media"
             or not self.session["run_id"]
         ):
-            raise ValueError("Expected a cricket media run session")
+            raise ValueError("Expected the explicitly registered media workload")
+        self.span_prefix = "cricket" if workload == "cricket-indexer" else "evaluation"
         self.host = host or socket.gethostname()
         self.path = session.parent / "telemetry.sqlite3"
         fd = os.open(self.path, os.O_WRONLY | os.O_CREAT, 0o600)
@@ -226,7 +236,7 @@ class RunTelemetry:
             )
         context = propagate.extract(parent) if parent else None
         with self.tracer.start_as_current_span(
-            "cricket." + stage,
+            self.span_prefix + "." + stage,
             context=context,
             attributes=fields,
             record_exception=False,
@@ -254,6 +264,10 @@ class RunTelemetry:
 
     def sync_verified(self, ledger: Path, schema: Path) -> int:
         """Import immutable source receipts once, retaining their first observation time."""
+        if self.session["workload"] != "cricket-indexer":
+            raise ValueError(
+                "Evaluation captures cannot import Cricket production receipts"
+            )
         from check_media_observations import check
 
         from .ledger import Ledger

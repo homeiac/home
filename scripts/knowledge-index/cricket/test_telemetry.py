@@ -435,3 +435,42 @@ def test_remote_transports_forward_caller_context(transport: str) -> None:
     else:
         command = request.call_args.args[0][-1]
         assert all(k + ": " + v in command for k, v in headers.items())
+
+
+def test_explicit_evaluation_caller_is_not_mislabeled_as_cricket(
+    tmp_path: Path,
+) -> None:
+    workload = "library-face-observations-evaluation"
+    session = tmp_path / "session.json"
+    session.write_text(
+        json.dumps(
+            {
+                "workload": workload,
+                "output_kind": "media",
+                "run_id": "cpu-face-fixture",
+                "stages": ["classify"],
+                "resources": [POOL],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="explicitly registered"):
+        RunTelemetry(session)
+    with pytest.raises(ValueError, match="explicitly registered"):
+        RunTelemetry(session, workload="another-evaluation")
+    evaluation = RunTelemetry(session, workload=workload)
+    try:
+        with evaluation.stage("classify", POOL):
+            assert evaluation.headers()["x-workload-name"] == workload
+        with pytest.raises(ValueError, match="cannot import Cricket"):
+            evaluation.sync_verified(
+                tmp_path / "must-not-open.sqlite3", tmp_path / "absent-schema"
+            )
+        assert not (tmp_path / "must-not-open.sqlite3").exists()
+        closed = tmp_path / "closed"
+        assert evaluation.close_window(closed)["verified_items"] == 0
+        assert spans(closed)[0]["name"] == "evaluation.classify"
+        resources = packets(closed)[0]["resourceSpans"][0]["resource"]["attributes"]
+        labels = {row["key"]: row["value"].get("stringValue") for row in resources}
+        assert labels["service.name"] == workload
+    finally:
+        evaluation.shutdown()

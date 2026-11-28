@@ -76,6 +76,30 @@ The workload checklist must account for every plausible stage and inventoried po
 
 The route graph and `workload.py review` do not currently enforce fleet coverage. The operator records and checks this completion gate alongside the machine decision. An `eligible` result on one pool approves only that measured scope.
 
+### Coordinate chats before changing shared capacity
+
+When the user authorizes coordination, identify the chats already operating each pool and exchange aggregate status before starting a trial. Record one actuator owner per physical pool, the protected allocation, scheduled reservations, current experiment, expiry and rollback setting. A serving pool and its underlying CPU, memory and device share the same accounting. Readiness and independent evidence review can proceed under separate owners. Only the actuator owner launches, stops or resizes trial inference on that pool.
+
+For a handoff, the outgoing owner stops new submissions, drains in-flight requests, verifies process/port/lock cleanup and reports the last effective allocation. The incoming owner acknowledges ownership and collects a clean baseline after the previous trial drains. Keep immutable run settings and closed measurement windows. Conflicting owners or expired ownership hold the affected trial. Other independent pools can continue after their own checks.
+
+Use authorized chat messages for results and ownership. Keep images, raw answers and account readings in private storage. Share aggregate scores and repository references where sufficient. If automatic review rejects a payload, record the failure and use a permitted reduced payload. Ownership remains unconfirmed until the receiving chat acknowledges it.
+
+### Complete the requested tuning outcome
+
+A readiness probe or single correct answer starts qualification. To select a setting, measure the shared allowance after peer reservations and system demand, use an aggregate CPU quota as well as thread/context limits, then test from that ceiling downward. Keep input, model, prompt and quality cohort fixed within comparisons. Test the same applicable quality baseline when comparing combined and separate calls. Parsing success alone does not establish actor/action accuracy.
+
+Reuse production clients, parsers and validators in the trial harness. Check saved-response replay first, including accepted fenced JSON and null/withheld responses. Correct an adapter mismatch before repeating its immutable candidate, and preserve the failed diagnostic receipt.
+
+Check whether pending items can reach the measured stage. A nonzero queue with zero in-flight requests can be blocked in decoding or another prerequisite. Inspect bounded recent attempts and classify failures before treating the queue as runnable inference demand. Preserve scheduled reservations even when the current items are ineligible. Record independent pre-existing failures separately from trial regressions; do not repair or restart a peer merely to make the capacity experiment pass.
+
+Record invalid model responses as failed cohort cases and continue the remaining frozen inputs. A parser exception must not silently truncate a quality denominator or retry indefinitely. A safety or workload-budget stop can end the arm early; label that quality sample partial and exclude unfinished requests. Review complete clauses, including actor and object, rather than accepting a valid verb alone.
+
+Use equal warmed windows, fresh caller-attributed outputs, peer latency/error limits and reviewed stage/action scores. Repeat qualifying candidates in reverse order and apply the existing 5% selection rule. Compare total useful throughput within the same workload and units, including the continuing GPU workers and CPU increment. Group backends of one workload before evaluating its throughput and latency/error budgets. A backend rate decrease is diagnostic evidence and can coexist with a qualifying total gain. Preserve explicitly reserved worker allocations. Apply a per-backend rate floor only when an existing service requirement or user instruction establishes it. Protect distinct workloads separately against their own budgets. Exclude retries, cached benchmark repeats and withheld outputs from new verified output. Include abstentions and failures in quality denominators.
+
+For a request covering still-fawn and Mac CPU, keep both backend rows open until measured acceptance or rejection. A failed two-thread probe leaves other admissible settings open. A candidate that loses quality or total throughput is rejected, followed by cleanup and verified peer recovery. If no candidate qualifies, record CPU allocation zero with the tested bounds and reason. Changed workload mix or external interference requires a new baseline.
+
+Tuning completion requires a per-backend before/after record with original, tested, rejected and selected allocations, quality scores, total throughput, timestamps and receipt references. Update the experiment journal and checklist, commit/push the result, let Flux publish the dashboard, and independently read back the served panel values. Keep implementation, local tests, deployment and live verification distinct. An actual external blocker needs concrete evidence and a recorded next action.
+
 ## 3. Trace the bottleneck
 
 ```mermaid
