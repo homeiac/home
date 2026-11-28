@@ -8,8 +8,10 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+from capacity_trials import ACTION as CAPACITY_ACTION, register as register_capacity
 from otel_diagnosis import attributes, digest, predict
 from shared_workloads import shared_context
 
@@ -180,6 +182,8 @@ def review(args: argparse.Namespace, session: dict) -> dict:
     checkpoint = {"topology": session["topology"]}
     if args.comparison:
         comparison = json.loads(args.comparison.read_text())
+        if comparison.get("action") == CAPACITY_ACTION:
+            raise ValueError("capacity registration is not admission; capacity phase review is not implemented yet")
         if comparison["subject"] != session["workload"] or set(comparison["resources"]) != set(session["requested"]):
             raise ValueError("comparison subject or affected resources differ from the session")
         checkpoint["comparison"] = comparison
@@ -239,6 +243,8 @@ def main() -> None:
     init.add_argument("--live", action="store_true", help="also collect current Prometheus activity")
     audit = sub.add_parser("review", help="validate OTLP and compute the diagnostic and fleet decisions")
     probe = sub.add_parser("diagnose", help="request the next probe or seal a pre-change prediction")
+    capacity = sub.add_parser("register-capacity", help="seal a bounded experiment without admitting or changing capacity")
+    capacity.add_argument("--spec", type=Path, required=True)
     audit.add_argument("--metrics", type=Path, help="defaults to metrics.jsonl beside session")
     for command in (audit, probe):
         command.add_argument("--capture", type=Path, help="defaults to traces-and-logs.jsonl beside session")
@@ -249,7 +255,7 @@ def main() -> None:
     for field in ("references", "readback", "schema"):
         media.add_argument("--" + field, required=True, type=Path)
         audit.add_argument("--" + field, type=Path)
-    for parser in (init, audit, probe, media):
+    for parser in (init, audit, probe, media, capacity):
         parser.add_argument("--session", required=True, type=Path)
     args = cli.parse_args()
     try:
@@ -257,7 +263,11 @@ def main() -> None:
             result = start(args)
         else:
             session = json.loads(args.session.read_text())
-            result = {"diagnose": diagnose, "review": review, "verify-media": verify_media}[args.command](args, session)
+            if args.command == "register-capacity":
+                result = register_capacity(session, json.loads(args.spec.read_text()), time.time_ns(),
+                                           args.session.parent / "capacity-trial.json")
+            else:
+                result = {"diagnose": diagnose, "review": review, "verify-media": verify_media}[args.command](args, session)
     except (OSError, KeyError, ValueError, TypeError, subprocess.SubprocessError) as error:
         cli.exit(2, f"Workload check failed: {error}\n")
     print(json.dumps(result, sort_keys=True, indent=2))

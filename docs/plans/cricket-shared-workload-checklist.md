@@ -52,8 +52,8 @@ and append the reason; retain the original receipt.
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
 | P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
-| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c [#285](https://github.com/homeiac/home/pull/285); P04-d `codex/cricket-p04-capacity-inspection` | Contracts, activity and slot observers implemented; complete window adapters pending | Foundation only | E17: 187 passed, 43 subtests | Complete live peer windows pending |
-| P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
+| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c [#285](https://github.com/homeiac/home/pull/285); P04-d [#286](https://github.com/homeiac/home/pull/286) | Contracts, activity and slot observers implemented; complete window adapters pending | Foundation only | E17: 187 passed, 43 subtests | Complete live peer windows pending |
+| P05 | Maximum-first trial registration | P05-a `codex/cricket-p05-registration` | Registration implemented; phase review/selection pending | No | E18: 220 passed, 43 subtests | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
 | P07 | Reviewed identity/outcome evidence | Existing #264/#266/#269; follow-up PR to create | Partial | Existing feature PRs open | E03 contains unresolved pilot results | Fresh quality pilot pending |
 | P08 | Verified review/search projection | Existing #259; canonical projection PR to create | Partial legacy view | Existing feature PR open | End-to-end canonical test pending | Pending |
@@ -136,6 +136,10 @@ and append the reason; retain the original receipt.
 
 ### P05 — Register the intended experiment
 
+- [x] **P05-a-I/V:** Private immutable registration, derived shared ceiling,
+  baseline/rollback reservations, fixed inputs, bounded deadlines and descending
+  candidates. Evidence: E18. Explicitly refuses live review until phase validation
+  and selection are implemented; registration acquires no lease.
 - [ ] **P05-I:** Add a supported bounded concurrency action, immutable pre-change
   registration, measured ceiling/reservations and descending comparison schedule.
 - [ ] **P05-V:** Reject tampered/stale action, source, policy, ceiling and allocation
@@ -500,6 +504,31 @@ no resize/concurrency setting was deployed. Reacquire a fresh baseline after dra
 Aligned the design with the proposed per-pool Kubernetes Lease and documented the
 required idle-target and qualification-versus-selection reviewer extension. Those
 are design requirements, not implemented ownership or live admission evidence.
+
+### E18 — P05-a bounded pre-trial registration
+
+Branch: `codex/cricket-p05-registration`, based on #286. The shared CLI now provides
+`register-capacity`; see the [contract](../reference/capacity-trial-registration.md).
+It seals complete resource/caller scope, timestamped measurement references/hashes,
+incumbent and scheduled reservations, fixed input/rubric hashes, measured ceiling,
+descending candidates, deadlines and planned ownership. The tightest measured
+constraint determines the maximum; configured worker limits are not accepted as
+the ceiling. Receipt creation is exclusive/private and validates its content,
+session and validator hashes on reread.
+
+The E02 command passed **220 tests and 43 subtests in 21.42 seconds**, no skips;
+private log `/private/tmp/cricket-p05-registration-tests.log`. Focused tests first
+passed 38 with one pinned-schema integration skip; E02 supplied that schema and
+passed the same integration. New-file Ruff and diff checks pass. New tests cover
+an idle target, full peer reservations/zero headroom, missing/stale constraints,
+unknown callers, changed receipt/scope, maximum-first order, finite typed counts,
+deadlines, immutable files and refusal to reuse a FIFO prediction for capacity.
+
+No live registration or trial was run. Phase/evaluation/ownership validation and
+repeatable candidate selection remain unimplemented. Consequently `review` rejects
+this action explicitly; `registered_not_admitted` cannot be treated as eligibility.
+This PR does not claim that a supplied measurement reference independently proves
+physical headroom or an acquired Kubernetes Lease.
 
 ## Updating evidence
 

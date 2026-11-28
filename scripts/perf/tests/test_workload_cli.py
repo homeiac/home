@@ -117,3 +117,9 @@ def test_malformed_instrumentation(state, file, old, new):
     path = state / file
     path.write_text(path.read_text().replace(old,new))
     assert run(state, "review", success=False)
+
+
+def test_capacity_cannot_reuse_queue_prediction_or_bypass_pending_phase_review(state):
+    run(state, "diagnose")
+    put(state, "comparison.json", [{"action": "bounded-concurrency"}])
+    assert "capacity registration is not admission" in run(state, "review", success=False)
