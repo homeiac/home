@@ -78,5 +78,35 @@
     "generation_s": 26.555,
     "admission": "diagnostic only; sustained peer and quality qualification pending",
     "cleanup_verified": true
-  }
+  },
+  "cpu_capacity_trials": [
+    {
+      "backend": "Mac CPU",
+      "threads": 10,
+      "quota_percent": 1000,
+      "decision": "Rejected",
+      "scope": "Closed five-minute peer window; partial five-case quality review",
+      "peer_rates": {
+        "mac-metal": {
+          "before_per_min": 7.396586228902487,
+          "trial_per_min": 6.196240431118419,
+          "before_p95": 39.866,
+          "trial_p95": 44.68
+        },
+        "rtx3070": {
+          "before_per_min": 18.59141944021436,
+          "trial_per_min": 20.387629805615443,
+          "before_p95": 14.363,
+          "trial_p95": 12.388
+        }
+      },
+      "quality": {
+        "reviewed": 5,
+        "stage_correct": 2,
+        "supported_actions": 4,
+        "both_correct": 2
+      },
+      "recovery_verified": true
+    }
+  ]
 }

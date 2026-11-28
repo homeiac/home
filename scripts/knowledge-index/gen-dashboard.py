@@ -448,6 +448,27 @@ def panels():
     # Allocate the timing panel after recovery so existing panel links stay stable.
     timing_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
     backend_charts.append(photo_server_timing_panel(timing_y))
+    for trial in json.loads(Path(__file__).with_name("library-server-timing.json").read_text()).get("cpu_capacity_trials", []):
+        trial_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+        rates = []
+        for backend, values in trial["peer_rates"].items():
+            rates.extend([
+                (f'vector({values["before_per_min"]})', f'{backend} · protected baseline'),
+                (f'vector({values["trial_per_min"]})', f'{backend} · CPU trial'),
+            ])
+        quality = trial["quality"]
+        description = (
+            f'{trial["threads"]} threads with aggregate quota {trial["quota_percent"]}%. '
+            f'{trial["scope"]}. Stage correct {quality["stage_correct"]}/{quality["reviewed"]}, '
+            f'supported action {quality["supported_actions"]}/{quality["reviewed"]}, '
+            f'both correct {quality["both_correct"]}/{quality["reviewed"]}. '
+            'Candidate rejected on Metal throughput and latency. Independent recomputation and recovery passed. '
+            'CPU evaluation responses are excluded from production saved-face counters. Tuning is still active.'
+        )
+        backend_charts.append(tuning_comparison(
+            f'{trial["backend"]} · {trial["threads"]} threads · {trial["decision"]}',
+            rates, 0, trial_y, 24, 7, "suffix: faces/min", description,
+        ))
     chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
     shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
     processing[charts_at:charts_at] = backend_charts
