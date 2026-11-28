@@ -51,3 +51,25 @@ On these metric resources, the checker allows only `service.name` and `host.name
 Existing exporter labels are read by the [Prometheus adapter](../../scripts/perf/observe-shared-workloads.py). Use its source heartbeat to distinguish stale data from a measured zero. The review CLI consumes OTLP JSONL files before Prometheus name translation.
 
 Service-only and inactive peers use the additional [peer measurement contract](shared-peer-measurements.md). Durable indexer counters remain unchanged.
+
+## Deterministic adapters and completion objectives
+
+All workload IDs now share warmed-window, sample-gap, minimum-completion, idle
+reservation and workload latency/error checks. Declare service measurement kinds
+explicitly; service objectives are reported separately from verified durable
+outputs. Supply a [versioned adapter](workload-adapter-contract.md) for native data
+and declarative observer mappings instead of editing a workload name into the
+engine. Saved observer responses replay with an explicit cutoff and mapping/input
+hashes.
+
+Private attempt envelopes retain workload/run, hashed job/source-version/execution
+IDs, immutable profile, mode, retained-stage/action flags, backend, purpose,
+disposition and actual timing. Canonical IDs are preserved in their native store.
+Combined latency comes from raw distinct production attempts, not mean backend
+p95s. Replays/cache/withheld outputs do not create new production counters.
+
+The single `completion_objective` binds fixed remaining work to baseline/trial
+production and verified backend totals, durations and evidence references. Its
+diagnostic ETA does not establish publication verification, semantic quality or a
+causal CPU/GPU/memory bottleneck. `qualify-capacity` consumes the same projection
+function and remains offline/not admitted while execution gates are pending.

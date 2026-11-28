@@ -1,20 +1,74 @@
 ---
 name: shared-workload
-description: Run or tune a homelab AI workload alongside other callers, check its telemetry and peer impact, and verify its media publications against the existing OpenLABEL store.
+description: Observe or tune workloads sharing CPU, accelerators, memory or storage, using their own progress units, service budgets and native publication contracts.
 ---
 
-From the repo root, use the [agent journey](../../../docs/guides/shared-workload-agent.md). Run `python3 scripts/perf/workload.py start` with the actual workload, resource, stage IDs and run ID. Use `--live` for current activity and `--output-kind media` for media publications.
+Use the [agent journey](../../../docs/guides/shared-workload-agent.md) and
+[adapter contract](../../../docs/reference/workload-adapter-contract.md). The workload
+owns execution, semantic quality and canonical data; shared scripts review evidence.
+Start `scripts/perf/workload.py` with the actual workload/run/stage/resource IDs.
 
-When scaling or diagnosing a backlog, first complete the [fleet discovery gate](../../../docs/methodology/distributed-ai-performance.md#discover-capacity-beyond-the-current-routes). Use physical inventory and local compute to enumerate CPU and accelerator candidates for every applicable stage, including hosts without inference endpoints. Run the existing stage-by-pool planner in inventory mode. Give each unmeasured candidate a readiness probe and bounded trial or an evidence-backed deferral with owner and revisit trigger. Occupied GPU slots require considering the remaining pools. Compare CPU inference by its useful added fleet throughput and quality. Keep measured preparation costs separate. Report coverage gaps explicitly before calling the investigation complete.
+Before scaling, expand stage-by-physical-pool coverage with `plan-compute-trials.py
+POLICY --inventory`. Include CPUs without endpoints and deduplicate hosts/guests.
+Each unmeasured candidate needs readiness/timing/quality evidence, demonstrated
+incompatibility or an owned deferral/revisit. Occupied GPU slots do not exclude
+independent pools. Preserve coverage gaps in the checklist.
 
-Before changing shared capacity, follow the [chat coordination and ownership contract](../../../docs/methodology/distributed-ai-performance.md#coordinate-chats-before-changing-shared-capacity). With user authorization, contact existing workload chats and agree on one actuator per physical pool. Record protected and scheduled allocations, current trial, expiry and rollback. Share aggregate outcomes and references. Confirm process/port/lock cleanup and acknowledged handoff before a new owner launches work. Keep an active task running through the requested completion condition and use compact status waits for coordinated work.
+Coordinate existing chats when user-authorized. Record one actuator per physical
+pool, peer and scheduled reservations, expiry, rollback and acknowledged handoff.
+Verify process/port/lock cleanup before another owner submits. Derive the maximum
+shared allowance after measured demand/reservations; bound aggregate CPU as well as
+threads/contexts, start at that ceiling and descend. Keep production workers intact.
 
-Reuse the production model client, response parser, field validators, queue and publication writer in the trial adapter. Verify parser parity on saved responses before spending inference capacity. Preserve harness failures as diagnostic receipts and correct the harness before repeating the same setting. Do not score a harness-only format error as a model quality failure.
+Reuse production model clients, parsers, validators, queue and writer. Replay saved
+responses before inference. Preserve harness failures separately from model errors.
+Freeze source/cohort/model/prompt/extraction/rubric/environment and adapter versions.
+Count invalid/abstained quality cases in the full declared denominator; safety stops
+remain partial. Review complete semantic claims, including actor/object attribution.
 
-For CPU tuning, derive the maximum shared allowance from measured demand and reservations, bound aggregate CPU use, start at that ceiling and descend. Freeze settings and reviewed inputs, compare quality and total useful throughput, and reverse-repeat qualifying settings. Aggregate CPU and GPU backends serving the same workload before applying its budgets. Treat a backend slowdown as diagnostic evidence unless a user instruction or existing service requirement sets a separate backend floor. Preserve reserved worker counts and the budgets of distinct peer workloads. Close every requested backend with measured acceptance or rejection. A readiness check, single answer or missing GPU capacity leaves tuning open. Follow the [tuning completion gate](../../../docs/methodology/distributed-ai-performance.md#complete-the-requested-tuning-outcome), including journal/checklist, per-backend Grafana before/after, pushed changes and independently verified served panels. Report true blockers explicitly. Preserve private evidence locally.
+For a finite job, use one fixed remaining-work snapshot and combined unique useful
+production across same-workload backends. Run `completion_objective.py OBJECTIVE
+--at-ns CUTOFF`; `qualify-capacity` consumes that same result. Evaluation replays,
+cache hits, retries and withheld outputs cannot create production gain. Passing
+peer budgets alone cannot promote. Missing native readback or no projected reduction
+in whole completion time holds the candidate. Keep service objectives in their own
+SLO units instead of inventing durable outputs or backfill ETA.
 
-Separate pending work from runnable demand at the measured stage. Check bounded recent attempts for decode or other prerequisite failures when a queue has no in-flight inference; retain scheduled reservations and distinguish pre-existing peer failures from trial regressions. In quality cohorts, record invalid responses as failed cases and continue. Guard-triggered early stops must retain a partial denominator and exclude unfinished requests. Judge the whole actor/action claim, not just its verb.
+Use declarative observer mappings and saved inputs with an explicit cutoff for
+replay. Record hashed job/source/version/execution identity, immutable profile,
+mode and retained-stage reuse in private attempt evidence. Sum deduplicated output
+within each workload; compute combined latency from raw attempts or mergeable
+histograms, never average backend p95s. Backend slowdowns are diagnostic unless a
+real backend SLO exists. Protect distinct workloads separately.
 
-Execute the requested job through its existing supervisor. Before a tuning trial, run `python3 scripts/perf/workload.py diagnose --session PATH`. Run `python3 scripts/perf/workload.py review --session PATH` on the closed trial window. Follow the returned probe or fleet decision and record the owner’s actual allocation and verified output.
+Keep baseline/trial/recovery controls and reverse-repeat qualifying settings. A
+slow no-increment control leaves causation unresolved; do not retry until a pass or
+select a convenient baseline. Require complete sampled windows and fresh health
+observations. Distinguish pending jobs blocked before inference from runnable work,
+while retaining scheduled reservations. Throughput/utilization alone do not prove
+a CPU, GPU or memory-bandwidth bottleneck.
 
-[Decision workflow](../../../docs/methodology/distributed-ai-performance.md) · [Field dictionary](../../../docs/reference/workload-telemetry.md) · [Publication contract](../../../docs/architecture/media-workload-contract.md)
+Preserve data architecture: media uses the existing native-ID OpenLABEL writer,
+pinned schema, revisions and independent readback. Nonmedia uses a frozen native
+adapter for its existing schema/store and saved execution provenance. Do not add a
+second canonical store or manufacture origin/first-commit facts. `other` is not a
+verification escape hatch. Services use registered measured service contracts.
+
+Diagnose/review closed captures with the shared CLI and use the existing supervisor
+for execution. Registration, output summaries, ETA and offline qualification do not
+actuate capacity. `qualify-capacity` currently returns `not_admitted`/`proceed=false`
+until ordered phases, independent fresh evaluation, repeats and lease/dispatch
+execution gates are implemented. Do not describe the one-increment feedback loop
+as maximum-first tuning or an `eligible` sub-review as live admission.
+
+Close the requested scope with the science journal/checklist, selected and rejected
+settings, timestamps and explicit unmeasured arms. When the user requests
+consolidation, report the best supported measured setup with its limits. Keep private
+raw evidence under persistent storage with verified hashes/permissions; commit only
+aggregate findings and references. Push changes and independently read served
+Grafana values, naming GPU series as before/during the added workload so a rejected
+increment is not confused with rejection of an incumbent backend.
+
+[Playbook](../../../docs/methodology/distributed-ai-performance.md) ·
+[Telemetry](../../../docs/reference/workload-telemetry.md) ·
+[Media architecture](../../../docs/architecture/media-workload-contract.md)

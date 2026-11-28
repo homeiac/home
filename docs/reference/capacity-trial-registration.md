@@ -28,6 +28,7 @@ demonstrates the complete JSON shape without describing actual spare capacity.
 | `completion_deadline_ns` | Hard experiment bound, long enough for forward/reverse windows and drain |
 | `candidates` | Strictly descending total target worker counts, starting at the derived measured ceiling and remaining above baseline |
 | `repeat_order`, `selection_tolerance` | `reverse-eligible` and `0.05`; phase selection is not implemented by registration |
+| `increment_backends` | Freeze identities of added backends (or an empty list for in-place tuning); missing binding cannot qualify a completion objective |
 | `output_accounting` | `fresh-evaluation-separate-from-production`; cache reuse cannot be counted as fresh inference |
 | `lease` | Planned `KubernetesLease`, owner, namespace, unique names for the physical dependency leaves, expiry and renewal interval with at least three renewal opportunities |
 
@@ -48,7 +49,7 @@ on a route it uses. Unknown constraints remain a blocker, not an assumed zero co
 
 The receipt binds the complete intake (including topology), spec, derived ceiling
 and allocation vectors, registration time and a deterministic digest covering the
-registration, capacity qualification, shared reviewer and service-budget sources. Creation is
+registration, capacity qualification, shared reviewer, service budgets, completion objective, native verification and output summarization sources. Creation is
 exclusive with file mode `0600`. Revalidation recomputes the contract and rejects
 changed scope, policy or measurements. A content digest detects accidental changes;
 it is not a signature or proof of authorization. Do not edit an existing receipt.
@@ -58,13 +59,15 @@ it is not a signature or proof of authorization. Do not edit an existing receipt
 `capacity_qualification.qualify` validates a registration against a candidate's
 fixed inputs, environment, observed allocation vectors and registered throughput
 and service budgets before applying the shared reviewer. Its top-level decision
-is always `not_admitted`. `candidate_review` describes only whether the supplied
-measurements satisfy candidate safety/quality checks. The public CLI still refuses
-capacity review while complete phase and receipt validation is pending.
+is always `not_admitted`. `capacity_budget_review` preserves the capacity/peer result. `candidate_review`
+also consumes the single machine-readable `completion_objective`; passing peer
+budgets alone cannot qualify verified useful gain. The public `review` command still refuses live capacity review. The separate
+`qualify-capacity` command exposes these offline checks and always returns
+`not_admitted`, `proceed=false` while complete phase and execution validation is pending.
 
 The comparison carries `capacity_registration_sha256`, the original sealed
 `peer_baseline` phase, the exact `fixed_inputs`
-and `output_accounting`, `min_gain=0` and a `max_peer_loss` no weaker than registered.
+and `output_accounting`, the [completion objective/native accounting](workload-adapter-contract.md), `min_gain=0` and a `max_peer_loss` no weaker than registered.
 Service budgets must match the registered `service_budgets` exactly. Each phase's
 `allocation` maps every affected workload to its observed total workers. Peer
 vectors cannot change. The first candidate is admitted at the derived maximum
@@ -92,10 +95,16 @@ losses from compounding across a sweep (for example, peer output 100 → 90 → 
 Retain the original baseline's real target evidence; never invent completions for
 an idle target or apply the initial-admission deadline again to this second review.
 
-Lower target throughput alone does not cause rollback in a capacity comparison.
+Lower target throughput alone need not violate a capacity safety budget. It does
+hold the completion objective when the fixed remaining job would not finish earlier.
+Missing independent production readback or missing added-backend contribution also
+holds the candidate. Native accounting is constructed by actual checking, not read
+from claimed JSON totals. It binds source creation, originating run/purpose, backend
+and the frozen session. Media still needs its own verified source-unit accounting
+bridge; scene-revision count is not that bridge.
 `rank_repeatable` ranks already-qualified samples by the lower rate across at least
 two repetitions, then chooses the fewest workers within 5% of the fastest such
-rate. Units and fixed inputs must match. Its result is `ranking_only`, not an
+rate. The zero-extra-worker control may participate and wins the same 5% rule. Units and fixed inputs must match. Its result is `ranking_only`, not an
 admission decision. It does not prove that repetition receipts are independent or
 in the required order; do not use hand-entered rates to promote an allocation.
 

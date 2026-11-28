@@ -1,9 +1,10 @@
-# Tune indexers sharing compute
+# Tune workloads sharing compute
 
-Use this playbook for cricket, knowledge indexing, life-stage analysis, face
-recognition and dog identification whenever their resources overlap. A faster
-cricket run is eligible for promotion only when the other active workloads also
-meet their service and progress budgets. Keep their baseline workers running.
+Use this procedure for overlapping workloads through their own evidence adapters.
+Cricket, indexing, transcription, face processing and services are examples, not
+an allowlist or shared model/schema. The target's quality and whole-job objective
+must improve while distinct peers retain their progress and service budgets.
+Keep baseline workers and scheduled reservations protected.
 
 This is an operating procedure, not a claim that a fleet-wide controller is
 deployed. The cricket worker's local memory guard alone cannot enforce it.
@@ -88,6 +89,24 @@ existing limits and any justified replacement before starting. If a baseline
 already fails its budgets, resolve or explicitly account for that condition
 before testing additional pressure.
 
+## Make one objective determine whether to proceed
+
+For finite work, freeze one remaining-work snapshot and use
+`completion_objective.py OBJECTIVE --at-ns CUTOFF` to compute both combined
+production rates and projected remaining times. The object is also consumed by
+`workload.py qualify-capacity`; dashboards display that same result instead of a
+second calculator. Require actual verified contribution from an added backend.
+Replays stay separate, and checkpoint-only projections remain diagnostic when
+canonical readback is missing. An unverified speedup or peer-budget pass cannot
+promote. Services use their measured SLO objective instead of backfill ETA.
+
+Use the [adapter contract](../reference/workload-adapter-contract.md) for declarative
+observers, source-version deduplication, native readback and saved execution
+provenance. OpenLABEL remains the media authority. Nonmedia keeps its existing
+schema and native store; performance receipts do not become another content store.
+The offline qualification command always reports `not_admitted`/`proceed=false`
+until ordered phase/repetition and live lease/dispatch gates are implemented.
+
 ## Start at the shared ceiling, then reduce
 
 Once the implementation and quality approach are qualified, start at the highest
@@ -116,6 +135,13 @@ throughput plateaus. Respect leases and finish in-flight work; preserve correcti
 and committed outputs. Verify peer recovery before the next trial. If conditions
 do not recover, investigate rather than attributing every failure to the trial.
 
+Retain adjacent baseline/trial/recovery controls. A no-increment control that also
+slows means the single trial cannot establish causation. Predeclare additional
+controls/repeats; do not keep retrying until one passes or use the slowest control
+as a convenient new anchor. Use actual sampled bounds rather than process wall
+time. Capture profile/mode/input difficulty and retained-stage reuse to assess
+comparability, and leave hardware cause unknown without stage/device evidence.
+
 Repeat eligible candidates on matched inputs in reverse order. Select the fewest
 workers within 5% of the fastest reproducible useful target rate that passes
 **every** peer gate and the quality checks. A 30% cricket gain with a 20% knowledge
@@ -134,6 +160,11 @@ before/trial/after allocations, per-workload rates and queue ages, quality,
 latency/errors, pressure, failed settings, and observed recovery. Keep private
 inputs and credentials outside Git. Use bounded workload/stage/backend labels in
 metrics; retain detailed provenance in the private experiment record.
+
+Preserve selected, rejected, partial and unmeasured settings separately. If the user
+requests consolidation, report best supported measured configuration, not a global
+optimum. Persist private raw evidence with verified manifests/permissions; keep
+aggregate science-journal conclusions and source references in Git.
 
 Persist the winning allocation with the workload mix, model and policy versions.
 Requalify it after a workload returns or changes placement. Capacity measured for
