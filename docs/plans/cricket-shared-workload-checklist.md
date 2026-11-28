@@ -51,8 +51,8 @@ and append the reason; retain the original receipt.
 | --- | --- | --- | --- | --- | --- | --- |
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
-| P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c `codex/cricket-p03-counters` | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
-| P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
+| P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
+| P04 | Complete resource/peer measurement | P04-a `codex/cricket-p04-peer-contracts` | Service/idle contracts implemented; live adapters pending | Foundation only | E14: 179 passed, 43 subtests | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
 | P07 | Reviewed identity/outcome evidence | Existing #264/#266/#269; follow-up PR to create | Partial | Existing feature PRs open | E03 contains unresolved pilot results | Fresh quality pilot pending |
@@ -115,6 +115,10 @@ and append the reason; retain the original receipt.
   reconcile unique sources, source minutes and referenced occurrences separately.
 
 ### P04 — Measure every affected workload
+
+- [x] **P04-a-I/V:** Registered service-only measurement kind, absolute/relative
+  service budgets and fresh idle/reservation evidence; indexer requirements cannot
+  be bypassed by relabelling a row. Evidence: E14. Live adapters still pending.
 
 - [ ] **P04-I:** Complete server and device caller census, measured routes,
   scheduled reservations and workload-specific progress/quality/service adapters.
@@ -393,6 +397,32 @@ imports/restart, zero for an earlier cutoff, rejection of a changed host, and co
 peer/trial evidence. Ruff and diff checks pass. No live changes; automatic worker
 publication dispatch, repeated evaluation receipts and complete peer measurements
 remain pending.
+
+### E14 — P04-a service and idle peer contracts
+
+Branch: `codex/cricket-p04-peer-contracts`, based on #282. Added the
+[peer measurement contract](../reference/shared-peer-measurements.md). Frigate's
+registered RTX route uses service budgets; Immich face processing and Knowledge
+Index retain durable indexing-output gates. Idle peers need fresh queue evidence
+and explicit unchanged scheduled reservations. Missing observations hold; measured
+service loss rolls back even when cricket throughput rises.
+
+The E02 command passed **179 tests and 43 subtests in 21.98 seconds**, with no
+skips. A preceding focused perf run passed 61 tests and skipped its pinned-schema
+integration test because the schema environment was not set for that focused
+command; the full E02 run supplied it and passed. New-module Ruff and diff checks
+pass. Tests cover absent/stale service samples, bad baseline, relative losses,
+missing budgets, conflicting resource declarations and indexer bypass attempts.
+
+The fresh private activity snapshot is
+`/private/tmp/cricket-p04-activity-20261127.json`, timestamp `1795843233`.
+Cricket reports zero active/queued and four desired Mac lanes; Knowledge Index's
+summary process is active, and its exporter reports success. Pet Mac activity and
+caption-recovery backlog are zero at their own source timestamps. These partial
+observations do not prove idle reservations, complete caller coverage, useful
+progress of every Knowledge Index stage or safe spare capacity. The separate
+Knowledge Index chat is actively investigating/tuning Bonsai face requests on the
+same backends. No model service, shared allocation or peer worker was changed here.
 
 ## Updating evidence
 

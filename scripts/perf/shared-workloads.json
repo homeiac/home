@@ -1,6 +1,6 @@
 {
   "mac-m5/metal": {"workloads": ["cricket-indexer", "knowledge-index", "immich-pet-tagger"], "uses": []},
   "mac-m5/bonsai-slots": {"workloads": ["cricket-indexer", "knowledge-index"], "uses": ["mac-m5/metal"]},
-  "pumped-piglet/rtx3070": {"workloads": ["knowledge-index", "frigate", "immich"], "uses": []},
+  "pumped-piglet/rtx3070": {"workloads": ["knowledge-index", "frigate", "immich"], "uses": [], "measurement_kinds": {"frigate": "service"}},
   "pumped-piglet/bonsai-slots": {"workloads": ["cricket-indexer", "knowledge-index"], "uses": ["pumped-piglet/rtx3070"]}
 }

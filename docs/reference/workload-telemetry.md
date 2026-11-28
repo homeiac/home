@@ -47,3 +47,5 @@ On these metric resources, the checker allows only `service.name` and `host.name
 | `waffles_worker_active_instances` | `worker="mac"` | Active worker processes |
 
 Existing exporter labels are read by the [Prometheus adapter](../../scripts/perf/observe-shared-workloads.py). Use its source heartbeat to distinguish stale data from a measured zero. The review CLI consumes OTLP JSONL files before Prometheus name translation.
+
+Service-only and inactive peers use the additional [peer measurement contract](shared-peer-measurements.md). Durable indexer counters remain unchanged.

@@ -24,9 +24,12 @@ def window():
     baseline = dict(start_ns=WINDOW, end_ns=2*WINDOW, warmed=True, max_sample_gap_s=15, environment="fixed-models-and-worker-floors",
                     callers={SLOTS: [CRICKET, KI], METAL: [CRICKET, KI]},
                     workloads={CRICKET: row(10, "reviewed source minutes"), KI: row(35, "verified captions"),
-                               PET: dict(demand=False, baseline_preserved=True)})
+                               PET: dict(demand=False, baseline_preserved=True,
+                                         activity=dict(state="idle", runnable=0, reservation_workers=0,
+                                                       observed_ns=2*WINDOW, evidence_ref="fixture/idle"))})
     trial = deepcopy(baseline)
     trial.update(start_ns=2*WINDOW, end_ns=3*WINDOW)
+    trial["workloads"][PET]["activity"]["observed_ns"] = 3*WINDOW
     trial["workloads"][CRICKET]["verified"] = 12
     return {"comparison": dict(resources=[SLOTS], subject=CRICKET, baseline=baseline, trial=trial,
                                min_gain=0.05, max_peer_loss=0.0)}
