@@ -45,6 +45,11 @@ def apply_hint(raw: dict, summary: str, default_batter: str) -> dict:
         return raw
     if raw["evidence"].get("confidence") == "likely" and raw["data"]["role"] == hint:
         return raw
+    if (
+        raw["evidence"].get("tracking", {}).get("matched")
+        or raw["evidence"].get("identity_excluded")
+    ):
+        return raw
     raw["data"]["role"] = hint
     eligible = not raw["evidence"].get("identity_excluded", False)
     raw["data"]["actor"] = default_batter if hint == "batting" and eligible else None

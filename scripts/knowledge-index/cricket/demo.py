@@ -53,7 +53,7 @@ def main() -> None:
         "fixture-owner", "fixture-album", "video", "video", 8, "fixture-v1", video.name
     )
     if not ledger.list_events("fixture-owner", "fixture-album", True):
-        ledger.create_event(
+        event = ledger.create_event(
             "fixture-owner",
             "fixture-album",
             "video",
@@ -67,6 +67,30 @@ def main() -> None:
                 "delivery_start": 2,
                 "outcome_end": 5,
             },
+        )
+        ledger.propose(
+            "fixture-owner",
+            event,
+            ledger.get("fixture-owner", event)["data"],
+            evidence={
+                "identity_context": {
+                    "status": "known",
+                    "age_years": 11,
+                    "age_months": 3,
+                    "recorded_date": "2021-09-25",
+                },
+                "subject_location": {
+                    "timestamp": 2,
+                    "frame_index": 0,
+                    "person_box": [0.2, 0.1, 0.3, 0.8],
+                    "face_box": [0.25, 0.12, 0.1, 0.15],
+                },
+                "subject_kit": {"jersey_colors": ["blue"], "jersey_number": "7"},
+                "identity_basis": "user_album_rule",
+            },
+            model="synthetic-fixture",
+            version="fixture",
+            run="coordinates",
         )
     api = CricketAPI(
         ledger,

@@ -26,6 +26,9 @@ function reviewDetails(event,asset){
   field('Player',player);
   const age=event.evidence.identity_context;
   if(age?.status==='known')field(name(album()?.default_batter)+'’s age at recording',age.age_years+' years, '+age.age_months+' months · '+age.recorded_date);
+  const kit=event.evidence.subject_kit;
+  if(kit&&(kit.jersey_colors?.length||kit.jersey_number))field('Observed jersey (best effort)',[kit.jersey_colors?.join(' / '),kit.jersey_number?'number '+kit.jersey_number:'number unreadable'].filter(Boolean).join(' · '));
+  if(event.evidence.tracking?.matched)field('Player continuity','Matched to the player located earlier in this video; still a suggestion.');
   if(event.review_state==='suggested'&&event.evidence.age_compatibility==='incompatible')box.append(node('p','The visible player appears inconsistent with the expected age. Identity is left unclear for you to check.'));
   field('Activity',({batting:'Batting',bowling:'Bowling',other:'Other activity',unknown:'Unknown — check what the player is doing'})[d.role]);
   if(!photo){
@@ -68,6 +71,7 @@ function render(){
     const playbackControls=node('div');playbackControls.className='actions playback-controls';
     const playbackMode=node('p','Playing the highlight only. Use Play whole video to check what happens before and afterward.');playbackMode.className='details playback-mode';
     const preview=node(asset?.kind==='photo'?'img':'video');
+    const playerFrame=node('div');playerFrame.className='player-frame';playerFrame.append(preview);
     if(asset?.kind==='photo'){preview.src=media(event.asset)+'&preview=true';preview.alt='Cricket activity';preview.loading='lazy';}
     else{
       preview.controls=true;preview.preload='none';preview.src=media(event.asset)+'#t='+d.start+','+d.end;
@@ -84,17 +88,34 @@ function render(){
     if(!event.dismissed&&event.review_state!=='confirmed')controls.append(action('Confirm shown details',()=>change(event,{action:'accept'})));
     controls.append(action('Edit details',()=>edit(event)),action(event.dismissed?'Restore':'Hide this moment',()=>change(event,{action:event.dismissed?'restore':'dismiss'})));
     if(asset?.kind==='video'){
-      const toggle=action('Play whole video',async()=>{
-        fullVideo=!fullVideo;toggle.textContent=fullVideo?'Back to highlight':'Play whole video';
+      async function playMode(value){
+        fullVideo=value;toggle.textContent=fullVideo?'Back to highlight':'Play whole video';
         playbackMode.textContent=fullVideo?'Whole original video · 0.0s – '+seconds(asset.duration)+'. Playback continues past the highlight.':'Highlight only · '+seconds(d.start)+' – '+seconds(d.end)+'.';
         preview.src=media(event.asset)+(fullVideo?'':'#t='+d.start+','+d.end);preview.load();
         await preview.play();
-      });playbackControls.append(toggle);
+      }
+      const toggle=action('Play whole video',()=>playMode(!fullVideo));playbackControls.append(toggle);
+      const where=event.evidence.subject_location;
+      if(where){
+        const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('player-position');svg.setAttribute('aria-label','Suggested player position');svg.style.display='none';playerFrame.append(svg);
+        function drawPosition(){
+          svg.style.display=Math.abs(preview.currentTime-where.timestamp)<0.8?'block':'none';
+          const w=preview.videoWidth,h=preview.videoHeight;if(!w||!h)return;
+          svg.setAttribute('viewBox','0 0 '+w+' '+h);svg.replaceChildren();
+          for(const [box,color] of [[where.person_box,'#ffe46b'],[where.face_box,'#70eaff']]){
+            if(!box)continue;const rect=document.createElementNS(svg.namespaceURI,'rect');
+            for(const [key,value] of Object.entries({x:box[0]*w,y:box[1]*h,width:box[2]*w,height:box[3]*h,fill:'none',stroke:color,'stroke-width':Math.max(2,w/200)}))rect.setAttribute(key,value);
+            svg.append(rect);
+          }
+        }
+        preview.addEventListener('timeupdate',drawPosition);preview.addEventListener('seeked',drawPosition);
+        playbackControls.append(action('Show player position',async()=>{await playMode(true);preview.pause();preview.currentTime=where.timestamp;playbackMode.textContent='Suggested position at '+seconds(where.timestamp)+'. Yellow: player; blue: visible face. Boxes are shown only near this sampled frame.';}));
+      }
     }
     const original=node('a',asset?.kind==='video'?'Open original file':'View original');original.href=media(event.asset);original.target='_blank';original.rel='noopener';controls.append(original);
     const link=node('a','Link to moment');link.href='/cricket?'+new URLSearchParams({album:event.album,event:event.id});controls.append(link);
     if(asset?.kind==='video')controls.append(action('Export clip',async()=>{notify('Preparing this clip…');const result=await api('export',{id:event.id,revision:event.revision});const download=node('a','Download clip');download.href=result.url;download.download='cricket-highlight.mp4';controls.append(download);notify('Clip ready to download.');}));
-    card.append(preview);if(asset?.kind==='video')card.append(playbackControls,playbackMode);
+    card.append(playerFrame);if(asset?.kind==='video')card.append(playbackControls,playbackMode);
     card.append(title,badge,details,reviewDetails(event,asset),controls,reason);$('cards').append(card);
   }
   if(!visible.length)$('cards').append(node('p','No moments in this view yet. Try another filter or add one below.'));

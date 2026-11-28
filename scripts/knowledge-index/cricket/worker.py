@@ -16,9 +16,11 @@ from pathlib import Path
 
 from .analyze import VERSION
 from .jobs import claim, failed, heartbeat
+from .kit_context import nearby
 from .ledger import Conflict, Ledger, encoded
 from .prepare import save_private
 from .reconcile import reconcile
+from .tracking import advance, reviewed_reference, with_anchor
 from .trial import analyze_one
 
 
@@ -106,6 +108,17 @@ def process(
 ) -> dict:
     """Checkpoint each window, then reconcile proposals and complete the lease atomically."""
     prepared = json.loads((evidence / (job["asset"] + ".json")).read_text())
+    manual_reference = reviewed_reference(
+        ledger, job["owner"], album["id"], job, prepared, album["default_batter"]
+    )
+    kit_context = nearby(
+        ledger,
+        job["owner"],
+        album["id"],
+        album["default_batter"],
+        job["asset"],
+        prepared.get("identity_context", {}),
+    )
     items = []
     config_hash = hashlib.sha256(
         encoded(
@@ -114,10 +127,15 @@ def process(
                 "backend": {k: backend[k] for k in ("model", "api")},
                 "evidence": prepared["cache_key"],
                 "portrait": portrait,
+                "kit_context": kit_context,
+                "manual_reference": manual_reference,
             }
         ).encode()
     ).hexdigest()
+    track_anchor = None
     for index, window in enumerate(prepared["windows"]):
+        window = with_anchor(window, track_anchor or manual_reference, job)
+        window["kit_context"] = kit_context
         target = state / "answers" / job["asset"] / config_hash / f"{index}.json"
         if target.exists():
             answer = json.loads(target.read_text())
@@ -130,6 +148,9 @@ def process(
             )
             save_private(target, answer)
         items.extend(answer["proposals"])
+        track_anchor = advance(
+            answer["proposals"], job, window, album["default_batter"]
+        )
         heartbeat(ledger, job, index + 1)
     return reconcile(
         ledger,
