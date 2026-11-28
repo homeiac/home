@@ -21,7 +21,7 @@ from .face_context import load, subject
 from .immich_frames import frame_key
 from .ledger import Ledger
 from .prepare import save_private
-from .vocabulary import ACTIONS, OUTCOMES, VERSION
+from .vocabulary import ACTIONS, COMPLETION, COMPLETION_VERSION, OUTCOMES, VERSION
 
 PRODUCER = "cricket-openlabel-v1"
 
@@ -69,7 +69,14 @@ def registry_for_scene(folder: Path, asset: dict) -> dict:
     return registry
 
 
-def scene(shared: ModuleType, asset: dict, registry: dict, events: list[dict]) -> dict:
+def scene(
+    shared: ModuleType,
+    asset: dict,
+    registry: dict,
+    events: list[dict],
+    *,
+    completion: dict | None = None,
+) -> dict:
     """Bind every native detection, then attach effective cricket facts and provenance."""
     if registry and (
         registry["owner"] != asset["owner"]
@@ -231,6 +238,44 @@ def scene(shared: ModuleType, asset: dict, registry: dict, events: list[dict]) -
                     "No current unambiguous native face binding; retain the editable person assertion separately.",
                 )
             )
+    if completion is not None:
+        if (
+            completion.get("state") != "complete"
+            or not all(
+                isinstance(completion.get(k), str) and completion[k].strip()
+                for k in ("analysis_version", "analysis_digest")
+            )
+            or registry.get("detection_complete") is not True
+            or not registry.get("frames")
+            or any(f.get("state") != "detected" for f in registry["frames"])
+        ):
+            raise ValueError(
+                "Completion requires completed analysis and native detection"
+            )
+        data["metadata"]["vocabulary_release"] = COMPLETION_VERSION
+        data["contexts"][
+            stable(asset["id"], "cricket completion", completion["analysis_version"])
+        ] = {
+            "name": "Source analysis completed",
+            "type": COMPLETION,
+            "context_data": {
+                "text": [
+                    text(k, v)
+                    for k, v in {
+                        "source_asset": asset["id"],
+                        "source_fingerprint": asset["fingerprint"],
+                        "analysis_version": completion["analysis_version"],
+                        "analysis_digest": completion["analysis_digest"],
+                        "stage": "analyze",
+                        "state": "complete",
+                        "result": "events_present" if data["actions"] else "no_event",
+                        "reason": "effective_events_saved"
+                        if data["actions"]
+                        else "no_effective_highlight_after_analysis_and_review",
+                    }.items()
+                ]
+            },
+        }
     return {"openlabel": data}
 
 

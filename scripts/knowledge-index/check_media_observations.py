@@ -14,6 +14,30 @@ REFERENCE = ROOT / "schemas/media-observation-reference.schema.json"
 FORMAT = "1.0.0"
 
 
+def check_cricket_completion(data: dict) -> None:
+    """A cricket-2 negative proves completed analysis, never unfinished detection."""
+    contexts = [c for c in data.get("contexts", {}).values() if c["type"] == "CRK.CTX.001"]
+    if len(contexts) != 1:
+        raise ValueError("expected exactly one cricket completion context")
+    text = contexts[0].get("context_data", {}).get("text", [])
+    fields = {v["name"]: v["val"] for v in text}
+    if len(fields) != len(text):
+        raise ValueError("duplicate cricket completion fields")
+    meta = data["metadata"]
+    frames = data.get("frames", {})
+    expected_result = "events_present" if data.get("actions") else "no_event"
+    if (fields.get("state") != "complete" or fields.get("stage") != "analyze"
+            or fields.get("result") != expected_result
+            or fields.get("source_asset") != meta.get("source_asset")
+            or fields.get("source_fingerprint") != meta.get("source_fingerprint")
+            or not all(isinstance(fields.get(k), str) and fields[k].strip()
+                       for k in ("analysis_version", "analysis_digest", "reason", "source_fingerprint"))
+            or meta.get("native_detection_complete") is not True or not frames
+            or any(f.get("frame_properties", {}).get("detection_state") != "detected"
+                   for f in frames.values())):
+        raise ValueError("incomplete or inconsistent cricket completion")
+
+
 def pg_digest(scene: dict) -> str:
     """Match openlabel_album.persist's existing scene serialization, including whitespace."""
     return hashlib.sha256(json.dumps(scene, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -50,10 +74,12 @@ def check(references: list, rows: list, definition: dict) -> dict:
         meta = data["metadata"]
         if ref["workload"] == "cricket-indexer" and (
             meta.get("producer") != "cricket-openlabel-v1"
-            or meta.get("vocabulary_release") != "cricket-1"
+            or meta.get("vocabulary_release") not in {"cricket-1", "cricket-2"}
             or meta.get("source_asset") != ref["asset"]
         ):
             raise ValueError("expected the cricket publisher, vocabulary and native source asset")
+        if ref["workload"] == "cricket-indexer" and meta["vocabulary_release"] == "cricket-2":
+            check_cricket_completion(data)
         if (meta.get("vocabulary_release") != ref["vocabulary_release"]
                 or meta.get("source_asset", ref["asset"]) != ref["asset"]):
             raise ValueError("scene vocabulary release or asset mismatch")
