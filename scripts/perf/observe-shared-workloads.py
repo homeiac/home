@@ -28,6 +28,41 @@ SERIES = {
     "immich-pet-tagger": {
         "heartbeat": ("waffles_queue_report_timestamp_seconds", ""),
         "mac_active_workers": ("waffles_worker_active_instances", 'worker="mac"')},
+    "knowledge-index/media-summary": {
+        "heartbeat": ("media_pipeline_heartbeat_timestamp_seconds", ""),
+        "running": ("media_pipeline_running", ""),
+        "pending_from_worker_scan": ("media_pipeline_queue", ""),
+        "mac_in_flight": ("media_pipeline_backend_in_flight", 'backend="metal"'),
+        "primary_in_flight": ("media_pipeline_backend_in_flight", 'backend="primary"'),
+        "mac_parquet_writes_process_total": ("media_pipeline_backend_saved_total", 'backend="metal"'),
+        "primary_parquet_writes_process_total": ("media_pipeline_backend_saved_total", 'backend="primary"'),
+        "cache_parquet_writes_process_total": ("media_pipeline_backend_saved_total", 'backend="cache"'),
+        "mac_offered_requests": ("media_pipeline_mac_request_limit", ""),
+    },
+    "knowledge-index/library-face-observations": {
+        "heartbeat": ("knowledge_index_photo_stage_updated_timestamp_seconds", 'stage="library-face-observations"'),
+        "pending_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="pending"'),
+        "running_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="running"'),
+        "complete_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="complete"'),
+        "failed_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="failed"'),
+        "mac_complete_checkpoints": ("knowledge_index_photo_stage_backend_completed", 'stage="library-face-observations",backend="mac-metal"'),
+        "rtx_complete_checkpoints": ("knowledge_index_photo_stage_backend_completed", 'stage="library-face-observations",backend="rtx3070"'),
+        "historical_model_request_p95_s": ("knowledge_index_photo_stage_phase_p95_seconds", 'stage="library-face-observations",phase="model_request"'),
+    },
+    "frigate": {
+        "heartbeat": ("photo_frigate_last_poll_timestamp_seconds", ""),
+        "stats_endpoint_up": ("photo_frigate_service_up", 'id="frigate_service"'),
+        "detector_rolling_mean_ms": ("photo_frigate_processing_milliseconds", 'kind="detector"'),
+        "object_detection_fps": ("photo_frigate_frames_per_second", 'kind="objects"'),
+        "face_recognition_fps": ("photo_frigate_frames_per_second", 'kind="faces"'),
+    },
+    "immich": {
+        "heartbeat": ("immich_observer_last_success_timestamp_seconds", 'source="queues"'),
+        "queue_observer_up": ("immich_observer_source_up", 'source="queues"'),
+        **{queue + "_" + state: ("immich_queue_jobs", f'queue="{queue}",state="{state}"')
+           for queue in ("face_detection", "facial_recognition")
+           for state in ("waiting", "active", "delayed", "prioritized", "failed", "paused")},
+    },
 }
 
 
@@ -52,8 +87,12 @@ def collect(at: int, kubeconfig: Path) -> dict:
         values = {}
         for key, (name, selector) in fields.items():
             required = dict(part.replace('"', '').split('=') for part in selector.split(',') if part)
-            matches = [v for labels, v in raw[name] if required.items() <= labels.items()]
-            values[key] = matches[0] if matches and min(matches) == max(matches) else None
+            selected = [(labels, v) for labels, v in raw[name] if required.items() <= labels.items()]
+            matches = [v for _, v in selected]
+            # Distinct enrichers are distinct callers, even if their numbers
+            # happen to match. Do not mistake them for duplicate scrape replicas.
+            streams = {labels.get("enricher") for labels, _ in selected}
+            values[key] = matches[0] if matches and min(matches) == max(matches) and len(streams) == 1 else None
         stamp = values.pop("heartbeat")
         fresh = stamp is not None and 0 <= at - stamp <= 180
         result[workload] = dict(source_age_s=round(at - stamp, 1) if stamp else None,

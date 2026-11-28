@@ -52,7 +52,7 @@ and append the reason; retain the original receipt.
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
 | P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
-| P04 | Complete resource/peer measurement | P04-a `codex/cricket-p04-peer-contracts` | Service/idle contracts implemented; live adapters pending | Foundation only | E14: 179 passed, 43 subtests | Complete live peer windows pending |
+| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b `codex/cricket-p04-peer-observer` | Contracts and expanded activity observer implemented; complete window adapters pending | Foundation only | E15: 181 passed, 43 subtests | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
 | P07 | Reviewed identity/outcome evidence | Existing #264/#266/#269; follow-up PR to create | Partial | Existing feature PRs open | E03 contains unresolved pilot results | Fresh quality pilot pending |
@@ -120,6 +120,9 @@ and append the reason; retain the original receipt.
   service budgets and fresh idle/reservation evidence; indexer requirements cannot
   be bypassed by relabelling a row. Evidence: E14. Live adapters still pending.
 
+- [x] **P04-b-I/V:** Observe the face pass, media summaries, Frigate service and
+  Immich face queues separately using existing exporters. Evidence: E15. These
+  activity facets do not substitute for complete matched-window measurements.
 - [ ] **P04-I:** Complete server and device caller census, measured routes,
   scheduled reservations and workload-specific progress/quality/service adapters.
 - [ ] **P04-V:** Demonstrate stale/absent/idle distinctions, unknown callers, changed
@@ -423,6 +426,29 @@ observations do not prove idle reservations, complete caller coverage, useful
 progress of every Knowledge Index stage or safe spare capacity. The separate
 Knowledge Index chat is actively investigating/tuning Bonsai face requests on the
 same backends. No model service, shared allocation or peer worker was changed here.
+
+### E15 — P04-b expanded read-only peer observer
+
+Branch: `codex/cricket-p04-peer-observer`, based on #283. The E02 command passed
+**181 tests and 43 subtests in 22.03 seconds**. Compile/diff checks pass. New tests
+preserve missing fields, separate stage/queue selectors and refuse to merge two
+distinct enricher streams even when their reported values match.
+
+Private observation: `/private/tmp/cricket-p04-expanded-activity-20261127.json`,
+timestamp `1795843392`. The library face pass reported 7 running and 28,282 pending
+checkpoints, 48,754 complete (13,004 Mac / 35,750 RTX), zero failed, and historical
+request p95 38.657 seconds. Its source age was 36.2 seconds. The coarse Knowledge
+Index exporter was stale while this face-stage observation was fresh under the
+legacy observer's 180-second activity rule. Thus the coarse summary alone was
+insufficient to identify current demand.
+
+Cricket was idle. The summary pipeline reported running=0, zero in-flight and 33
+pending from its last worker scan. Frigate's stats endpoint was up with detector
+rolling mean 27.96 ms; this is not p95. Immich face detection/recognition queues
+reported zero across the observed states. These are timestamped activity facts,
+not verified throughput, complete caller attribution or capacity headroom. The
+user authorized coordination with the active Knowledge Index chat; no shared
+service or allocation was changed by this slice.
 
 ## Updating evidence
 
