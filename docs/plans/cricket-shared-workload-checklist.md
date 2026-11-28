@@ -51,7 +51,7 @@ and append the reason; retain the original receipt.
 | --- | --- | --- | --- | --- | --- | --- |
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
-| P03 | Manifest, readback, receipt and no-event output | P03-a `codex/cricket-p03-completion` | Completion contract implemented; outbox pending | Foundation only | E11: 155 passed, 43 subtests | Pending |
+| P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b `codex/cricket-p03-publication` | Completion/outbox/readback implemented; automatic dispatch/counters pending | Foundation only | E12: 164 passed, 43 subtests | Pending |
 | P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
@@ -100,6 +100,9 @@ and append the reason; retain the original receipt.
   independent checker validation; publish/read back valid negatives through the
   shared writer. Evidence: E11. Outbox/production receipts remain pending.
 
+- [x] **P03-b-I/V:** Backed-up ledger outbox, independent SQL readback, bounded
+  retries and durable deduplicated source receipts. Evidence: E12. Opt-in single-
+  source CLI; automatic worker publication and receipt-derived OTLP counters pending.
 - [ ] **P03-I:** Emit manifest/outbox records, independently query committed scenes,
   persist verification receipts and introduce the versioned no-event context.
 - [ ] **P03-V:** Verify schema/run/digest/typed links, crash recovery, retry dedup,
@@ -353,6 +356,24 @@ PostgreSQL, verify the context reference, and prove identical retries deduplicat
 Both builder and checker reject unfinished analysis/detection, missing frames,
 missing/duplicated completion fields and inconsistent source/result assertions.
 This does not establish detector recall or semantic accuracy. No live deployment.
+
+### E12 — P03-b durable outbox and independent readback
+
+Branch: `codex/cricket-p03-publication`, based on #280. Added the opt-in
+[publisher and recovery command](../runbooks/cricket-publication.md); analysis
+completion now retains the checked source fingerprint and trace context.
+The E02 command passed **164 tests and 43 subtests in 21.42 seconds**. Ruff on
+changed modules and `git diff --check` pass. Disposable PostgreSQL tests cover
+independent write/read sessions, process-object restart after a committed write,
+retry/run/correction deduplication, edit/source/detection invalidation, bounded
+failure, checker refusal, actual `workload.py verify-media`, and SDK writer spans.
+
+The outbox is an additive ledger extension with an online backup before first use;
+no production ledger was migrated. Historical checkpoints lacking a fingerprint
+are refused, not silently treated as verified. The single-source path is ready
+for review; automatic dispatcher integration, receipt-to-metric accounting and
+live evidence remain unchecked. Publication serializes against local edits during
+bounded SQL operations; UI retry behavior still needs the review integration gate.
 
 ## Updating evidence
 
