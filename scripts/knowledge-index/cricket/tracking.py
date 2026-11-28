@@ -167,6 +167,7 @@ def advance(items: list[dict], asset: dict, window: dict, person: str) -> dict |
             "visual_reference_suggestion",
             "user_album_rule",
             "user_confirmed",
+            "immich_face_match",
         }:
             continue
         try:

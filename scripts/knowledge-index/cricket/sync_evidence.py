@@ -23,6 +23,7 @@ def main() -> None:
             "--no-owner",
             "--no-group",
             "--delay-updates",
+            "--include=faces/",
             "--include=*.json",
             "--include=*.jpg",
             "--exclude=*",
@@ -39,7 +40,9 @@ import os
 from pathlib import Path
 root=Path('/local-3TB-backup/photo-enrichment/cricket/evidence')
 os.chown(root,0,0);root.chmod(0o700)
-for path in root.iterdir():
+for path in root.rglob('*'):
+ if path.is_dir() and not path.is_symlink():
+  os.chown(path,0,0);path.chmod(0o700)
  if path.suffix in {'.json','.jpg'} and path.is_file() and not path.is_symlink():
   os.chown(path,0,0);path.chmod(0o600)
 """

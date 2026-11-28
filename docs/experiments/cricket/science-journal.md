@@ -173,3 +173,40 @@ pilot videos remained in flight and continue under the same leases; full-album
 dispatch does not restart them. This is a functional best-effort release, not a
 claim that the pilot or album is fully analyzed or that four/six/wicket recall is
 established. Corrections, playback, export, and search are available immediately.
+
+### 2026-11-27: native frame identities and age/position follow-up
+
+Initial album inference completed: 633 videos and 867 photos, zero worker errors.
+Four overlapping dismissal suggestions were corrected to attempted run-out; the
+whole-video player allows checking the aftermath beyond the highlight bounds.
+
+A four-worker age/position trial completed four frozen windows in 160.47 seconds
+(1.50 windows/minute), no inference errors. Quality inspection found coordinates
+returned at the JSON root rather than inside individual events, so those boxes
+were correctly rejected. The next prompt explicitly requires per-event locations.
+This trial does not establish tracking accuracy or justify an album rerun.
+
+Native Immich v3.4.2 exposes a face-instance UUID independently from a recognized
+person. The flagged long video had zero native faces. Eight archived sample frames
+were submitted after the owner authorized enabling `asset.upload` on the existing
+sync key through the browser. No key value was copied or rotated. Retrying reused
+the same eight native assets. All eight completed detection with zero faces;
+distant/helmeted/back-facing players must not be assigned invented face IDs.
+This is not completed video coverage.
+
+Next bounded trial: four deterministic 10–30-second videos, eight prepared frames
+each, plus four existing photos. Selected source IDs/fingerprints frozen privately
+before launch. Start at four submission workers (hard bound four), then compare
+two on matched inputs if tuning is needed. Native inference concurrency remains
+unchanged. Acceptance: every returned face retains its UUID including unnamed
+faces, retries reuse native assets, owner/timestamp mappings are correct, original
+media and corrections remain unchanged, and empty responses before detection
+completion remain pending. A first local launch was blocked by the sandbox before
+any network operation; retry uses the authorized network execution context.
+
+The broader four-worker pilot completed 36 frame/photo reads in 61.16 seconds.
+It returned five native face IDs, all unnamed, from the four original photos.
+The 32 submitted video frames initially had four pending jobs and no detections.
+This verifies that unnamed faces survive the import, but does not establish video
+face recall. No native person assignment was changed. The browser fixture verifies
+two distinct unnamed face IDs alongside correction/undo and whole-video playback.

@@ -15,6 +15,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from .analyze import VERSION
+from .face_context import for_window
+from .face_context import load as load_faces
 from .jobs import claim, failed, heartbeat
 from .kit_context import nearby
 from .ledger import Conflict, Ledger, encoded
@@ -108,6 +110,7 @@ def process(
 ) -> dict:
     """Checkpoint each window, then reconcile proposals and complete the lease atomically."""
     prepared = json.loads((evidence / (job["asset"] + ".json")).read_text())
+    face_registry = load_faces(evidence, job)
     manual_reference = reviewed_reference(
         ledger, job["owner"], album["id"], job, prepared, album["default_batter"]
     )
@@ -129,6 +132,7 @@ def process(
                 "portrait": portrait,
                 "kit_context": kit_context,
                 "manual_reference": manual_reference,
+                "face_registry": face_registry,
             }
         ).encode()
     ).hexdigest()
@@ -136,6 +140,7 @@ def process(
     for index, window in enumerate(prepared["windows"]):
         window = with_anchor(window, track_anchor or manual_reference, job)
         window["kit_context"] = kit_context
+        window["immich_faces"] = for_window(face_registry, window)
         target = state / "answers" / job["asset"] / config_hash / f"{index}.json"
         if target.exists():
             answer = json.loads(target.read_text())

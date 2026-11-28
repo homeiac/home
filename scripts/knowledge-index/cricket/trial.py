@@ -13,6 +13,8 @@ from pathlib import Path
 from .analyze import VERSION, parse_reply, prompt, proposal
 from .contact_sheet import sheet
 from .context import apply_hint
+from .face_context import for_window
+from .face_context import load as load_faces
 from .ledger import Ledger
 from .models import infer
 from .prepare import save_private
@@ -29,11 +31,15 @@ def sample(ledger: Ledger, evidence: Path, count: int) -> list[dict]:
         asset = assets[value["asset"]]
         # First window per original avoids double-counting overlapping source minutes.
         window = value["windows"][0]
+        window["immich_faces"] = for_window(load_faces(evidence, asset), window)
         rows.append(
             {
                 "asset": asset,
                 "window": window,
-                "input_hash": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "input_hash": hashlib.sha256(
+                    path.read_bytes()
+                    + json.dumps(window["immich_faces"], sort_keys=True).encode()
+                ).hexdigest(),
             }
         )
     if not rows:

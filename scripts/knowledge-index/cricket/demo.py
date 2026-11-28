@@ -86,6 +86,31 @@ def main() -> None:
                     "face_box": [0.25, 0.12, 0.1, 0.15],
                 },
                 "subject_kit": {"jersey_colors": ["blue"], "jersey_number": "7"},
+                "subject_face": {
+                    "face_id": "10000000-0000-4000-8000-000000000004",
+                    "person_id": None,
+                },
+                "immich_faces": [
+                    {
+                        "timestamp": 2,
+                        "frame_asset": "10000000-0000-4000-8000-000000000003",
+                        "state": "detected",
+                        "faces": [
+                            {
+                                "face_id": "10000000-0000-4000-8000-000000000004",
+                                "person_id": None,
+                                "name": None,
+                                "face_box": [0.25, 0.12, 0.1, 0.15],
+                            },
+                            {
+                                "face_id": "10000000-0000-4000-8000-000000000005",
+                                "person_id": None,
+                                "name": None,
+                                "face_box": [0.65, 0.12, 0.1, 0.15],
+                            },
+                        ],
+                    }
+                ],
                 "identity_basis": "user_album_rule",
             },
             model="synthetic-fixture",
