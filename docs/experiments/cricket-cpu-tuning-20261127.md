@@ -396,3 +396,25 @@ The archive is evidence, not a replacement canonical annotation/content store.
 This closes consolidation of the completed finite tests. A subsequent request to
 generalize the playbook/scripts is tracked separately; it does not authorize or
 imply additional live capacity trials.
+
+## 2026-11-28 — superseding reusable-method record
+
+The subsequent user request generalized the playbook and deterministic scripts.
+The [shared-evidence science journal](shared-workload-evidence-20261128.md) records
+source commits, tests, canonical data boundaries and the exact completion-time
+replays. It preserves the measured CPU results above, rather than recasting
+unmeasured settings as rejected or checkpoint ETA as a proven CPU speedup.
+
+The determining objective uses one fixed remaining count across combined
+production rates and keeps CPU evaluations separate. All three saved photo
+objectives replay exactly as HOLD because independently verified production
+contribution/publication is missing; the seven-thread separate-call arm also
+projects a later finish. No additional inference was launched for this work.
+The incumbent four-Metal/three-RTX allocation remains selected, and the corrected
+RTX chart explicitly shows GPU performance during an added Mac CPU trial.
+
+The reusable implementation is reviewed in #295/#296/#297; the pure objective
+remains pinned at `3143ecb`, and `bf9038b` additionally protects target latency
+and compares descending completion objectives with the selected protected control.
+Final generic validation passed 321 tests and 43 subtests. These are offline
+method/architecture results, not another live performance measurement.
