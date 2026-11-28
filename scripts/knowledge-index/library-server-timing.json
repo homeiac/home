@@ -65,5 +65,18 @@
         }
       }
     }
+  },
+  "cpu_diagnostic": {
+    "backend": "still-fawn CPU",
+    "threads": 2,
+    "lanes": 1,
+    "reviewed_faces": 1,
+    "stage_correct": 1,
+    "supported_action": 1,
+    "elapsed_with_startup_s": 549.72,
+    "input_s": 512.815,
+    "generation_s": 26.555,
+    "admission": "diagnostic only; sustained peer and quality qualification pending",
+    "cleanup_verified": true
   }
 }

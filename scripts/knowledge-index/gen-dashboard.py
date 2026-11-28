@@ -659,6 +659,14 @@ def photo_server_timing_panel(y):
             "median 33.77 → 35.19 s. A further unpaired Mac reading is excluded. "
             "These are queued client request times during production. No production resize was deployed."
         )
+    cpu = sample.get("cpu_diagnostic")
+    if cpu:
+        description += (
+            f' CPU diagnostic: {cpu["threads"]} threads, {cpu["lanes"]} lane, one reviewed face. '
+            f'Correct stage and supported action. {cpu["elapsed_with_startup_s"]} s including startup, '
+            f'{cpu["input_s"]} s input and {cpu["generation_s"]} s generation. '
+            'Server cleanup verified. Sustained quality and peer qualification remain open.'
+        )
     return tuning_comparison(
         "Life stage + action · where server time went (Nov 27 sample)",
         [(f"vector({seconds})", label) for label, seconds in phases], 0, y, 24, 7, "s", description,
