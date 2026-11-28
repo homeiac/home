@@ -7,6 +7,25 @@ import library_worker as worker
 
 
 class LibraryWorkerTests(unittest.TestCase):
+    def test_shared_stage_normalization_preserves_abstention_and_validation(self):
+        self.assertEqual(
+            worker.normalized_stage({"stage": "school_age", "confidence": "low"}),
+            ("unknown", "low"),
+        )
+        self.assertEqual(
+            worker.normalized_stage({"stage": "school_age", "confidence": "high"}),
+            ("school_age", "high"),
+        )
+        for reading in (
+            {"stage": "unsupported", "confidence": "high"},
+            {"stage": "adult", "confidence": "certain"},
+            {"stage": "adult"},
+        ):
+            with self.subTest(reading=reading), self.assertRaisesRegex(
+                ValueError, "Invalid stage"
+            ):
+                worker.normalized_stage(reading)
+
     def test_separate_object_is_lossless_and_other_actor_remains_invalid(self):
         self.assertEqual(
             worker.normalized_action({"verb": "holds", "action": "a diploma"}),

@@ -222,6 +222,18 @@ def normalized_action(action):
     return verb, text
 
 
+def normalized_stage(age):
+    """Validate a stage reading and retain low confidence as an abstention."""
+    if age.get("stage") not in STAGES or age.get("confidence") not in {
+        "high",
+        "medium",
+        "low",
+    }:
+        raise ValueError("Invalid stage")
+    stage = age["stage"] if age["confidence"] != "low" else "unknown"
+    return stage, age["confidence"]
+
+
 def infer(row, backend, endpoint, saved, checkpoint, *, joint=False):
     start = time.monotonic()
     pics = frames(row)
@@ -237,16 +249,8 @@ def infer(row, backend, endpoint, saved, checkpoint, *, joint=False):
             if combined is not None
             else observe(backend, endpoint, pics, AGE_PROMPT, AGE_SCHEMA)
         )
-        if age.get("stage") not in STAGES or age.get("confidence") not in {
-            "high",
-            "medium",
-            "low",
-        }:
-            raise ValueError("Invalid stage")
-        saved.update(
-            stage=age["stage"] if age["confidence"] != "low" else "unknown",
-            confidence=age["confidence"],
-        )
+        stage, confidence = normalized_stage(age)
+        saved.update(stage=stage, confidence=confidence)
         checkpoint(saved)
     if not saved.get("reviewed_action"):
         action = (
