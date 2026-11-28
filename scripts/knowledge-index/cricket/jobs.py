@@ -16,6 +16,7 @@ def claim(
     evidence: Path,
     now: float | None = None,
     allowed: set[str] | None = None,
+    trace_context: dict | None = None,
 ) -> dict | None:
     """Claim one prepared original with a finite lease and bounded retries."""
     now = time.time() if now is None else now
@@ -39,6 +40,8 @@ def claim(
                 continue
             lease = str(uuid4())
             checkpoint.update(lease=lease, lease_until=now + 900)
+            if trace_context is not None:
+                checkpoint["trace_context"] = trace_context
             db.execute(
                 "UPDATE jobs SET state='running',attempts=attempts+1,checkpoint=?,error=NULL WHERE owner=? AND asset=? AND version=? AND stage='analyze'",
                 (encoded(checkpoint), owner, row["asset"], version),
@@ -48,6 +51,7 @@ def claim(
                 "id": row["asset"],
                 "lease": lease,
                 "attempts": row["attempts"] + 1,
+                "trace_context": trace_context,
             }
     return None
 

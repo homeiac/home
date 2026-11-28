@@ -48,7 +48,12 @@ def sample(ledger: Ledger, evidence: Path, count: int) -> list[dict]:
 
 
 def analyze_one(
-    row: dict, backend: dict, default_batter: str, portrait: str | None
+    row: dict,
+    backend: dict,
+    default_batter: str,
+    portrait: str | None,
+    *,
+    caller_headers: dict | None = None,
 ) -> dict:
     """Save raw observations and structured proposals, retaining individual validation failures."""
     start = time.monotonic()
@@ -59,7 +64,12 @@ def analyze_one(
         + ([window["track_image"]] if window.get("track_image") else [])
         + [sheet(window)]
     )
-    raw = infer(backend, prompt(window, photo=photo, reference=bool(portrait)), frames)
+    raw = infer(
+        backend,
+        prompt(window, photo=photo, reference=bool(portrait)),
+        frames,
+        caller_headers=caller_headers,
+    )
     events = parse_reply(raw)
     proposals = []
     errors = []

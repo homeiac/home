@@ -12,7 +12,12 @@ import sqlite3
 import subprocess
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import nullcontext
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .telemetry import RunTelemetry
 
 from .analyze import VERSION
 from .face_context import for_window
@@ -107,9 +112,42 @@ def process(
     evidence: Path,
     state: Path,
     portrait: str | None,
+    telemetry: "RunTelemetry | None" = None,
 ) -> dict:
     """Checkpoint each window, then reconcile proposals and complete the lease atomically."""
-    prepared = json.loads((evidence / (job["asset"] + ".json")).read_text())
+    with (
+        telemetry.stage(
+            "analyze",
+            backend["resource"],
+            parent=job.get("trace_context"),
+            job=job,
+            whole_job=True,
+        )
+        if telemetry
+        else nullcontext()
+    ):
+        return _process(
+            ledger, album, job, backend, evidence, state, portrait, telemetry
+        )
+
+
+def _process(
+    ledger: Ledger,
+    album: dict,
+    job: dict,
+    backend: dict,
+    evidence: Path,
+    state: Path,
+    portrait: str | None,
+    telemetry: "RunTelemetry | None",
+) -> dict:
+    """Keep telemetry stages separate from model success and publication verification."""
+    with (
+        telemetry.stage("load-evidence", backend["resource"])
+        if telemetry
+        else nullcontext()
+    ):
+        prepared = json.loads((evidence / (job["asset"] + ".json")).read_text())
     face_registry = load_faces(evidence, job)
     manual_reference = reviewed_reference(
         ledger, job["owner"], album["id"], job, prepared, album["default_batter"]
@@ -145,30 +183,41 @@ def process(
         if target.exists():
             answer = json.loads(target.read_text())
         else:
-            answer = analyze_one(
-                {"asset": job, "window": window},
-                backend,
-                album["default_batter"],
-                portrait,
-            )
+            with (
+                telemetry.stage("classify", backend["resource"])
+                if telemetry
+                else nullcontext()
+            ):
+                answer = analyze_one(
+                    {"asset": job, "window": window},
+                    backend,
+                    album["default_batter"],
+                    portrait,
+                    **({"caller_headers": telemetry.headers()} if telemetry else {}),
+                )
             save_private(target, answer)
         items.extend(answer["proposals"])
         track_anchor = advance(
             answer["proposals"], job, window, album["default_batter"]
         )
         heartbeat(ledger, job, index + 1)
-    return reconcile(
-        ledger,
-        job["owner"],
-        album["id"],
-        job["asset"],
-        job["fingerprint"],
-        items,
-        model=backend["model"],
-        version=job["version"],
-        run=config_hash,
-        lease=job["lease"],
-    )
+    with (
+        telemetry.stage("reconcile", backend["resource"])
+        if telemetry
+        else nullcontext()
+    ):
+        return reconcile(
+            ledger,
+            job["owner"],
+            album["id"],
+            job["asset"],
+            job["fingerprint"],
+            items,
+            model=backend["model"],
+            version=job["version"],
+            run=config_hash,
+            lease=job["lease"],
+        )
 
 
 def export(ledger: Ledger, folder: Path) -> None:
@@ -197,7 +246,29 @@ def main() -> None:
     parser.add_argument("--version", default="cricket-v1")
     parser.add_argument("--prom", type=Path)
     parser.add_argument("--until-idle", action="store_true")
+    parser.add_argument(
+        "--telemetry-session",
+        type=Path,
+        help="Existing shared-workload media session; requires declared backend resource mappings",
+    )
     args = parser.parse_args()
+    telemetry = None
+    if args.telemetry_session:
+        from .telemetry import RunTelemetry
+
+        telemetry = RunTelemetry(args.telemetry_session)
+        required = {"ingest", "load-evidence", "analyze", "classify", "reconcile"}
+        if not required <= set(telemetry.session["stages"]):
+            raise ValueError("Declare all cricket analysis stages before dispatch")
+        initial = policy(args.policy)
+        if any(
+            b.get("resource") not in telemetry.session["resources"]
+            for b in initial["backends"].values()
+        ):
+            raise ValueError(
+                "Map each backend to a declared shared resource before dispatch"
+            )
+        telemetry.bind_configuration({"analysis_version": args.version, **initial})
     args.state.mkdir(parents=True, exist_ok=True, mode=0o700)
     fence = (args.state / "worker.lock").open("a")
     fcntl.flock(fence, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -253,6 +324,15 @@ def main() -> None:
                 del running[future]
             try:
                 config = policy(args.policy)
+                if telemetry and any(
+                    b.get("resource") not in telemetry.session["resources"]
+                    for b in config["backends"].values()
+                ):
+                    raise ValueError("Changed backend resource mapping")
+                if telemetry:
+                    telemetry.bind_configuration(
+                        {"analysis_version": args.version, **config}
+                    )
             except (OSError, ValueError, KeyError, TypeError):
                 config = {"enabled": False, "backends": {}}
             version = config.get("analysis_version", args.version)
@@ -272,16 +352,22 @@ def main() -> None:
             }
             for name, backend in config["backends"].items():
                 for _ in range(max(0, desired[name] - active[name])):
-                    job = claim(
-                        ledger,
-                        album["owner"],
-                        album["id"],
-                        version,
-                        args.evidence,
-                        allowed=set(config["allowed_assets"])
-                        if config.get("allowed_assets") is not None
-                        else None,
-                    )
+                    with (
+                        telemetry.stage("ingest", backend["resource"])
+                        if telemetry
+                        else nullcontext()
+                    ):
+                        job = claim(
+                            ledger,
+                            album["owner"],
+                            album["id"],
+                            version,
+                            args.evidence,
+                            allowed=set(config["allowed_assets"])
+                            if config.get("allowed_assets") is not None
+                            else None,
+                            trace_context=telemetry.headers() if telemetry else None,
+                        )
                     if job is None:
                         break
                     future = pool.submit(
@@ -293,6 +379,7 @@ def main() -> None:
                         args.evidence,
                         args.state,
                         portrait,
+                        telemetry,
                     )
                     running[future] = (name, job)
                     active[name] += 1
@@ -322,6 +409,9 @@ def main() -> None:
                 "completed_this_run": completed,
                 "errors_this_run": errors,
                 "elapsed": time.monotonic() - started,
+                "telemetry_healthy": not telemetry.exporter.failed
+                if telemetry
+                else None,
             }
             save_private(args.state / "status.json", report)
             if args.prom:
@@ -331,6 +421,8 @@ def main() -> None:
                 break
             time.sleep(2)
     fence.close()
+    if telemetry:
+        telemetry.shutdown()
 
 
 if __name__ == "__main__":
