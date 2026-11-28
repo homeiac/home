@@ -90,3 +90,16 @@ must join every expected frozen window to successful inference, reject reused or
 late evidence, and bind it to independently read-back OpenLABEL completion and
 quality evaluation. Aggregate `fresh_inference_items` claims alone remain
 insufficient to admit a capacity trial.
+
+Other media evaluation callers can reuse the durable SDK journal only with an
+explicit matching workload, for example
+`RunTelemetry(session, workload="library-face-observations-evaluation")`. The
+default still requires Cricket. A mismatched or invalid caller is rejected before
+journal creation. Evaluation spans use `evaluation.*` names and the actual session
+service identity/headers; they must not masquerade as Cricket production. Private
+per-window provenance retains the legacy `cricket.*` trace attribute names.
+
+An evaluation caller cannot import Cricket production receipts. Its captures have
+zero production verified items until its own independently checked evidence path
+is implemented. Keep frozen fresh-inference evaluations distinct from new unique
+library outputs, even when their OpenLABEL readbacks are valid.

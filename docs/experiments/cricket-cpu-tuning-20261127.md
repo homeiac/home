@@ -40,7 +40,30 @@ Private baseline receipts:
 `/private/tmp/cricket-mac-cpu-protected-baseline` and
 `/private/tmp/cricket-cpu-clean-baseline-with-latency.jsonl`.
 
-## Mac ten-thread arm — rejected
+## Scope correction — workload totals govern acceptance
+
+The first operator guard incorrectly applied a 90% rate floor independently to
+Metal and RTX even though both serve `library-face-observations`. That floor was
+not a registered backend SLO. Preserve the original stop receipts as history, but
+use aggregate unique face-workload progress and combined latency/errors for
+acceptance. Distinct Whisper, pet and service workloads retain their own budgets.
+Frozen CPU evaluations are a separate unit and never inflate production progress.
+Future evaluations use an explicit face-evaluation caller identity rather than the
+legacy Cricket helper's default identity. Historical captures remain diagnostic.
+
+Recomputing the same closed windows across the face workload gives:
+
+| Arm | Unique GPU production completions | Combined p95 | Correct scoped result |
+| --- | --- | --- | --- |
+| Ten threads | 130 → 133 (ratio 1.022928) | 37.434 → 42.503 s | Aggregate latency fails 10% budget; stop remains justified on that evidence |
+| Six threads | 130 → 137 (ratio 1.053790) | 37.434 → 36.111 s | Aggregate production peer budgets pass; the earlier backend-only rejection is withdrawn |
+
+Neither includes CPU benchmark replays as new production work. Six-thread quality
+and a unique-source live canary remain unqualified. Do not discard it solely for
+moving work between backends. New profile arms compare both the original protected
+baseline and a fresh baseline, with per-backend figures retained as diagnostics.
+
+## Mac ten-thread arm — stopped, aggregate latency failure confirmed
 
 First attempt returned fenced JSON in 63.897 s with zero cache reuse. The harness
 incorrectly used bare JSON parsing. Preserved this as a diagnostic; corrected
@@ -78,16 +101,18 @@ request-boundary tests pass, including stop/lost-owner/changed-input refusal and
 valid low-confidence/null-action semantics. Stage helper source is the peer's
 `cdd03bc` refactor; subsequent trial configs bind its source digest.
 
-## Mac six-thread arm — rejected
+## Mac six-thread arm — stopped; aggregate verdict still open
 
 After confirmed cleanup, recovery passed a closed 300.198-second window: Metal
 39 completions versus the original 37, p95 36.982 versus 39.866 seconds; RTX 96
 versus 93, p95 14.725 versus 14.363 seconds. Independent review confirmed recovery.
 The six-thread/600% quota arm used the same frozen model/inputs and a bound on
-the production validator source. Its closed 300.154-second window also failed:
+the production validator source. The original backend-only guard stopped it after
+its closed 300.154-second window showed:
 Metal completed 32 versus the original 37 (ratio 0.864819), while p95 38.774 s
 stayed within the 39.866 s baseline budget. RTX completed 105 versus 93, p95
-11.694 versus 14.363 s. Independent review confirmed the losing Metal peer.
+11.694 versus 14.363 s. These backend diagnostics do not establish a whole-workload
+loss; the aggregate correction above supersedes that interpretation.
 
 The automatic watcher wrote the owner stop signal at the closed-window failure.
 The current request finished, four completed evaluations were retained, and no new

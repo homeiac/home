@@ -712,6 +712,22 @@ mocked actuation; saved production-parser parity passed seven stored responses.
 These focused checks do not replace live peer, quality, publication or recovery
 gates. No full application suite was repeated for the documentation-only journal.
 
+Subsequent correction: backend rates within the same face workload are diagnostic,
+not separate undeclared peer floors. Aggregate recomputation retains the ten-thread
+stop for combined p95 37.434 → 42.503 s, but withdraws the six-thread rejection:
+130 → 137 unique production completions, combined p95 37.434 → 36.111 s. Six-thread
+quality and unique-source CPU canary remain open. Historical stop receipts are kept.
+
+The SDK journal now requires an explicit matching non-Cricket evaluation caller
+and refuses to import Cricket production receipts for that caller. This prevents
+misattributed face-evaluation traces or inflated production counts. The full E02
+command passed **275 tests and 43 subtests in 23.57 seconds**, no skips, at
+`/private/tmp/cricket-cpu-caller-identity-tests.log`; scoped Ruff and diff checks pass.
+New tests cover caller mismatch, actual resource/header identity and zero production
+counts/refused receipt import. Smaller-model readiness passed one reviewed case and
+isolated readback; full cohort, workload totals, real canary and final config remain
+unchecked. Integrated #289's aggregate-workload clarification before the next arm.
+
 ## Updating evidence
 
 For each new receipt record date/time, task ID, source/PR, environment, exact
