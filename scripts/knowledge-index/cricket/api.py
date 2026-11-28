@@ -80,6 +80,42 @@ class CricketAPI:
             require_text(identifier)
             require_text(name)
 
+    def event_view(self, event: dict) -> dict:
+        """Refresh native face metadata without rewriting reviewed event identities."""
+        from .face_context import load, subject
+
+        result = public_event(event)
+        registry = load(
+            self.ledger.path.parent / "evidence",
+            {
+                "id": event["asset"],
+                "owner": self.owner,
+                "fingerprint": event["fingerprint"],
+            },
+        )
+        if registry:
+            evidence = dict(result["evidence"])
+            start, end = result["data"]["start"], result["data"]["end"]
+            frames = [
+                f
+                for f in registry["frames"]
+                if start is None
+                or f["timestamp"] is not None
+                and start <= f["timestamp"] <= end
+            ]
+            evidence["immich_faces"] = frames
+            evidence["face_scan"] = {
+                "complete": registry.get("detection_complete", False),
+                "frames": len(registry["frames"]),
+                "expected": registry.get("expected_frames"),
+                "pending": sum(f["state"] != "detected" for f in registry["frames"]),
+            }
+            evidence["subject_face"] = subject(evidence.get("subject_location"), frames)
+            if registry.get("identity_context"):
+                evidence["identity_context"] = registry["identity_context"]
+            result["evidence"] = evidence
+        return result
+
     def get(
         self, route: str, query: dict, range_header: str | None = None
     ) -> dict | FileBody:
@@ -105,7 +141,7 @@ class CricketAPI:
         if route == "/api/cricket/events":
             return {
                 "events": [
-                    public_event(row)
+                    self.event_view(row)
                     for row in self.ledger.list_events(
                         self.owner, query["album"], query.get("dismissed") == "true"
                     )
@@ -148,7 +184,7 @@ class CricketAPI:
                 ]
             return {"jobs": jobs}
         if route == "/api/cricket/event":
-            return public_event(self.ledger.get(self.owner, query["id"]))
+            return self.event_view(self.ledger.get(self.owner, query["id"]))
         if route == "/api/cricket/export":
             from .exports import target
 
@@ -252,9 +288,9 @@ class CricketAPI:
                 manual=True,
                 editor=self.owner,
             )
-            return public_event(self.ledger.get(self.owner, event))
+            return self.event_view(self.ledger.get(self.owner, event))
         if route == "/api/cricket/revise":
-            return public_event(
+            return self.event_view(
                 self.ledger.revise(
                     self.owner,
                     body["id"],

@@ -5,7 +5,8 @@ const initial = new URLSearchParams(location.search);state.focus=initial.get('ev
 const labels = {four:'Four',six:'Six',boundary_unclear:'Boundary unclear',dismissal:'Dismissal',run_out:'Run-out — out',attempted_run_out:'Attempted run-out — not out',other:'Other',unknown:'Result unclear'};
 const node = (tag,text) => {const el=document.createElement(tag);if(text!==undefined)el.textContent=text;return el;};
 const option = (value,text) => {const el=node('option',text);el.value=value;return el;};
-const name = id => state.people.find(p=>p.id===id)?.name || 'Person unclear';
+const name = id => state.people.find(p=>p.id===id)?.name || (id?'Person '+id:'Player not linked to a face');
+const playerName = event => event.data.actor?name(event.data.actor):event.evidence?.subject_face?'Face '+event.evidence.subject_face.face_id:'Player not linked to a face';
 const album = () => state.albums.find(a=>a.id===$('album').value);
 const media = asset => '/api/cricket/media?'+new URLSearchParams({album:$('album').value,asset});
 const seconds = value => Number(value).toFixed(1)+'s';
@@ -21,9 +22,14 @@ function reviewDetails(event,asset){
   box.append(node('h3',event.review_state==='confirmed'?'Details you confirmed':'Check these details'));
   const list=node('dl');
   const field=(label,value)=>{const row=node('div');row.append(node('dt',label),node('dd',value));list.append(row);};
-  let player=d.actor?name(d.actor):'Unknown — choose a player if you recognize them';
+  let player=playerName(event);
   if(event.review_state==='suggested'&&event.evidence.identity_basis==='user_album_rule')player+=' — assumed for batting; check this is the batter you want';
   field('Player',player);
+  const scan=event.evidence.face_scan;if(scan)field('Face scan',scan.complete?'All sampled frames processed':scan.frames+' / '+(scan.expected??'?')+' sampled frames submitted · '+scan.pending+' pending');
+  const face=event.evidence.subject_face;
+  if(face){field('Immich face ID',face.face_id);field('Immich person ID',face.person_id||'Not grouped yet — this face retains its own ID');}
+  const faceFrames=event.evidence.immich_faces||[];
+  if(faceFrames.length){const faces=node('details');faces.className='details';faces.append(node('summary','Faces detected in these frames'));for(const frame of faceFrames){for(const f of frame.faces){faces.append(node('p',seconds(frame.timestamp)+' · '+(f.name||'Unnamed face')+' · Face '+f.face_id+(f.person_id?' · Person '+f.person_id:'')));}}box.append(faces);}
   const age=event.evidence.identity_context;
   if(age?.status==='known')field(name(album()?.default_batter)+'’s age at recording',age.age_years+' years, '+age.age_months+' months · '+age.recorded_date);
   const kit=event.evidence.subject_kit;
@@ -46,7 +52,7 @@ function matches(event){
   const filter=$('filter').value,d=event.data;
   if(event.dismissed&&!$('show-dismissed').checked)return false;
   if(state.focus&&event.id!==state.focus)return false;
-  const words=[name(d.actor),d.role,labels[d.outcome],event.evidence.reason||'',event.review_state,d.role==='bowling'&&['dismissal','run_out'].includes(d.outcome)?'wicket':''].join(' ').toLowerCase();
+  const words=[playerName(event),d.role,labels[d.outcome],event.evidence.reason||'',event.review_state,d.role==='bowling'&&['dismissal','run_out'].includes(d.outcome)?'wicket':''].join(' ').toLowerCase();
   if(!$('search').value.toLowerCase().split(/\s+/).every(word=>words.includes(word)))return false;
   if(filter==='all')return true;
   if(album()?.default_batter && d.actor!==album().default_batter && !(d.actor===null&&d.role==='bowling'&&['bowling','bowling_wicket','attempted_run_out'].includes(filter)))return false;
@@ -80,7 +86,7 @@ function render(){
       preview.addEventListener('play',()=>{if(!fullVideo&&(preview.currentTime<d.start||preview.currentTime>=d.end))preview.currentTime=d.start;});
       preview.addEventListener('timeupdate',()=>{if(!fullVideo&&preview.currentTime>=d.end)preview.pause();});
     }
-    const title=node('h2',name(d.actor)+' · '+(d.role==='unknown'?'Activity unclear':d.role)+' · '+labels[d.outcome]);
+    const title=node('h2',playerName(event)+' · '+(d.role==='unknown'?'Activity unclear':d.role)+' · '+labels[d.outcome]);
     const badge=node('span',event.dismissed?'Dismissed':event.review_state==='suggested'?'Suggested':event.review_state==='confirmed'?'Confirmed':'Corrected');badge.className='badge';
     const details=node('p',asset?.kind==='video'?seconds(d.start)+' – '+seconds(d.end):'Photo');details.className='details highlight-range';
     const reason=node('details');reason.className='details';reason.append(node('summary','Why this was suggested'),node('p',event.evidence.reason||event.evidence.confidence||'Best-effort suggestion. Check the details against the original.'));
@@ -135,8 +141,8 @@ async function load(){
 function edit(event){
   const asset=state.assets.find(a=>a.id===event.asset);if(!asset)throw Error('Original is no longer in this album');
   state.editing=structuredClone(event);const d=event.data,video=asset.kind==='video';
-  $('person').replaceChildren(option('','Person unclear'),...state.people.map(p=>option(p.id,p.name)));
-  if(d.actor&&!state.people.some(p=>p.id===d.actor))$('person').append(option(d.actor,'Unresolved person'));
+  $('person').replaceChildren(option('','No person assigned; retain detected face ID'),...state.people.map(p=>option(p.id,p.name)));
+  if(d.actor&&!state.people.some(p=>p.id===d.actor))$('person').append(option(d.actor,name(d.actor)));
   $('person').value=d.actor||'';$('role').value=d.role;$('outcome').value=d.outcome;$('credit').value=d.wicket_credit;
   $('start').value=d.start??0;$('end').value=d.end??0;$('start').max=asset.duration;$('end').max=asset.duration;
   $('timing').hidden=!video;$('start').required=video;$('end').required=video;$('outcome').disabled=!video;$('credit').disabled=!video;

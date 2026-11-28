@@ -24,7 +24,7 @@ both comparison orders, and the selected four-worker Mac configuration.
 
 The full album queue is enabled after 32 pilot videos and four photos completed
 without worker errors, plus live playback/export and synthetic correction checks.
-Longer pilot clips continue in flight; the backfill is not finished. Outcome
+The initial backfill completed all 633 videos and 867 photos with zero worker errors. Outcome
 accuracy remains unmeasured. The external Entire review gate could not run because
 organization credit was exhausted; the stacked PRs remain open.
 
@@ -182,6 +182,13 @@ Each PR should introduce one reviewable behavior with focused tests, reference i
 
 ### Live tuning requirement
 
+Use the [shared-indexer tuning playbook](../runbooks/shared-indexer-tuning.md).
+Account for cricket and knowledge indexing together, plus life-stage, Immich ML,
+dog identification and other active consumers of the same physical resources.
+Reinventory at each trial boundary; expired telemetry does not establish spare
+capacity. A trial must pass each affected workload's progress and service budgets.
+Never add unlike completion units or promote a cricket speedup that starves peers.
+
 Once the approach is finalized, start live tuning at the highest concurrency
 justified by measured backend slots, available memory, and decode capacity, then
 reduce workers to find the best sustained throughput. Do not start at one and
@@ -205,3 +212,37 @@ The first usable milestone is PR 3: the user can create and correct highlights a
 Before starting implementation, verify the latest merged versions of the cited modules, resolve the intended album and Adil's person ID from the connected library, and inspect the current worker/runtime configuration. Ask for clarification only if album/person resolution is genuinely ambiguous. Do not require a fresh accuracy preference: best effort with easy correction is already agreed.
 
 Completion means the requested categories are browsable, long videos offer individual timed highlights, common mistakes can be fixed without technical steps, and those fixes survive reruns and downstream publication. Model perfection, automatic ball tracking, model fine-tuning from corrections, broadcast-quality scoring, and full-library reprocessing are outside the initial scope.
+
+
+## OpenLABEL alignment and native face follow-up
+
+The existing life-stage architecture is authoritative: ASAM OpenLABEL 1.0.0,
+asset-scoped face occurrence IDs, separate person IDs, typed action-role relations,
+and append-only PostgreSQL scene revisions. See the established
+[photo-memory ontology architecture](https://github.com/homeiac/home/blob/codex/photo-memory-album-231/docs/architecture/photo-memory-ontology.md).
+The cricket SQLite ledger is the resumable work queue and correction import
+source. Frame-upload JSON is an operational checkpoint, not a competing annotation
+schema. Publish through the existing `openlabel_album.persist` and
+`validate_scenes` writer/validator; never maintain a separate face identity store.
+
+- PR #264: age at recording, date-conflict guards, and visible age context.
+- PR #265: versioned reanalysis, retaining all corrections and existing leases.
+- PR #266: sampled coordinates, bounded same-video continuity, dated jersey clues.
+- Native faces: submit sampled frames as archived Immich assets; store the native
+  face UUID for every returned detection, whether named, unnamed, or ungrouped.
+  Frame provenance includes original asset, source fingerprint and timestamp.
+  An empty result before detection completion is pending, not proof of no faces.
+- OpenLABEL adapter: reuse the life-stage face binder, stable occurrence IDs,
+  schema validator, and revision writer. Add a versioned cricket vocabulary for
+  batting/bowling and outcomes. Preserve per-event suggestion/confirmation,
+  source evidence, exact source seconds, and human overrides. Frame geometry uses
+  oriented pixels and explicitly identifies the sampled frame coordinate space.
+  Only a verified face-to-player association creates an actor-to-face relation;
+  the album batting assumption remains a separate, correctable assertion.
+
+Full face backfill and publication require the native-frame pilot and schema
+validation to pass. Every detected face must round-trip with its actual Immich ID;
+no generated UUID may be presented as a native detection. Faces missed by the
+native detector need better frames or a reviewed manual face box, not fabricated
+recognition. Preserve a reason on detections without a supported action, as the
+life-stage renderer already does.

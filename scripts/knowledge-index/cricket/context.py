@@ -48,6 +48,7 @@ def apply_hint(raw: dict, summary: str, default_batter: str) -> dict:
     if (
         raw["evidence"].get("tracking", {}).get("matched")
         or raw["evidence"].get("identity_excluded")
+        or raw["evidence"].get("subject_face")
     ):
         return raw
     raw["data"]["role"] = hint

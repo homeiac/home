@@ -1,5 +1,34 @@
 # Cricket highlight experiments
 
+## OpenLABEL adapter validation, November 27 2026
+
+Reused the actual life-stage face binder and schema validator. The private native
+pilot checkpoints produced nine valid OpenLABEL scenes with 44 sampled frames and
+all five returned native face IDs retained. Seven source scopes report completed
+detection; three sampled frames remain pending across the other scopes. These
+counts describe the checkpoint snapshot, not full-album face recognition quality.
+Eighteen legacy frame records lacked dimensions; recovered them read-only from
+checksum-matched local evidence. No additional uploads or inference were needed.
+
+The complete cricket suite passed 83 tests and 49 subtests, including nine new
+OpenLABEL/vocabulary tests. Fixtures cover corrected attempts, dismissal removal,
+distinct unnamed faces, pixel geometry, exact timestamps, ambiguous actors,
+person-link changes, source fencing, and refusing another producer's scene.
+The publication guard uses a mocked connection; no production PostgreSQL write
+was performed. The shared writer owns atomic revision/digest behavior. Ruff and
+diff whitespace checks passed. The new adapter is not yet a deployed publication
+timer or a claim that the live review UI reads canonical OpenLABEL scenes.
+
+## Shared-workload requirement added November 27 2026
+
+Future trials follow the [shared-indexer playbook](../../runbooks/shared-indexer-tuning.md).
+Record the live cricket/knowledge-index workload mix and all other consumers of
+shared inference, memory, storage and publication capacity. Protect each peer's
+useful progress, not just process health; begin at the measured shared ceiling
+after reservations and reduce the target allocation. Existing historical trials
+remain evidence under their recorded conditions, not proof of passing these new
+per-workload gates. No worker setting was changed for this documentation update.
+
 ## November 27 2026 initial live trial contract
 
 The album has 633 videos (245.6 minutes) and 867 photos. Existing audio analysis
@@ -173,3 +202,40 @@ pilot videos remained in flight and continue under the same leases; full-album
 dispatch does not restart them. This is a functional best-effort release, not a
 claim that the pilot or album is fully analyzed or that four/six/wicket recall is
 established. Corrections, playback, export, and search are available immediately.
+
+### 2026-11-27: native frame identities and age/position follow-up
+
+Initial album inference completed: 633 videos and 867 photos, zero worker errors.
+Four overlapping dismissal suggestions were corrected to attempted run-out; the
+whole-video player allows checking the aftermath beyond the highlight bounds.
+
+A four-worker age/position trial completed four frozen windows in 160.47 seconds
+(1.50 windows/minute), no inference errors. Quality inspection found coordinates
+returned at the JSON root rather than inside individual events, so those boxes
+were correctly rejected. The next prompt explicitly requires per-event locations.
+This trial does not establish tracking accuracy or justify an album rerun.
+
+Native Immich v3.4.2 exposes a face-instance UUID independently from a recognized
+person. The flagged long video had zero native faces. Eight archived sample frames
+were submitted after the owner authorized enabling `asset.upload` on the existing
+sync key through the browser. No key value was copied or rotated. Retrying reused
+the same eight native assets. All eight completed detection with zero faces;
+distant/helmeted/back-facing players must not be assigned invented face IDs.
+This is not completed video coverage.
+
+Next bounded trial: four deterministic 10–30-second videos, eight prepared frames
+each, plus four existing photos. Selected source IDs/fingerprints frozen privately
+before launch. Start at four submission workers (hard bound four), then compare
+two on matched inputs if tuning is needed. Native inference concurrency remains
+unchanged. Acceptance: every returned face retains its UUID including unnamed
+faces, retries reuse native assets, owner/timestamp mappings are correct, original
+media and corrections remain unchanged, and empty responses before detection
+completion remain pending. A first local launch was blocked by the sandbox before
+any network operation; retry uses the authorized network execution context.
+
+The broader four-worker pilot completed 36 frame/photo reads in 61.16 seconds.
+It returned five native face IDs, all unnamed, from the four original photos.
+The 32 submitted video frames initially had four pending jobs and no detections.
+This verifies that unnamed faces survive the import, but does not establish video
+face recall. No native person assignment was changed. The browser fixture verifies
+two distinct unnamed face IDs alongside correction/undo and whole-video playback.
