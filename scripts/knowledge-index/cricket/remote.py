@@ -15,6 +15,7 @@ state=Path('/local-3TB-backup/photo-enrichment/cricket')
 command=[str(root/'venv/bin/python'),'-m','cricket.ops','--ledger',str(state/'ledger.sqlite3'),'--policy',str(state/'policy.json'),packet['command']]
 if packet.get('backend'):command+=['--backend',packet['backend']]
 if packet.get('workers') is not None:command+=['--workers',str(packet['workers'])]
+if packet.get('version'):command+=['--version',packet['version']]
 if packet['command']=='scope':
     sys.path.insert(0,str(root))
     from cricket.prepare import save_private
@@ -48,10 +49,20 @@ def main() -> None:
     parser.add_argument("--host", required=True)
     parser.add_argument(
         "command",
-        choices=["status", "pause", "resume", "workers", "retry", "publish", "scope"],
+        choices=[
+            "status",
+            "pause",
+            "resume",
+            "workers",
+            "retry",
+            "publish",
+            "scope",
+            "reanalyze",
+        ],
     )
     parser.add_argument("--backend")
     parser.add_argument("--workers", type=int)
+    parser.add_argument("--version")
     parser.add_argument(
         "--scope-file",
         type=Path,

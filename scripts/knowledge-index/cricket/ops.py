@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -47,6 +48,27 @@ def retry(ledger: Ledger, version: str) -> int:
         ).rowcount
 
 
+def reanalyze(ledger: Ledger, policy_path: Path, version: str) -> int:
+    """Add a fresh job generation and switch the dispatcher; preserve history and corrections."""
+    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", version) or version == "cricket-v1":
+        raise ValueError("Choose a distinct analysis version")
+    config = policy(policy_path)
+    backup(
+        ledger.path,
+        ledger.path.parent
+        / "backups"
+        / ("before-" + version + "-" + str(time.time_ns()) + ".sqlite3"),
+    )
+    with ledger.connect(True) as db:
+        count = db.execute(
+            "INSERT OR IGNORE INTO jobs(owner,asset,version,stage) SELECT owner,id,?,'analyze' FROM assets",
+            (version,),
+        ).rowcount
+    config["analysis_version"] = version
+    save_private(policy_path, config)
+    return count
+
+
 def main() -> None:
     """Use explicit commands for status, pause/resume, live workers, retry and safe backups."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -54,7 +76,16 @@ def main() -> None:
     parser.add_argument("--policy", type=Path)
     parser.add_argument(
         "command",
-        choices=["status", "pause", "resume", "workers", "retry", "backup", "restore"],
+        choices=[
+            "status",
+            "pause",
+            "resume",
+            "workers",
+            "retry",
+            "backup",
+            "restore",
+            "reanalyze",
+        ],
     )
     parser.add_argument("--backend")
     parser.add_argument("--workers", type=int)
@@ -92,6 +123,13 @@ def main() -> None:
         }
     elif args.command == "retry":
         result = {"retried": retry(ledger, args.version)}
+    elif args.command == "reanalyze":
+        if args.policy is None:
+            parser.error("--policy required")
+        result = {
+            "queued": reanalyze(ledger, args.policy, args.version),
+            "analysis_version": args.version,
+        }
     elif args.command in {"backup", "restore"}:
         if args.path is None:
             parser.error("--path required")

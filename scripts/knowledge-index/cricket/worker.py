@@ -55,6 +55,11 @@ def policy(path: Path) -> dict:
         ):
             raise ValueError("Worker count exceeds configured resource bound")
     allowed = value.get("allowed_assets")
+    version = value.get("analysis_version", "cricket-v1")
+    if not isinstance(version, str) or not re.fullmatch(
+        r"[a-zA-Z0-9_-]{1,64}", version
+    ):
+        raise ValueError("Invalid analysis version")
     if allowed is not None and (
         not isinstance(allowed, list)
         or not all(isinstance(a, str) and a for a in allowed)
@@ -224,6 +229,7 @@ def main() -> None:
                 config = policy(args.policy)
             except (OSError, ValueError, KeyError, TypeError):
                 config = {"enabled": False, "backends": {}}
+            version = config.get("analysis_version", args.version)
             active = {
                 name: sum(n == name for n, _ in running.values())
                 for name in set(config["backends"]) | {n for n, _ in running.values()}
@@ -244,7 +250,7 @@ def main() -> None:
                         ledger,
                         album["owner"],
                         album["id"],
-                        args.version,
+                        version,
                         args.evidence,
                         allowed=set(config["allowed_assets"])
                         if config.get("allowed_assets") is not None
@@ -268,14 +274,15 @@ def main() -> None:
                 states = dict(
                     db.execute(
                         "SELECT state,count(*) FROM jobs WHERE version=? GROUP BY state",
-                        (args.version,),
+                        (version,),
                     )
                 )
                 minutes = db.execute(
                     "SELECT coalesce(sum(a.duration),0)/60 FROM jobs j JOIN assets a ON a.owner=j.owner AND a.id=j.asset WHERE j.version=? AND j.state='complete'",
-                    (args.version,),
+                    (version,),
                 ).fetchone()[0]
             report = {
+                "analysis_version": version,
                 "time": time.time(),
                 "desired": desired,
                 "active": active,

@@ -130,6 +130,10 @@ class CricketAPI:
             }
         if route == "/api/cricket/status":
             with self.ledger.connect() as db:
+                latest = db.execute(
+                    "SELECT j.version FROM jobs j JOIN members m ON m.owner=j.owner AND m.asset=j.asset WHERE m.owner=? AND m.album=? ORDER BY j.rowid DESC LIMIT 1",
+                    (self.owner, query["album"]),
+                ).fetchone()
                 jobs = [
                     dict(r)
                     for r in db.execute(
@@ -137,7 +141,8 @@ class CricketAPI:
                         (
                             self.owner,
                             query["album"],
-                            query.get("version", "cricket-v1"),
+                            query.get("version")
+                            or (latest[0] if latest else "cricket-v1"),
                         ),
                     )
                 ]
