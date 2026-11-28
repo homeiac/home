@@ -123,10 +123,15 @@ lead-in, clamped to the original, and enough aftermath to review the outcome.
 A successful no-event analysis needs a typed completion context so it can produce
 a nonempty publication reference without manufacturing an action, person or face.
 Its fields identify source/analysis version, stage completion and the no-event
-reason. A pending detector must not be encoded as a completed negative. Introduce
-this context through the versioned vocabulary and update the checker’s currently
-explicit `cricket-1` acceptance deliberately; retain backward validation and stable
-existing codes. P03 must specify the new release before migration.
+reason. A pending detector must not be encoded as a completed negative. `cricket-2` adds `CRK.CTX.001` for this purpose; `cricket-1` remains accepted and
+all prior action/outcome codes retain their meaning. Completion records contain
+source/fingerprint, analysis version/digest, stage/state, result (`events_present`
+or `no_event`) and reason. They require at least one sampled frame and completed
+native detection on every recorded frame. Zero detected faces is valid; it does
+not prove perfect face recall. The independent checker enforces this contract.
+Legacy scene generation remains `cricket-1` unless supplied an explicit completion.
+Run identity belongs in the publication manifest, so a retry in another run does
+not manufacture a different canonical scene solely because its run ID changed.
 
 ## Run files and verification boundary
 

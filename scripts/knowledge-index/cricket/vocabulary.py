@@ -1,6 +1,9 @@
 """Stable cricket extensions to the shared OpenLABEL vocabulary; never recycle codes."""
 
 VERSION = "cricket-1"
+COMPLETION_VERSION = "cricket-2"
+COMPLETION = "CRK.CTX.001"
+# cricket-2 adds a source-analysis completion context; all cricket-1 codes remain.
 # Definitions describe saved assertions, whose review state remains explicit.
 ACTIONS = {
     "batting": ("CRK.ACT.001", "Playing as the batter in the observed delivery."),

@@ -50,8 +50,8 @@ and append the reason; retain the original receipt.
 | ID | Scope | Actual PR / source | Implemented | Merged | Local verification | Deployment / live verification |
 | --- | --- | --- | --- | --- | --- | --- |
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
-| P02 | Run identity and closed telemetry | `codex/cricket-p02-telemetry` | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
-| P03 | Manifest, readback, receipt and no-event output | Adapter exists in #271/#273; extension PR to create | Partial foundation | Foundation only | E02 covers synthetic writer, not production adapter | Pending |
+| P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
+| P03 | Manifest, readback, receipt and no-event output | P03-a `codex/cricket-p03-completion` | Completion contract implemented; outbox pending | Foundation only | E11: 155 passed, 43 subtests | Pending |
 | P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
@@ -95,6 +95,10 @@ and append the reason; retain the original receipt.
   with the operational ledger. Link private capture and aggregate receipt in E04.
 
 ### P03 — Publish and read back
+
+- [x] **P03-a-I/V:** Add backward-compatible `cricket-2` completion context and
+  independent checker validation; publish/read back valid negatives through the
+  shared writer. Evidence: E11. Outbox/production receipts remain pending.
 
 - [ ] **P03-I:** Emit manifest/outbox records, independently query committed scenes,
   persist verification receipts and introduce the versioned no-event context.
@@ -338,6 +342,17 @@ telemetry and holds without publication evidence. Model calls remain mocked;
 verified output intentionally remains zero. This does not establish live model
 server span support, writer propagation, baseline/trial qualification or complete
 peer telemetry. No live service or allocation was changed.
+
+### E11 — P03-a versioned completion context
+
+Branch: `codex/cricket-p03-completion`, based on #279. `cricket-2` adds
+`CRK.CTX.001` while preserving all action/outcome codes and `cricket-1` reads.
+The E02 command passed **155 tests and 43 subtests in 6.11 seconds**. Tests write
+and independently query a no-event scene with zero detected faces in disposable
+PostgreSQL, verify the context reference, and prove identical retries deduplicate.
+Both builder and checker reject unfinished analysis/detection, missing frames,
+missing/duplicated completion fields and inconsistent source/result assertions.
+This does not establish detector recall or semantic accuracy. No live deployment.
 
 ## Updating evidence
 
