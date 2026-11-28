@@ -20,6 +20,8 @@ def categories(data: dict, default_batter: str | None) -> list[str]:
         result.append(outcome)
     if outcome in {"dismissal", "run_out"} and role in {"batting", "bowling"}:
         result.append("batting_out" if role == "batting" else "bowling_wicket")
+    if outcome == "attempted_run_out" and role in {"batting", "bowling"}:
+        result.append("attempted_run_out")
     return result
 
 
@@ -100,6 +102,7 @@ def search(
         "boundary_unclear",
         "batting_out",
         "bowling_wicket",
+        "attempted_run_out",
     }:
         raise ValueError("Unknown cricket filter")
     return [

@@ -18,6 +18,7 @@ OUTCOMES = {
     "boundary_unclear",
     "dismissal",
     "run_out",
+    "attempted_run_out",
     "other",
     "unknown",
 }

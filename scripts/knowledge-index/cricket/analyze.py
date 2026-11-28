@@ -6,7 +6,7 @@ import re
 
 from .ledger import OUTCOMES, ROLES, validate
 
-VERSION = "cricket-observations-v4"
+VERSION = "cricket-observations-v5"
 
 
 def prompt(window: dict, *, photo: bool = False, reference: bool = False) -> str:
@@ -30,13 +30,15 @@ def prompt(window: dict, *, photo: bool = False, reference: bool = False) -> str
         "Do not apply that assumption to a non-striker or bowler. Bowler identity must be a visual reference match. "
         "Use audio after a shot, stopped running, boundary visibility, umpire signals, and reactions. "
         "Include plausible fours, sixes, dismissals and run-outs with possible/likely confidence. "
-        "An appeal alone is not a confirmed dismissal; a shout of go for six is not a scored six. "
+        "An appeal, throw at the stumps, or shout of out alone is not a dismissal. Check what happens AFTER the attempt. "
+        "If the featured batter is safe and continues batting after a run-out attempt, use attempted_run_out (NOT OUT), never dismissal or run_out. "
+        "If the aftermath is missing, use unknown instead of assuming the appeal succeeded. A shout of go for six is not a scored six. "
         "A run-out during bowling is separate from a wicket credited to the bowler. "
         "Distinguish the featured batter getting out from their batting partner. "
         "If the boundary value is unclear use boundary_unclear. If outcome is missing use unknown. "
         "Return one JSON object with events (at most 4 distinct deliveries in this short window). Each event has role (batting/bowling/other/unknown), "
         "actor (adil/other/unknown), featured_batter (boolean), outcome "
-        "(four/six/boundary_unclear/dismissal/run_out/other/unknown), "
+        "(four/six/boundary_unclear/dismissal/run_out/attempted_run_out/other/unknown), "
         "wicket_credit (bowler/run_out/unknown), runup_start, release, outcome_end "
         "(source video seconds, or null when unseen), confidence (likely/possible/unclear), and a short reason. "
         "Include each distinct delivery visible in this window. If only activity is identifiable, return one role event "
