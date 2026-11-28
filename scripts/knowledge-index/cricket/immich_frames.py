@@ -135,6 +135,16 @@ def frame_bytes(image: str, key: str) -> str:
     ).decode()
 
 
+def frame_key(asset: dict, stamp: float | None, image: str) -> str:
+    """Identify the exact prepared image and source used for a native upload."""
+    return hashlib.sha256(
+        json.dumps(
+            [asset["owner"], asset["id"], asset["fingerprint"], stamp, image],
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+
 def synchronize(
     asset: dict, prepared: dict, folder: Path, *, max_frames: int = 0
 ) -> dict:
@@ -162,12 +172,7 @@ def synchronize(
     for index, (stamp, image) in enumerate(sorted(frames.items())):
         if max_frames and index >= max_frames:
             break
-        key = hashlib.sha256(
-            json.dumps(
-                [asset["owner"], asset["id"], asset["fingerprint"], stamp, image],
-                separators=(",", ":"),
-            ).encode()
-        ).hexdigest()
+        key = frame_key(asset, stamp, image)
         old = prior.get(stamp, {})
         if old and old.get("key") != key:
             raise ValueError("Prepared frame changed; retain prior native IDs")

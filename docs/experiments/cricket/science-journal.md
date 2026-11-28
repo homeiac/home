@@ -1,5 +1,24 @@
 # Cricket highlight experiments
 
+## OpenLABEL adapter validation, November 27 2026
+
+Reused the actual life-stage face binder and schema validator. The private native
+pilot checkpoints produced nine valid OpenLABEL scenes with 44 sampled frames and
+all five returned native face IDs retained. Seven source scopes report completed
+detection; three sampled frames remain pending across the other scopes. These
+counts describe the checkpoint snapshot, not full-album face recognition quality.
+Eighteen legacy frame records lacked dimensions; recovered them read-only from
+checksum-matched local evidence. No additional uploads or inference were needed.
+
+The complete cricket suite passed 83 tests and 49 subtests, including nine new
+OpenLABEL/vocabulary tests. Fixtures cover corrected attempts, dismissal removal,
+distinct unnamed faces, pixel geometry, exact timestamps, ambiguous actors,
+person-link changes, source fencing, and refusing another producer's scene.
+The publication guard uses a mocked connection; no production PostgreSQL write
+was performed. The shared writer owns atomic revision/digest behavior. Ruff and
+diff whitespace checks passed. The new adapter is not yet a deployed publication
+timer or a claim that the live review UI reads canonical OpenLABEL scenes.
+
 ## Shared-workload requirement added November 27 2026
 
 Future trials follow the [shared-indexer playbook](../../runbooks/shared-indexer-tuning.md).
