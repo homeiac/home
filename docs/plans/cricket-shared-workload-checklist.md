@@ -49,7 +49,7 @@ and append the reason; retain the original receipt.
 
 | ID | Scope | Actual PR / source | Implemented | Merged | Local verification | Deployment / live verification |
 | --- | --- | --- | --- | --- | --- | --- |
-| P01 | Reconcile feature stack; freeze acceptance cohort | P01-a: `codex/cricket-p01-evidence`; existing stack through #269 remains a dependency | Identity/inventory slice reconciled; runtime/UI pending | No | E07: 111 passed, 19 subtests | Fresh GUI release inspected; full state/cohort pending |
+| P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b `codex/cricket-p01-inference` | Identity/inventory and inference slices reconciled; dispatcher/UI pending | No | E07/E08: 121 passed, 43 subtests | Fresh GUI release and peer activity inspected; full state/cohort pending |
 | P02 | Run identity and closed telemetry | To create | No | No | Pending | Pending |
 | P03 | Manifest, readback, receipt and no-event output | Adapter exists in #271/#273; extension PR to create | Partial foundation | Foundation only | E02 covers synthetic writer, not production adapter | Pending |
 | P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
@@ -66,6 +66,9 @@ and append the reason; retain the original receipt.
   sheet helpers with the existing ledger, native faces, coordinates and kit clues;
   restore their original regression tests. Evidence: E07. This is a local
   integration slice, not the entire feature stack or a production deployment.
+- [x] **P01-b-I/V:** Reconcile existing model transports, transcript outcome guards
+  and matched evaluation helper. Evidence: E08. All model requests in these tests
+  are mocked; this does not qualify live inference or automatically admit a trial.
 - [ ] **P01-I:** Reconcile required open feature modules with master, preserving
   #273's contracts and PostgreSQL test; record exact PR/source/merge state and
   regression evidence for each existing small PR, rather than one bulk import.
@@ -273,6 +276,23 @@ Dependency inspection also found photo-review PR #218 still open and conflicting
 with its base (`feat/media-summaries-enricher`). The cricket UI stack builds on it.
 Keep frontend reconciliation explicit; do not bulk-import that application or
 replace the newer deployed dashboard merely to make a backend test pass.
+
+### E08 — P01-b inference dependency reconciliation
+
+Branch: `codex/cricket-p01-inference`. Restored `models`, `reactions`, `trial` and
+their original regression tests from `d5eeda7` (feature PR #256 and follow-ups).
+The E02 verification command passed **121 tests and 43 subtests in 4.86 seconds**.
+Requests are mocked; no new media upload, inference or worker allocation occurred.
+This legacy evaluation helper must still be wired to the new run/review contract
+before an authorized capacity experiment; it is not a replacement for P02–P06.
+
+The shared CLI's `start --live --output-kind media` intake expanded Mac Bonsai to
+Metal and found Knowledge Index and Waffles as registered peers. The private
+receipt is `/private/tmp/cricket-p01-intake/session.json`, run
+`cricket-p01-integration`, and its decision is `observe_only`. Cricket had no active
+or queued jobs and four desired workers; Waffles had no active Mac workers. The
+Knowledge Index summary enricher was active with a fresh successful exporter
+observation. These are activity observations, not complete matched peer windows.
 
 ## Updating evidence
 
