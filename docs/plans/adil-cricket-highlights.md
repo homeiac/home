@@ -182,6 +182,13 @@ Each PR should introduce one reviewable behavior with focused tests, reference i
 
 ### Live tuning requirement
 
+Use the [shared-indexer tuning playbook](../runbooks/shared-indexer-tuning.md).
+Account for cricket and knowledge indexing together, plus life-stage, Immich ML,
+dog identification and other active consumers of the same physical resources.
+Reinventory at each trial boundary; expired telemetry does not establish spare
+capacity. A trial must pass each affected workload's progress and service budgets.
+Never add unlike completion units or promote a cricket speedup that starves peers.
+
 Once the approach is finalized, start live tuning at the highest concurrency
 justified by measured backend slots, available memory, and decode capacity, then
 reduce workers to find the best sustained throughput. Do not start at one and

@@ -1,5 +1,15 @@
 # Cricket highlight experiments
 
+## Shared-workload requirement added November 27 2026
+
+Future trials follow the [shared-indexer playbook](../../runbooks/shared-indexer-tuning.md).
+Record the live cricket/knowledge-index workload mix and all other consumers of
+shared inference, memory, storage and publication capacity. Protect each peer's
+useful progress, not just process health; begin at the measured shared ceiling
+after reservations and reduce the target allocation. Existing historical trials
+remain evidence under their recorded conditions, not proof of passing these new
+per-workload gates. No worker setting was changed for this documentation update.
+
 ## November 27 2026 initial live trial contract
 
 The album has 633 videos (245.6 minutes) and 867 photos. Existing audio analysis
