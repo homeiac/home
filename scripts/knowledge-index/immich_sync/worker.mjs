@@ -6,6 +6,7 @@ import http from 'node:http';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {META_KEY,ROOT,stable,digest,sourcePacket,retainRecoveryCaption,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap} from './core.mjs';
+import {restoreRecovery,expireCatalog} from './publisher-queue.mjs';
 const require=createRequire('/usr/src/app/server/package.json');
 const {Pool}=require('pg');
 const sharp=require('sharp');
@@ -93,7 +94,7 @@ async function discover(db) {
         updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash THEN now() ELSE immich_sync.jobs.updated_at END
         WHERE NOT (immich_sync.jobs.payload ? 'recovery') OR immich_sync.jobs.state='applied'`,[JSON.stringify(jobs)]);
     }
-    await db.query("UPDATE immich_sync.jobs SET state='conflict',reason='source_removed' WHERE cycle_id<>$1 AND state<>'excluded' AND NOT (payload ? 'recovery')",[cycle]);
+    await db.query(expireCatalog,[cycle]);
     await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new Date().toISOString()});
     await db.query('COMMIT');counters.last_discovery=Date.now()/1000;
     log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});
@@ -200,6 +201,12 @@ async function metrics(db) {
   }
   const faces=(await db.query('SELECT state,count(*)::int n FROM immich_sync.faces GROUP BY state')).rows;
   for(const status of ['pending','applied','conflict'])lines.push(`immich_sync_faces{state="${status}"} ${faces.find(x=>x.state===status)?.n??0}`);
+  const recovery=(await db.query(`SELECT count(*) FILTER (WHERE reason='source_removed')::int removed,
+    count(*) FILTER (WHERE reason IS DISTINCT FROM 'source_removed')::int other
+    FROM immich_sync.jobs WHERE payload ? 'recovery' AND state='conflict'`)).rows[0];
+  lines.push('# TYPE immich_sync_recovery_conflicts gauge',
+    `immich_sync_recovery_conflicts{reason="source_removed"} ${recovery.removed}`,
+    `immich_sync_recovery_conflicts{reason="other"} ${recovery.other}`);
   const preserved=(await db.query("SELECT count(*)::int n FROM immich_sync.jobs j CROSS JOIN LATERAL jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'")).rows[0].n;
   lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);
   lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode="${MODE}"} 1`);
@@ -217,11 +224,7 @@ async function cycle() {
     // Repair only false removals made by earlier catalog sweeps. Applied snapshots
     // keep their edit protection and are scheduled for a fresh readback audit.
     if (MODE==='apply' && !counters.last_discovery) {
-      await db.query(`UPDATE immich_sync.jobs
-        SET state=CASE WHEN applied->>'sourceRevision'=source_hash AND intent IS NULL THEN 'applied' ELSE 'pending' END,
-            reason=NULL, available_at=now(), verified_at=NULL, updated_at=now()
-        WHERE state='conflict' AND reason='source_removed' AND payload ? 'recovery'
-          AND asset_id IS NOT NULL AND length(trim(payload->>'summary'))>0`);
+      await db.query(restoreRecovery);
     }
     if(!counters.last_discovery){
       const checkpoint=await state(db,'checkpoint');

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import {ROOT,sourcePacket,retainRecoveryCaption,digest,mapAsset,metadataDecision,faceCandidate} from './immich_sync/core.mjs';
+import {ROOT,sourcePacket,sameRecoveryOriginal,retainRecoveryCaption,digest,mapAsset,metadataDecision,faceCandidate} from './immich_sync/core.mjs';
 const source={path:'Google Photos/Photos from 2025/a.jpg',size_bytes:123,summary:'first',faces:[],groups:[]};
 const asset={id:'asset',ownerId:'owner',libraryId:'library',isExternal:true,originalPath:ROOT+source.path,exifInfo:{fileSizeInByte:123}};
 asset.checksum=crypto.createHash('sha1').update('path:'+asset.originalPath).digest('base64');
@@ -54,5 +54,18 @@ test('catalog discoveries retain a recovery caption only for the same original',
  for(const modified of [{...packet,summary:'catalog scene'},{...packet,sourceMtime:null},{...packet,sizeBytes:100},
                          {...packet,sourceMtime:'2025-01-01T00:00:00Z'}]){
    assert.equal(retainRecoveryCaption(modified,{id:'a'},saved),modified);
+ }
+});
+
+test('duplicate publishers reuse a saved caption only for the same recovered file',()=>{
+ const packet={...sourcePacket({...source,mtime:'2026-01-02T03:04:05Z'}),recovery:{run:'one',frames:1}};
+ const job={asset_id:'a',payload:packet,source_hash:digest(packet),state:'pending'};
+ const proposed={...packet,summary:'a different description'};
+ assert.ok(sameRecoveryOriginal(job,'a',proposed));
+ assert.equal(sameRecoveryOriginal(job,'b',proposed),false);
+ assert.equal(sameRecoveryOriginal({...job,source_hash:'stale'},'a',proposed),false);
+ assert.equal(sameRecoveryOriginal({...job,state:'conflict'},'a',proposed),false);
+ for(const changes of [{sourceMtime:'later'},{sizeBytes:1},{sourcePath:'different'},{recovery:{run:'two',frames:1}}]){
+   assert.equal(sameRecoveryOriginal(job,'a',{...proposed,...changes}),false);
  }
 });

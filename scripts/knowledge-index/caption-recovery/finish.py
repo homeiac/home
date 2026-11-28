@@ -9,6 +9,7 @@ import sys
 import time
 
 import process
+from audit import audit
 
 
 def main():
@@ -30,7 +31,7 @@ def main():
         stamp=dt.datetime.now(dt.timezone.utc).isoformat()
         retryable=db.execute("""SELECT id,reason FROM work WHERE state='error' AND answer IS NULL
           AND (reason LIKE 'EROFS:%' OR reason LIKE '%timed out%' OR reason='no JSON in model reply'
-          OR reason='empty video frame') AND id NOT IN (SELECT id FROM recovery_retry)""").fetchall()
+          OR reason='empty video frame' OR reason LIKE '%Connection reset by peer%') AND id NOT IN (SELECT id FROM recovery_retry)""").fetchall()
         with db:
             db.executemany('INSERT INTO recovery_retry VALUES(?,?,?)',[(r['id'],r['reason'],stamp) for r in retryable])
             db.executemany("UPDATE work SET state='pending',reason=NULL WHERE id=? AND state='error'",[(r['id'],) for r in retryable])
@@ -40,12 +41,22 @@ def main():
         subprocess.run([sys.executable,str(process.HERE/'process.py'),str(args.ledger),'--limit','2192',
                         '--workers','6' if phase==0 else '4','--rtx',args.rtx,'--journal',str(args.journal),
                         '--final-pass'],check=True)
-    deadline=time.monotonic()+3600
-    while True:
-        process.verify(db)
-        if not db.execute("SELECT count(*) FROM work WHERE state='queued'").fetchone()[0] or time.monotonic()>=deadline:
-            break
-        time.sleep(30)
+    with args.ledger.with_suffix('.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        last_progress = time.monotonic()
+        previous = None
+        while True:
+            process.verify(db)
+            queued = db.execute("SELECT count(*) FROM work WHERE state='queued'").fetchone()[0]
+            if not queued:
+                break
+            if previous is None or queued < previous:
+                last_progress = time.monotonic()
+            elif time.monotonic() - last_progress >= 3600:
+                break
+            previous = queued
+            time.sleep(30)
+        audit(db, record=True)
     counts=dict(db.execute('SELECT state,count(*) FROM work GROUP BY state').fetchall())
     stamp=dt.datetime.now().astimezone().isoformat(timespec='minutes')
     with args.journal.open('a') as journal:
@@ -55,6 +66,8 @@ def main():
             journal.write(f'| {state} | {count:,} |\n')
         journal.write(f"\n{retried_count} records qualified for a bounded retry after a change to decoding or inference. The private ledger retains per-asset reasons for any unresolved records.\n")
     print(counts,flush=True)
+    if counts.get('queued'):
+        raise SystemExit('Publication stalled. Inspect live publisher conflicts and resume readback after repair.')
 
 
 if __name__=='__main__':

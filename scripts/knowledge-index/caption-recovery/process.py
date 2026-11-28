@@ -85,7 +85,7 @@ def infer(row, backend, key, final_pass=False):
 
 def verify(db):
     """Recheck queued writes in Immich by exact ID and saved text before marking them verified."""
-    rows=db.execute("SELECT id,answer FROM work WHERE state='queued'").fetchall()
+    rows=db.execute("SELECT id,answer,reason FROM work WHERE state='queued'").fetchall()
     for offset in range(0,len(rows),500):
         records=rows[offset:offset+500]
         from uuid import UUID
@@ -99,7 +99,9 @@ def verify(db):
         found=dict(json.loads(line) for line in out.splitlines())
         for r in records:
             if found.get(r['id'])==json.loads(r['answer'])['summary']:
-                db.execute("UPDATE work SET state='verified' WHERE id=?", (r['id'],))
+                db.execute("UPDATE work SET state='verified',reason=NULL WHERE id=?", (r['id'],))
+            elif found.get(r['id']) and r['reason'] == 'publisher_sha256:' + hashlib.sha256(found[r['id']].encode()).hexdigest():
+                db.execute("UPDATE work SET state='already_described',reason='existing_caption_read_back' WHERE id=?", (r['id'],))
     db.commit()
 
 
@@ -135,8 +137,10 @@ def main():
     key = (PRIVATE / 'knowledge-index-bonsai/server.key').read_text().strip()
     def publish(items):
         for result in pod('publish', items):
-            db.execute('UPDATE work SET state=?,reason=? WHERE id=?',
-                       (result['state'],result.get('reason'),result['id']))
+            reason = result.get('reason')
+            if result.get('priorSummary'):
+                reason = 'publisher_sha256:' + hashlib.sha256(result['priorSummary'].encode()).hexdigest()
+            db.execute('UPDATE work SET state=?,reason=? WHERE id=?', (result['state'],reason,result['id']))
         db.commit()
     # If the process stopped after inference, replay the saved answer without invoking the model.
     for row in db.execute("SELECT c.*,w.answer FROM work w JOIN cohort c USING(id) WHERE state='generated'").fetchall():

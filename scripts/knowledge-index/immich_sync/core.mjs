@@ -28,6 +28,14 @@ export function retainRecoveryCaption(packet, asset, saved) {
     summaryCreatedAt:previous.summaryCreatedAt, recovery:previous.recovery,
     tags:[...new Set([...packet.tags,...previous.tags])].sort()};
 }
+// A second caption can finish before the first queued write becomes visible.
+export function sameRecoveryOriginal(job, assetId, proposed) {
+  const saved=job?.payload;
+  return Boolean(job?.asset_id===assetId && saved?.recovery?.run && saved.recovery.run===proposed.recovery.run &&
+    saved.sourcePath===proposed.sourcePath && saved.sizeBytes===proposed.sizeBytes &&
+    saved.sourceMtime===proposed.sourceMtime && saved.recovery.frames===proposed.recovery.frames &&
+    saved.summary?.trim() && digest(saved)===job.source_hash && ['pending','applied','error'].includes(job.state));
+}
 export function eligible(source) {
   return Boolean(source.summary || source.context_summary || source.faces?.length || source.groups?.length);
 }

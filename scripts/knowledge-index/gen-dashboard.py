@@ -465,7 +465,7 @@ def caption_recovery_panels():
     total = f'sum(max by(state) ({base}))'
     panels = [
         row("Basic-caption recovery · missing Immich descriptions", 0),
-        stat("Verified in Immich", done + fresh, 0, 1, w=5, unit="locale",
+        stat("Assets with a caption in Immich", done + fresh, 0, 1, w=5, unit="locale",
              description="Saved captions read back on the original asset, including independently filled descriptions."),
         stat("Recovery complete", f'100 * {done} / {total}' + fresh, 5, 1, w=4, unit="percent", decimals=1),
         stat("Awaiting Immich readback", f'max({base}{{state="queued"}})' + fresh, 9, 1, w=5, unit="locale"),
@@ -490,6 +490,18 @@ def caption_recovery_panels():
     tuning_notes = Path(__file__).with_name('caption-recovery') / 'tuning-results.md'
     panels.append(_panel('text', 'Basic-caption recovery · matched backend trials', [], 0, 12, 24, 15,
                          extra={'options': {'mode': 'markdown', 'content': tuning_notes.read_text().strip()}}))
+    # Allocate these after the existing panels to preserve bookmarked IDs.
+    panels.extend([
+        stat("Exact saved captions", f'max({base}{{state="verified"}})' + fresh, 0, 27, w=6, unit="locale",
+             description="Original Immich assets whose Knowledge Index caption matched the recovery ledger at readback."),
+        stat("Other captions preserved", f'max({base}{{state="already_described"}})' + fresh, 6, 27, w=6, unit="locale",
+             description="Assets with existing caption text that was retained during recovery."),
+        stat("Publisher marked source removed", 'max(immich_sync_recovery_conflicts{reason="source_removed"})',
+             12, 27, w=6, unit="locale", thresholds=RED_IF_POS,
+             description="Live publisher count of recovery jobs blocked by catalog removal."),
+        stat("Other publisher conflicts", 'max(immich_sync_recovery_conflicts{reason="other"})',
+             18, 27, w=6, unit="locale", thresholds=RED_IF_POS),
+    ])
     for panel in panels:
         if panel["type"] == "stat":
             panel["targets"][0].update(instant=True, range=False)

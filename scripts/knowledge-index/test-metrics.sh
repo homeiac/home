@@ -179,7 +179,7 @@ have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_e
 have.update(re.findall(r"# HELP (photo_[a-z_]+) ", pathlib.Path(here + "/photo_enrichment/triage.py").read_text()))
 have.update({"immich_queue_jobs", "immich_jobs_asset_generate_thumbnails_success_total", "immich_jobs_ocr_success_total", "immich_jobs_ocr_failed_total"})
 have.update({"immich_jobs_asset_encode_video_success_total", "immich_jobs_asset_encode_video_failed_total"})
-have.update({"immich_sync_available_summaries", "immich_sync_assets"})
+have.update({"immich_sync_available_summaries", "immich_sync_assets", "immich_sync_recovery_conflicts"})
 have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked against the live collector.
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 have.update(runpy.run_path(here + "/audio-story/worker.py")["HELP"])

@@ -50,8 +50,14 @@ data:
     \ || !Number.isFinite(Date.parse(packet.sourceMtime))) return packet;\n  const\
     \ previous=saved.payload;\n  return {...packet, summary:previous.summary, summaryModel:previous.summaryModel,\n\
     \    summaryCreatedAt:previous.summaryCreatedAt, recovery:previous.recovery,\n\
-    \    tags:[...new Set([...packet.tags,...previous.tags])].sort()};\n}\nexport\
-    \ function eligible(source) {\n  return Boolean(source.summary || source.context_summary\
+    \    tags:[...new Set([...packet.tags,...previous.tags])].sort()};\n}\n// A second\
+    \ caption can finish before the first queued write becomes visible.\nexport function\
+    \ sameRecoveryOriginal(job, assetId, proposed) {\n  const saved=job?.payload;\n\
+    \  return Boolean(job?.asset_id===assetId && saved?.recovery?.run && saved.recovery.run===proposed.recovery.run\
+    \ &&\n    saved.sourcePath===proposed.sourcePath && saved.sizeBytes===proposed.sizeBytes\
+    \ &&\n    saved.sourceMtime===proposed.sourceMtime && saved.recovery.frames===proposed.recovery.frames\
+    \ &&\n    saved.summary?.trim() && digest(saved)===job.source_hash && ['pending','applied','error'].includes(job.state));\n\
+    }\nexport function eligible(source) {\n  return Boolean(source.summary || source.context_summary\
     \ || source.faces?.length || source.groups?.length);\n}\nexport function scope(source)\
     \ {\n  return /^Google Photos\\/Photos from [0-9]{4}\\//.test(source.path) &&\
     \ !source.path.split('/').includes('..') && !path.isAbsolute(source.path);\n}\n\
@@ -122,6 +128,14 @@ data:
     console.log(JSON.stringify({secondPage:second.assets.nextPage,firstAssetChanged:second.assets.items[0]?.id!==a.id}));
 
     '
+  publisher-queue.mjs: "// Catalog cycles own only catalog jobs. Recovery jobs have\
+    \ their own source and lifetime.\nexport const expireCatalog = `UPDATE immich_sync.jobs\
+    \ SET state='conflict',reason='source_removed'\n WHERE cycle_id<>$1 AND state<>'excluded'\
+    \ AND NOT (payload ? 'recovery')`;\n\nexport const restoreRecovery = `UPDATE immich_sync.jobs\n\
+    \ SET state=CASE WHEN applied->>'sourceRevision'=source_hash AND intent IS NULL\
+    \ THEN 'applied' ELSE 'pending' END,\n     reason=NULL, available_at=now(), verified_at=NULL,\
+    \ updated_at=now()\n WHERE state='conflict' AND reason='source_removed' AND payload\
+    \ ? 'recovery'\n   AND asset_id IS NOT NULL AND length(trim(payload->>'summary'))>0`;\n"
   schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
     \ Immich's DB.\nCREATE TABLE IF NOT EXISTS immich_sync.jobs (\n source_path text\
     \ PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,\n asset_id text,\
@@ -164,8 +178,9 @@ data:
     \ from 'node:fs';\nimport crypto from 'node:crypto';\nimport http from 'node:http';\n\
     import {createRequire} from 'node:module';\nimport {fileURLToPath} from 'node:url';\n\
     import {META_KEY,ROOT,stable,digest,sourcePacket,retainRecoveryCaption,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap}\
-    \ from './core.mjs';\nconst require=createRequire('/usr/src/app/server/package.json');\n\
-    const {Pool}=require('pg');\nconst sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
+    \ from './core.mjs';\nimport {restoreRecovery,expireCatalog} from './publisher-queue.mjs';\n\
+    const require=createRequire('/usr/src/app/server/package.json');\nconst {Pool}=require('pg');\n\
+    const sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';\nconst DISCOVERY_VERSION=1;\
     \ // Bump whenever mapping rules change.\nconst MODE=process.env.SYNC_MODE??'dry-run';\n\
     const MAX_PRESERVED=Number(process.env.SYNC_MAX_PRESERVED??0);\nconst BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\n\
@@ -228,9 +243,7 @@ data:
     \ ELSE excluded.reason END,\n        updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash\
     \ THEN now() ELSE immich_sync.jobs.updated_at END\n        WHERE NOT (immich_sync.jobs.payload\
     \ ? 'recovery') OR immich_sync.jobs.state='applied'`,[JSON.stringify(jobs)]);\n\
-    \    }\n    await db.query(\"UPDATE immich_sync.jobs SET state='conflict',reason='source_removed'\
-    \ WHERE cycle_id<>$1 AND state<>'excluded' AND NOT (payload ? 'recovery')\",[cycle]);\n\
-    \    await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new\
+    \    }\n    await db.query(expireCatalog,[cycle]);\n    await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new\
     \ Date().toISOString()});\n    await db.query('COMMIT');counters.last_discovery=Date.now()/1000;\n\
     \    log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});\n\
     \  } catch(e){await db.query('ROLLBACK');throw e;}\n}\nasync function checksum(file)\
@@ -306,11 +319,16 @@ data:
     ${status}\"} ${row?.n??0}`,`immich_sync_summaries{state=\"${status}\"} ${row?.summaries??0}`);\n\
     \  }\n  const faces=(await db.query('SELECT state,count(*)::int n FROM immich_sync.faces\
     \ GROUP BY state')).rows;\n  for(const status of ['pending','applied','conflict'])lines.push(`immich_sync_faces{state=\"\
-    ${status}\"} ${faces.find(x=>x.state===status)?.n??0}`);\n  const preserved=(await\
-    \ db.query(\"SELECT count(*)::int n FROM immich_sync.jobs j CROSS JOIN LATERAL\
-    \ jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'\"\
-    )).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);\n\
-    \  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
+    ${status}\"} ${faces.find(x=>x.state===status)?.n??0}`);\n  const recovery=(await\
+    \ db.query(`SELECT count(*) FILTER (WHERE reason='source_removed')::int removed,\n\
+    \    count(*) FILTER (WHERE reason IS DISTINCT FROM 'source_removed')::int other\n\
+    \    FROM immich_sync.jobs WHERE payload ? 'recovery' AND state='conflict'`)).rows[0];\n\
+    \  lines.push('# TYPE immich_sync_recovery_conflicts gauge',\n    `immich_sync_recovery_conflicts{reason=\"\
+    source_removed\"} ${recovery.removed}`,\n    `immich_sync_recovery_conflicts{reason=\"\
+    other\"} ${recovery.other}`);\n  const preserved=(await db.query(\"SELECT count(*)::int\
+    \ n FROM immich_sync.jobs j CROSS JOIN LATERAL jsonb_array_elements(j.payload->'faces')\
+    \ f WHERE j.state='applied' AND f->>'label_source'='user'\")).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved\
+    \ ${preserved}`);\n  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
     ${MODE}\"} 1`);\n  const age=(await db.query(\"SELECT coalesce(extract(epoch FROM\
     \ now()-min(discovered_at)),0)::float age FROM immich_sync.jobs WHERE state IN\
     \ ('pending','error')\")).rows[0].age;\n  lines.push(`immich_sync_oldest_pending_seconds\
@@ -320,15 +338,10 @@ data:
     \ locked')).rows[0].locked;\n    if(!lock)return;\n    phase='connect';await api('/users/me');counters.api_ready=1;\n\
     \    // Repair only false removals made by earlier catalog sweeps. Applied snapshots\n\
     \    // keep their edit protection and are scheduled for a fresh readback audit.\n\
-    \    if (MODE==='apply' && !counters.last_discovery) {\n      await db.query(`UPDATE\
-    \ immich_sync.jobs\n        SET state=CASE WHEN applied->>'sourceRevision'=source_hash\
-    \ AND intent IS NULL THEN 'applied' ELSE 'pending' END,\n            reason=NULL,\
-    \ available_at=now(), verified_at=NULL, updated_at=now()\n        WHERE state='conflict'\
-    \ AND reason='source_removed' AND payload ? 'recovery'\n          AND asset_id\
-    \ IS NOT NULL AND length(trim(payload->>'summary'))>0`);\n    }\n    if(!counters.last_discovery){\n\
-    \      const checkpoint=await state(db,'checkpoint');\n      if(checkpoint &&\
-    \ (checkpoint.version??1)===DISCOVERY_VERSION){\n        counters.last_discovery=Date.parse(checkpoint.capturedAt)/1000;\n\
-    \        counters.source=checkpoint.sourceRows;counters.available_summaries=checkpoint.successfulSummaries;\n\
+    \    if (MODE==='apply' && !counters.last_discovery) {\n      await db.query(restoreRecovery);\n\
+    \    }\n    if(!counters.last_discovery){\n      const checkpoint=await state(db,'checkpoint');\n\
+    \      if(checkpoint && (checkpoint.version??1)===DISCOVERY_VERSION){\n      \
+    \  counters.last_discovery=Date.parse(checkpoint.capturedAt)/1000;\n        counters.source=checkpoint.sourceRows;counters.available_summaries=checkpoint.successfulSummaries;\n\
     \      }\n    }\n    await metrics(db);\n    if(Date.now()/1000-counters.last_discovery>600)await\
     \ discover(db);\n    if(MODE==='apply'){\n      const preserved=MAX_PRESERVED?(await\
     \ db.query(\"SELECT count(*)::int n FROM immich_sync.jobs WHERE state='applied'\"\
@@ -411,8 +424,14 @@ data:
     \ || !Number.isFinite(Date.parse(packet.sourceMtime))) return packet;\n  const\
     \ previous=saved.payload;\n  return {...packet, summary:previous.summary, summaryModel:previous.summaryModel,\n\
     \    summaryCreatedAt:previous.summaryCreatedAt, recovery:previous.recovery,\n\
-    \    tags:[...new Set([...packet.tags,...previous.tags])].sort()};\n}\nexport\
-    \ function eligible(source) {\n  return Boolean(source.summary || source.context_summary\
+    \    tags:[...new Set([...packet.tags,...previous.tags])].sort()};\n}\n// A second\
+    \ caption can finish before the first queued write becomes visible.\nexport function\
+    \ sameRecoveryOriginal(job, assetId, proposed) {\n  const saved=job?.payload;\n\
+    \  return Boolean(job?.asset_id===assetId && saved?.recovery?.run && saved.recovery.run===proposed.recovery.run\
+    \ &&\n    saved.sourcePath===proposed.sourcePath && saved.sizeBytes===proposed.sizeBytes\
+    \ &&\n    saved.sourceMtime===proposed.sourceMtime && saved.recovery.frames===proposed.recovery.frames\
+    \ &&\n    saved.summary?.trim() && digest(saved)===job.source_hash && ['pending','applied','error'].includes(job.state));\n\
+    }\nexport function eligible(source) {\n  return Boolean(source.summary || source.context_summary\
     \ || source.faces?.length || source.groups?.length);\n}\nexport function scope(source)\
     \ {\n  return /^Google Photos\\/Photos from [0-9]{4}\\//.test(source.path) &&\
     \ !source.path.split('/').includes('..') && !path.isAbsolute(source.path);\n}\n\
@@ -483,6 +502,14 @@ data:
     console.log(JSON.stringify({secondPage:second.assets.nextPage,firstAssetChanged:second.assets.items[0]?.id!==a.id}));
 
     '
+  publisher-queue.mjs: "// Catalog cycles own only catalog jobs. Recovery jobs have\
+    \ their own source and lifetime.\nexport const expireCatalog = `UPDATE immich_sync.jobs\
+    \ SET state='conflict',reason='source_removed'\n WHERE cycle_id<>$1 AND state<>'excluded'\
+    \ AND NOT (payload ? 'recovery')`;\n\nexport const restoreRecovery = `UPDATE immich_sync.jobs\n\
+    \ SET state=CASE WHEN applied->>'sourceRevision'=source_hash AND intent IS NULL\
+    \ THEN 'applied' ELSE 'pending' END,\n     reason=NULL, available_at=now(), verified_at=NULL,\
+    \ updated_at=now()\n WHERE state='conflict' AND reason='source_removed' AND payload\
+    \ ? 'recovery'\n   AND asset_id IS NOT NULL AND length(trim(payload->>'summary'))>0`;\n"
   schema.sql: "-- This schema belongs to reconciliation, in photo_enrichment, never\
     \ Immich's DB.\nCREATE TABLE IF NOT EXISTS immich_sync.jobs (\n source_path text\
     \ PRIMARY KEY, source_hash text NOT NULL, payload jsonb NOT NULL,\n asset_id text,\
@@ -525,8 +552,9 @@ data:
     \ from 'node:fs';\nimport crypto from 'node:crypto';\nimport http from 'node:http';\n\
     import {createRequire} from 'node:module';\nimport {fileURLToPath} from 'node:url';\n\
     import {META_KEY,ROOT,stable,digest,sourcePacket,retainRecoveryCaption,eligible,scope,mapAsset,metadataDecision,faceCandidate,normalizedBox,overlap}\
-    \ from './core.mjs';\nconst require=createRequire('/usr/src/app/server/package.json');\n\
-    const {Pool}=require('pg');\nconst sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
+    \ from './core.mjs';\nimport {restoreRecovery,expireCatalog} from './publisher-queue.mjs';\n\
+    const require=createRequire('/usr/src/app/server/package.json');\nconst {Pool}=require('pg');\n\
+    const sharp=require('sharp');\nconst pool=new Pool({max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});\n\
     const BASE=process.env.IMMICH_URL??'http://immich-server:2283/api';\nconst DISCOVERY_VERSION=1;\
     \ // Bump whenever mapping rules change.\nconst MODE=process.env.SYNC_MODE??'dry-run';\n\
     const MAX_PRESERVED=Number(process.env.SYNC_MAX_PRESERVED??0);\nconst BATCH=Number(process.env.SYNC_BATCH_SIZE??50);\n\
@@ -589,9 +617,7 @@ data:
     \ ELSE excluded.reason END,\n        updated_at=CASE WHEN immich_sync.jobs.source_hash<>excluded.source_hash\
     \ THEN now() ELSE immich_sync.jobs.updated_at END\n        WHERE NOT (immich_sync.jobs.payload\
     \ ? 'recovery') OR immich_sync.jobs.state='applied'`,[JSON.stringify(jobs)]);\n\
-    \    }\n    await db.query(\"UPDATE immich_sync.jobs SET state='conflict',reason='source_removed'\
-    \ WHERE cycle_id<>$1 AND state<>'excluded' AND NOT (payload ? 'recovery')\",[cycle]);\n\
-    \    await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new\
+    \    }\n    await db.query(expireCatalog,[cycle]);\n    await state(db,'checkpoint',{version:DISCOVERY_VERSION,cycle,sourceRows:counters.source,successfulSummaries:counters.available_summaries,capturedAt:new\
     \ Date().toISOString()});\n    await db.query('COMMIT');counters.last_discovery=Date.now()/1000;\n\
     \    log('sync.discovery',{source:counters.source,available_summaries:counters.available_summaries});\n\
     \  } catch(e){await db.query('ROLLBACK');throw e;}\n}\nasync function checksum(file)\
@@ -667,11 +693,16 @@ data:
     ${status}\"} ${row?.n??0}`,`immich_sync_summaries{state=\"${status}\"} ${row?.summaries??0}`);\n\
     \  }\n  const faces=(await db.query('SELECT state,count(*)::int n FROM immich_sync.faces\
     \ GROUP BY state')).rows;\n  for(const status of ['pending','applied','conflict'])lines.push(`immich_sync_faces{state=\"\
-    ${status}\"} ${faces.find(x=>x.state===status)?.n??0}`);\n  const preserved=(await\
-    \ db.query(\"SELECT count(*)::int n FROM immich_sync.jobs j CROSS JOIN LATERAL\
-    \ jsonb_array_elements(j.payload->'faces') f WHERE j.state='applied' AND f->>'label_source'='user'\"\
-    )).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved ${preserved}`);\n\
-    \  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
+    ${status}\"} ${faces.find(x=>x.state===status)?.n??0}`);\n  const recovery=(await\
+    \ db.query(`SELECT count(*) FILTER (WHERE reason='source_removed')::int removed,\n\
+    \    count(*) FILTER (WHERE reason IS DISTINCT FROM 'source_removed')::int other\n\
+    \    FROM immich_sync.jobs WHERE payload ? 'recovery' AND state='conflict'`)).rows[0];\n\
+    \  lines.push('# TYPE immich_sync_recovery_conflicts gauge',\n    `immich_sync_recovery_conflicts{reason=\"\
+    source_removed\"} ${recovery.removed}`,\n    `immich_sync_recovery_conflicts{reason=\"\
+    other\"} ${recovery.other}`);\n  const preserved=(await db.query(\"SELECT count(*)::int\
+    \ n FROM immich_sync.jobs j CROSS JOIN LATERAL jsonb_array_elements(j.payload->'faces')\
+    \ f WHERE j.state='applied' AND f->>'label_source'='user'\")).rows[0].n;\n  lines.push(`immich_sync_confirmed_labels_preserved\
+    \ ${preserved}`);\n  lines.push(`immich_sync_visible_captions_enabled 0`,`immich_sync_mode{mode=\"\
     ${MODE}\"} 1`);\n  const age=(await db.query(\"SELECT coalesce(extract(epoch FROM\
     \ now()-min(discovered_at)),0)::float age FROM immich_sync.jobs WHERE state IN\
     \ ('pending','error')\")).rows[0].age;\n  lines.push(`immich_sync_oldest_pending_seconds\
@@ -681,15 +712,10 @@ data:
     \ locked')).rows[0].locked;\n    if(!lock)return;\n    phase='connect';await api('/users/me');counters.api_ready=1;\n\
     \    // Repair only false removals made by earlier catalog sweeps. Applied snapshots\n\
     \    // keep their edit protection and are scheduled for a fresh readback audit.\n\
-    \    if (MODE==='apply' && !counters.last_discovery) {\n      await db.query(`UPDATE\
-    \ immich_sync.jobs\n        SET state=CASE WHEN applied->>'sourceRevision'=source_hash\
-    \ AND intent IS NULL THEN 'applied' ELSE 'pending' END,\n            reason=NULL,\
-    \ available_at=now(), verified_at=NULL, updated_at=now()\n        WHERE state='conflict'\
-    \ AND reason='source_removed' AND payload ? 'recovery'\n          AND asset_id\
-    \ IS NOT NULL AND length(trim(payload->>'summary'))>0`);\n    }\n    if(!counters.last_discovery){\n\
-    \      const checkpoint=await state(db,'checkpoint');\n      if(checkpoint &&\
-    \ (checkpoint.version??1)===DISCOVERY_VERSION){\n        counters.last_discovery=Date.parse(checkpoint.capturedAt)/1000;\n\
-    \        counters.source=checkpoint.sourceRows;counters.available_summaries=checkpoint.successfulSummaries;\n\
+    \    if (MODE==='apply' && !counters.last_discovery) {\n      await db.query(restoreRecovery);\n\
+    \    }\n    if(!counters.last_discovery){\n      const checkpoint=await state(db,'checkpoint');\n\
+    \      if(checkpoint && (checkpoint.version??1)===DISCOVERY_VERSION){\n      \
+    \  counters.last_discovery=Date.parse(checkpoint.capturedAt)/1000;\n        counters.source=checkpoint.sourceRows;counters.available_summaries=checkpoint.successfulSummaries;\n\
     \      }\n    }\n    await metrics(db);\n    if(Date.now()/1000-counters.last_discovery>600)await\
     \ discover(db);\n    if(MODE==='apply'){\n      const preserved=MAX_PRESERVED?(await\
     \ db.query(\"SELECT count(*)::int n FROM immich_sync.jobs WHERE state='applied'\"\
@@ -799,7 +825,7 @@ spec:
     metadata:
       labels: *id001
       annotations:
-        checksum/code: 68dc37828de18c07f1e05789f471f991ee49a5bd74bd879ab552a0686d827ea9
+        checksum/code: 3fd89e25d5f7eba0f0453cfe0cf7634e2e90bdcd2c52d6aea36c3f003e17f66a
     spec:
       restartPolicy: Always
       automountServiceAccountToken: false

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {sourcePacket, scope, ROOT, META_KEY, digest, mapAsset} from '/code/core.mjs';
+import {sourcePacket, sameRecoveryOriginal, scope, ROOT, META_KEY, digest, mapAsset} from '/code/core.mjs';
 const require = createRequire('/usr/src/app/server/package.json');
 const sharp = require('sharp');
 const {Client} = require('pg');
@@ -98,8 +98,12 @@ async function one(item) {
     const result=await db.query(`INSERT INTO immich_sync.jobs(source_path,source_hash,payload,asset_id,state,cycle_id)
       VALUES ($1,$2,$3,$4,'pending',$5) ON CONFLICT(source_path) DO NOTHING`,[path,digest(packet),packet,item.id,packet.recovery.run]);
     if (!result.rowCount) {
-      const existing=(await db.query('SELECT asset_id,source_hash,state FROM immich_sync.jobs WHERE source_path=$1',[path])).rows[0];
-      if(existing?.asset_id!==item.id || existing.source_hash!==digest(packet)) throw Error('competing sync job');
+      const existing=(await db.query('SELECT asset_id,source_hash,payload,state FROM immich_sync.jobs WHERE source_path=$1',[path])).rows[0];
+      if(existing?.asset_id!==item.id) throw Error('competing sync job');
+      if(existing.source_hash!==digest(packet)){
+        if(!sameRecoveryOriginal(existing,item.id,packet)) throw Error('competing sync job');
+        return {state:'queued',priorSummary:existing.payload.summary};
+      }
     }
     return {state:'queued'};
   }
