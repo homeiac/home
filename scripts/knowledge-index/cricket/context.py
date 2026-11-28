@@ -46,9 +46,14 @@ def apply_hint(raw: dict, summary: str, default_batter: str) -> dict:
     if raw["evidence"].get("confidence") == "likely" and raw["data"]["role"] == hint:
         return raw
     raw["data"]["role"] = hint
-    raw["data"]["actor"] = default_batter if hint == "batting" else None
+    eligible = not raw["evidence"].get("identity_excluded", False)
+    raw["data"]["actor"] = default_batter if hint == "batting" and eligible else None
     raw["evidence"]["identity_basis"] = (
-        "user_album_rule" if hint == "batting" else "unresolved"
+        "age_conflict"
+        if raw["evidence"].get("age_compatibility") == "incompatible"
+        else "user_album_rule"
+        if hint == "batting" and eligible
+        else "unresolved"
     )
     raw["evidence"]["role_basis"] = "existing_scene_caption"
     raw["evidence"]["confidence"] = "possible"
