@@ -24,6 +24,10 @@ S5 and S6 each have their own baseline. A photo-only win can qualify photo-only 
 
 The live intake sees the cricket controller and the shared GPUs. It omits photo face completions as an independent caller. Split S2 into a first PR registering both photo routes and reading the existing stage-scoped queue and backend counters, then a worker instrumentation change for end-to-end traces. Verify the first PR against the same private checkpoint used in S1. The library reader serves SQLite, and the cluster enrichment database has no OpenLABEL scene table. Leave the independent publication count unknown until S3 supplies its manifest and readback. Keep the historical album pilot separate. The cricket integration has its own [plan and checklist](https://github.com/homeiac/home/pull/274).
 
+## Model-server timing probe
+
+Before changing a prompt or image, measure a common live window. On RTX, pair the runner's input and output timers by slot and task. On Mac, sample numeric slot progress before and after decoding begins. Keep client latency, queue delay and device execution distinct. Reuse the reviewed-face comparison for previous pass-count settings. Record the outcome with the per-backend Grafana results. A candidate that would add a lane requires the peer headroom and quality gates below.
+
 ## Acceptance contract for a live trial
 
 1. **Declare the trial.** Freeze cohort, model/quantization, prompt, media sizes, pass modes and versions. Use matched inputs for quality and separate production counters for rate. Record each baseline, trial, reserved and rollback allocation and a target minimum gain before starting. Use the last known effective settings if actual headroom is unknown.
