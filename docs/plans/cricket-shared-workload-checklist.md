@@ -49,7 +49,7 @@ and append the reason; retain the original receipt.
 
 | ID | Scope | Actual PR / source | Implemented | Merged | Local verification | Deployment / live verification |
 | --- | --- | --- | --- | --- | --- | --- |
-| P01 | Reconcile feature stack; freeze acceptance cohort | To create; existing stack through #269 is a dependency | Partial existing stack | No | Historical stack checks only | Fresh release inventory and cohort needed |
+| P01 | Reconcile feature stack; freeze acceptance cohort | P01-a: `codex/cricket-p01-evidence`; existing stack through #269 remains a dependency | Identity/inventory slice reconciled; runtime/UI pending | No | E07: 111 passed, 19 subtests | Fresh GUI release inspected; full state/cohort pending |
 | P02 | Run identity and closed telemetry | To create | No | No | Pending | Pending |
 | P03 | Manifest, readback, receipt and no-event output | Adapter exists in #271/#273; extension PR to create | Partial foundation | Foundation only | E02 covers synthetic writer, not production adapter | Pending |
 | P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
@@ -62,6 +62,10 @@ and append the reason; retain the original receipt.
 
 ### P01 — Reconcile and freeze
 
+- [x] **P01-a-I/V:** Reconcile inventory selection, age context and caption/contact-
+  sheet helpers with the existing ledger, native faces, coordinates and kit clues;
+  restore their original regression tests. Evidence: E07. This is a local
+  integration slice, not the entire feature stack or a production deployment.
 - [ ] **P01-I:** Reconcile required open feature modules with master, preserving
   #273's contracts and PostgreSQL test; record exact PR/source/merge state and
   regression evidence for each existing small PR, rather than one bulk import.
@@ -243,6 +247,32 @@ conditions. Include each review decision, not only the final winner.
 analysis version; analyzed/published/verified/pending/terminal counts; manifest to
 database to derived-view reconciliation; preserved corrections; peer health;
 restart/expiry/recovery result; outstanding best-effort recognition issues.
+
+### E07 — P01-a identity dependency reconciliation
+
+Branch: `codex/cricket-p01-evidence`, based on the planning PR #274 and master
+`b4a19672`. Reused the original implementation at `d5eeda7` without changing its
+behavior: inventory import and owner/person selection (#254), caption/contact-sheet
+context (#256), date/age guards (#264), and coordinate/nearby-kit regression coverage
+(#266), plus the durable correction ledger tests (#251 and follow-ups).
+The newer master OpenLABEL writer/readback tests remain present.
+
+Verification on 2026-11-27: the E02 command passed **111 tests and 19 subtests in
+3.82 seconds** against disposable PostgreSQL. Early collection attempts exposed
+missing importer, context and contact-sheet dependencies; the complete identity
+dependency slice now passes. Model dispatch tests were left for the runtime slice
+rather than importing that subsystem implicitly.
+
+Read-only deployment inspection found the GUI release
+`dashboard-1795836747906611473`; GUI and audio-story services were active, and
+Knowledge Index enrichment reported `activating` at that instant. The private
+receipt is `/private/tmp/cricket-p01-deployment-20261127.json`. This is not a peer
+throughput or readiness qualification. No live worker or release was changed.
+
+Dependency inspection also found photo-review PR #218 still open and conflicting
+with its base (`feat/media-summaries-enricher`). The cricket UI stack builds on it.
+Keep frontend reconciliation explicit; do not bulk-import that application or
+replace the newer deployed dashboard merely to make a backend test pass.
 
 ## Updating evidence
 
