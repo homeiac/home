@@ -46,16 +46,26 @@ def request_body(backend: dict, prompt: str, frames: list[str]) -> tuple[str, di
 REMOTE = r"""
 import json,sys,urllib.request
 packet=json.load(sys.stdin)
-request=urllib.request.Request(packet['url'],json.dumps(packet['body']).encode(),{'Content-Type':'application/json'})
+request=urllib.request.Request(packet['url'],json.dumps(packet['body']).encode(),{'Content-Type':'application/json',**packet.get('headers',{})})
 with urllib.request.urlopen(request,timeout=600) as response:sys.stdout.write(response.read().decode())
 """
 
 
-def infer(backend: dict, prompt: str, frames: list[str]) -> str:
+def infer(
+    backend: dict, prompt: str, frames: list[str], *, caller_headers: dict | None = None
+) -> str:
     """Perform one bounded request; only the local process reads any credential file."""
     route, body = request_body(backend, prompt, frames)
     url = backend["endpoint"].rstrip("/") + route
     transport = backend.get("transport", "http")
+    caller_headers = caller_headers or {}
+    if set(caller_headers) - {
+        "traceparent",
+        "tracestate",
+        "x-workload-name",
+        "x-workload-run-id",
+    }:
+        raise ValueError("Unexpected caller header")
     if transport == "ssh":
         response = subprocess.run(
             [
@@ -67,7 +77,7 @@ def infer(backend: dict, prompt: str, frames: list[str]) -> str:
                 backend["host"],
                 "python3 -c " + shlex.quote(REMOTE),
             ],
-            input=json.dumps({"url": url, "body": body}),
+            input=json.dumps({"url": url, "body": body, "headers": caller_headers}),
             capture_output=True,
             text=True,
             timeout=640,
@@ -80,6 +90,9 @@ def infer(backend: dict, prompt: str, frames: list[str]) -> str:
         command = (
             "qm guest exec 108 --timeout 620 --pass-stdin 1 -- curl -fsS --max-time 600 -H "
             + shlex.quote("Content-Type: application/json")
+            + "".join(
+                " -H " + shlex.quote(k + ": " + v) for k, v in caller_headers.items()
+            )
             + " --data-binary @- "
             + shlex.quote(url)
         )
@@ -110,7 +123,7 @@ def infer(backend: dict, prompt: str, frames: list[str]) -> str:
             raise RuntimeError("Guest response incomplete")
         value = json.loads(report["out-data"])
     elif transport == "http":
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", **caller_headers}
         if backend.get("key_file"):
             headers["Authorization"] = (
                 "Bearer " + Path(backend["key_file"]).read_text().strip()
