@@ -1,7 +1,7 @@
 """Prevent duplicate or stale CPU writes while the original workers keep running."""
 
 import argparse
-from contextlib import closing
+from contextlib import closing, nullcontext
 import json
 from pathlib import Path
 import sqlite3
@@ -11,6 +11,22 @@ from unittest.mock import patch
 
 import cpu_library_canary as cpu
 from library_backfill import claims, initialize
+
+
+class RecordedTelemetry:
+    session = {"workload": "library-face-observations",
+               "stages": ["claim", "process", "infer", "checkpoint", "write"]}
+
+    def bind_configuration(self, config):
+        self.configuration = config
+
+    def stage(self, *args, **kwargs):
+        return nullcontext()
+
+    def headers(self):
+        return {"x-workload-name": "library-face-observations",
+                "x-workload-run-id": "test-run",
+                "traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"}
 
 
 class CPUCanaryTests(unittest.TestCase):
@@ -103,7 +119,7 @@ class CPUCanaryTests(unittest.TestCase):
             checkpoint({"stage": "adult"})
             return "complete", {"stage": "adult", "action": "stands", "backend": backend}
         with patch.object(cpu, "infer", side_effect=observed):
-            self.assertEqual(cpu.run(args)["states"], {"complete": 1})
+            self.assertEqual(cpu.run(args, RecordedTelemetry())["states"], {"complete": 1})
         value = json.loads(self.db.execute("SELECT outcome FROM jobs").fetchone()[0])
         self.assertEqual(value["backend"], "mac-cpu")
         self.assertEqual(value["cpu_execution_profile"], "profile-v1")
@@ -122,7 +138,7 @@ class CPUCanaryTests(unittest.TestCase):
                                   profile="profile-v1", lease="pool", holder="owner",
                                   timeout=1, limit=3, joint=False, stop_file=None)
         with patch.object(cpu, "infer", side_effect=ValueError("invalid response")):
-            result = cpu.run(args)
+            result = cpu.run(args, RecordedTelemetry())
         self.assertEqual(result["processed"], 2)
         self.assertEqual(self.db.execute("SELECT status,attempts FROM jobs").fetchone(), ("withheld", 2))
 
@@ -134,9 +150,33 @@ class CPUCanaryTests(unittest.TestCase):
                                   timeout=1, limit=3, joint=False, stop_file=None)
         with patch.object(cpu, "infer", side_effect=OSError("endpoint unavailable")):
             with self.assertRaises(OSError):
-                cpu.run(args)
+                cpu.run(args, RecordedTelemetry())
         self.assertEqual(self.db.execute("SELECT status,attempts FROM jobs").fetchone(), ("pending", 0))
         self.assertIsNotNone(claims.claim(self.db, mac_batch=0, resume=False))
+
+    def test_enabled_adapter_requires_registered_telemetry(self) -> None:
+        with self.assertRaisesRegex(ValueError, "telemetry"):
+            cpu.run(argparse.Namespace(lanes=1))
+
+    def test_mac_request_forwards_trace_headers(self) -> None:
+        args = argparse.Namespace(backend="mac-cpu", endpoint="http://127.0.0.1:19480",
+                                  model="cpu-model", timeout=1)
+        headers = RecordedTelemetry().headers()
+        with patch.object(cpu, "ask_model", return_value='{"stage":"adult"}') as model:
+            cpu.cpu_observe(args, [b"image"], "prompt", headers)
+        self.assertEqual(model.call_args.kwargs["headers"], headers)
+
+    def test_guest_request_forwards_trace_headers(self) -> None:
+        args = argparse.Namespace(backend="still-fawn-cpu", endpoint="http://127.0.0.1:19479",
+                                  model="cpu-model", timeout=1)
+        body = {"choices": [{"message": {"content": '{"stage":"adult"}'}}]}
+        reply = dict(exited=True, exitcode=0, **{"out-data": json.dumps(body)})
+        with patch.object(cpu.subprocess, "check_output", return_value=json.dumps(reply)) as remote:
+            cpu.cpu_observe(args, [b"image"], "prompt", RecordedTelemetry().headers())
+        command = remote.call_args.args[0][-1]
+        self.assertIn("x-workload-name: library-face-observations", command)
+        self.assertIn("x-workload-run-id: test-run", command)
+        self.assertIn("traceparent:", command)
 
 
 if __name__ == "__main__":

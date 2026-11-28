@@ -1,6 +1,7 @@
 """Opt-in, finite CPU canary using the existing face queue and an external pool owner."""
 
 import argparse
+import hashlib
 from collections import Counter
 from contextlib import closing
 from datetime import datetime, timezone
@@ -110,14 +111,17 @@ def recover(db: sqlite3.Connection) -> int:
     return len(rows)
 
 
-def cpu_observe(args: argparse.Namespace, pictures: list[bytes], prompt: str) -> dict:
+def cpu_observe(args: argparse.Namespace, pictures: list[bytes], prompt: str, headers: dict) -> dict:
     """Use the production HTTP client, with guest-agent transport for still-fawn."""
+    if (headers.get("x-workload-name") != "library-face-observations"
+            or not headers.get("x-workload-run-id") or not headers.get("traceparent")):
+        raise PoolOwnershipLost("Registered caller and trace context are required")
     extra = dict(max_tokens=160, temperature=0.1, seed=42, cache_prompt=False,
                  response_format={"type": "json_object"},
                  chat_template_kwargs={"enable_thinking": False})
     if args.backend == "mac-cpu":
         return decode(ask_model(args.endpoint, args.model, prompt, pictures,
-                                timeout=args.timeout, extra=extra))
+                                timeout=args.timeout, extra=extra, headers=headers))
     # Send the exact production OpenAI request through the guest agent. No VM SSH.
     import base64
     content = [{"type": "text", "text": prompt}] + [
@@ -129,9 +133,10 @@ def cpu_observe(args: argparse.Namespace, pictures: list[bytes], prompt: str) ->
                  if line.partition("#")[2].strip() == "still-fawn"]
     if len(addresses) != 1:
         raise ValueError("Need exactly one inventoried still-fawn host")
+    forwarded = [part for key, value in headers.items() for part in ("-H", key + ": " + value)]
     remote = shlex.join(["qm", "guest", "exec", "108", "--timeout", str(args.timeout + 15),
                          "--pass-stdin", "1", "--", "curl", "-fsS", "--max-time", str(args.timeout),
-                         "-H", "Content-Type: application/json", "--data-binary", "@-",
+                         "-H", "Content-Type: application/json", "--data-binary", "@-", *forwarded,
                          args.endpoint.rstrip("/") + "/v1/chat/completions"])
     reply = json.loads(subprocess.check_output(
         ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "root@" + addresses[0], remote],
@@ -141,10 +146,16 @@ def cpu_observe(args: argparse.Namespace, pictures: list[bytes], prompt: str) ->
     return decode(json.loads(reply["out-data"])["choices"][0]["message"]["content"])
 
 
-def run(args: argparse.Namespace) -> dict:
+def run(args: argparse.Namespace, telemetry=None) -> dict:
     """Process finite unique jobs only after explicit activation and ownership."""
     if args.lanes == 0:
         return {"enabled": False, "processed": 0}
+    if telemetry is None or telemetry.session.get("workload") != "library-face-observations":
+        raise ValueError("A registered photo-workload telemetry provider is required")
+    resource = {"mac-cpu": "mac-m5/cpu", "still-fawn-cpu": "still-fawn/cpu"}[args.backend]
+    required = {"claim", "process", "infer", "checkpoint", "write"}
+    if not required.issubset(telemetry.session.get("stages", [])):
+        raise ValueError("Telemetry must declare claim, process, infer, checkpoint and write")
     endpoint = urlsplit(args.endpoint or "")
     if endpoint.scheme != "http" or endpoint.hostname not in {"127.0.0.1", "localhost"} or endpoint.path not in {"", "/"} or endpoint.query or endpoint.fragment:
         raise ValueError("The bounded CPU canary requires a loopback server endpoint")
@@ -156,6 +167,16 @@ def run(args: argparse.Namespace) -> dict:
     def verify_owner() -> None:
         check_lease(args.lease, args.holder)
     verify_owner()
+    telemetry.bind_configuration({
+        "analysis_version": args.profile,
+        "allowed_assets": None,
+        "backends": {args.backend: {
+            "endpoint": args.endpoint, "model": args.model, "timeout": args.timeout,
+            "joint": args.joint, "seed": 42, "cache_prompt": False,
+            "checkpoint": str(args.root.resolve()),
+            "adapter_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        }},
+    })
     states = Counter()
     with closing(connect(args.root)) as db:
         initialize(db)
@@ -164,13 +185,17 @@ def run(args: argparse.Namespace) -> dict:
             if args.stop_file and args.stop_file.exists():
                 break
             verify_owner()
-            reserved = reserve(db, 2 * args.timeout + 300)
+            with telemetry.stage("claim", resource):
+                reserved = reserve(db, 2 * args.timeout + 300)
+                parent = telemetry.headers()
             if not reserved:
                 break
             asset, raw, generation = reserved
             old, attempts = db.execute("SELECT outcome,attempts FROM jobs WHERE asset=?", (asset,)).fetchone()
             saved = {}
             called = set()
+            job = dict(asset=asset, fingerprint=hashlib.sha256(raw.encode()).hexdigest(),
+                       version=args.profile, execution_id=generation, attempts=attempts + 1)
 
             def annotate(value: dict) -> None:
                 value.update(cpu_execution_profile=args.profile, cpu_model=args.model)
@@ -181,49 +206,55 @@ def run(args: argparse.Namespace) -> dict:
             def observe(backend: str, url: str, pictures: list[bytes], prompt: str, schema: dict) -> dict:
                 from library_worker import AGE_SCHEMA, JOINT_SCHEMA
                 verify_owner()
-                answer = cpu_observe(args, pictures, prompt)
+                with telemetry.stage("infer", resource, job=job):
+                    answer = cpu_observe(args, pictures, prompt, telemetry.headers())
                 called.update(("stage", "action") if schema is JOINT_SCHEMA else
                               ("stage",) if schema is AGE_SCHEMA else ("action",))
                 return answer
 
             def save(value: dict) -> None:
                 verify_owner()
-                annotate(value)
-                checkpoint(db, asset, raw, generation, value)
+                with telemetry.stage("checkpoint", resource, job=job):
+                    annotate(value)
+                    value["trace_context"] = telemetry.headers()
+                    checkpoint(db, asset, raw, generation, value)
 
-            try:
-                saved.update(json.loads(old or "{}"))
-                if "stage" in saved:
-                    saved.setdefault("stage_model_profile", saved.get("model_profile", "legacy-unspecified"))
-                if saved.get("reviewed_action"):
-                    saved.setdefault("action_model_profile", "reviewed-unchanged")
-                state, value = infer(json.loads(raw), args.backend, args.endpoint, saved, save,
-                                     joint=args.joint, observer=observe)
-                annotate(value)
-                verify_owner()
-                finish(db, asset, raw, generation, state, value)
-            except (OSError, ValueError, KeyError, TypeError, IndexError, RuntimeError, subprocess.SubprocessError) as error:
-                # Fencing also applies during cleanup. A newer owner must win.
+            with telemetry.stage("process", resource, parent=parent, job=job, whole_job=True):
                 try:
-                    invalid = isinstance(error, (ValueError, KeyError, TypeError, IndexError))
-                    state = "withheld" if invalid and attempts >= 1 else "pending"
-                    saved["reason"] = type(error).__name__
-                    db.execute("BEGIN IMMEDIATE")
-                    with db:
-                        guard(db, asset, raw, generation)
-                        db.execute("UPDATE jobs SET attempts=attempts+? WHERE asset=?", (int(invalid), asset))
-                    finish(db, asset, raw, generation, state, saved)
-                except ReservationLost:
-                    db.rollback()
-                    recover(db)
-                    raise
-                if not invalid:
-                    raise
+                    saved.update(json.loads(old or "{}"))
+                    if "stage" in saved:
+                        saved.setdefault("stage_model_profile", saved.get("model_profile", "legacy-unspecified"))
+                    if saved.get("reviewed_action"):
+                        saved.setdefault("action_model_profile", "reviewed-unchanged")
+                    state, value = infer(json.loads(raw), args.backend, args.endpoint, saved, save,
+                                         joint=args.joint, observer=observe)
+                    annotate(value)
+                    verify_owner()
+                    with telemetry.stage("write", resource, job=job):
+                        value["trace_context"] = telemetry.headers()
+                        finish(db, asset, raw, generation, state, value)
+                except (OSError, ValueError, KeyError, TypeError, IndexError, RuntimeError, subprocess.SubprocessError) as error:
+                    # Fencing also applies during cleanup. A newer owner must win.
+                    try:
+                        invalid = isinstance(error, (ValueError, KeyError, TypeError, IndexError))
+                        state = "withheld" if invalid and attempts >= 1 else "pending"
+                        saved["reason"] = type(error).__name__
+                        db.execute("BEGIN IMMEDIATE")
+                        with db:
+                            guard(db, asset, raw, generation)
+                            db.execute("UPDATE jobs SET attempts=attempts+? WHERE asset=?", (int(invalid), asset))
+                        finish(db, asset, raw, generation, state, saved)
+                    except ReservationLost:
+                        db.rollback()
+                        recover(db)
+                        raise
+                    if not invalid:
+                        raise
+                    states[state] += 1
+                    (args.root / "progress").touch()
+                    continue
                 states[state] += 1
                 (args.root / "progress").touch()
-                continue
-            states[state] += 1
-            (args.root / "progress").touch()
     return {"enabled": True, "processed": sum(states.values()), "states": dict(states)}
 
 
@@ -242,7 +273,24 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, choices=range(1, 901), default=100)
     parser.add_argument("--joint", action="store_true")
     parser.add_argument("--stop-file", type=Path)
-    print(json.dumps(run(parser.parse_args())))
+    parser.add_argument("--telemetry-session", type=Path)
+    args = parser.parse_args()
+    if args.lanes == 0:
+        print(json.dumps(run(args)))
+        return
+    if args.telemetry_session is None:
+        parser.error("An existing --telemetry-session is required for activation")
+    try:
+        from cricket.telemetry import RunTelemetry
+    except ImportError:
+        parser.error("Install the existing shared RunTelemetry runtime before activation")
+    telemetry = RunTelemetry(args.telemetry_session, workload="library-face-observations")
+    try:
+        result = run(args, telemetry)
+    finally:
+        telemetry.close_window(args.telemetry_session.parent / "closed-telemetry")
+        telemetry.shutdown()
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":
