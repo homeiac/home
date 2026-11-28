@@ -51,6 +51,8 @@ def run(tmp_path: Path) -> Iterator[RunTelemetry]:
                     "analyze",
                     "classify",
                     "reconcile",
+                    "publish",
+                    "verify",
                 )
                 for arg in ("--stage", name)
             ],

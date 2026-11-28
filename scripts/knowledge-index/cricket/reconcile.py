@@ -182,8 +182,26 @@ def reconcile(
                 )
                 summary["superseded"] += 1
         if lease is not None:
+            previous = json.loads(
+                db.execute(
+                    "SELECT checkpoint FROM jobs WHERE owner=? AND asset=? AND version=? AND stage='analyze'",
+                    (owner, asset_id, version),
+                ).fetchone()[0]
+            )
             db.execute(
                 "UPDATE jobs SET state='complete',checkpoint=?,error=NULL WHERE owner=? AND asset=? AND version=? AND stage='analyze'",
-                (encoded({"run": run, "result": summary}), owner, asset_id, version),
+                (
+                    encoded(
+                        {
+                            "run": run,
+                            "result": summary,
+                            "fingerprint": fingerprint,
+                            "trace_context": previous.get("trace_context"),
+                        }
+                    ),
+                    owner,
+                    asset_id,
+                    version,
+                ),
             )
     return summary
