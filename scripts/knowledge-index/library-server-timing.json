@@ -328,7 +328,8 @@
         "causal_bottleneck": "not established by throughput or utilization alone",
         "projection_scope": "same fixed remaining work; unique production only; evaluations excluded"
       },
-      "completion_engine_sha256": "827bd0a064de0039d3fc3b91dffd56969f160450512deee2497c5f738fd967aa"
+      "completion_engine_sha256": "dcc3d6533c7c4eb9a236105f5f7006fbbffb1a3cf5601e03b772d588bad60894",
+      "completion_engine_revision": "3143ecb"
     },
     {
       "trial_panel_id": 295,
@@ -425,7 +426,8 @@
         "causal_bottleneck": "not established by throughput or utilization alone",
         "projection_scope": "same fixed remaining work; unique production only; evaluations excluded"
       },
-      "completion_engine_sha256": "827bd0a064de0039d3fc3b91dffd56969f160450512deee2497c5f738fd967aa"
+      "completion_engine_sha256": "dcc3d6533c7c4eb9a236105f5f7006fbbffb1a3cf5601e03b772d588bad60894",
+      "completion_engine_revision": "3143ecb"
     },
     {
       "trial_panel_id": 297,
@@ -523,7 +525,8 @@
         "causal_bottleneck": "not established by throughput or utilization alone",
         "projection_scope": "same fixed remaining work; unique production only; evaluations excluded"
       },
-      "completion_engine_sha256": "827bd0a064de0039d3fc3b91dffd56969f160450512deee2497c5f738fd967aa"
+      "completion_engine_sha256": "dcc3d6533c7c4eb9a236105f5f7006fbbffb1a3cf5601e03b772d588bad60894",
+      "completion_engine_revision": "3143ecb"
     }
   ]
 }
