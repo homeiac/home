@@ -751,6 +751,27 @@ baseline, descending/reverse outcomes, genuine queue canary and final configurat
 remain open. The Knowledge Index queue adapter is prepared in #294 with CPU lanes
 zero by default; no unique-source CPU claim or production publication is asserted.
 
+### E25 — Linux retains zero; original-model Mac seven-core arm rejected
+
+Still-fawn remains at **zero CPU production lanes** for the finite tested profiles.
+The smaller-model known-failing case 02 diagnostic reproduced the incorrect
+school-age/high stage for the reviewed preschool face; its gaze action was supported.
+Requests took 131.645/134.840 seconds, zero cache. Independent process/listener/Lease
+cleanup passed at `1795850409849502000` ns. Knowledge Index independently confirmed
+both Linux paired reviews and agrees no reviewed-quality hypothesis reopens the
+smaller profile. The original 27B maximum-allowance diagnostic produced no output
+within its declared bound. This is a tested-route rejection with an explicit
+revisit on changed shared allowance, runtime or reviewed-quality profile.
+
+Original 27B separate AGE/ACTION at Mac seven threads / 700% quota failed the fresh
+whole-workload latency budget over 300.236 seconds: **156→147 production checkpoints,
+combined p95 32.028→38.220 seconds**. Independent recomputation matches. Only two
+frozen CPU pairs completed; partial independent quality is stage 2/2, action 1/2,
+both 1/2. Evaluation replays are excluded from production progress. Cleanup passed;
+four cores follows only after verified zero-CPU recovery. The seven-core older
+baseline comparison passed, which is why both original and fresh references are
+retained. Mac descending outcomes and final selection remain open.
+
 ## Updating evidence
 
 For each new receipt record date/time, task ID, source/PR, environment, exact

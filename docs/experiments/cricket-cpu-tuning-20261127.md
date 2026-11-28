@@ -258,6 +258,27 @@ hashed before the trial and checked again at launch; raw pins remain private.
 Request safety bound is 300 seconds, not a newly declared user/service SLO.
 Private arm: `/private/tmp/cricket-original-two-pass-mac-t7-forward`.
 
+## still-fawn finite-profile outcome — retain zero CPU production lanes
+
+The targeted Linux case 02 diagnostic reproduced the same incorrect school-age,
+high-confidence stage for the reviewed preschool face. Independent whole-action
+review supports the gaze action, but there is no demonstrated runtime quality
+improvement over the rejected smaller profile. Age/action requests took 131.645 and
+134.840 seconds with zero cached input. Independent cleanup at
+`1795850409849502000` ns confirmed no trial model process, closed listener and
+released Lease.
+
+Retain CPU allocation zero on still-fawn for the finite profiles tested: the
+original 27B profile produced no output within the 901.916-second diagnostic bound
+at the measured 75% ceiling, and the smaller profile failed the full reviewed
+quality pass and reproduced a known stage failure on Linux. Descending a
+quality-failing profile does not qualify it. This closes these routes with measured
+rejection; it does not establish a user latency requirement, universal CPU
+incompatibility or an exhaustive model search. Reopen on a changed shared allowance,
+a changed runtime or a concrete profile with a reviewed-quality hypothesis. No
+unique-source CPU publication or throughput increment is claimed. Existing guest
+service reservations remain protected.
+
 ## Preregistered next profile and sweep
 
 If the small model fails the reviewed quality gate, test the original pinned 27B
@@ -270,11 +291,37 @@ separate prompts, or partial repetitions. A passing evaluated setting then needs
 the opt-in unique-source queue adapter, native face IDs and independent publication
 readback before counting CPU contribution. The adapter defaults to zero lanes and
 has not been activated. Additional concurrent contexts require a separate bounded
-profile and measured memory allowance.
+profile and measured memory allowance. If neither separate-call setting qualifies,
+resolve the earlier six-thread joint-call result with a bounded fresh comparison
+after clean recovery. Its old-baseline aggregate pass and partial quality cannot
+be silently treated as a rejection. This is the final preregistered profile revisit;
+no open-ended model search is proposed.
+
+## Original 27B two-call Mac, seven cores — aggregate latency rejected
+
+The warmed closed 300.236-second window recorded 147 unique GPU production face
+completions versus 156 in the fresh baseline (ratio 0.942292), and combined p95
+rose from 32.028 to 38.220 seconds, failing the 10% workload latency budget. The
+older original baseline alone would have passed; retaining the fresh comparison
+prevents masking the current regression. Backend diagnostics were Metal 40→33,
+RTX 116→114, with reserved production worker counts unchanged.
+
+Only two paired frozen CPU evaluations completed before the owner-requested drain;
+these are excluded from production progress. First paired timings were 69.17 and
+73.48 seconds; the second pair took 91.29 and 96.63 seconds. Partial quality cannot
+qualify the cohort. Independent review found the first stage correct but its whole
+action unsupported because the attributed hand belonged to the other person.
+
+The current request drained, the model stopped, independent cleanup/Lease readback
+passed, and a zero-CPU five-minute recovery window started before the four-core
+arm. No replacement model may launch until recovery passes both retained baselines.
+Private closed phase: `/private/tmp/cricket-original-two-pass-mac-t7-forward`;
+`owner-final-peer-review.json` preserves the scoped decision and both comparisons.
 
 ## Completion remains open
 
-Both backend rows remain open. Required: measured descending outcomes, complete
+The Mac row remains open; still-fawn retains zero CPU production lanes for the
+finite tested profiles above. Required on a qualifying Mac candidate: measured descending outcomes, complete
 reviewed quality on passing profiles (including separate calls if joint fails),
 independent evaluation/readback, reverse repetition, combined useful throughput,
 chosen setting or tested rejection, cleanup/recovery, pushed receipts and served
