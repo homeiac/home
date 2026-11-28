@@ -60,3 +60,7 @@ This reporting change adds no second promotion gate or canonical annotation stor
 - [Throughput and projected remaining backfill time](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?viewPanel=299)
 - [Measured CPU stage and unresolved hardware cause](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?viewPanel=300)
 - [Selected production allocation](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?viewPanel=298)
+
+## Verification
+
+The direct DuckDB query agrees with the shared projection engine for all three recorded arms. The generated dashboard and metrics suite passed all 44 checks. Flux applied report revision `008f5ad`; independent Grafana-served API readback returned version 89 and verified panels 299–300, including HOLD, the 84.2% stage fraction and explicit unresolved hardware causation. The source helper SHA matches every recorded assessment. No live CPU inference or admission was performed.
