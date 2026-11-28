@@ -56,3 +56,10 @@ Extract the existing allowed-stage/confidence check and low-confidence-to-unknow
 ## Correct the unit of throughput qualification
 
 The first CPU arms were stopped using per-backend rate floors. Those backend measurements remain valid, but Metal and CPU serve the same face workload. Reopen their aggregate qualification under the user's total-throughput objective. Preserve reserved GPU worker counts, combine newly verified face outcomes and workload latency/errors across backends, and protect distinct peer workloads separately. A per-backend slowdown alone cannot close a candidate. Keep the original stopped-trial receipts and label the policy correction and missing production-output evidence. The dashboard must show the scope of that reassessment.
+
+
+## Opt-in unique-job CPU canary adapter
+
+Prepare the adapter with CPU lanes zero by default and a finite job limit. The existing owner controls serving capacity and the Kubernetes pool lease. Before each claim and commit, verify that lease and its holder. Reuse production inference, prompts, normalization and the indexed SQLite claim path, with an injected CPU observer. Add an atomic claim hook and expected-claim-state fencing while preserving existing callers' defaults. Record CPU reservations with unique generations, expiry and the exact input so stale results cannot overwrite a retry or a changed source, including after the GPU supervisor resets running jobs. Expired recovery must match the CPU generation.
+
+Store model/profile provenance with stage and action results. Release interrupted jobs safely and bound bad-response retries. Export separate bounded mac-cpu/still-fawn-cpu counters, while retaining existing legacy-backend handling. Verify concurrent claims, lost ownership, changed inputs, restart/reclaim fencing and partial reuse with isolated tests. The adapter remains disabled and cannot claim real jobs until reviewed quality and capacity evidence qualifies a bounded live canary. The existing scene writer supplies publication/readback after an accepted result.
