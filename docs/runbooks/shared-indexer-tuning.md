@@ -48,6 +48,14 @@ telemetry is not evidence that it is idle. If an affected workload cannot be
 observed, retain the last proven allocation and hold capacity trials on that
 shared resource. Unrelated pools may continue independently.
 
+## Cover every plausible CPU and accelerator
+
+Follow the [fleet discovery and completion gate](../methodology/distributed-ai-performance.md#discover-capacity-beyond-the-current-routes) before declaring capacity exhausted. Create a stage-by-pool table from physical inventory and local compute. Include still-fawn and other CPU hosts even when no model service is running. Keep CPU inference and preparation as separate candidates.
+
+For each missing measurement, check runtime availability, model memory fit, input access and peer headroom, then run a bounded sample through the existing workload adapter where feasible. Measure useful completed output and quality on the reviewed cohort. Include cold startup separately from warmed performance. If model provisioning is required, use the established GitOps or host installation path and assign the next step. Record a deferral with an owner and revisit trigger when it cannot proceed.
+
+Keep baseline workers running. A hold for an unobserved peer on the RTX pool applies to that pool's experiment. Independently check the CPU host's peers and shared dependencies before its canary. A failed image-size experiment closes that candidate and leaves other hardware candidates open.
+
 ## Define a trial before changing capacity
 
 Record the target workload, frozen inputs, quality checks, all affected peers,

@@ -126,6 +126,9 @@ and append the reason; retain the original receipt.
 - [x] **P04-c-I/V:** Integrate the peer-owned #275 route/name/counter contract and
   remove the duplicate face-workload alias. Preserve the explicit Frigate service
   kind and fresh idle-evidence gates. Verification/coordination: E16.
+- [x] **P04-e-I/V:** Integrate #289's fleet-discovery rule and expand Cricket's
+  seven stages across eleven inventoried CPU/accelerator candidates. Evidence:
+  E20. This enumerates work; seventy readiness/compatibility checks remain open.
 - [ ] **P04-I:** Complete server and device caller census, measured routes,
   scheduled reservations and workload-specific progress/quality/service adapters.
 - [ ] **P04-V:** Demonstrate stale/absent/idle distinctions, unknown callers, changed
@@ -575,6 +578,46 @@ It also does not establish fleet-wide exhaustion: stage-by-pool CPU/accelerator
 coverage and evidence-backed exclusions remain part of P04. The peer chat is
 preparing the corresponding shared-playbook clarification; no independent-pool
 canary has been admitted by this receipt.
+
+### E20 — P04-e inventory coverage beyond occupied serving slots
+
+Branch: `codex/cricket-p04-cpu-coverage`, based on #288. Integrated peer PR
+[#289](https://github.com/homeiac/home/pull/289), commit
+`44f80e33fdfc315949240b0c0dbd63c8facc3d45`, without conflicts. Retained Cricket's
+maximum-first guidance and offline admission boundary. The shared skill, playbook,
+runbook and agent guide now require stage-by-pool discovery including hosts without
+model endpoints. This is local stack integration, not a claim of a master merge.
+
+Added [Cricket's discovery policy](../../scripts/perf/cricket-compute-policy.json).
+The existing planner expanded seven stages across eleven pools: the six physical
+Proxmox CPUs from inventory, Mac CPU, Mac Metal, RTX 3070, and still-fawn's VAAPI
+and passed-through Coral candidates. Broad enumeration does not assert that an
+accelerator can execute every stage; a runtime/compatibility check must establish
+that before a canary. Never test the Coral from its Proxmox host.
+
+Command: `python3 scripts/perf/plan-compute-trials.py scripts/perf/cricket-compute-policy.json --inventory --as-of 2026-11-27`.
+Private output: `/private/tmp/cricket-stage-pool-coverage-20261127.tsv`, **77 rows**:
+70 `PREFLIGHT + CANARY`, 7 dated `DEFER` rows for intentionally offline rapid-civet.
+`pytest -q scripts/perf/tests/test_compute_trials.py` passed **3 tests in 0.11 s**.
+No runtime/model, endpoint, guest, worker or shared allocation was changed.
+
+Every open row is owned by the Cricket indexer implementation, with review on
+2026-11-28 or sooner when its prerequisite becomes available. The policy contains
+stage profiles and pool-specific precautions; these are discovery profiles, not
+frozen acceptance-model evidence. Coverage remains incomplete until each open row
+has a measured result, demonstrated incompatibility or evidence-backed deferral.
+
+| Candidate scope | Next action and evidence needed |
+| --- | --- |
+| still-fawn, pve, chief-horse, fun-bedbug, pumped-piglet CPUs | Bounded read-only readiness: physical/guest memory and CPU, runtime availability, source/transfer path and active/scheduled peers; then qualify a stage-specific canary on a ready pool |
+| Mac CPU | Measure runtime/model fit and shared memory/CPU demand alongside photo work; no assumption that Metal occupancy excludes CPU work |
+| Mac Metal and RTX 3070 | Preserve four Mac/three RTX photo lanes; census other callers and measure physical constraints before selecting a route/model and allowance |
+| still-fawn VAAPI and Coral | Inspect only their current owning guest/pod path; establish stage/runtime compatibility and peer use before any device test |
+| rapid-civet CPU | Keep the intentional offline state; revisit availability change or 2026-11-28, with no power-on action from this policy |
+
+The observation of four occupied Mac Bonsai slots is specific to that serving
+route. It does not close other models, stages, CPU pools or devices. The common
+machine reviewer still does not enforce complete fleet discovery automatically.
 
 ## Updating evidence
 
