@@ -41,3 +41,8 @@ Use the existing twelve-face reviewed cohort, with original prompts, pass modes 
 5. **Close the task.** Independently reconcile published output, record the decision and attach before/trial/recovery Grafana windows per backend. Keep private records outside Git. The checklist can mark a code change implemented while live verification remains open. Reopen the promotion gate after a change in workload mix, backend, model, prompt or publication path.
 
 Use the existing trial directory and CLI. The owner supplies the comparison, time-bounded traces and independent readback. A successful CLI exit only establishes that review ran. Inspect its decision and the reviewed examples before promotion. [Playbook and evidence workflow](https://github.com/homeiac/home/blob/b4a19672cd37301206a5487c8f2e192c34f75bb7/docs/guides/shared-workload-agent.md) · [Detailed peer budgets](https://github.com/homeiac/home/blob/b4a19672cd37301206a5487c8f2e192c34f75bb7/docs/runbooks/shared-indexer-tuning.md)
+
+
+## Still-fawn CPU canary
+
+Readiness found the prior loopback CPU endpoint stopped and no reusable runtime or weights in the guest's standard storage roots. VM 108 has roughly 20 GiB available memory. Use a temporary, time-bounded loopback-only CPU server with the same pinned Bonsai weights and projector, one lane and at most two CPU threads. Verify downloads by digest and prevent duplicate servers with an exclusive lock. Keep startup/download time separate. Probe the same reviewed full scene and crop with the unchanged joint prompt and validator. Record stage, actor-action support, latency and peer progress. A temporary canary cannot qualify ongoing allocation. Persist any selected worker through GitOps after quality and peer checks.
