@@ -30,6 +30,24 @@ sequenceDiagram
     Agent-->>User: Verified outputs, peer impact and decision
 ```
 
+**Discover the fleet.** For scaling work, complete the [stage-by-pool coverage](../methodology/distributed-ai-performance.md#discover-capacity-beyond-the-current-routes) before selecting a serving route. Maintain a workload policy with `pools`, `proxmox_inventory` and `stages`. Each stage has a versioned `profile` and `evidence` by pool, using the existing planner contract. Resolve the inventory path relative to the policy. Invoke the planner explicitly in inventory mode.
+
+```sh
+python3 scripts/perf/plan-compute-trials.py "$policy" --inventory --as-of "$evaluation_date"
+```
+
+The read-only planner emits `PREFLIGHT + CANARY` for unmeasured stage/pool pairs and `REASSESS` for expired or changed profiles. It schedules discovery. The owner supplies real readiness and quality receipts before admitting work.
+
+| Stage | Physical pool | State | Next action or evidence |
+|---|---|---|---|
+| Life-stage/action inference | Mac Metal | Baseline | Record four protected lanes and measured output. |
+| Life-stage/action inference | RTX 3070 | Baseline | Record three protected lanes, peer demand and measured output. |
+| Life-stage/action inference | still-fawn CPU | Unmeasured | Probe runtime, available memory and source access. Then time the same reviewed faces and record quality and net fleet gain. |
+| Preview preparation | still-fawn CPU | Candidate | Compare measured preview cost and transfer overhead before deciding whether moving it helps. |
+| Applicable stage | Every other physical CPU/device | Discovered | Measure, demonstrate incompatibility or record an owned deferral and revisit trigger. |
+
+These rows illustrate the photo workload. They require current evidence for each run. Keep the full discovered table with the run receipts. An unmeasured CPU stays visible when a GPU experiment is held.
+
 **Start.** From the repo root, give each run a private directory. The command resolves the resource graph, samples Prometheus with `--live` and creates the session once.
 
 ```sh

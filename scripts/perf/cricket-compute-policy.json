@@ -1,0 +1,45 @@
+{
+  "workload": "cricket-indexer",
+  "purpose": "Discovery only; no allocation or admission authority",
+  "owner": "cricket-indexer",
+  "review_on": "2026-11-28",
+  "proxmox_inventory": "../../proxmox/inventory.txt",
+  "pools": ["mac-m5/cpu", "mac-m5/metal", "pumped-piglet/rtx3070", "still-fawn/vaapi", "still-fawn/coral"],
+  "readiness": {
+    "all": "Measure runtime/model fit, available CPU/memory, source access and transfer costs, active/scheduled peers and physical dependency closure before a bounded quality/timing canary. Then derive the maximum shared allowance; this discovery file supplies no worker count.",
+    "mac-m5/metal": "The existing Bonsai route has four contexts reserved for photo work. This is not evidence excluding all alternative Metal models or other stages; any alternative needs its own quality and shared-memory/peer measurements.",
+    "still-fawn/vaapi": "Inspect the existing K3s guest/pod path for decode support and peer use. Do not double-count its host CPU or passed-through device.",
+    "still-fawn/coral": "Inventory/runtime compatibility check through the owning guest only. Never test the passed-through Coral from the Proxmox host. No Cricket model compatibility or useful output is established.",
+    "rapid-civet/cpu": "Intentionally offline per current repository instructions; do not power it on for this task. Revisit on an explicit availability change or the dated review. Historical inventory also records SSH timeout."
+  },
+  "stages": {
+    "fetch": {
+      "profile": "cricket-source-fetch-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-source-fetch-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline in current repository instructions; inventory records timeout. Revisit availability change or 2026-11-28; no wake action authorized by this policy."}}
+    },
+    "decode-preview": {
+      "profile": "cricket-original-frame-extraction-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-original-frame-extraction-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline; revisit availability change or 2026-11-28. Preserve original frame dimensions and benchmark transfer/decode separately."}}
+    },
+    "native-faces": {
+      "profile": "cricket-immich-native-identity-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-immich-native-identity-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline; revisit availability change or 2026-11-28. Recognition remains through the native Immich identity authority."}}
+    },
+    "transcribe": {
+      "profile": "cricket-audio-evidence-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-audio-evidence-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline; revisit availability change or 2026-11-28. Measure audio evidence quality against the reviewed outcome cohort."}}
+    },
+    "classify": {
+      "profile": "cricket-age-face-kit-action-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-age-face-kit-action-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline; revisit availability change or 2026-11-28. Every runtime/model needs its own fixed quality and timing profile."}}
+    },
+    "reconcile": {
+      "profile": "cricket-correction-preserving-reconciliation-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-correction-preserving-reconciliation-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline; revisit availability change or 2026-11-28. Preserve authoritative ledger and correction concurrency."}}
+    },
+    "publish-verify": {
+      "profile": "cricket-openlabel-independent-readback-discovery-v1",
+      "evidence": {"rapid-civet/cpu": {"profile": "cricket-openlabel-independent-readback-discovery-v1", "state": "deferred", "review_on": "2026-11-28", "owner": "cricket-indexer", "reason": "Intentionally offline; revisit availability change or 2026-11-28. Keep database authority and independent readback; measure writer/transfer costs."}}
+    }
+  }
+}
