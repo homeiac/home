@@ -444,6 +444,10 @@ def panels():
     # Allocate the backend charts last to keep all existing dashboard links stable.
     charts_at = next(i for i, panel in enumerate(processing) if panel["type"] == "timeseries")
     backend_charts = photo_backend_panels(processing[charts_at]["gridPos"]["y"])
+    recovery = caption_recovery_panels()
+    # Allocate the timing panel after recovery so existing panel links stay stable.
+    timing_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+    backend_charts.append(photo_server_timing_panel(timing_y))
     chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
     shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
     processing[charts_at:charts_at] = backend_charts
@@ -452,7 +456,6 @@ def panels():
     remaining = (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
                  + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
                  + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
-    recovery = caption_recovery_panels()
     recovery_height = max(p['gridPos']['y'] + p['gridPos']['h'] for p in recovery)
     return recovery + shift(processing + shift(remaining, processing_height), recovery_height)
 
@@ -627,6 +630,30 @@ def photo_backend_panels(y):
     panels.append(_panel("text", "Life stage + action per face · quality comparison", [], 0, y + 20, 24, 8,
                          extra={"options": {"mode": "markdown", "content": "\n".join(quality)}}))
     return panels
+
+
+def photo_server_timing_panel(y):
+    sample = json.loads(Path(__file__).with_name("library-server-timing.json").read_text())
+    mac, rtx, sizes = sample["mac"], sample["rtx"], sample["size_trial"]
+    phases = [
+        ("Mac · before second output token (estimated)", mac["median_before_second_s"]),
+        ("Mac · later decoding (estimated)", mac["median_later_decode_s"]),
+        ("RTX · input evaluation", rtx["median_input_s"]),
+        ("RTX · output generation", rtx["median_decode_s"]),
+    ]
+    description = (
+        f'Median seconds per request, {sample["start_utc"]} to {sample["end_utc"]}. '
+        f'Mac timing uses {mac["closed_requests"]} observed slot transitions. '
+        f'RTX timing uses {rtx["closed_requests"]} complete runner records. Admission wait is unmeasured. '
+        f'Input-size test on {sizes["photos"]} reviewed faces with the close-up preserved: '
+        f'{sizes["before_input_units"]:,} → {sizes["candidate_input_units"]:,} input tokens across both Mac calls. '
+        f'{sizes["small_faces_below_minimum"]} of {sizes["small_faces_tested"]} separately sampled small faces '
+        f'fell below {sizes["minimum_marked_face_px"]} px in the marked scene. Production keeps the original size.'
+    )
+    return tuning_comparison(
+        "Life stage + action · where server time went (Nov 27 sample)",
+        [(f"vector({seconds})", label) for label, seconds in phases], 0, y, 24, 7, "s", description,
+    )
 
 
 def tuning_story(content):

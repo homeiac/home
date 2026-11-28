@@ -53,6 +53,21 @@ The ledger recorded **145 new saves**. At close, 28,922 were pending, 7 running,
 
 **Decision — observe only.** No qualifying mixed-cricket window, verified publication rate or end-to-end peer latency comparison exists for this run. The intake change in [PR #275](https://github.com/homeiac/home/pull/275) exposes photo queue counts to cricket review and holds a trial that omits the photo peer. All 48 shared performance tests passed. The live intake used that PR's checkout.
 
+## Which part of a model request took the time?
+
+On Nov 27 from 9:19:26 to 9:21:30 p.m. Pacific, both production backends spent more time handling input or reaching the first output than producing the rest of the answer. Existing workers continued processing. These measurements describe **requests**. An ordinary Mac face uses two and an RTX face uses one. [Timing panel](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&viewPanel=293) · [Aggregate receipt](../../../scripts/knowledge-index/library-server-timing.json)
+
+| Backend | Measurement | Result |
+|---|---|---|
+| Mac Metal | Sample all four slots about once a second. Group by slot and task. Use complete transitions observed before the second output unit. Estimate each boundary halfway between adjacent observations. | Across 31 such requests, the median was 11.03 s before the second output unit and 3.01 s afterward. The longest gap between samples was 2.62 s. This first interval includes startup and initial decoding. |
+| RTX 3070 | Join prompt, output and total timings by runner slot and task in the same UTC window. | Across 42 complete tasks, median input evaluation was 4.39 s and generation 2.25 s. Input evaluation accounted for 58.2% of summed runner time. All 42 HTTP calls succeeded. The median HTTP duration was 7.80 s. |
+
+Queue wait before admission remains unmeasured. The Mac observation begins at slot assignment. The RTX HTTP log has no common request ID with the runner, and the attempted time match yielded zero unambiguous pairs under a 100 ms matching limit. Subtracting the two medians would not identify queue time. The RTX server records aggregate traffic through a shared ingress address, so these numbers describe that endpoint.
+
+**Input-size trial.** Reproduce the two saved preview hashes on all 12 reviewed faces. Keep the crop byte-identical and use the production age and action prompts. Cap only the long edge of the marked scene at 640 px in place of 840 px. Use the installed Mac server's count-only endpoint for each pair. The 24 prompts per arm consumed **15,448 → 11,032 input tokens (28.6% fewer)**. One face already had a small enough scene and its count stayed the same. This measures the size of a model input. Throughput and the accuracy of generated observations at 640 px remain untested.
+
+**Decision.** Retain the production preview size. All 12 reference faces passed the existing 12 px minimum at either size, but **3 of 24** previously completed faces in a separate, deliberately small-face sample shrank to 10 px on the marked scene. The floor protects the link between the close-up and the person acting in the scene. This sample measures a failure mode and cannot estimate its prevalence. The next candidate keeps the original scene whenever resizing would cross the floor. Before deployment it must pass a matched generation trial on reviewed faces, including crowded scenes and small actors, and the live peer gates. S5 stays open.
+
 ## Receipt to append for each trial
 
 | Field | Record |

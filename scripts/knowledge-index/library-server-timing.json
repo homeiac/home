@@ -1,0 +1,27 @@
+{
+  "start_utc": "2026-11-28T05:19:26.479979Z",
+  "end_utc": "2026-11-28T05:21:30.713841Z",
+  "mac": {
+    "closed_requests": 31,
+    "median_before_second_s": 11.03,
+    "median_later_decode_s": 3.01,
+    "max_sample_gap_s": 2.62
+  },
+  "rtx": {
+    "closed_requests": 42,
+    "median_input_s": 4.392,
+    "median_decode_s": 2.246,
+    "input_pct_of_runner_time": 58.2,
+    "median_http_s": 7.795
+  },
+  "size_trial": {
+    "before_px": 840,
+    "candidate_px": 640,
+    "photos": 12,
+    "before_input_units": 15448,
+    "candidate_input_units": 11032,
+    "small_faces_tested": 24,
+    "small_faces_below_minimum": 3,
+    "minimum_marked_face_px": 12
+  }
+}
