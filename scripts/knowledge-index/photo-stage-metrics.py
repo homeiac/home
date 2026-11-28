@@ -31,7 +31,8 @@ def render(database: Path, progress_log: Path, stage: str = STAGE) -> str:
             raise ValueError("Unexpected life-stage checkpoint dispositions")
         backends = dict(conn.execute(
             "SELECT CASE WHEN json_extract(outcome, '$.backend') = 'rtx3070' "
-            "THEN 'rtx3070' ELSE 'mac-metal' END, count(*) "
+            "THEN 'rtx3070' WHEN json_extract(outcome, '$.backend') IN ('mac-cpu','still-fawn-cpu') "
+            "THEN json_extract(outcome, '$.backend') ELSE 'mac-metal' END, count(*) "
             "FROM jobs WHERE status = 'complete' GROUP BY 1"
         ))
         durations = sorted(
