@@ -42,7 +42,7 @@ def state(tmp_path):
     d = tmp_path
     prepared = run(d, "start", "--workload", WORKLOAD, "--run-id", "fixture", "--stage", "classify",
                    "--resource", POOL, "--output-kind", "media")
-    assert prepared["registered_peers"] == ["immich-pet-tagger", "knowledge-index"]
+    assert prepared["registered_peers"] == ["immich-pet-tagger", "knowledge-index", "library-face-observations"]
     assert set(prepared["resources"]) == {POOL, DEVICE}
     labels = attrs(**{"service.name": WORKLOAD, "workload.run.id": "fixture", "host.name": "mac"})
     span = {"traceId": "ab" * 16, "spanId": "ab" * 8, "startTimeUnixNano": str(NOW - 1000),
@@ -73,6 +73,7 @@ def test_registered_trial_with_peers_and_media(state):
     peer = "knowledge-index"
     rows = {w: dict(demand=True, unit="items", cohort="matched", verified=10, completed_items=10, p95_s=2, terminal_error_rate=0, quality_ok=True,
                     slo_ok=True, baseline_preserved=True) for w in [WORKLOAD, peer]}
+    rows["library-face-observations"] = dict(demand=False, baseline_preserved=True)
     rows["immich-pet-tagger"] = dict(demand=False, baseline_preserved=True)
     before = dict(start_ns=NOW-WINDOW, end_ns=NOW, warmed=True, max_sample_gap_s=15, environment="fixed",
                   callers={POOL: [WORKLOAD, peer], DEVICE: [WORKLOAD, peer]}, workloads=rows)

@@ -10,7 +10,18 @@ from urllib.parse import urlencode
 
 PROXY = "/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?"
 # Backlog alone cannot be attributed to a device. Keep the labels separate.
+FACE_STAGE = 'stage="library-face-observations"'
+FACE_ITEMS = "knowledge_index_photo_stage_items"
+FACE_SAVED = "knowledge_index_photo_stage_backend_completed"
 SERIES = {
+    "library-face-observations": {
+        "heartbeat": ("knowledge_index_photo_stage_updated_timestamp_seconds", FACE_STAGE),
+        "pending_faces": (FACE_ITEMS, FACE_STAGE + ',state="pending"'),
+        "running_faces": (FACE_ITEMS, FACE_STAGE + ',state="running"'),
+        "reused_faces": (FACE_ITEMS, FACE_STAGE + ',state="reused"'),
+        "withheld_faces": (FACE_ITEMS, FACE_STAGE + ',state="withheld"'),
+        "mac_saved_faces": (FACE_SAVED, FACE_STAGE + ',backend="mac-metal"'),
+        "rtx_saved_faces": (FACE_SAVED, FACE_STAGE + ',backend="rtx3070"')},
     "cricket-indexer": {
         "heartbeat": ("cricket_heartbeat_timestamp_seconds", ""),
         "mac_active_workers": ("cricket_workers", 'backend="mac",kind="active"'),
