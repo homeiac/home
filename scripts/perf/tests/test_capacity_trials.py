@@ -42,6 +42,7 @@ def fixture(at_ns: int = NOW) -> tuple[dict, dict]:
         "pool": POOL,
         "callers": {r: dict(workloads=[TARGET, PEER], **evidence) for r in topology},
         "allocation_evidence": dict(evidence),
+        "peer_baseline_sha256": "c" * 64,
         "baseline_allocation": {TARGET: 0, PEER: 4},
         "protected_allocation": {TARGET: 0, PEER: 4},
         "rollback_allocation": {TARGET: 0, PEER: 4},
@@ -75,6 +76,7 @@ def fixture(at_ns: int = NOW) -> tuple[dict, dict]:
             "sample_gap_s": 15,
             "minimum_completed_items": 10,
             "no_progress_s": 60,
+            "warmup_deadline_s": 60,
             "request_deadline_s": 90,
             "drain_deadline_s": 120,
             "max_peer_loss": 0.10,
@@ -196,6 +198,25 @@ def test_receipt_rejects_changed_session_policy_and_measured_facts(
     session["run_id"] = "another-run"
     with pytest.raises(ValueError):
         validate_receipt(session, original)
+
+
+def test_changed_peer_assessment_source_invalidates_registration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, spec = fixture()
+    register(session, spec, NOW, tmp_path / "receipt")
+    receipt = json.loads((tmp_path / "receipt").read_text())
+    original = Path.read_bytes
+
+    def changed(path: Path) -> bytes:
+        raw = original(path)
+        return (
+            raw + b"\n# changed policy\n" if path.name == "service_budgets.py" else raw
+        )
+
+    monkeypatch.setattr(Path, "read_bytes", changed)
+    with pytest.raises(ValueError, match="integrity changed"):
+        validate_receipt(session, receipt)
 
 
 def test_cli_registers_without_model_requests_or_ownership(tmp_path: Path) -> None:

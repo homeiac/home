@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from capacity_qualification import context, qualify, rank_repeatable
 from capacity_trials import register
+from otel_diagnosis import digest
 from shared_workloads import shared_context
 from test_capacity_trials import DEVICE, NOW, PEER, POOL, TARGET, fixture
 
@@ -19,8 +20,6 @@ WINDOW = 300 * 10**9
 
 def sample(tmp_path: Path) -> tuple[dict, dict, dict]:
     session, spec = fixture()
-    register(session, spec, NOW, tmp_path / "receipt")
-    receipt = json.loads((tmp_path / "receipt").read_text())
     target = {
         "demand": False,
         "verified": 0,
@@ -64,6 +63,9 @@ def sample(tmp_path: Path) -> tuple[dict, dict, dict]:
     trial.update(
         start_ns=NOW,
         end_ns=NOW + WINDOW,
+        admitted_ns=NOW,
+        warmup_start_ns=NOW,
+        warmup_end_ns=NOW,
         allocation={TARGET: 4, PEER: 4},
         callers={POOL: [TARGET, PEER], DEVICE: [TARGET, PEER]},
     )
@@ -74,6 +76,9 @@ def sample(tmp_path: Path) -> tuple[dict, dict, dict]:
         fresh_inference_items=10,
         terminal_error_rate=0,
     )
+    spec["peer_baseline_sha256"] = digest(before)
+    register(session, spec, NOW, tmp_path / "receipt")
+    receipt = json.loads((tmp_path / "receipt").read_text())
     comparison = {
         "action": spec["action"],
         "subject": TARGET,
@@ -84,6 +89,7 @@ def sample(tmp_path: Path) -> tuple[dict, dict, dict]:
         "min_gain": 0,
         "max_peer_loss": 0.10,
         "baseline": before,
+        "peer_baseline": deepcopy(before),
         "trial": trial,
     }
     return session, receipt, comparison
@@ -151,6 +157,10 @@ def test_idle_target_cannot_hide_peer_loss(
 def test_fake_idle_and_cached_outputs_hold(tmp_path: Path, mutation) -> None:
     session, receipt, comparison = sample(tmp_path)
     mutation(comparison)
+    if digest(comparison["baseline"]) != receipt["spec"]["peer_baseline_sha256"]:
+        with pytest.raises(ValueError, match="changed the protected baseline"):
+            qualify(session, receipt, comparison, NOW + WINDOW)
+        return
     assert (
         qualify(session, receipt, comparison, NOW + WINDOW)["candidate_review"][
             "decision"
@@ -171,7 +181,7 @@ def test_fake_idle_and_cached_outputs_hold(tmp_path: Path, mutation) -> None:
         lambda c: c.update(service_budgets={PEER: {"changed": "after-registration"}}),
         lambda c: c.update(capacity_registration_sha256="b" * 64),
         lambda c: c["trial"]["allocation"].update(**{TARGET: 3}),
-        lambda c: c["trial"].update(start_ns=NOW + 20 * 10**9),
+        lambda c: c["trial"].update(admitted_ns=NOW + 20 * 10**9),
         lambda c: c["trial"].update(end_ns=NOW + 4000 * 10**9),
     ],
 )
@@ -189,7 +199,13 @@ def test_lower_rate_can_qualify_and_mutation_cannot_reuse_context(
 ) -> None:
     session, receipt, comparison = sample(tmp_path)
     comparison["baseline"] = deepcopy(comparison["trial"])
-    comparison["trial"].update(start_ns=NOW + WINDOW, end_ns=NOW + 2 * WINDOW)
+    comparison["trial"].update(
+        start_ns=NOW + WINDOW,
+        end_ns=NOW + 2 * WINDOW,
+        admitted_ns=NOW + WINDOW,
+        warmup_start_ns=NOW + WINDOW,
+        warmup_end_ns=NOW + WINDOW,
+    )
     comparison["trial"]["allocation"][TARGET] = 2
     comparison["trial"]["workloads"][TARGET]["verified"] = 97
     result = qualify(session, receipt, comparison, NOW + 2 * WINDOW)["candidate_review"]
@@ -207,10 +223,11 @@ def test_lower_rate_can_qualify_and_mutation_cannot_reuse_context(
 
 def test_tighter_registered_latency_budget_stays_binding(tmp_path: Path) -> None:
     session, spec = fixture()
+    _, _, comparison = sample(tmp_path)
+    spec["peer_baseline_sha256"] = digest(comparison["peer_baseline"])
     spec["limits"]["max_peer_p95_growth"] = 0.01
     register(session, spec, NOW, tmp_path / "tight")
     tight = json.loads((tmp_path / "tight").read_text())
-    _, _, comparison = sample(tmp_path)
     comparison["capacity_registration_sha256"] = tight["receipt_sha256"]
     comparison["trial"]["workloads"][PEER]["p95_s"] = 2.04
     assert (
@@ -228,6 +245,8 @@ def test_service_peer_budgets_remain_binding(
     tmp_path: Path, value: float | None, decision: str
 ) -> None:
     session, spec = fixture()
+    _, _, comparison = sample(tmp_path)
+    spec["peer_baseline_sha256"] = digest(comparison["peer_baseline"])
     for route in session["topology"].values():
         route["measurement_kinds"] = {PEER: "service"}
     spec["service_budgets"] = {
@@ -242,7 +261,6 @@ def test_service_peer_budgets_remain_binding(
     }
     register(session, spec, NOW, tmp_path / "service")
     receipt = json.loads((tmp_path / "service").read_text())
-    _, _, comparison = sample(tmp_path)
     comparison["capacity_registration_sha256"] = receipt["receipt_sha256"]
     comparison["service_budgets"] = spec["service_budgets"]
     if value is not None:
@@ -256,12 +274,76 @@ def test_service_peer_budgets_remain_binding(
                     "evidence_ref": "fixture/service",
                 }
             }
+        # Baseline service measurements are sealed before registration too.
+        comparison["peer_baseline"] = deepcopy(comparison["baseline"])
+        spec["peer_baseline_sha256"] = digest(comparison["peer_baseline"])
+        register(session, spec, NOW, tmp_path / "service-measured")
+        receipt = json.loads((tmp_path / "service-measured").read_text())
+        comparison["capacity_registration_sha256"] = receipt["receipt_sha256"]
     assert (
         qualify(session, receipt, comparison, NOW + WINDOW)["candidate_review"][
             "decision"
         ]
         == decision
     )
+
+
+@pytest.mark.parametrize(
+    "metric,previous,current",
+    [
+        ("verified", 90, 81),
+        ("p95_s", 2.2, 2.42),
+    ],
+)
+def test_pairwise_losses_cannot_compound_beyond_original_baseline(
+    tmp_path: Path, metric: str, previous: float, current: float
+) -> None:
+    session, receipt, comparison = sample(tmp_path)
+    comparison["baseline"] = deepcopy(comparison["trial"])
+    comparison["baseline"]["workloads"][PEER][metric] = previous
+    comparison["trial"].update(
+        start_ns=NOW + WINDOW,
+        end_ns=NOW + 2 * WINDOW,
+        admitted_ns=NOW + WINDOW,
+        warmup_start_ns=NOW + WINDOW,
+        warmup_end_ns=NOW + WINDOW,
+    )
+    comparison["trial"]["allocation"][TARGET] = 3
+    comparison["trial"]["workloads"][PEER][metric] = current
+    paired = shared_context(
+        {"topology": session["topology"], "comparison": comparison},
+        NOW + 2 * WINDOW,
+        capacity=context(session, receipt, comparison),
+    )
+    assert paired["decision"] == "eligible"
+    result = qualify(session, receipt, comparison, NOW + 2 * WINDOW)
+    assert result["candidate_review"]["decision"] == "rollback"
+    assert result["protected_baseline_review"]["decision"] == "rollback"
+
+
+def test_delayed_warmup_is_separate_from_fresh_admission(tmp_path: Path) -> None:
+    session, receipt, comparison = sample(tmp_path)
+    warmed = NOW + 30 * 10**9
+    comparison["trial"].update(
+        warmup_end_ns=warmed, start_ns=warmed, end_ns=warmed + WINDOW
+    )
+    assert (
+        qualify(session, receipt, comparison, warmed + WINDOW)["candidate_review"][
+            "decision"
+        ]
+        == "eligible"
+    )
+    comparison["trial"]["admitted_ns"] = NOW + 2 * 10**9
+    comparison["trial"]["warmup_start_ns"] = NOW + 2 * 10**9
+    with pytest.raises(ValueError, match="first candidate"):
+        qualify(session, receipt, comparison, warmed + WINDOW)
+
+
+def test_original_baseline_cannot_be_replaced_mid_sweep(tmp_path: Path) -> None:
+    session, receipt, comparison = sample(tmp_path)
+    comparison["peer_baseline"]["workloads"][PEER]["verified"] = 80
+    with pytest.raises(ValueError, match="original protected baseline"):
+        qualify(session, receipt, comparison, NOW + WINDOW)
 
 
 def rankings() -> list[dict]:

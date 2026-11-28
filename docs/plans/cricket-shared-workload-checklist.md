@@ -53,7 +53,7 @@ and append the reason; retain the original receipt.
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
 | P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
 | P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c [#285](https://github.com/homeiac/home/pull/285); P04-d [#286](https://github.com/homeiac/home/pull/286) | Contracts, activity and slot observers implemented; complete window adapters pending | Foundation only | E17: 187 passed, 43 subtests | Complete live peer windows pending |
-| P05 | Maximum-first trial registration | P05-a [#287](https://github.com/homeiac/home/pull/287); P05-b `codex/cricket-p05-qualification` | Registration and offline qualification/ranking implemented; phase receipt/CLI integration pending | No | E19: 255 passed, 43 subtests | Local contract; live use through P09 |
+| P05 | Maximum-first trial registration | P05-a [#287](https://github.com/homeiac/home/pull/287); P05-b [#288](https://github.com/homeiac/home/pull/288) | Registration and offline qualification/ranking implemented; phase receipt/CLI integration pending | No | E19: 260 passed, 43 subtests after review fixes | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
 | P07 | Reviewed identity/outcome evidence | Existing #264/#266/#269; follow-up PR to create | Partial | Existing feature PRs open | E03 contains unresolved pilot results | Fresh quality pilot pending |
 | P08 | Verified review/search projection | Existing #259; canonical projection PR to create | Partial legacy view | Existing feature PR open | End-to-end canonical test pending | Pending |
@@ -551,6 +551,16 @@ validation, changed allocations/configuration/context rejection, unchanged peer
 and service gates, tighter registered latency budgets, and repeatable ranking that
 selects the 97% candidate with fewer workers but not the 94% candidate.
 
+Outcome-researcher design review identified three additional issues before live
+integration. Fixed them in this PR: every candidate also checks the sealed original
+protected baseline to prevent compounded peer losses; the policy fingerprint now
+covers all four registration/qualification/reviewer/service-budget sources; and
+observed admission time is separate from bounded warm-up and the measured window.
+The follow-up E02 run passed **260 tests and 43 subtests in 22.82 seconds**, no skips,
+at `/private/tmp/cricket-p05-qualification-reviewed-tests.log`. Added regressions
+for 100 → 90 → 81 throughput, compounded p95 growth, policy-source changes, replaced
+original baselines and a valid 30-second warm-up after timely admission.
+
 Qualification returns `not_admitted` with the measurement verdict nested beneath
 it. Ranking returns `ranking_only`. The CLI still rejects capacity review until
 phase ordering, independent fresh-evaluation receipts and observed ownership are
@@ -561,6 +571,10 @@ Post-quality-screen private slot receipt:
 `1795844546017737000` ns. The endpoint was ready with four serving/processing
 contexts and zero idle. This confirms no newly observed Mac context headroom;
 it is not a complete post-drain peer baseline or physical-resource qualification.
+It also does not establish fleet-wide exhaustion: stage-by-pool CPU/accelerator
+coverage and evidence-backed exclusions remain part of P04. The peer chat is
+preparing the corresponding shared-playbook clarification; no independent-pool
+canary has been admitted by this receipt.
 
 ## Updating evidence
 

@@ -1,6 +1,6 @@
 """Offline capacity qualification and ranking; these helpers never admit a trial."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from capacity_trials import ACTION, integer, number, require, validate_receipt
 from otel_diagnosis import digest
@@ -95,6 +95,21 @@ def context(session: dict, receipt: dict, comparison: dict) -> CandidateContext:
     derived = validate_receipt(session, receipt)
     spec = receipt["spec"]
     target = session["workload"]
+    reference = comparison.get("peer_baseline")
+    require(
+        isinstance(reference, dict)
+        and digest(reference) == spec["peer_baseline_sha256"],
+        "missing or changed original protected baseline",
+    )
+    require(
+        integer(reference.get("end_ns"), 1)
+        and 0 <= receipt["registered_ns"] - reference["end_ns"] <= 15 * 10**9
+        and reference.get("allocation") == spec["baseline_allocation"]
+        and reference.get("environment") == spec["fixed_inputs"]["environment_sha256"]
+        and reference["workloads"][target].get("cohort")
+        == spec["fixed_inputs"]["cohort_sha256"],
+        "protected baseline is stale or differs from registered inputs/allocations",
+    )
     require(
         comparison.get("action") == ACTION
         and comparison.get("subject") == target
@@ -166,6 +181,21 @@ def context(session: dict, receipt: dict, comparison: dict) -> CandidateContext:
     before, trial = comparison["baseline"], comparison["trial"]
     require(
         all(
+            integer(trial.get(k), 1)
+            for k in ("admitted_ns", "warmup_start_ns", "warmup_end_ns")
+        )
+        and receipt["registered_ns"] <= trial["admitted_ns"]
+        and before["end_ns"]
+        <= trial["admitted_ns"]
+        <= trial["warmup_start_ns"]
+        <= trial["warmup_end_ns"]
+        <= trial["start_ns"]
+        and trial["start_ns"] - trial["admitted_ns"]
+        <= spec["limits"]["warmup_deadline_s"] * 10**9,
+        "missing or unbounded admission/warmup timing",
+    )
+    require(
+        all(
             integer(p.get(k), 1)
             for p in (before, trial)
             for k in ("start_ns", "end_ns")
@@ -178,8 +208,12 @@ def context(session: dict, receipt: dict, comparison: dict) -> CandidateContext:
     )
     if initial:
         require(
+            digest(before) == spec["peer_baseline_sha256"],
+            "initial comparison changed the protected baseline",
+        )
+        require(
             0 <= receipt["registered_ns"] - before["end_ns"] <= 15 * 10**9
-            and trial["start_ns"] <= spec["admission_deadline_ns"]
+            and trial["admitted_ns"] <= spec["admission_deadline_ns"]
             and allocations[1][target] == derived["ceiling"],
             "first candidate must start at the measured maximum after a fresh baseline",
         )
@@ -214,9 +248,29 @@ def qualify(session: dict, receipt: dict, comparison: dict, watermark: int) -> d
         watermark,
         capacity=validated,
     )
+    # Pairwise checks alone allow 100 -> 90 -> 81 throughput or repeated p95
+    # growth. Compare every candidate with the same real protected baseline too.
+    anchored = {**comparison, "baseline": comparison["peer_baseline"]}
+    original = replace(
+        validated,
+        comparison_sha256=digest(anchored),
+        idle_target=receipt["spec"]["baseline_mode"] == "observed_idle",
+    )
+    protected = shared_context(
+        {"topology": session["topology"], "comparison": anchored},
+        watermark,
+        capacity=original,
+    )
+    priority = {"eligible": 0, "hold": 1, "rollback": 2}
+    if priority[protected["decision"]] > priority[result["decision"]]:
+        result["decision"] = protected["decision"]
+    result["reasons"] += [
+        "protected baseline: " + reason for reason in protected["reasons"]
+    ]
     return {
         "decision": "not_admitted",
         "candidate_review": result,
+        "protected_baseline_review": protected,
         "pending": [
             "phase_order_and_repetition",
             "fresh_evaluation_receipt_readback",

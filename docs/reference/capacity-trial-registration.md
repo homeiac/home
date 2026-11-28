@@ -19,10 +19,11 @@ demonstrates the complete JSON shape without describing actual spare capacity.
 | `protected_allocation` | Floors that the baseline and every candidate preserve |
 | `rollback_allocation` | Exact baseline vector; rollback cannot take lanes from a peer |
 | `allocation_evidence` | Timestamp and private evidence pointer/hash for the vectors |
+| `peer_baseline_sha256` | Digest of the original protected baseline phase, sealed before the first candidate and retained for every comparison |
 | `baseline_mode` | `active` or `observed_idle`; idle target has zero observed workers. Actual queue proof remains a phase-review requirement |
 | `fixed_inputs` | SHA-256 digests for sources, cohort, model, prompt, extraction, quality rubric and environment |
 | `constraints` | Measured rows covering every resource: metric, unit, capacity, per-extra-worker cost and the baseline/scheduled footprint reserved for every affected workload |
-| `limits` | Warm-window duration ≥300 s, sampling gap ≤15 s, ≥10 durable items, progress/request/drain deadlines and peer budgets no weaker than the playbook |
+| `limits` | Warm-window duration ≥300 s, sampling gap ≤15 s, ≥10 durable items, progress/request/drain/warm-up deadlines and peer budgets no weaker than the playbook |
 | `admission_deadline_ns` | Initial admission no more than 15 s after registration; the owner still must recheck freshness and ownership at admission |
 | `completion_deadline_ns` | Hard experiment bound, long enough for forward/reverse windows and drain |
 | `candidates` | Strictly descending total target worker counts, starting at the derived measured ceiling and remaining above baseline |
@@ -46,7 +47,8 @@ worker sweep. An allocated/reserved caller cannot have a zero resource footprint
 on a route it uses. Unknown constraints remain a blocker, not an assumed zero cost.
 
 The receipt binds the complete intake (including topology), spec, derived ceiling
-and allocation vectors, registration time and validator source digest. Creation is
+and allocation vectors, registration time and a deterministic digest covering the
+registration, capacity qualification, shared reviewer and service-budget sources. Creation is
 exclusive with file mode `0600`. Revalidation recomputes the contract and rejects
 changed scope, policy or measurements. A content digest detects accidental changes;
 it is not a signature or proof of authorization. Do not edit an existing receipt.
@@ -60,12 +62,17 @@ is always `not_admitted`. `candidate_review` describes only whether the supplied
 measurements satisfy candidate safety/quality checks. The public CLI still refuses
 capacity review while complete phase and receipt validation is pending.
 
-The comparison carries `capacity_registration_sha256`, the exact `fixed_inputs`
+The comparison carries `capacity_registration_sha256`, the original sealed
+`peer_baseline` phase, the exact `fixed_inputs`
 and `output_accounting`, `min_gain=0` and a `max_peer_loss` no weaker than registered.
 Service budgets must match the registered `service_budgets` exactly. Each phase's
 `allocation` maps every affected workload to its observed total workers. Peer
-vectors cannot change. The first candidate starts at the derived maximum after a
-fresh baseline, within the initial admission deadline. Later candidates and their
+vectors cannot change. The first candidate is admitted at the derived maximum
+after a fresh baseline, within the initial admission deadline. The observed
+`admitted_ns`, `warmup_start_ns` and `warmup_end_ns` precede the measured `start_ns`;
+warm-up is bounded separately by `warmup_deadline_s`. A warm-up longer than fifteen
+seconds does not invalidate a timely admission, and cannot count as a warmed
+measurement window. Later candidates and their
 baseline allocations must be registered and fall within the experiment bound.
 
 For an observed-idle target, retain real zero baseline output and fresh empty-queue
@@ -77,6 +84,13 @@ An active target needs comparable fresh completions in both windows. Cached
 results cannot satisfy these fields; independent receipts will verify them in the
 remaining integration. Every peer retains the existing progress, latency, error,
 quality and service-budget gates, including tighter registered limits.
+
+Every candidate also passes a second shared review against the same hash-bound
+original protected baseline. Combine that verdict with the current comparison
+using `rollback` before `hold` before `eligible`. This prevents acceptable pairwise
+losses from compounding across a sweep (for example, peer output 100 → 90 → 81).
+Retain the original baseline's real target evidence; never invent completions for
+an idle target or apply the initial-admission deadline again to this second review.
 
 Lower target throughput alone does not cause rollback in a capacity comparison.
 `rank_repeatable` ranks already-qualified samples by the lower rate across at least
