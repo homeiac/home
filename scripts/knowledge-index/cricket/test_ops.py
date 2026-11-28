@@ -7,12 +7,47 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cricket.ledger import Ledger
-from cricket.ops import main, retry, status
+from cricket.ops import main, reanalyze, retry, status
 from cricket.test_ledger import delivery
 from cricket.worker import available_memory
 
 
 class OpsTests(unittest.TestCase):
+    def test_new_analysis_generation_preserves_completed_jobs_and_corrections(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ledger = Ledger(root / "ledger")
+            ledger.add_album("o", "a", "person-a")
+            ledger.add_asset("o", "a", "v", "video", 120, "source")
+            event = ledger.create_event(
+                "o", "a", "v", delivery(outcome="attempted_run_out"), manual=True
+            )
+            with ledger.connect(True) as db:
+                db.execute(
+                    "INSERT INTO jobs(owner,asset,version,stage,state) VALUES('o','v','cricket-v1','analyze','complete')"
+                )
+            path = root / "policy.json"
+            path.write_text(json.dumps({"enabled": True, "backends": {}}))
+            self.assertEqual(reanalyze(ledger, path, "cricket-age-track-v1"), 1)
+            self.assertEqual(reanalyze(ledger, path, "cricket-age-track-v1"), 0)
+            self.assertEqual(
+                json.loads(path.read_text())["analysis_version"], "cricket-age-track-v1"
+            )
+            self.assertEqual(
+                ledger.get("o", event)["data"]["outcome"], "attempted_run_out"
+            )
+            with ledger.connect() as db:
+                self.assertEqual(
+                    db.execute(
+                        "SELECT state FROM jobs WHERE version='cricket-v1'"
+                    ).fetchone()[0],
+                    "complete",
+                )
+            with self.assertRaises(ValueError):
+                reanalyze(ledger, path, "cricket-v1")
+
     def test_retry_and_restore_are_scoped_and_nondestructive(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
