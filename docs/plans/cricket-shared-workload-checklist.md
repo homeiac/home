@@ -690,6 +690,28 @@ ordered phase receipts and shared lease execution remain pending. CPU canaries
 continue to be coordinated by the Knowledge Index chat, with no overlapping Cricket
 model instance or trial ownership.
 
+### E23 — Live CPU tuning is active, first Mac ceiling rejected
+
+See the [live CPU journal](../experiments/cricket-cpu-tuning-20261127.md) for the
+ownership handoff, measured ceilings, immutable private receipts and remaining
+completion gates. The Mac10-thread/1000% quota arm failed a closed warmed window:
+Metal throughput ratio 0.837716, p95 39.866 → 44.680 seconds. Independent peer review
+reproduced both losses. The isolated model was stopped; process/listener cleanup and
+released ownership were verified at `1795847358556469000` ns. Five completed cases
+have partial reviewed quality only. Recovery precedes the next lower setting.
+
+Still-fawn's measured maximum is 75% of one core after existing host demand and
+system margin. A separate Lease and transient cgroup enforce that bound; its first
+request is running within an explicit diagnostic deadline. Neither backend is
+selected or production-qualified. Protected four Mac/three RTX photo lanes and
+current Cricket corrections remain intact. The knowledge chat owns independent
+quality/readback verification and Grafana publication; Cricket owns CPU actuation.
+
+Three operational Lease tests and four request-boundary/parser tests passed with
+mocked actuation; saved production-parser parity passed seven stored responses.
+These focused checks do not replace live peer, quality, publication or recovery
+gates. No full application suite was repeated for the documentation-only journal.
+
 ## Updating evidence
 
 For each new receipt record date/time, task ID, source/PR, environment, exact
