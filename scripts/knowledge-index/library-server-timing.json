@@ -81,10 +81,10 @@
   },
   "cpu_capacity_trials": [
     {
-      "backend": "Mac CPU",
+      "backend": "Added Mac CPU",
       "threads": 10,
       "quota_percent": 1000,
-      "decision": "Stopped \u00b7 workload latency failed",
+      "decision": "Stopped \u00b7 combined latency +13.5%",
       "scope": "Closed five-minute peer window; partial five-case quality review",
       "peer_rates": {
         "mac-metal": {
@@ -107,11 +107,11 @@
         "both_correct": 2
       },
       "recovery_verified": true,
-      "decision_reason": "Aggregate GPU production rose 130 to 133 faces, but combined p95 rose 37.434 to 42.503 s, exceeding the 10% workload budget. Five CPU replays are excluded from new library output. No CPU allocation selected.",
+      "decision_reason": "Aggregate GPU production rose 130 to 133 faces, but combined p95 rose 37.434 to 42.503 s, exceeding the 10% workload budget. Five CPU replays are excluded from new library output. No CPU allocation selected. RTX GPU throughput improved in this window; the stopped decision concerns the added Mac CPU work, while all three RTX GPU lanes remain selected.",
       "panel_id": 294
     },
     {
-      "backend": "Mac CPU",
+      "backend": "Added Mac CPU",
       "threads": 6,
       "quota_percent": 600,
       "decision": "Stopped \u00b7 aggregate budgets passed \u00b7 quality incomplete",
@@ -142,7 +142,7 @@
     },
     {
       "panel_id": 297,
-      "backend": "Mac CPU \u00b7 original 27B two calls",
+      "backend": "Added Mac CPU \u00b7 original 27B two calls",
       "threads": 7,
       "quota_percent": 700,
       "decision": "Stopped \u00b7 fresh workload latency failed",
@@ -208,5 +208,28 @@
     "diagnostic_case02_stage_correct": false,
     "diagnostic_case02_action_supported": true,
     "cleanup_verified": true
+  },
+  "cpu_selection": {
+    "mac_metal_lanes": 4,
+    "rtx_lanes": 3,
+    "mac_cpu_lanes": 0,
+    "still_fawn_cpu_lanes": 0,
+    "decision": "Keep protected GPU baseline \u00b7 no qualified CPU increment",
+    "scope": "Best supported by completed finite tests; no global optimum claim",
+    "unmeasured": [
+      "original 27B Mac two-call four threads",
+      "original 27B Mac two-call two threads",
+      "fresh original 27B Mac joint six-thread repeat"
+    ],
+    "production_cpu_outputs": 0,
+    "quality_preserving_verified_gain_demonstrated": false,
+    "control_before": 156,
+    "control_after": 139,
+    "control_before_p95_s": 32.028,
+    "control_after_p95_s": 34.828,
+    "trial_cleanup_verified": true,
+    "mac_serving_ready": true,
+    "mac_serving_contexts": 4,
+    "production_supervisor_running": true
   }
 }

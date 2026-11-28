@@ -452,19 +452,21 @@ def panels():
         trial_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
         rates = []
         for backend, values in trial["peer_rates"].items():
+            label = {"mac-metal": "Mac GPU (Metal)", "rtx3070": "RTX GPU"}[backend]
             rates.extend([
-                (f'vector({values["before_per_min"]})', f'{backend} · protected baseline'),
-                (f'vector({values["trial_per_min"]})', f'{backend} · CPU trial'),
+                (f'vector({values["before_per_min"]})', f'{label} · before added Mac CPU'),
+                (f'vector({values["trial_per_min"]})', f'{label} · during added Mac CPU'),
             ])
         quality = trial["quality"]
         description = (
-            f'{trial["threads"]} threads with aggregate quota {trial["quota_percent"]}%. '
+            'Bars measure the existing GPU workers before and during added Mac CPU inference. '
+            f'The added CPU setting uses {trial["threads"]} threads with aggregate quota {trial["quota_percent"]}%. '
             f'{trial["scope"]}. Stage correct {quality["stage_correct"]}/{quality["reviewed"]}, '
             f'supported action {quality["supported_actions"]}/{quality["reviewed"]}, '
             f'both correct {quality["both_correct"]}/{quality["reviewed"]}. '
             f'{trial.get("decision_reason", "Qualification remains open.")} '
             'Independent recomputation completed; cleanup and recovery are recorded per trial. '
-            'CPU evaluation responses are excluded from production saved-face counters. Tuning is still active.'
+            'CPU evaluation responses are excluded from production saved-face counters. Final production choice retains zero CPU lanes.'
         )
         backend_charts.append(tuning_comparison(
             f'{trial["backend"]} · {trial["threads"]} threads · {trial["decision"]}',
@@ -472,6 +474,12 @@ def panels():
         ))
         # These published comparison links stay stable as new trial arms are added.
         backend_charts[-1]["id"] = trial["panel_id"]
+        backend_charts[-1]["fieldConfig"]["overrides"] = [
+            {"matcher": {"id": "byRegexp", "options": ".*before added Mac CPU"},
+             "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "gray"}}]},
+            {"matcher": {"id": "byRegexp", "options": ".*during added Mac CPU"},
+             "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]},
+        ]
     cpu_evidence = json.loads(Path(__file__).with_name("library-server-timing.json").read_text())
     if "cpu_quality_screen" in cpu_evidence:
         quality = cpu_evidence["cpu_quality_screen"]
@@ -492,13 +500,38 @@ def panels():
             'Both readings were supported. A second diagnostic reproduced the known age error, so the smaller model remains unqualified on Linux. '
             'The 27B Linux profile exceeded its 900 s diagnostic request bound. Keep zero CPU lanes for these tested Linux profiles; cleanup was verified.\n\n'
             '**New CPU production outputs: 0. CPU production lanes: 0.** '
-            'Frozen evaluations do not count as library progress. Original-model Mac two-call testing continues; '
-            'quality, aggregate workload gain, distinct peer budgets and independent publication/readback must pass before selection.'
+            'Frozen evaluations do not count as library progress. The finite comparison is closed with the protected GPU baseline; '
+            'no profile qualified for a production CPU increment. Unrun settings remain unmeasured.'
         )
-        backend_charts.append(_panel('text', 'CPU quality · Mac and still-fawn · no production selection', [],
+        backend_charts.append(_panel('text', 'CPU quality · Mac and still-fawn · no CPU profile qualified', [],
                                      0, evidence_y, 24, 9,
                                      extra={'options': {'mode': 'markdown', 'content': content}}))
         backend_charts[-1]["id"] = 296
+    if "cpu_selection" in cpu_evidence:
+        choice = cpu_evidence["cpu_selection"]
+        selection_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+        content = (
+            "### Keep the current GPU workers\n\n"
+            "| Backend | Selected production lanes | Outcome |\n"
+            "|---|---:|---|\n"
+            f'| Mac Metal | {choice["mac_metal_lanes"]} | Protected baseline retained |\n'
+            f'| RTX 3070 | {choice["rtx_lanes"]} | Protected baseline retained |\n'
+            f'| Mac CPU | {choice["mac_cpu_lanes"]} | No qualified quality-preserving verified gain |\n'
+            f'| still-fawn CPU | {choice["still_fawn_cpu_lanes"]} | Tested profiles did not qualify |\n\n'
+            '**No CPU speedup is claimed.** Smaller Bonsai2 failed reviewed quality. Original 27B CPU arms '
+            'had workload latency failures or incomplete quality/gain evidence. A zero-CPU control also varied '
+            f'{choice["control_before"]}→{choice["control_after"]} GPU checkpoints per five minutes '
+            f'(p95 {choice["control_before_p95_s"]:.3f}→{choice["control_after_p95_s"]:.3f} s), '
+            'so individual windows cannot establish causation.\n\n'
+            '**Scope:** best supported by completed finite tests, not a proven global optimum. '
+            'Original-model Mac four/two-thread two-call arms and a fresh joint-six repeat were not run. '
+            'CPU queue adapter remains opt-in and disabled. Trial processes and listeners are stopped and Leases released. '
+            'Mac serving is ready with four contexts; the production supervisor is running with four Mac and three RTX lanes. '
+            'Reopen only with a declared new quality/capacity hypothesis.'
+        )
+        backend_charts.append(_panel('text', 'Selected production · 4 Mac Metal + 3 RTX · CPU 0', [],
+                                     0, selection_y, 24, 11,
+                                     extra={'options': {'mode': 'markdown', 'content': content}}))
     chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
     shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
     processing[charts_at:charts_at] = backend_charts

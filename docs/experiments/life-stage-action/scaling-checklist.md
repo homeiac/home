@@ -125,9 +125,9 @@ The trial process and listener were confirmed stopped and the lease released. Re
 - [x] Independently review the first full Bonsai2 2B Mac pass, excluding the partial repeat. Correct known stages 2/10, supported whole actions 8/12, both 1/10, one invalid action and zero stage abstentions. Historical original-model reference is 21/40 stages, 35/48 actions and 16/40 both. The smaller profile fails quality prequalification.
 - [x] Review still-fawn Bonsai2 readiness at 75% quota. The one paired case has the correct school-age stage and supported smile toward the camera. Age 125.426476 s and action 131.462032 s are compatibility timings only. The original 27B profile exceeded its 900 s diagnostic bound. Neither result establishes a production CPU setting.
 - [x] Prepare an opt-in native-face queue adapter, default CPU lanes zero. Atomic claim generation/input/expiry guards fence stale CPU saves even after GPU supervisor recovery. Actual SDK synthetic integration records claim/process/infer/checkpoint/write and forwards caller/run/trace headers, with zero verified-output increments. Tests use disposable synthetic queues and no inference.
-- [ ] Finish original-model two-call Mac quality and capacity comparison, under sole coordinated actuation and preserved GPU reservations.
-- [ ] Qualify any winner using new unique library claims, independent OpenLABEL publication/readback, repeated aggregate workload gain and distinct peer budgets.
-- [ ] Independently read the served Grafana revision containing all closed results.
+- [x] Conclude the finite original-model comparison with CPU zero. The measured ceiling did not qualify; four/two-thread and fresh joint-six arms remain unmeasured following the coordinated user direction to consolidate existing results.
+- [ ] Deferred promotion gate: any future CPU winner still requires new unique library claims, independent OpenLABEL publication/readback, repeated aggregate workload gain and distinct peer budgets. No CPU profile was promoted in this comparison.
+- [x] Independently read served Grafana versions 86 and 87 for the published closed results. Final selection-panel readback is recorded below.
 
 The earlier ten-thread rejection paragraph is the historical backend-only stop reason. Its current decision comes from aggregate workload latency. The six-thread backend-only rejection was withdrawn. Frozen CPU answers never count as newly completed production faces. CPU production remains disabled pending the gates above.
 
@@ -138,3 +138,13 @@ Seven CPU threads at 700% quota failed the closed 300.236 s fresh-baseline laten
 Linux's second diagnostic reproduced the smaller model's known school-age-versus-preschool error, with high confidence. Its action was supported. Input digests and production normalization were independently checked. Model processes and listener were absent and the lease released. Keep zero still-fawn CPU lanes for these tested profiles; a future different allowance/runtime/profile needs a reviewed quality hypothesis. This does not establish that all CPU models are unsuitable.
 
 The served Grafana API independently returned version 86 and the expected contents for panels 294–296 after Flux applied 38fcc2c. The next source revision adds the seven-thread comparison as panel 297 and retains those links.
+
+## Final finite CPU selection
+
+Keep four Mac Metal and three RTX production lanes, with zero CPU lanes on both Mac and still-fawn. This is the best supported choice from completed evidence. No added CPU profile demonstrated reviewed-quality, independently verified new-library output gain. It is not proof of a global optimum. The CPU adapter remains opt-in and disabled.
+
+The user asked the coordinated chat to consolidate the data already generated, with no additional CPU inference. Accordingly, original-model Mac two-call four/two-thread arms and a fresh joint-six repeat were not run. They remain unmeasured, not rejected. No CPU production outputs were counted.
+
+A zero-CPU control produced 139 versus 156 baseline GPU checkpoints over five minutes (p95 34.828 versus 32.028 s). Throughput varied even without CPU inference, so the single seven-thread slowdown is an observed budget failure rather than a causal estimate. Preserve the failed controls and fresh/original anchors.
+
+Final cleanup receipts report zero CPU trial model processes, closed listeners and released pool Leases. Authenticated Mac serving readback is ready with four serving/processing contexts; the production LaunchAgent is running with four Mac and three RTX lanes and no overrides. The final dashboard/metrics suite passed 44 checks; the canary adapter passed 24 targeted checks and the separate real-SDK synthetic integration. The skill validator also passed.
