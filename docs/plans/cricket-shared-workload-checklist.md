@@ -52,7 +52,7 @@ and append the reason; retain the original receipt.
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
 | P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
-| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b `codex/cricket-p04-peer-observer` | Contracts and expanded activity observer implemented; complete window adapters pending | Foundation only | E15: 181 passed, 43 subtests | Complete live peer windows pending |
+| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c `codex/cricket-p04-face-contract` | Contracts and expanded activity observer implemented; complete window adapters pending | Foundation only | E16: 182 passed, 43 subtests | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
 | P07 | Reviewed identity/outcome evidence | Existing #264/#266/#269; follow-up PR to create | Partial | Existing feature PRs open | E03 contains unresolved pilot results | Fresh quality pilot pending |
@@ -123,6 +123,9 @@ and append the reason; retain the original receipt.
 - [x] **P04-b-I/V:** Observe the face pass, media summaries, Frigate service and
   Immich face queues separately using existing exporters. Evidence: E15. These
   activity facets do not substitute for complete matched-window measurements.
+- [x] **P04-c-I/V:** Integrate the peer-owned #275 route/name/counter contract and
+  remove the duplicate face-workload alias. Preserve the explicit Frigate service
+  kind and fresh idle-evidence gates. Verification/coordination: E16.
 - [ ] **P04-I:** Complete server and device caller census, measured routes,
   scheduled reservations and workload-specific progress/quality/service adapters.
 - [ ] **P04-V:** Demonstrate stale/absent/idle distinctions, unknown callers, changed
@@ -449,6 +452,29 @@ reported zero across the observed states. These are timestamped activity facts,
 not verified throughput, complete caller attribution or capacity headroom. The
 user authorized coordination with the active Knowledge Index chat; no shared
 service or allocation was changed by this slice.
+
+### E16 — P04-c reconcile the peer-owned contract
+
+Branch: `codex/cricket-p04-face-contract`. Integrated PR #275 source
+`6bcdbc07182a66d9e3ff6f285545499692520c63` into the Cricket stack. Resolved overlap in
+topology and tests, retained the service/idle gates from #283, and removed the
+new observer's duplicate `knowledge-index/library-face-observations` alias. The
+canonical name is `library-face-observations`, registered on both serving pools
+and their physical accelerators. Existing per-backend counter names are retained.
+This is a local integration, not a claim that #275 is merged to master.
+
+The authorized coordination response confirms four Mac and three RTX photo lanes,
+zero trial increment, and no shared lease acquired/deployed. The proposed owner
+mechanism is an expiring Kubernetes Lease per physical pool; expiry stops new
+trial submissions and drains in-flight work. Photo admission delay is unknown.
+Its 640 px cohort experiment failed the existing detail floor for 3 of 24 small
+faces, so production image sizing stays unchanged. Preserve these constraints
+through P05/P06; no live changes were made here.
+
+The E02 command passed **182 tests and 43 subtests in 22.34 seconds**. The
+integrated tests require the photo peer in Cricket review, retain missing/backend
+zero distinctions, and preserve both the original CLI coverage and newer
+service/idle contracts. Compile and diff checks pass.
 
 ## Updating evidence
 

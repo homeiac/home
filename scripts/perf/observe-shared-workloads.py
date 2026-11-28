@@ -10,7 +10,21 @@ from urllib.parse import urlencode
 
 PROXY = "/api/v1/namespaces/monitoring/services/http:kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?"
 # Backlog alone cannot be attributed to a device. Keep the labels separate.
+FACE_STAGE = 'stage="library-face-observations"'
+FACE_ITEMS = "knowledge_index_photo_stage_items"
+FACE_SAVED = "knowledge_index_photo_stage_backend_completed"
 SERIES = {
+    "library-face-observations": {
+        "heartbeat": ("knowledge_index_photo_stage_updated_timestamp_seconds", FACE_STAGE),
+        "pending_faces": (FACE_ITEMS, FACE_STAGE + ',state="pending"'),
+        "running_faces": (FACE_ITEMS, FACE_STAGE + ',state="running"'),
+        "reused_faces": (FACE_ITEMS, FACE_STAGE + ',state="reused"'),
+        "withheld_faces": (FACE_ITEMS, FACE_STAGE + ',state="withheld"'),
+        "mac_saved_faces": (FACE_SAVED, FACE_STAGE + ',backend="mac-metal"'),
+        "rtx_saved_faces": (FACE_SAVED, FACE_STAGE + ',backend="rtx3070"'),
+        "complete_checkpoints": (FACE_ITEMS, FACE_STAGE + ',state="complete"'),
+        "failed_checkpoints": (FACE_ITEMS, FACE_STAGE + ',state="failed"'),
+        "historical_model_request_p95_s": ("knowledge_index_photo_stage_phase_p95_seconds", FACE_STAGE + ',phase="model_request"')},
     "cricket-indexer": {
         "heartbeat": ("cricket_heartbeat_timestamp_seconds", ""),
         "mac_active_workers": ("cricket_workers", 'backend="mac",kind="active"'),
@@ -38,16 +52,6 @@ SERIES = {
         "primary_parquet_writes_process_total": ("media_pipeline_backend_saved_total", 'backend="primary"'),
         "cache_parquet_writes_process_total": ("media_pipeline_backend_saved_total", 'backend="cache"'),
         "mac_offered_requests": ("media_pipeline_mac_request_limit", ""),
-    },
-    "knowledge-index/library-face-observations": {
-        "heartbeat": ("knowledge_index_photo_stage_updated_timestamp_seconds", 'stage="library-face-observations"'),
-        "pending_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="pending"'),
-        "running_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="running"'),
-        "complete_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="complete"'),
-        "failed_checkpoints": ("knowledge_index_photo_stage_items", 'stage="library-face-observations",state="failed"'),
-        "mac_complete_checkpoints": ("knowledge_index_photo_stage_backend_completed", 'stage="library-face-observations",backend="mac-metal"'),
-        "rtx_complete_checkpoints": ("knowledge_index_photo_stage_backend_completed", 'stage="library-face-observations",backend="rtx3070"'),
-        "historical_model_request_p95_s": ("knowledge_index_photo_stage_phase_p95_seconds", 'stage="library-face-observations",phase="model_request"'),
     },
     "frigate": {
         "heartbeat": ("photo_frigate_last_poll_timestamp_seconds", ""),

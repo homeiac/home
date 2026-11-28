@@ -16,6 +16,8 @@ METAL = "mac-m5/metal"
 WINDOW = 300 * 10**9
 CRICKET, KI, PET = "cricket-indexer", "knowledge-index", "immich-pet-tagger"
 
+FACE = "library-face-observations"
+
 
 def window():
     def row(count, unit):
@@ -24,6 +26,7 @@ def window():
     baseline = dict(start_ns=WINDOW, end_ns=2*WINDOW, warmed=True, max_sample_gap_s=15, environment="fixed-models-and-worker-floors",
                     callers={SLOTS: [CRICKET, KI], METAL: [CRICKET, KI]},
                     workloads={CRICKET: row(10, "reviewed source minutes"), KI: row(35, "verified captions"),
+                               FACE: row(25, "verified faces"),
                                PET: dict(demand=False, baseline_preserved=True,
                                          activity=dict(state="idle", runnable=0, reservation_workers=0,
                                                        observed_ns=2*WINDOW, evidence_ref="fixture/idle"))})
@@ -39,8 +42,16 @@ def test_shared_server_and_device_dependencies():
     decision = shared_context(window(), 3*WINDOW)
     assert decision["decision"] == "eligible"
     assert decision["resources"] == sorted([SLOTS, METAL])
-    assert decision["affected"] == sorted([KI, CRICKET, PET])
-    assert decision["verified_change_percent"] == {CRICKET: 20.0, KI: 0.0}
+    assert decision["affected"] == sorted([KI, CRICKET, PET, FACE])
+    assert decision["verified_change_percent"] == {CRICKET: 20.0, KI: 0.0, FACE: 0.0}
+
+
+def test_cricket_requires_a_measurement_for_the_photo_peer():
+    sample = window()
+    del sample["comparison"]["trial"]["workloads"][FACE]
+    report = shared_context(sample, 3*WINDOW)
+    assert report["decision"] == "hold"
+    assert any(FACE in reason for reason in report["reasons"])
 
 
 @pytest.mark.parametrize("field,value,decision", [
@@ -85,7 +96,12 @@ def test_live_observer_distinguishes_absent_stale_zero_and_desired(monkeypatch):
     spec.loader.exec_module(observer)
     def result(name, value, **labels):
         return dict(metric=dict(__name__=name, **labels), value=[1000, str(value)])
-    rows = [result("cricket_heartbeat_timestamp_seconds", 999),
+    rows = [result("knowledge_index_photo_stage_updated_timestamp_seconds", 990, stage=FACE),
+            result("knowledge_index_photo_stage_updated_timestamp_seconds", 50, stage="life-stage"),
+            result("knowledge_index_photo_stage_backend_completed", 14, stage=FACE, backend="mac-metal"),
+            result("knowledge_index_photo_stage_backend_completed", 300, stage="life-stage", backend="mac-metal"),
+            result("knowledge_index_photo_stage_items", 0, stage=FACE, state="pending"),
+            result("cricket_heartbeat_timestamp_seconds", 999),
             result("cricket_workers", 4, backend="mac", kind="desired"),
             result("cricket_workers", 0, backend="mac", kind="active"),
             result("cricket_workers", 2, backend="rtx", kind="active"),
@@ -93,6 +109,11 @@ def test_live_observer_distinguishes_absent_stale_zero_and_desired(monkeypatch):
     monkeypatch.setattr(observer.subprocess, "check_output", lambda *a, **kw: json.dumps(
         {"status": "success", "data": {"result": rows}}).encode())
     snapshot = observer.collect(1000, Path("test"))["workloads"]
+    face = snapshot[FACE]
+    assert face["fresh"] and face["source_age_s"] == 10
+    assert face["observations"]["mac_saved_faces"] == 14
+    assert face["observations"]["rtx_saved_faces"] is None
+    assert face["observations"]["pending_faces"] == 0
     assert snapshot[CRICKET]["observations"]["mac_active_workers"] == 0
     assert snapshot[CRICKET]["observations"]["mac_desired_workers"] == 4
     assert snapshot[CRICKET]["observations"]["queued_jobs_all_backends"] is None
@@ -120,9 +141,9 @@ def test_observer_keeps_face_work_separate_from_caption_progress(monkeypatch):
     monkeypatch.setattr(observer.subprocess, "check_output", lambda *a, **kw: json.dumps(
         {"status": "success", "data": {"result": rows}}).encode())
     snapshot = observer.collect(1000, Path("fixture"))["workloads"]
-    faces = snapshot["knowledge-index/library-face-observations"]["observations"]
-    assert faces["pending_checkpoints"] == 27 and faces["mac_complete_checkpoints"] == 12
-    assert faces["running_checkpoints"] is None
+    faces = snapshot[FACE]["observations"]
+    assert faces["pending_faces"] == 27 and faces["mac_saved_faces"] == 12
+    assert faces["running_faces"] is None
     assert snapshot["frigate"]["observations"]["detector_rolling_mean_ms"] == 7
     assert "p95_s" not in snapshot["frigate"]["observations"]
     assert snapshot["immich"]["observations"]["face_detection_active"] == 3
