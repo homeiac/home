@@ -48,7 +48,11 @@ def analyze_one(
     start = time.monotonic()
     window = row["window"]
     photo = row["asset"]["kind"] == "photo"
-    frames = ([portrait] if portrait else []) + [sheet(window)]
+    frames = (
+        ([portrait] if portrait else [])
+        + ([window["track_image"]] if window.get("track_image") else [])
+        + [sheet(window)]
+    )
     raw = infer(backend, prompt(window, photo=photo, reference=bool(portrait)), frames)
     events = parse_reply(raw)
     proposals = []
