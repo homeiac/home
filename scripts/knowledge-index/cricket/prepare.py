@@ -42,7 +42,10 @@ def prepare(asset: dict, *, host: str, folder: Path, audio: dict | None) -> dict
     target = folder / (asset["id"] + ".json")
     if target.exists():
         old = json.loads(target.read_text())
-        if old.get("cache_key") == key and old.get("version") == VERSION:
+        if (
+            old.get("age_base_cache_key", old.get("cache_key")) == key
+            and old.get("version") == VERSION
+        ):
             save_preview(folder, asset, old)
             return {
                 "asset": asset["id"],

@@ -24,6 +24,9 @@ function reviewDetails(event,asset){
   let player=d.actor?name(d.actor):'Unknown — choose a player if you recognize them';
   if(event.review_state==='suggested'&&event.evidence.identity_basis==='user_album_rule')player+=' — assumed for batting; check this is the batter you want';
   field('Player',player);
+  const age=event.evidence.identity_context;
+  if(age?.status==='known')field(name(album()?.default_batter)+'’s age at recording',age.age_years+' years, '+age.age_months+' months · '+age.recorded_date);
+  if(event.review_state==='suggested'&&event.evidence.age_compatibility==='incompatible')box.append(node('p','The visible player appears inconsistent with the expected age. Identity is left unclear for you to check.'));
   field('Activity',({batting:'Batting',bowling:'Bowling',other:'Other activity',unknown:'Unknown — check what the player is doing'})[d.role]);
   if(!photo){
     field('Result',d.outcome==='unknown'?'Unknown — no four, six or dismissal selected':d.outcome==='dismissal'?(d.role==='batting'?'This batter got out':'A batter got out during this delivery'):d.outcome==='boundary_unclear'?'Boundary — four or six is still unclear':d.outcome==='other'?'No highlight / other result':labels[d.outcome]);
