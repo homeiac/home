@@ -84,7 +84,7 @@
       "backend": "Mac CPU",
       "threads": 10,
       "quota_percent": 1000,
-      "decision": "Stopped \u00b7 aggregate review open",
+      "decision": "Stopped \u00b7 workload latency failed",
       "scope": "Closed five-minute peer window; partial five-case quality review",
       "peer_rates": {
         "mac-metal": {
@@ -107,7 +107,71 @@
         "both_correct": 2
       },
       "recovery_verified": true,
-      "decision_reason": "The trial stopped on individual Metal budgets. Measurements remain valid, but total face-workload qualification is reopened. CPU benchmark answers are excluded from production output. No CPU allocation selected."
+      "decision_reason": "Aggregate GPU production rose 130 to 133 faces, but combined p95 rose 37.434 to 42.503 s, exceeding the 10% workload budget. Five CPU replays are excluded from new library output. No CPU allocation selected."
+    },
+    {
+      "backend": "Mac CPU",
+      "threads": 6,
+      "quota_percent": 600,
+      "decision": "Stopped \u00b7 aggregate budgets passed \u00b7 quality incomplete",
+      "scope": "Closed 300.154 s peer window; partial four-case quality review",
+      "peer_rates": {
+        "mac-metal": {
+          "before_per_min": 7.4,
+          "trial_per_min": 6.396706527710077,
+          "before_p95": 39.866,
+          "trial_p95": 38.774
+        },
+        "rtx3070": {
+          "before_per_min": 18.6,
+          "trial_per_min": 20.98919329404869,
+          "before_p95": 14.363,
+          "trial_p95": 11.694
+        }
+      },
+      "quality": {
+        "reviewed": 4,
+        "stage_correct": 2,
+        "supported_actions": 3,
+        "both_correct": 2
+      },
+      "recovery_verified": false,
+      "decision_reason": "The original backend-only rejection was withdrawn. Aggregate production rose 130 to 137 faces and combined p95 improved 37.434 to 36.111 s. Partial CPU replay quality cannot qualify a production lane. No CPU allocation selected."
     }
-  ]
+  ],
+  "cpu_quality_screen": {
+    "model": "Bonsai2 2B",
+    "backend": "Mac CPU",
+    "threads": 7,
+    "quota_percent": 700,
+    "profile": "separate age/action calls",
+    "reviewed_faces": 12,
+    "known_stages": 10,
+    "stage_correct": 2,
+    "supported_actions": 8,
+    "both_correct": 1,
+    "invalid_actions": 1,
+    "stage_abstentions": 0,
+    "decision": "Not selected \u00b7 quality failed",
+    "historical_reference": {
+      "stage_correct": 21,
+      "known_stages": 40,
+      "supported_actions": 35,
+      "faces": 48,
+      "both_correct": 16
+    },
+    "production_outputs": 0
+  },
+  "cpu_linux_readiness": {
+    "model": "Bonsai2 2B",
+    "backend": "still-fawn CPU",
+    "quota_percent": 75,
+    "faces": 1,
+    "age_s": 125.426476,
+    "action_s": 131.462032,
+    "stage_correct": 1,
+    "supported_actions": 1,
+    "decision": "Compatibility only \u00b7 broader quality unqualified",
+    "production_outputs": 0
+  }
 }

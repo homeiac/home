@@ -463,13 +463,39 @@ def panels():
             f'supported action {quality["supported_actions"]}/{quality["reviewed"]}, '
             f'both correct {quality["both_correct"]}/{quality["reviewed"]}. '
             f'{trial.get("decision_reason", "Qualification remains open.")} '
-            'Independent recomputation and recovery passed. '
+            'Independent recomputation completed; cleanup and recovery are recorded per trial. '
             'CPU evaluation responses are excluded from production saved-face counters. Tuning is still active.'
         )
         backend_charts.append(tuning_comparison(
             f'{trial["backend"]} · {trial["threads"]} threads · {trial["decision"]}',
             rates, 0, trial_y, 24, 7, "suffix: faces/min", description,
         ))
+    cpu_evidence = json.loads(Path(__file__).with_name("library-server-timing.json").read_text())
+    if "cpu_quality_screen" in cpu_evidence:
+        quality = cpu_evidence["cpu_quality_screen"]
+        linux = cpu_evidence["cpu_linux_readiness"]
+        evidence_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+        content = (
+            "### CPU model quality and Linux compatibility\n\n"
+            f'**{quality["model"]} · Mac CPU · {quality["decision"]}.** '
+            f'Same 12 marked faces, separate age/action calls, {quality["threads"]} CPU threads. '
+            f'Correct stage **{quality["stage_correct"]}/{quality["known_stages"]}**, '
+            f'supported whole action **{quality["supported_actions"]}/{quality["reviewed_faces"]}**, '
+            f'both **{quality["both_correct"]}/{quality["known_stages"]}**. '
+            f'Invalid actions {quality["invalid_actions"]}; stage abstentions {quality["stage_abstentions"]}. '
+            'Historical original-model reference: stage 21/40, action 35/48, both 16/40. '
+            'The smaller model does not preserve quality.\n\n'
+            f'**{linux["backend"]} · {linux["quota_percent"]}% CPU quota · one readiness face.** '
+            f'Age call **{linux["age_s"]:.1f} s**, action call **{linux["action_s"]:.1f} s**. '
+            'Both readings were supported, but one case cannot qualify model quality or sustained capacity. '
+            'The 27B Linux profile exceeded its 900 s diagnostic request bound.\n\n'
+            '**New CPU production outputs: 0. CPU production lanes: 0.** '
+            'Frozen evaluations do not count as library progress. Original-model Mac two-call testing continues; '
+            'quality, aggregate workload gain, distinct peer budgets and independent publication/readback must pass before selection.'
+        )
+        backend_charts.append(_panel('text', 'CPU quality · Mac and still-fawn · no production selection', [],
+                                     0, evidence_y, 24, 9,
+                                     extra={'options': {'mode': 'markdown', 'content': content}}))
     chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
     shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
     processing[charts_at:charts_at] = backend_charts

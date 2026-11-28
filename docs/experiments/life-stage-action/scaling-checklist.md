@@ -118,3 +118,15 @@ The trial process and listener were confirmed stopped and the lease released. Re
 
 
 **Policy correction.** The original stopped-trial receipt applied budgets separately to each GPU backend. CPU and Metal serve the same face workload, so a Metal rate drop alone does not establish a failure of the requested total-throughput objective. Retain the valid measurements and recovery receipts, and reopen aggregate qualification. CPU evaluation answers were excluded from newly processed production faces. Quality coverage is partial. Aggregate verified output and workload latency/error evidence are still required before selection. The dashboard labels this arm stopped with aggregate review open.
+
+## CPU aggregate reassessment and smaller-model screen
+
+- [x] Recompute the original stopped arms under the same-workload aggregate objective. Ten threads produced 130→133 new GPU faces, but combined p95 37.434→42.503 s failed the 10% latency budget. Six threads produced 130→137 with p95 37.434→36.111 s, passing aggregate peer budgets. Their partial CPU replay quality remains insufficient for promotion.
+- [x] Independently review the first full Bonsai2 2B Mac pass, excluding the partial repeat. Correct known stages 2/10, supported whole actions 8/12, both 1/10, one invalid action and zero stage abstentions. Historical original-model reference is 21/40 stages, 35/48 actions and 16/40 both. The smaller profile fails quality prequalification.
+- [x] Review still-fawn Bonsai2 readiness at 75% quota. The one paired case has the correct school-age stage and supported smile toward the camera. Age 125.426476 s and action 131.462032 s are compatibility timings only. The original 27B profile exceeded its 900 s diagnostic bound. Neither result establishes a production CPU setting.
+- [x] Prepare an opt-in native-face queue adapter, default CPU lanes zero. Atomic claim generation/input/expiry guards fence stale CPU saves even after GPU supervisor recovery. Actual SDK synthetic integration records claim/process/infer/checkpoint/write and forwards caller/run/trace headers, with zero verified-output increments. Tests use disposable synthetic queues and no inference.
+- [ ] Finish original-model two-call Mac quality and capacity comparison, under sole coordinated actuation and preserved GPU reservations.
+- [ ] Qualify any winner using new unique library claims, independent OpenLABEL publication/readback, repeated aggregate workload gain and distinct peer budgets.
+- [ ] Independently read the served Grafana revision containing all closed results.
+
+The earlier ten-thread rejection paragraph is the historical backend-only stop reason. Its current decision comes from aggregate workload latency. The six-thread backend-only rejection was withdrawn. Frozen CPU answers never count as newly completed production faces. CPU production remains disabled pending the gates above.

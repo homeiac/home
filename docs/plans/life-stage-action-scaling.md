@@ -66,3 +66,7 @@ Store model/profile provenance with stage and action results. Release interrupte
 
 
 The enabled CPU canary also requires the existing registered photo RunTelemetry provider. Trace claim, inference, checkpoint and write stages with native job/input/profile/generation context. Forward its actual caller/run/W3C headers through both OpenAI HTTP and guest-agent curl. The adapter records checkpoint saves; only independent publication receipts may increment verified-output counters. Disabled operation has no telemetry dependency and no queue mutation.
+
+## Close CPU quality and compatibility evidence
+
+Publish each closed CPU comparison with its actual denominator and scope. Add the six-thread aggregate reassessment beside the ten-thread result, the complete Bonsai2 Mac quality screen, and the paired Linux readiness timings. Separate replay speed from new library output. Keep CPU production lanes at zero until reviewed quality, aggregate workload budgets, unique queue claims and independent publication/readback qualify. Preserve the original per-backend stop receipts as history and show their corrected interpretation. Continue the original-model two-call Mac profile under the acknowledged owner before selecting capacity.
