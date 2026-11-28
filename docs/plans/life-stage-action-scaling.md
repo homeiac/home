@@ -20,6 +20,10 @@ Start with S1. Each row is one reviewable change or a measurement-only trial. An
 
 S5 and S6 each have their own baseline. A photo-only win can qualify photo-only operation. If cricket arrives before S5 finishes, retain the photo workers, close the old window and start a mixed baseline. A wait for real cricket demand leaves S6 open. The next step never depends on pretending that an idle queue is a backlogged peer.
 
+## November 27 execution update
+
+The live intake sees the cricket controller and the shared GPUs. It omits photo face completions as an independent caller. Split S2 into a first PR registering both photo routes and reading the existing stage-scoped queue and backend counters, then a worker instrumentation change for end-to-end traces. Verify the first PR against the same private checkpoint used in S1. The library reader serves SQLite, and the cluster enrichment database has no OpenLABEL scene table. Leave the independent publication count unknown until S3 supplies its manifest and readback. Keep the historical album pilot separate. The cricket integration has its own [plan and checklist](https://github.com/homeiac/home/pull/274).
+
 ## Acceptance contract for a live trial
 
 1. **Declare the trial.** Freeze cohort, model/quantization, prompt, media sizes, pass modes and versions. Use matched inputs for quality and separate production counters for rate. Record each baseline, trial, reserved and rollback allocation and a target minimum gain before starting. Use the last known effective settings if actual headroom is unknown.
