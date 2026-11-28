@@ -55,15 +55,14 @@ def assess(topology: dict, comparison: dict, watermark: int, capacity: "Candidat
         reasons.append("windows are stale, overlapping, unequal or outside the cutoff")
     if not phases[0].get("environment") or phases[0].get("environment") != phases[1].get("environment"):
         reasons.append("background configuration changed or unknown")
-    cricket = subject == "cricket-indexer"
-    if cricket:
-        for phase in phases:
-            gap = phase.get("max_sample_gap_s")
-            if (not valid_number(gap) or gap > (capacity.sample_gap_s if capacity else 15) or phase.get("warmed") is not True
-                    or type(phase["start_ns"]) is not int or type(phase["end_ns"]) is not int
-                    or phase["end_ns"] - phase["start_ns"] < (capacity.window_s if capacity else 300) * 10**9):
-                reasons.append("cricket requires five-minute warm windows and 15-second health sampling")
-    changes = {}
+    # These are evidence requirements, independent of the caller's display name.
+    for phase in phases:
+        gap = phase.get("max_sample_gap_s")
+        if (not valid_number(gap) or gap > (capacity.sample_gap_s if capacity else 15) or phase.get("warmed") is not True
+                or type(phase["start_ns"]) is not int or type(phase["end_ns"]) is not int
+                or phase["end_ns"] - phase["start_ns"] < (capacity.window_s if capacity else 300) * 10**9):
+            reasons.append("comparison requires five-minute warm windows and 15-second health sampling")
+    changes, service_changes = {}, {}
     for name in sorted(affected):
         rows = [p["workloads"].get(name) for p in phases]
         if any(not isinstance(r, dict) or type(r.get("demand")) is not bool for r in rows):
@@ -87,9 +86,9 @@ def assess(topology: dict, comparison: dict, watermark: int, capacity: "Candidat
         if not before["demand"]:
             if name == subject or name in discovered:
                 reasons.append(f"{name}: no comparable demand despite subject or caller activity")
-            if cricket and any(not inactive(row, phase) for row, phase in zip(rows, phases)):
+            if any(not inactive(row, phase) for row, phase in zip(rows, phases)):
                 reasons.append(f"{name}: idle state or scheduled reservation lacks fresh evidence")
-            elif cricket and before["activity"]["reservation_workers"] != trial["activity"]["reservation_workers"]:
+            elif before["activity"]["reservation_workers"] != trial["activity"]["reservation_workers"]:
                 reasons.append(f"{name}: scheduled reservation changed during comparison")
             continue
         kinds = {topology.get(resource, {}).get("measurement_kinds", {}).get(name, "indexer")
@@ -98,22 +97,34 @@ def assess(topology: dict, comparison: dict, watermark: int, capacity: "Candidat
             reasons.append(f"{name}: conflicting or unknown measurement kind")
             continue
         if kinds == {"service"}:
-            if name == subject:
-                reasons.append(f"{name}: a service budget cannot replace target completion measurement")
-                continue
-            missing, losses = assess_service(name, rows, phases, comparison.get("service_budgets", {}).get(name))
+            budgets = comparison.get("service_budgets", {}).get(name)
+            missing, losses = assess_service(name, rows, phases, budgets)
             reasons.extend(missing)
             regressions.extend(losses)
+            if name == subject:
+                objective = comparison.get("service_objective", {})
+                metric = objective.get("metric")
+                if missing or losses:
+                    continue
+                if not isinstance(metric, str) or metric not in budgets:
+                    reasons.append(f"{name}: declare an existing measured service objective")
+                    continue
+                a, b = (r["service_metrics"][metric]["value"] for r in rows)
+                if a <= 0:
+                    reasons.append(f"{name}: positive baseline service objective required")
+                    continue
+                change = (b / a - 1) if budgets[metric]["direction"] == "higher" else (1 - b / a)
+                service_changes[name] = round(100 * change, 4)
+                if change + 1e-12 < comparison["min_gain"]:
+                    regressions.append(f"{name}: service objective missed declared threshold")
             continue
-        if cricket:
-            if any(type(r.get("completed_items")) is not int or r["completed_items"] < (capacity.minimum_items if capacity else 10) for r in rows):
-                reasons.append(f"{name}: fewer than ten measured durable completions or count missing")
-            if name != subject:
-                if any(not valid_number(r.get(k)) for r in rows for k in ("p95_s", "terminal_error_rate")):
-                    reasons.append(f"{name}: missing peer latency or terminal-error rate")
-                elif (trial["p95_s"] > before["p95_s"] * (1 + (capacity.max_peer_p95_growth if capacity else .10))
-                      or trial["terminal_error_rate"] > before["terminal_error_rate"]):
-                    regressions.append(f"{name}: peer latency or terminal-error budget exceeded")
+        if any(type(r.get("completed_items")) is not int or r["completed_items"] < (capacity.minimum_items if capacity else 10) for r in rows):
+            reasons.append(f"{name}: fewer than ten measured durable completions or count missing")
+        if any(not valid_number(r.get(k)) for r in rows for k in ("p95_s", "terminal_error_rate")):
+            reasons.append(f"{name}: missing workload latency or terminal-error rate")
+        elif (trial["p95_s"] > before["p95_s"] * (1 + (capacity.max_peer_p95_growth if capacity else .10))
+              or trial["terminal_error_rate"] > before["terminal_error_rate"]):
+            regressions.append(f"{name}: workload latency or terminal-error budget exceeded")
         if any(not r.get("cohort") or not r.get("unit") for r in rows) or any(
                 before[k] != trial[k] for k in ("cohort", "unit")):
             reasons.append(f"{name}: output unit or matched input cohort changed")
@@ -130,13 +141,14 @@ def assess(topology: dict, comparison: dict, watermark: int, capacity: "Candidat
         change = counts[1] / counts[0] - 1
         changes[name] = round(100 * change, 4)
         floor = comparison["min_gain"] if name == subject else -comparison["max_peer_loss"]
-        if cricket and name != subject:
+        if name != subject:
             floor = max(floor, -0.10)
         if change + 1e-12 < floor:
             regressions.append(f"{name}: verified throughput missed declared threshold")
     # Incomparable evidence cannot establish a win. A demonstrated loss ends the canary.
     decision = "rollback" if regressions else "hold" if reasons else "eligible"
     return dict(decision=decision, resources=sorted(resources), affected=sorted(affected), verified_change_percent=changes,
+                service_objective_change_percent=service_changes,
                 reasons=sorted(set(reasons + regressions)))
 
 
