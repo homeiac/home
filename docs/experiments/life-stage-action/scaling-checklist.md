@@ -1,6 +1,6 @@
 # Life-stage/action scaling checklist
 
-**S1 is next.** Capture a closed baseline window with per-backend face completions, publication readback and all active or scheduled peers. The existing backfill and the November GPU comparison establish the starting point. Photo-plus-cricket capacity still needs a live trial.
+**S1 verified for checkpoint saves.** The photo queue and the deployed Grafana totals agree within the sampling resolution. S2 worker tracing and S3 publication readback remain open. The current decision is observe only.
 
 [Scaling design](../../architecture/life-stage-action-scaling.md) · [Implementation plan and acceptance gates](../../plans/life-stage-action-scaling.md)
 
@@ -28,15 +28,30 @@ Mark a task verified only when its owner records the UTC window, scope, receipt,
 
 | Done | Verified | ID | Evidence required to close | Current evidence or gap |
 |---|---|---|---|---|
-| [ ] | [ ] | S1 | Closed baseline census and ledger-to-Grafana comparison | Snapshot and historical trial above. Reservations, peer freshness and same-window rates still needed. |
-| [ ] | [ ] | S2 | Both pool routes, physical device census, trace through writer, bounded per-caller counters | Current shared registry has knowledge indexing. Distinct photo life-stage/action still needs end-to-end verification. |
-| [ ] | [ ] | S3 | Media manifest versus independent PostgreSQL readback, retry, correction and owner collision tests | Shared writer contract exists. A live photo run receipt is outstanding. |
+| [x] | [x] | S1 | Closed baseline census and ledger-to-Grafana comparison | See the November 27 closed-window receipt below. |
+| [ ] | [ ] | S2 | Both pool routes, physical device census, trace through writer, bounded per-caller counters | [PR #275](https://github.com/homeiac/home/pull/275) implements and live-checks the two pool routes and per-backend checkpoint census. End-to-end worker/writer tracing is open. |
+| [ ] | [ ] | S3 | Media manifest versus independent PostgreSQL readback, retry, correction and owner collision tests | The library reader uses SQLite. The cluster enrichment database has no scene revision table in any schema. The separate reference-album PostgreSQL cluster was shut down at measurement time. Production coverage is unknown. |
 | [ ] | [ ] | S4 | Both subjects exercise sampling, minimum counts, p95/error and rollback gates. Grafana matches the measured windows. | Strict defaults currently branch on the cricket subject. |
 | [ ] | [ ] | S5 | Matched photo canary, paired quality scores, reverse-order repeat and per-backend decisions | Historical pass-count trial is available. Full fleet comparison remains open. |
 | [ ] | [ ] | S6 | Joint run with real cricket backlog, separate output units, independent readback and every peer within budget | Cricket journal records a pilot. It does not establish the capacity of this mix. |
 | [ ] | [ ] | S7 | Promotion record for a named workload mix, expiry, restart/rollback and verified recovery | Await S5 and S6 evidence. |
 
 [Shared reviewer](https://github.com/homeiac/home/blob/b4a19672cd37301206a5487c8f2e192c34f75bb7/scripts/perf/shared_workloads.py) · [Cricket pilot journal](https://github.com/homeiac/home/blob/b4a19672cd37301206a5487c8f2e192c34f75bb7/docs/experiments/cricket/science-journal.md)
+
+## November 27 baseline with cricket idle
+
+Private run `photo-scaling-s1-20261128` observed the library from 2026-11-28T04:55:41+00:00 to 2026-11-28T05:00:41+00:00. The Mac supervisor had four Mac lanes (separate stage and action) and three RTX lanes (joint inference on new work). The local Metal server offered four slots. No capacity change was made.
+
+| Backend | Saved at start | Saved at end | Five-minute ledger rate | Grafana 15-minute trend at end |
+|---|---:|---:|---:|---:|
+| Mac Metal | 12,777 | 12,818 | 8.20 faces/min | 8.72 faces/min |
+| RTX 3070 | 35,198 | 35,302 | 20.80 faces/min | 20.94 faces/min |
+
+The ledger recorded **145 new saves**. At close, 28,922 were pending, 7 running, 4,600 reused and 850 withheld. The Grafana exporter runs less often than the ledger sampler. For each of 5 distinct in-window exporter reports, **both** backend totals fell between the consecutive 15-second ledger reads bracketing its progress timestamp. Panel 274 supplied the totals. Panel 273 fits a 15-minute trend, which explains why its rates can differ from the five-minute count. [Saved totals](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&from=1795841741161&to=1795842041168&var-photo_stage=library-face-observations&viewPanel=274) · [Per-backend rates](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&from=1795841741161&to=1795842041168&var-photo_stage=library-face-observations&viewPanel=273)
+
+**Peer demand.** Cricket reported zero active workers and zero queued jobs, with four Mac lanes desired and zero RTX lanes desired. Preserve that potential demand when cricket work arrives. The pet tagger reported zero active Mac workers. Caption recovery reported zero pending assets. Knowledge Index's source heartbeat was stale in 8 of 21 observations using the existing 180-second limit. On the RTX host, Frigate was detecting at both spot checks. Immich face detection, facial recognition and smart search each reported zero waiting, active, paused, delayed or prioritized jobs at the queue check. Neither spot check establishes a full-window latency budget. The photo launch agent is scheduled every 60 seconds and the caption reconciler every five minutes. Reservations beyond these observed settings remain unknown.
+
+**Decision — observe only.** No qualifying mixed-cricket window, verified publication rate or end-to-end peer latency comparison exists for this run. The intake change in [PR #275](https://github.com/homeiac/home/pull/275) exposes photo queue counts to cricket review and holds a trial that omits the photo peer. All 48 shared performance tests passed. The live intake used that PR's checkout.
 
 ## Receipt to append for each trial
 
