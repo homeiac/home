@@ -42,17 +42,39 @@ Declare `--output-kind media` at intake. The review command runs the shared chec
 ```mermaid
 flowchart TD
     A["Agent receives a workload"] --> B["workload.py start --live"]
-    B --> C["Expand serving pool → device → other callers"]
-    C --> D{"Eligible backlog and measured headroom?"}
-    D -->|No or unknown| E["Keep baseline allocation; measure backlog and headroom"]
+    B --> C["Discover inventory CPUs and accelerators, including pools without endpoints"]
+    C --> Stages["Map every stage to every plausible pool"]
+    Stages --> D{"Backlog and measured headroom on this pool?"}
+    D -->|Unknown| Probe["Bounded readiness and quality probe"]
+    Probe --> D
+    D -->|No| Other["Record pool constraint and evaluate other pools"]
+    Other --> Stages
     D -->|Yes| F["Select measured ceiling after peer reservations"]
     F --> G["Freeze input cohort, baseline rate and peer budgets"]
     G --> H["Run matched quality check on candidate and baseline"]
     H -->|Pass| I["Owner runs the canary alongside baseline workers"]
-    H -->|Fail| J["Keep existing placement; journal result"]
+    H -->|Fail| J["Record this stage and pool result; evaluate remaining candidates"]
 ```
 
-`start` discovers registered peers. Add `--live` for current exporter observations. For a workload with a capacity adapter, the planner selects a pool from ready backlog and free worker equivalents. For Cricket, reserve scheduled and active demand, test the highest measured shared allowance, then sweep down one pool at a time. Repeat in reverse order and choose the fewest workers within 5% of the fastest repeatable qualifying rate. A caption controller that can actuate only one extra lane tests that increment against the same peer budgets. [Cricket operating policy](../runbooks/shared-indexer-tuning.md) · [Agent commands](../guides/shared-workload-agent.md)
+`start --live` discovers registered routes and their peers. Complete the fleet discovery below before choosing an allocation. For each ready candidate, select the measured shared allowance after active and scheduled reservations. Sweep downward, repeat in reverse order, and choose the fewest workers within 5% of the fastest repeatable qualifying rate. [Operating policy](../runbooks/shared-indexer-tuning.md) · [Agent commands and coverage format](../guides/shared-workload-agent.md)
+
+### Discover capacity beyond the current routes
+
+**Required whenever queued work remains and a user asks to scale, tune or find spare capacity.** Start with `proxmox/inventory.txt`, the local Mac and currently observed guests and pods. Enumerate physical CPU pools and accelerators, including nodes without a model endpoint. Map fetch, decode, preview, inference, transcription, OCR and publication stages as applicable. Deduplicate host, VM and pod capacity and identify shared memory, storage and network dependencies.
+
+Use the existing `scripts/perf/plan-compute-trials.py POLICY --inventory` to expand stage-by-pool candidates. The policy must include the Mac CPU and accelerators and point `proxmox_inventory` at the repository inventory so newly listed physical CPUs receive rows. Every missing row of evidence gets a readiness probe. Record each candidate's next action, owner and evidence in the workload checklist.
+
+Occupied GPU slots establish that pool's current allowance. Continue with independent CPU pools or other devices. CPU inference, a different model and CPU preparation each require their own measured result. A CPU can contribute useful parallel throughput even when its individual request takes longer. Measure added verified output and reduced queue drain time after transfer, startup and peer costs. Different models or quantizations must pass the same reviewed quality checks.
+
+A missing endpoint calls for a bounded readiness check of model fit, available runtime, source access, CPU/memory limits and peer demand. Use existing deployment and queue paths for a canary when feasible. Preserve baseline workers. An offline host or a blocked provisioning dependency gets concrete evidence, a next action and a revisit date. Keep other pools moving when a constraint applies to only one pool.
+
+### Completion gate for a scaling investigation
+
+The workload checklist must account for every plausible stage and inventoried pool. Each row ends with a measured result, a specific incompatibility or a bounded deferral with owner and revisit trigger. Include input/model/prompt versions, elapsed time, quality, useful throughput, transfer costs and peer impact. Historical results expire when the workload or backend profile changes.
+
+**“GPU full” and “CPU probably slow” leave discovery open.** Close a CPU candidate using a timed, quality-checked sample or a demonstrated constraint such as insufficient available memory or an offline host. A saturated GPU and an untested still-fawn CPU means the next action is a still-fawn readiness probe. If CPU inference fails to add useful throughput, record that result and check CPU preparation only where stage timings predict an improvement.
+
+The route graph and `workload.py review` do not currently enforce fleet coverage. The operator records and checks this completion gate alongside the machine decision. An `eligible` result on one pool approves only that measured scope.
 
 ## 3. Trace the bottleneck
 
