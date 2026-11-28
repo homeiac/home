@@ -67,6 +67,7 @@ const [ready, screenshot] = process.argv.slice(2);
     assert.equal(exported.status(),206);assert.equal((await exported.body()).length,1024);
     if(screenshot)await page.screenshot({path:screenshot,fullPage:true});
     await page.setViewportSize({width:390,height:844});
+    await page.locator('#original option').first().evaluate(el=>{el.textContent='A very long original filename from the imported cricket album 2026-11-27 1234567890.mp4';});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
     assert.deepEqual(errors,[]);
     console.log('PASS: labels, person, interval playback, refresh, dismiss/undo, filters, missed moment, failed save, mobile layout');
