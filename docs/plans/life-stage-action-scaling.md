@@ -2,7 +2,7 @@
 
 The first deliverable lets an operator open Grafana and see how many face observations Mac and RTX saved, how many reached the album store, and which other jobs share those devices. That baseline makes the first cricket arrival measurable. Stage and action quality take precedence over a higher inference rate.
 
-[Scaling design](../architecture/life-stage-action-scaling.md) · [Task and evidence checklist](../experiments/life-stage-action/scaling-checklist.md) · [Photo memory epic](https://github.com/homeiac/home/issues/228) · [Existing implementation plan](photo-memory-implementation-plan.md)
+[Scaling design](../architecture/life-stage-action-scaling.md) · [Task and evidence checklist](../experiments/life-stage-action/scaling-checklist.md) · [Queryable science journal](../experiments/life-stage-action/science-journal.md) · [Photo memory epic](https://github.com/homeiac/home/issues/228) · [Existing implementation plan](photo-memory-implementation-plan.md)
 
 ## Smallest independently verifiable changes
 
@@ -78,3 +78,7 @@ Append closed original-model two-pass CPU arms to the same before/after panel pa
 The coordinated tuning chat reports the user's direction to determine the setup from the completed evidence. Conclude this finite comparison with the best supported production choice: preserve four Mac Metal and three RTX lanes, with CPU lanes zero on Mac and still-fawn. No tested CPU profile demonstrated independently verified new-output gain while preserving reviewed quality and workload budgets. Do not claim a global optimum or reject unrun settings. Four/two-thread original-model arms and a fresh joint-six repeat remain unmeasured. Publish that scope and the zero-CPU control variability, verify final cleanup and read back the served dashboard before closure.
 
 Clarify comparison labels before final publication: bars show the existing GPU workers before and during added Mac CPU inference. Explicitly identify RTX as GPU and make the stopped decision refer to the added Mac CPU setting. Use neutral before/during colors; the RTX worker remains selected even where an added CPU trial fails combined workload latency.
+
+## Queryable whole-backfill CPU comparison
+
+Expose the closed baseline/during windows as rows in the existing timing evidence JSON, with fixed remaining face-job count, actual unique production checkpoint counts and durations, per-minute rates, projected remaining time and the time difference. Keep replay answers, unique CPU production output and independently verified publication separate. Reuse these rows in the science journal's DuckDB query and a Grafana table. This is a historical projection, not a live ETA or a promotion gate. The coordinating chat owns the generic deterministic qualification code and will bind the same useful-output/time-to-finish objective to quality, service and evidence-completeness gates. No new inference is authorized by this reporting change.

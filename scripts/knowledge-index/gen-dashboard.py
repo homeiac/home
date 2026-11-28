@@ -5,6 +5,7 @@ Usage: gen-dashboard.py > gitops/clusters/homelab/apps/photo-enrichment/knowledg
 Output is deterministic; test-metrics.sh fails if the committed YAML differs from what this prints. Edit THIS file, then regenerate.
 Metrics come from export-metrics.py (node-exporter textfile on the Proxmox host); host/disk panels also use node_boot_time_seconds and nvme_* .
 """
+import hashlib
 import json
 from pathlib import Path
 from immich_dashboard import add_graph
@@ -532,6 +533,64 @@ def panels():
         backend_charts.append(_panel('text', 'Selected production · 4 Mac Metal + 3 RTX · CPU 0', [],
                                      0, selection_y, 24, 11,
                                      extra={'options': {'mode': 'markdown', 'content': content}}))
+    if cpu_evidence.get("cpu_backfill_comparisons"):
+        comparisons = cpu_evidence["cpu_backfill_comparisons"]
+        def finish_time(seconds):
+            hours, minutes = divmod(round(seconds / 60), 60)
+            return f"{hours}h {minutes:02d}m"
+        finish_rows, bottleneck_rows = [], []
+        for comparison in comparisons:
+            objective = comparison["completion_objective"]
+            result = comparison["completion_assessment"]
+            fingerprint = hashlib.sha256(json.dumps(objective, sort_keys=True,
+                separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+            if fingerprint != result["evidence_sha256"]:
+                raise ValueError("CPU completion assessment is stale; rerun the shared objective engine")
+            before, during = (result["phases"][key] for key in ("baseline", "trial"))
+            before_rate, during_rate = (phase["combined_production_per_s"] * 60
+                                        for phase in (before, during))
+            finish_rows.append(
+                f'| {comparison["trial"]} | {before_rate:.2f} → {during_rate:.2f} | '
+                f'{finish_time(before["projected_remaining_s"])} → {finish_time(during["projected_remaining_s"])} | '
+                f'{-result["projected_finish_delta_s"] / 60:+.0f} min | {result["decision"].upper()} |')
+            def gpu_rate(phase, backend):
+                value = objective[phase]
+                return value["backend_unique_production_completed"][backend] * 60e9 / (value["end_ns"] - value["start_ns"])
+            timing = comparison["cpu_timing"]
+            bottleneck_rows.append(
+                f'| {comparison["trial"]} | {timing["prompt_share_pct"]:.1f}% | '
+                f'{gpu_rate("baseline", "mac-metal"):.2f} → {gpu_rate("trial", "mac-metal"):.2f} | '
+                f'{gpu_rate("baseline", "rtx3070"):.2f} → {gpu_rate("trial", "rtx3070"):.2f} | Not established |')
+        amount = comparisons[0]["completion_objective"]["remaining"]["amount"]
+        finish_content = (
+            f'**Same {amount:,} remaining face jobs in every projection. Four Metal and three RTX lanes stayed running.** '
+            'Recorded historical comparison, not a live ETA.\n\n'
+            '| Added Mac CPU | Production faces/min before → during | Projected remaining time before → during | Time saved | Completion gate |\n'
+            '|---|---:|---:|---:|---|\n' + '\n'.join(finish_rows) +
+            '\n\nRates count unique GPU production checkpoints while CPU replay work ran. '
+            '**New CPU production faces: 0. Independent publication/readback was not measured.** '
+            'CPU replays are excluded. The shared completion-objective engine returns HOLD because verified production proof is missing. '
+            'Quality, latency, peer budgets, repeatability and ownership remain additional qualification gates. '
+            'Control windows also varied; these projections do not prove CPU caused a gain or loss.'
+        )
+        bottleneck_content = (
+            '| Added Mac CPU | CPU model time reading prompt | Mac GPU faces/min before → during | RTX GPU faces/min before → during | Hardware cause |\n'
+            '|---|---:|---:|---:|---|\n' + '\n'.join(bottleneck_rows) +
+            '\n\n**Measured slow stage: CPU model prompt processing**, compared with generating the answer. '
+            'This is not an isolated image-encoder measurement. Stage fractions use all completed CPU evaluation calls in each arm, including drain. '
+            'Mac GPU throughput decreased in these windows, while RTX varied. '
+            '**CPU contention versus unified-memory bandwidth is unresolved.** '
+            'The saved GPU windows lack matched per-stage/device attribution, and a no-CPU control also slowed. '
+            'Throughput and utilization alone do not establish the hardware bottleneck. '
+            'The query and journal retain raw counts, time bounds, scope and receipt references.'
+        )
+        for title, content in [
+            ('Remaining backfill · added CPU · throughput and finish time', finish_content),
+            ('CPU trial bottleneck · measured stage and attribution gaps', bottleneck_content),
+        ]:
+            at_y = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+            backend_charts.append(_panel('text', title, [], 0, at_y, 24, 11,
+                                         extra={'options': {'mode': 'markdown', 'content': content}}))
     chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
     shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
     processing[charts_at:charts_at] = backend_charts

@@ -231,5 +231,299 @@
     "mac_serving_ready": true,
     "mac_serving_contexts": 4,
     "production_supervisor_running": true
-  }
+  },
+  "cpu_backfill_comparisons": [
+    {
+      "trial_panel_id": 294,
+      "trial": "Mac +10 CPU threads \u00b7 joint",
+      "protected_mac_metal_lanes": 4,
+      "protected_rtx_lanes": 3,
+      "completion_objective": {
+        "version": 1,
+        "workload": "library-face-observations",
+        "unit": "face_observation",
+        "remaining": {
+          "amount": 24305,
+          "observed_ns": 1795851605737330000,
+          "evidence_ref": "photo-cpu-remaining-snapshot.json"
+        },
+        "increment_backends": [
+          "mac-cpu"
+        ],
+        "baseline": {
+          "unique_production_completed": 130,
+          "verified_production_completed": null,
+          "backend_verified_production_completed": null,
+          "readback_ref": null,
+          "start_ns": 1795846419651132000,
+          "end_ns": 1795846719789592000,
+          "backend_unique_production_completed": {
+            "mac-metal": 37,
+            "rtx3070": 93
+          },
+          "evaluation_completed": 0,
+          "evidence_ref": "cricket-mac-cpu-protected-baseline/samples.jsonl"
+        },
+        "trial": {
+          "unique_production_completed": 133,
+          "verified_production_completed": null,
+          "backend_verified_production_completed": null,
+          "readback_ref": null,
+          "start_ns": 1795846937887894000,
+          "end_ns": 1795847238069919000,
+          "backend_unique_production_completed": {
+            "mac-metal": 31,
+            "rtx3070": 102,
+            "mac-cpu": 0
+          },
+          "evaluation_completed": 4,
+          "evidence_ref": "cricket-mac-cpu-t10-forward-v2/aggregate-workload-review.json"
+        }
+      },
+      "cpu_timing": {
+        "scope": "all completed evaluation requests in arm, including drain; not production",
+        "requests": 5,
+        "prompt_s": 288.598076,
+        "decode_s": 54.132977,
+        "prompt_share_pct": 84.2054063890149,
+        "median_http_s": 66.939957,
+        "measured_slow_stage": "CPU model prompt processing",
+        "resource_cause": "not established",
+        "gpu_stage_attribution": "not measured",
+        "evidence_ref": "cricket-mac-cpu-t10-forward-v2/answer-*.json"
+      },
+      "completion_assessment": {
+        "decision": "hold",
+        "workload": "library-face-observations",
+        "unit": "face_observation",
+        "remaining_amount": 24305,
+        "phases": {
+          "baseline": {
+            "duration_s": 300.13846,
+            "unique_production_completed": 130,
+            "verified_production_completed": null,
+            "combined_production_per_s": 0.4331334278186141,
+            "projected_remaining_s": 56114.348233076926,
+            "readback_complete": false,
+            "evaluation_completed_excluded": 0
+          },
+          "trial": {
+            "duration_s": 300.182025,
+            "unique_production_completed": 133,
+            "verified_production_completed": null,
+            "combined_production_per_s": 0.44306450394556435,
+            "projected_remaining_s": 54856.572312969925,
+            "readback_complete": false,
+            "evaluation_completed_excluded": 4
+          }
+        },
+        "projected_finish_delta_s": -1257.7759201070003,
+        "projected_finish_improvement_percent": 2.241451535501569,
+        "evidence_sha256": "4bced9c644b3dee32dc732f1017144722d731bff1cabd08d03df1801f0c3a7ae",
+        "reasons": [
+          "baseline: independent production readback incomplete",
+          "mac-cpu: no independently verified new production contribution",
+          "trial: independent production readback incomplete"
+        ],
+        "causal_bottleneck": "not established by throughput or utilization alone",
+        "projection_scope": "same fixed remaining work; unique production only; evaluations excluded"
+      },
+      "completion_engine_sha256": "827bd0a064de0039d3fc3b91dffd56969f160450512deee2497c5f738fd967aa"
+    },
+    {
+      "trial_panel_id": 295,
+      "trial": "Mac +6 CPU threads \u00b7 joint",
+      "protected_mac_metal_lanes": 4,
+      "protected_rtx_lanes": 3,
+      "completion_objective": {
+        "version": 1,
+        "workload": "library-face-observations",
+        "unit": "face_observation",
+        "remaining": {
+          "amount": 24305,
+          "observed_ns": 1795851605737330000,
+          "evidence_ref": "photo-cpu-remaining-snapshot.json"
+        },
+        "increment_backends": [
+          "mac-cpu"
+        ],
+        "baseline": {
+          "unique_production_completed": 130,
+          "verified_production_completed": null,
+          "backend_verified_production_completed": null,
+          "readback_ref": null,
+          "start_ns": 1795846419651132000,
+          "end_ns": 1795846719789592000,
+          "backend_unique_production_completed": {
+            "mac-metal": 37,
+            "rtx3070": 93
+          },
+          "evaluation_completed": 0,
+          "evidence_ref": "cricket-mac-cpu-protected-baseline/samples.jsonl"
+        },
+        "trial": {
+          "unique_production_completed": 137,
+          "verified_production_completed": null,
+          "backend_verified_production_completed": null,
+          "readback_ref": null,
+          "start_ns": 1795847800721823000,
+          "end_ns": 1795848100876284000,
+          "backend_unique_production_completed": {
+            "mac-metal": 32,
+            "rtx3070": 105,
+            "mac-cpu": 0
+          },
+          "evaluation_completed": 3,
+          "evidence_ref": "cricket-mac-cpu-t6-forward/aggregate-workload-review.json"
+        }
+      },
+      "cpu_timing": {
+        "scope": "all completed evaluation requests in arm, including drain; not production",
+        "requests": 4,
+        "prompt_s": 320.196581,
+        "decode_s": 50.342394,
+        "prompt_share_pct": 86.41373852777565,
+        "median_http_s": 87.1080955,
+        "measured_slow_stage": "CPU model prompt processing",
+        "resource_cause": "not established",
+        "gpu_stage_attribution": "not measured",
+        "evidence_ref": "cricket-mac-cpu-t6-forward/answer-*.json"
+      },
+      "completion_assessment": {
+        "decision": "hold",
+        "workload": "library-face-observations",
+        "unit": "face_observation",
+        "remaining_amount": 24305,
+        "phases": {
+          "baseline": {
+            "duration_s": 300.13846,
+            "unique_production_completed": 130,
+            "verified_production_completed": null,
+            "combined_production_per_s": 0.4331334278186141,
+            "projected_remaining_s": 56114.348233076926,
+            "readback_complete": false,
+            "evaluation_completed_excluded": 0
+          },
+          "trial": {
+            "duration_s": 300.154461,
+            "unique_production_completed": 137,
+            "verified_production_completed": null,
+            "combined_production_per_s": 0.4564316636959795,
+            "projected_remaining_s": 53250.03047156935,
+            "readback_complete": false,
+            "evaluation_completed_excluded": 3
+          }
+        },
+        "projected_finish_delta_s": -2864.3177615075765,
+        "projected_finish_improvement_percent": 5.104430242351436,
+        "evidence_sha256": "75bb26320a0a33a25a12a95c62252c2e4b50360481e13e7b2a98302978e1c59f",
+        "reasons": [
+          "baseline: independent production readback incomplete",
+          "mac-cpu: no independently verified new production contribution",
+          "trial: independent production readback incomplete"
+        ],
+        "causal_bottleneck": "not established by throughput or utilization alone",
+        "projection_scope": "same fixed remaining work; unique production only; evaluations excluded"
+      },
+      "completion_engine_sha256": "827bd0a064de0039d3fc3b91dffd56969f160450512deee2497c5f738fd967aa"
+    },
+    {
+      "trial_panel_id": 297,
+      "trial": "Mac +7 CPU threads \u00b7 two calls",
+      "protected_mac_metal_lanes": 4,
+      "protected_rtx_lanes": 3,
+      "completion_objective": {
+        "version": 1,
+        "workload": "library-face-observations",
+        "unit": "face_observation",
+        "remaining": {
+          "amount": 24305,
+          "observed_ns": 1795851605737330000,
+          "evidence_ref": "photo-cpu-remaining-snapshot.json"
+        },
+        "increment_backends": [
+          "mac-cpu"
+        ],
+        "baseline": {
+          "unique_production_completed": 156,
+          "verified_production_completed": null,
+          "backend_verified_production_completed": null,
+          "readback_ref": null,
+          "start_ns": 1795849712412071000,
+          "end_ns": 1795850012643508000,
+          "backend_unique_production_completed": {
+            "mac-metal": 40,
+            "rtx3070": 116
+          },
+          "evaluation_completed": 0,
+          "evidence_ref": "cricket-original-two-pass-clean-baseline/samples.jsonl"
+        },
+        "trial": {
+          "unique_production_completed": 147,
+          "verified_production_completed": null,
+          "backend_verified_production_completed": null,
+          "readback_ref": null,
+          "start_ns": 1795850223800081000,
+          "end_ns": 1795850524036531000,
+          "backend_unique_production_completed": {
+            "mac-metal": 33,
+            "rtx3070": 114,
+            "mac-cpu": 0
+          },
+          "evaluation_completed": 1,
+          "evidence_ref": "cricket-original-two-pass-mac-t7-forward/peer-review-first-window.json"
+        }
+      },
+      "cpu_timing": {
+        "scope": "all completed evaluation requests in arm, including drain; not production",
+        "requests": 4,
+        "prompt_s": 299.822922,
+        "decode_s": 29.665743,
+        "prompt_share_pct": 90.9964298771856,
+        "median_http_s": 82.386137,
+        "measured_slow_stage": "CPU model prompt processing",
+        "resource_cause": "not established",
+        "gpu_stage_attribution": "not measured",
+        "evidence_ref": "cricket-original-two-pass-mac-t7-forward/answer-*.json"
+      },
+      "completion_assessment": {
+        "decision": "hold",
+        "workload": "library-face-observations",
+        "unit": "face_observation",
+        "remaining_amount": 24305,
+        "phases": {
+          "baseline": {
+            "duration_s": 300.231437,
+            "unique_production_completed": 156,
+            "verified_production_completed": null,
+            "combined_production_per_s": 0.5195991517703723,
+            "projected_remaining_s": 46776.44279669873,
+            "readback_complete": false,
+            "evaluation_completed_excluded": 0
+          },
+          "trial": {
+            "duration_s": 300.23645,
+            "unique_production_completed": 147,
+            "verified_production_completed": null,
+            "combined_production_per_s": 0.4896141024848915,
+            "projected_remaining_s": 49641.1354914966,
+            "readback_complete": false,
+            "evaluation_completed_excluded": 1
+          }
+        },
+        "projected_finish_delta_s": 2864.692694797872,
+        "projected_finish_improvement_percent": -6.124220918739997,
+        "evidence_sha256": "7b635b01a26a4e3db597e6b6246d28aeadecfb48aed9cb963cb5c93611adaf87",
+        "reasons": [
+          "baseline: independent production readback incomplete",
+          "mac-cpu: no independently verified new production contribution",
+          "no projected reduction in remaining completion time",
+          "trial: independent production readback incomplete"
+        ],
+        "causal_bottleneck": "not established by throughput or utilization alone",
+        "projection_scope": "same fixed remaining work; unique production only; evaluations excluded"
+      },
+      "completion_engine_sha256": "827bd0a064de0039d3fc3b91dffd56969f160450512deee2497c5f738fd967aa"
+    }
+  ]
 }
