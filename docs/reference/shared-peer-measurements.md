@@ -70,8 +70,11 @@ still require live collection before maximum-first trials.
 ## Read-only observation coverage
 
 `observe-shared-workloads.py` now reports the library face pass and media-summary
-pipeline separately from the coarse Knowledge Index status. They are facets of
-Knowledge Index, not extra physical pools or additive throughput units. It also
+pipeline separately from the coarse Knowledge Index status. The face queue uses
+PR #275’s canonical `library-face-observations` workload name and is a separately
+measured peer on both serving pools and devices. Summary activity remains a
+Knowledge Index facet. These are not extra physical pools or additive throughput
+units. It also
 reads existing Frigate service stats and Immich face detection/recognition queues.
 Source fields come from the existing exporters; the observer does not deploy or
 reconfigure them. Multiple distinct enricher streams are not collapsed into one
@@ -90,3 +93,19 @@ Keep these meanings intact when building window adapters:
 
 Server/device caller attribution, complete CPU/storage/database routes, scheduled
 reservations and matched useful-output windows are still needed for a live trial.
+
+## Coordination receipt
+
+On 2026-11-27 the Knowledge Index owner confirmed four Mac and three RTX photo
+lanes, with zero live trial increment. Preserve these reservations. Its private
+source of truth is `photo-memory-acceptance/library-enrichment/library.sqlite3`,
+`jobs` table; #275 defines its stage-filtered backend counters. A 640-pixel input
+experiment failed the existing detail floor for 3 of 24 reviewed small faces, so
+production image sizing remains unchanged.
+
+The agreed proposed coordination mechanism is one owner of the trial increment
+and an expiring Kubernetes Lease per physical pool. Expiry stops new trial
+submissions and drains in-flight work. This lease has not been deployed or
+acquired. The current local supervisor lock protects only its own queue and does
+not establish shared-pool ownership. Admission delay remains unmeasured. These
+facts constrain the future P05/P06 work; they do not authorize a live increment.

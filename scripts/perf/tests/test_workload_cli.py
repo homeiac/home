@@ -42,7 +42,7 @@ def state(tmp_path):
     d = tmp_path
     prepared = run(d, "start", "--workload", WORKLOAD, "--run-id", "fixture", "--stage", "classify",
                    "--resource", POOL, "--output-kind", "media")
-    assert prepared["registered_peers"] == ["immich-pet-tagger", "knowledge-index"]
+    assert prepared["registered_peers"] == ["immich-pet-tagger", "knowledge-index", "library-face-observations"]
     assert set(prepared["resources"]) == {POOL, DEVICE}
     labels = attrs(**{"service.name": WORKLOAD, "workload.run.id": "fixture", "host.name": "mac"})
     span = {"traceId": "ab" * 16, "spanId": "ab" * 8, "startTimeUnixNano": str(NOW - 1000),
@@ -76,11 +76,13 @@ def test_registered_trial_with_peers_and_media(state):
     rows["immich-pet-tagger"] = dict(demand=False, baseline_preserved=True,
                                     activity=dict(state="idle", runnable=0, reservation_workers=0,
                                                   observed_ns=NOW, evidence_ref="fixture/idle"))
+    rows["library-face-observations"] = json.loads(json.dumps(rows["immich-pet-tagger"]))
     before = dict(start_ns=NOW-WINDOW, end_ns=NOW, warmed=True, max_sample_gap_s=15, environment="fixed",
                   callers={POOL: [WORKLOAD, peer], DEVICE: [WORKLOAD, peer]}, workloads=rows)
     during = json.loads(json.dumps(before))
     during.update(start_ns=NOW, end_ns=NOW+WINDOW)
-    during["workloads"]["immich-pet-tagger"]["activity"]["observed_ns"] = NOW+WINDOW
+    for idle in ("immich-pet-tagger", "library-face-observations"):
+        during["workloads"][idle]["activity"]["observed_ns"] = NOW+WINDOW
     during["workloads"][WORKLOAD]["verified"] = 12
     cmp = dict(subject=WORKLOAD, resources=[POOL], action="index_ready_fifo", min_gain=.05,
                max_peer_loss=0, baseline=before, trial=during)
