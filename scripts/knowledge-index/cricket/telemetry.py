@@ -9,6 +9,7 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import os
 import socket
 import sqlite3
@@ -173,6 +174,7 @@ class RunTelemetry:
         parent: dict | None = None,
         job: dict | None = None,
         whole_job: bool = False,
+        inference_window: dict | None = None,
     ) -> Iterator[None]:
         """Time an operation without treating remote request latency as GPU time."""
         if (
@@ -186,9 +188,42 @@ class RunTelemetry:
         if whole_job:
             fields["workload.stage"] = "job"
         if job:
-            for name in ("asset", "fingerprint", "version", "attempts"):
+            for name in ("asset", "fingerprint", "version", "attempts", "execution_id"):
                 if name in job:
                     fields["cricket." + name] = job[name]
+        if inference_window is not None:
+            expected = {
+                "index",
+                "count",
+                "start_s",
+                "end_s",
+                "analysis_digest",
+                "preparation_digest",
+            }
+            if (
+                stage != "classify"
+                or set(inference_window) != expected
+                or type(inference_window["index"]) is not int
+                or type(inference_window["count"]) is not int
+                or not 0 <= inference_window["index"] < inference_window["count"]
+                or any(
+                    type(inference_window[k]) not in (int, float)
+                    or not math.isfinite(inference_window[k])
+                    or inference_window[k] < 0
+                    for k in ("start_s", "end_s")
+                )
+                or inference_window["end_s"] < inference_window["start_s"]
+                or any(
+                    not isinstance(inference_window[k], str) or not inference_window[k]
+                    for k in ("analysis_digest", "preparation_digest")
+                )
+                or not job
+                or not job.get("execution_id")
+            ):
+                raise ValueError("Invalid per-window inference provenance")
+            fields.update(
+                {"cricket.window." + k: v for k, v in inference_window.items()}
+            )
         context = propagate.extract(parent) if parent else None
         with self.tracer.start_as_current_span(
             "cricket." + stage,
