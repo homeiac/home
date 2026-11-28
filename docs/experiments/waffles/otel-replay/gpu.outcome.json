@@ -1,0 +1,52 @@
+{
+  "observations": {
+    "all_binary_decisions_identical": true,
+    "binary_decisions_compared_per_trial": 52,
+    "phases": {
+      "before": {
+        "all_competitors_stopped": false,
+        "trials": {
+          "mac-cpu": {
+            "photos_per_minute": 501.02614683320667
+          },
+          "mac-mps": {
+            "photos_per_minute": 345.45240465173356
+          }
+        }
+      },
+      "paused": {
+        "all_competitors_stopped": true,
+        "trials": {
+          "mac-cpu": {
+            "photos_per_minute": 519.3895225371909
+          },
+          "mac-mps": {
+            "photos_per_minute": 627.1361879118449
+          }
+        }
+      },
+      "resumed": {
+        "all_competitors_stopped": false,
+        "trials": {
+          "mac-cpu": {
+            "photos_per_minute": 387.8208528551846
+          },
+          "mac-mps": {
+            "photos_per_minute": 374.8649206249993
+          }
+        }
+      }
+    },
+    "resume_health_http": [
+      200
+    ],
+    "state": "complete",
+    "verification": {
+      "resumed": 1,
+      "same_original_processes": true,
+      "state": "complete",
+      "stopped": 1
+    }
+  },
+  "source_revision": "3a4c900272b8937304d16fdc67a9e936bf8f5307"
+}

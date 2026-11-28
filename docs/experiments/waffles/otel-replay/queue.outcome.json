@@ -1,0 +1,17 @@
+{
+  "observations": [
+    {
+      "candidate_ms": 1661.587,
+      "completed_in_3m": 472,
+      "returned_rows": 1,
+      "sort_rows": 54406
+    },
+    {
+      "candidate_ms": 0.286,
+      "completed_in_3m": 1302,
+      "returned_rows": 1,
+      "sort_rows": 0
+    }
+  ],
+  "source_revision": "d21253f8b0af575cc617d9726895de5aff5c1080"
+}

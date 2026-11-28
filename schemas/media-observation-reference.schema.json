@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Homelab media workload reference to a revision of a saved OpenLABEL observation",
+  "description": "Private lineage joining a producing workload to an observation in an exported PostgreSQL scene revision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "workload", "run_id", "album", "asset", "revision", "digest", "vocabulary_release", "collection", "uid", "evidence_ref"],
+  "properties": {
+    "contract_version": {"const": 1},
+    "workload": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "album": {"type": "string", "format": "uuid"},
+    "asset": {"type": "string", "format": "uuid"},
+    "revision": {"type": "integer", "minimum": 1},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "vocabulary_release": {"type": "string", "minLength": 1},
+    "collection": {"enum": ["objects", "actions", "events", "contexts", "relations", "tags"]},
+    "uid": {"type": "string", "minLength": 1},
+    "evidence_ref": {"type": "string", "minLength": 1, "description": "Opaque pointer into the private evidence or review ledger."}
+  }
+}

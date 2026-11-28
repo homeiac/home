@@ -28,6 +28,8 @@ graph TD
 
 See the [Homelab AI Overview](docs/source/md/homelab_ai_overview.md) for a deeper explanation
 and additional diagrams.
+
+For Cricket Indexer, Knowledge Index and Waffles, see how workloads share model servers and devices, how the diagnosis loop selects a trial, and how published media observations are verified. [Distributed AI architecture diagrams](docs/architecture/distributed-ai-workloads.md) · [Performance playbook](docs/methodology/distributed-ai-performance.md)
 See the [Ubuntu MAAS and Proxmox Overview](docs/source/md/maas_proxmox_overview.md)
 for details on bare metal installs and container provisioning.
 

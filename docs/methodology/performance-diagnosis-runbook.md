@@ -3,6 +3,8 @@
 A repeatable, **script-based** methodology for diagnosing performance issues.
 Works every time, regardless of where the problem is.
 
+For distributed AI jobs, run the stage-by-pool inventory when placing work, reviewing spare capacity, or tuning concurrency. Include CPU capacity even on hosts with an accelerator. [Distributed AI performance playbook](distributed-ai-performance.md)
+
 ## Core Principle
 
 **USE Method first, then Application Logs, then Standard Tracing Tools.**
