@@ -84,7 +84,7 @@
       "backend": "Mac CPU",
       "threads": 10,
       "quota_percent": 1000,
-      "decision": "Rejected",
+      "decision": "Stopped \u00b7 aggregate review open",
       "scope": "Closed five-minute peer window; partial five-case quality review",
       "peer_rates": {
         "mac-metal": {
@@ -106,7 +106,8 @@
         "supported_actions": 4,
         "both_correct": 2
       },
-      "recovery_verified": true
+      "recovery_verified": true,
+      "decision_reason": "The trial stopped on individual Metal budgets. Measurements remain valid, but total face-workload qualification is reopened. CPU benchmark answers are excluded from production output. No CPU allocation selected."
     }
   ]
 }

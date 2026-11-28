@@ -1645,7 +1645,7 @@ data:
         {
           "id": 294,
           "type": "bargauge",
-          "title": "Mac CPU \u00b7 10 threads \u00b7 Rejected",
+          "title": "Mac CPU \u00b7 10 threads \u00b7 Stopped \u00b7 aggregate review open",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1715,7 +1715,7 @@ data:
               ]
             }
           },
-          "description": "10 threads with aggregate quota 1000%. Closed five-minute peer window; partial five-case quality review. Stage correct 2/5, supported action 4/5, both correct 2/5. Candidate rejected on Metal throughput and latency. Independent recomputation and recovery passed. CPU evaluation responses are excluded from production saved-face counters. Tuning is still active."
+          "description": "10 threads with aggregate quota 1000%. Closed five-minute peer window; partial five-case quality review. Stage correct 2/5, supported action 4/5, both correct 2/5. The trial stopped on individual Metal budgets. Measurements remain valid, but total face-workload qualification is reopened. CPU benchmark answers are excluded from production output. No CPU allocation selected. Independent recomputation and recovery passed. CPU evaluation responses are excluded from production saved-face counters. Tuning is still active."
         },
         {
           "id": 254,

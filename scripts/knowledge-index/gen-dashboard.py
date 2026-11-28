@@ -462,7 +462,8 @@ def panels():
             f'{trial["scope"]}. Stage correct {quality["stage_correct"]}/{quality["reviewed"]}, '
             f'supported action {quality["supported_actions"]}/{quality["reviewed"]}, '
             f'both correct {quality["both_correct"]}/{quality["reviewed"]}. '
-            'Candidate rejected on Metal throughput and latency. Independent recomputation and recovery passed. '
+            f'{trial.get("decision_reason", "Qualification remains open.")} '
+            'Independent recomputation and recovery passed. '
             'CPU evaluation responses are excluded from production saved-face counters. Tuning is still active.'
         )
         backend_charts.append(tuning_comparison(
