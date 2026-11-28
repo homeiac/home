@@ -129,6 +129,9 @@ and append the reason; retain the original receipt.
 - [x] **P04-e-I/V:** Integrate #289's fleet-discovery rule and expand Cricket's
   seven stages across eleven inventoried CPU/accelerator candidates. Evidence:
   E20. This enumerates work; seventy readiness/compatibility checks remain open.
+- [x] **P04-f-I/V:** Bounded CPU/runtime readiness collector with host/guest
+  separation, real Mac/still-fawn receipts and failure-safe tests. Evidence: E21.
+  This does not establish model fit, sustained headroom or peer-qualified capacity.
 - [ ] **P04-I:** Complete server and device caller census, measured routes,
   scheduled reservations and workload-specific progress/quality/service adapters.
 - [ ] **P04-V:** Demonstrate stale/absent/idle distinctions, unknown callers, changed
@@ -618,6 +621,45 @@ has a measured result, demonstrated incompatibility or evidence-backed deferral.
 The observation of four occupied Mac Bonsai slots is specific to that serving
 route. It does not close other models, stages, CPU pools or devices. The common
 machine reviewer still does not enforce complete fleet discovery automatically.
+
+### E21 — P04-f bounded CPU readiness, including the guest layer
+
+Branch: `codex/cricket-p04-cpu-readiness`, based on
+[#290](https://github.com/homeiac/home/pull/290). Added
+`scripts/perf/inspect-compute-readiness.py`: private aggregate receipts, physical
+inventory allowlist, bounded SSH with normal verification, and optional inventoried
+K3s guest inspection through `qm guest exec`. It executes no model or device test,
+retains no process arguments/remote error text, and does not power on guests/hosts.
+Failed measurements remain failed rather than becoming zero-load evidence.
+
+Live read-only commands used the collector with `--output` for the Mac, then
+`--host still-fawn`, and `--host still-fawn --guest`. Initial `.maas` resolution
+failed. The collector retried only the exact address from inventory, preserving the
+SSH alias and normal host verification. The physical host and guest then responded.
+
+| Scope / observation | Aggregate finding | Private receipt |
+| --- | --- | --- |
+| Mac, `1795845111547364000` ns | arm64, 18 logical CPUs; ffmpeg/llama-server on PATH; memory and CPU busy unmeasured by this Linux-oriented sampler | `/private/tmp/cricket-mac-cpu-readiness-20261127.json` |
+| still-fawn host, `1795845171373555568` ns | 4 logical CPUs, 16.58% busy over 1 s, about 1.19 GiB MemAvailable; one running guest configured for 4 vCPUs/25 GiB | `/private/tmp/cricket-still-fawn-cpu-readiness-20261127.json` |
+| still-fawn guest 108, `1795845241053571808` ns | 4 vCPUs, 9.37% busy over 1 s, about 19.85 GiB MemAvailable; CPU PSI some avg10 27.59%, memory some/full 8.48%/8.13%, I/O some/full 2.19%/2.06% | `/private/tmp/cricket-still-fawn-guest-readiness-20261127.json` |
+
+Host and guest are one physical CPU pool. A large guest MemAvailable figure does
+not override host memory/pressure constraints. Neither host nor guest had
+llama-server, ffmpeg or Ollama on the inspected PATH; pod runtimes and model fit
+remain unverified. Subsequent collector support also inventories k3s/crictl presence;
+the listed live receipts precede that addition and do not report those fields.
+
+Focused verification passed **11 tests in 0.22 s**: physical-host allowlist, offline
+and guest restrictions, exact-address DNS fallback, sanitized failures, checked QGA
+exit status, and existing planner behavior. New-file Ruff and diff checks pass.
+The full E02 regression command passed **268 tests and 43 subtests in 22.81 s**,
+no skips. Private log: `/private/tmp/cricket-p04-cpu-readiness-tests.log`.
+
+The authorized peer chat is now coordinating the photo CPU evaluation. Cricket
+sent these readiness facts and holds CPU inference to avoid duplicate instances
+or overlapping canaries; no Cricket CPU owner/lease or live trial exists. Independent
+source access, model fit, sustained resource/peer measurements and Cricket quality
+checks remain open. Readiness alone closes none of the seventy candidate rows.
 
 ## Updating evidence
 
