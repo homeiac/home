@@ -13,6 +13,7 @@
 </section>
 <p id="status" role="status" aria-live="polite">Loading highlights…</p>
 <p id="progress" class="details"></p>
+<aside class="review-guide"><strong>What am I confirming?</strong><p>Watch the clip, then check the player, activity, result and start/end shown on its card. For a photo, check only the player and activity.</p><p><strong>Confirm shown details</strong> keeps those details. <strong>Edit details</strong> fixes anything wrong or adds a result you can see. <strong>Hide this moment</strong> removes an unwanted suggestion; the original stays safe. Unsure? Leave the card for later — no confirmation is required.</p></aside>
 <p class="details">Bowling views include unidentified players. Correct the person when needed.</p>
 <nav class="actions" aria-label="Saved cricket searches"><a href="/cricket?filter=four">Fours</a><a href="/cricket?filter=six">Sixes</a><a href="/cricket?filter=batting_out">Batter out</a><a href="/cricket?filter=bowling_wicket">Bowling wickets</a><a href="/cricket">All moments</a></nav>
 <section id="cards" aria-label="Highlights"></section>
@@ -21,6 +22,7 @@
 </main>
 <dialog id="editor"><form id="edit-form">
 <div class="dialog-top"><h2 id="edit-title">Correct highlight</h2><button id="cancel" type="button">Close</button></div>
+<p id="edit-help" class="details"></p>
 <video id="edit-video" controls preload="metadata"></video><img id="edit-image" alt="Original cricket photo" hidden>
 <div class="fields"><label>Person<select id="person"></select></label><label>Activity<select id="role"><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="other">Other</option><option value="unknown">Unclear</option></select></label>
 <label>Result<select id="outcome"><option value="four">Four</option><option value="six">Six</option><option value="boundary_unclear">Boundary unclear</option><option value="dismissal">Dismissal</option><option value="run_out">Run-out</option><option value="other">No highlight / other</option><option value="unknown">Unclear</option></select></label>

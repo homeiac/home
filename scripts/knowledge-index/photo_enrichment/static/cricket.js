@@ -15,6 +15,27 @@ async function api(route,body){
 }
 function notify(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 function action(text,fn){const el=node('button',text);el.type='button';el.onclick=async()=>{el.disabled=true;try{await fn();}catch(error){notify(error.message,true);}finally{el.disabled=false;}};return el;}
+function reviewDetails(event,asset){
+  const d=event.data,photo=asset?.kind==='photo',box=node('section');box.className='review-details';
+  box.setAttribute('aria-label','Details to confirm');
+  box.append(node('h3',event.review_state==='confirmed'?'Details you confirmed':'Check these details'));
+  const list=node('dl');
+  const field=(label,value)=>{const row=node('div');row.append(node('dt',label),node('dd',value));list.append(row);};
+  let player=d.actor?name(d.actor):'Unknown — choose a player if you recognize them';
+  if(event.review_state==='suggested'&&event.evidence.identity_basis==='user_album_rule')player+=' — assumed for batting; check this is the batter you want';
+  field('Player',player);
+  field('Activity',({batting:'Batting',bowling:'Bowling',other:'Other activity',unknown:'Unknown — check what the player is doing'})[d.role]);
+  if(!photo){
+    field('Result',d.outcome==='unknown'?'Unknown — no four, six or dismissal selected':d.outcome==='dismissal'?(d.role==='batting'?'This batter got out':'A batter got out during this delivery'):d.outcome==='boundary_unclear'?'Boundary — four or six is still unclear':d.outcome==='other'?'No highlight / other result':labels[d.outcome]);
+    if(d.role==='bowling'&&['dismissal','run_out'].includes(d.outcome))field('Wicket credit',d.wicket_credit==='bowler'?'Credited to this bowler':d.wicket_credit==='run_out'?'Run-out; not credited to the bowler':'Unknown — bowler credit has not been established');
+    field('Clip',seconds(d.start)+' – '+seconds(d.end)+' in the original');
+  }
+  box.append(list);
+  box.append(node('p',photo?'Confirm the player and activity only. A photo does not establish a four, six or wicket.':'Check that the clip includes the delivery and its outcome. Edit the start/end if it cuts off the action.'));
+  if(!photo&&d.outcome==='unknown')box.append(node('p','If you can tell what happened, use Edit details to choose Four, Six, Dismissal or another result. Otherwise, Unknown can stay.'));
+  box.append(node('p',event.review_state==='confirmed'?'You can still edit these details.':'Confirmation keeps every detail shown, including anything marked Unknown, until you edit it.'));
+  return box;
+}
 function matches(event){
   const filter=$('filter').value,d=event.data;
   if(event.dismissed&&!$('show-dismissed').checked)return false;
@@ -31,7 +52,7 @@ function matches(event){
 async function change(event,operation){
   const updated=await api('revise',{id:event.id,revision:event.revision,...operation});
   state.events=state.events.map(e=>e.id===updated.id?updated:e);render();
-  notify('Saved.');
+  notify(operation.action==='accept'?'Shown details confirmed. Any unknown details remain unknown.':operation.action==='dismiss'?'Moment hidden. The original is unchanged.':'Saved.');
   $('status').append(' ',action('Undo',async()=>change(updated,{action:'undo'})));
 }
 function render(){
@@ -51,14 +72,14 @@ function render(){
     const title=node('h2',name(d.actor)+' · '+(d.role==='unknown'?'Activity unclear':d.role)+' · '+labels[d.outcome]);
     const badge=node('span',event.dismissed?'Dismissed':event.review_state==='suggested'?'Suggested':event.review_state==='confirmed'?'Confirmed':'Corrected');badge.className='badge';
     const details=node('p',asset?.kind==='video'?seconds(d.start)+' – '+seconds(d.end):'Photo');details.className='details';
-    const reason=node('p',event.evidence.reason||event.evidence.confidence||'Best effort — easy to correct.');reason.className='details';
+    const reason=node('details');reason.className='details';reason.append(node('summary','Why this was suggested'),node('p',event.evidence.reason||event.evidence.confidence||'Best-effort suggestion. Check the details against the original.'));
     const controls=node('div');controls.className='actions';
-    controls.append(action('Correct',()=>edit(event)),action(event.dismissed?'Restore':'Dismiss',()=>change(event,{action:event.dismissed?'restore':'dismiss'})));
-    if(!event.dismissed)controls.append(action('Confirm',()=>change(event,{action:'accept'})));
+    if(!event.dismissed&&event.review_state!=='confirmed')controls.append(action('Confirm shown details',()=>change(event,{action:'accept'})));
+    controls.append(action('Edit details',()=>edit(event)),action(event.dismissed?'Restore':'Hide this moment',()=>change(event,{action:event.dismissed?'restore':'dismiss'})));
     const original=node('a',asset?.kind==='video'?'Play full video':'View original');original.href=media(event.asset);original.target='_blank';original.rel='noopener';controls.append(original);
     const link=node('a','Link to moment');link.href='/cricket?'+new URLSearchParams({album:event.album,event:event.id});controls.append(link);
     if(asset?.kind==='video')controls.append(action('Export clip',async()=>{notify('Preparing this clip…');const result=await api('export',{id:event.id,revision:event.revision});const download=node('a','Download clip');download.href=result.url;download.download='cricket-highlight.mp4';controls.append(download);notify('Clip ready to download.');}));
-    card.append(preview,title,badge,details,reason,controls);$('cards').append(card);
+    card.append(preview,title,badge,details,reviewDetails(event,asset),controls,reason);$('cards').append(card);
   }
   if(!visible.length)$('cards').append(node('p','No moments in this view yet. Try another filter or add one below.'));
   $('more').hidden=visible.length<=state.visibleLimit;
@@ -86,6 +107,7 @@ function edit(event){
   if(video){$('edit-video').src=media(event.asset);$('edit-video').onloadedmetadata=()=>{$('edit-video').currentTime=d.start||0;};}
   else $('edit-image').src=media(event.asset)+'&preview=true';
   $('edit-title').textContent=event.id?'Correct highlight':'Add highlight';$('save').textContent=event.id?'Save correction':'Add highlight';$('save-status').textContent='';$('editor').showModal();
+  $('edit-help').textContent=video?'Choose who is batting or bowling and what happened. Leave uncertain fields as Unclear. Set the clip to include about 10 seconds before the run-up when available, through the outcome and reactions.':'Check the player and activity in this photo. Result and clip timing do not apply to photos.';
 }
 function closeEditor(){$('edit-video').pause();$('editor').close();}
 $('cancel').onclick=closeEditor;$('editor').addEventListener('close',()=>$('edit-video').pause());
