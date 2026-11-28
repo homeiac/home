@@ -43,6 +43,12 @@ The deployer installs the scoped `cricket-ledger.conf` override and backs it up.
 
 ## Live controls
 
+Follow the [shared-indexer tuning playbook](shared-indexer-tuning.md) before any
+worker increase or new reanalysis/frame-upload pass. Inventory knowledge indexing,
+life-stage, Immich ML and any active dog-identification workers on the same
+resources. The four-worker setting below is historical evidence for its observed
+workload mix, not an exclusive reservation of four shared inference slots.
+
 From `scripts/knowledge-index`, set `CRICKET_HOST` to the inventory-confirmed SSH
 target. The following reusable commands operate on the host authority:
 
@@ -61,7 +67,9 @@ Worker counts reload every two seconds. A lower count or pause drains in-flight
 requests; it does not discard answers. Host memory below 512 MiB pauses dispatch
 for at least 60 seconds. Do not change baseline caption/audio services to improve
 a cricket benchmark. Start trials at measured serving bounds and decrease; keep
-input hashes, errors and unsuccessful settings in the experiment journal.
+input hashes, errors, per-peer progress and unsuccessful settings in the experiment
+journal. A live service or healthy endpoint is insufficient: every affected
+backlogged indexer must continue committing useful work within its trial budget.
 
 `scope --scope-file` restricts new claims to a private JSON array of source IDs;
 `scope` without the file allows the imported album. Neither command resets jobs
