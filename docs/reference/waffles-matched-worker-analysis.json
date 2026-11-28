@@ -1,5 +1,767 @@
 {
   "trials": {
+    "aba-before-hybrid": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-before-hybrid",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": true,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.3232530409586616,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          2.9452377090347,
+          3.5202225840184838
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 529.6686224051128,
+          "seconds": 2.9452377090347,
+          "means": {
+            "decode": 0.00551726604373051,
+            "detect": 0.04536905933771497,
+            "embed": 0.058399580121309,
+            "classify": 0.0002631763838088283,
+            "total": 0.10955409296170379
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 443.15379575208385,
+          "seconds": 3.5202225840184838,
+          "means": {
+            "decode": 0.005514544766181364,
+            "detect": 0.04793275330358973,
+            "embed": 0.0767777899633914,
+            "classify": 0.00024044723921598724,
+            "total": 0.13047062822554906
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.930397,
+      "wall_seconds": 6.467079162597656,
+      "rss_peak": 1990066176
+    },
+    "aba-before-mac-cpu": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-before-mac-cpu",
+        "device": "cpu",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 0.9904795840266161,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "pass_wall_seconds": [
+          2.936390041024424,
+          3.2908298749825917
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 531.2645725551364,
+          "seconds": 2.936390041024424,
+          "means": {
+            "decode": 0.005667235612725982,
+            "detect": 0.04105984773531628,
+            "embed": 0.062174463185678736,
+            "classify": 0.0002569598906960052,
+            "total": 0.10916379815003333
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 474.04455996323793,
+          "seconds": 3.2908298749825917,
+          "means": {
+            "decode": 0.005365730726715321,
+            "detect": 0.04573841819924732,
+            "embed": 0.07163521142389911,
+            "classify": 0.00025784787990582676,
+            "total": 0.12300210092843582
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 6.725003000000001,
+      "wall_seconds": 6.228350877761841,
+      "rss_peak": 1991081984
+    },
+    "aba-before-mac-mps": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-before-mac-mps",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.7171255000284873,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          4.977990333980415,
+          4.05364458297845
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 313.3794755187119,
+          "seconds": 4.977990333980415,
+          "means": {
+            "decode": 0.0062526763470556876,
+            "detect": 0.12074580607273114,
+            "embed": 0.06328637338279244,
+            "classify": 0.00026767457333894877,
+            "total": 0.19055780296016914
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 384.83886982853755,
+          "seconds": 4.05364458297845,
+          "means": {
+            "decode": 0.005760775657388597,
+            "detect": 0.08777322111731897,
+            "embed": 0.060235591390385076,
+            "classify": 0.00023072735460188525,
+            "total": 0.15400581408399516
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.0417769999999997,
+      "wall_seconds": 9.032510995864868,
+      "rss_peak": 1968619520
+    },
+    "aba-control-still-fawn": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0+cpu",
+          "torchvision": "0.22.0+cpu",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-control-still-fawn",
+        "device": "cpu",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.41",
+        "torch": "2.7.0+cpu",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 3.4262384600006044,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "pass_wall_seconds": [
+          13.65736271487549,
+          13.500714832916856
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 114.22410260077962,
+          "seconds": 13.65736271487549,
+          "means": {
+            "decode": 0.02117618845883184,
+            "detect": 0.15327195246489003,
+            "embed": 0.3483548964499138,
+            "classify": 0.0006887366314633534,
+            "total": 0.5235047998318735
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 115.54943714509663,
+          "seconds": 13.500714832916856,
+          "means": {
+            "decode": 0.017953004956675265,
+            "detect": 0.15243683137501088,
+            "embed": 0.34752235014457256,
+            "classify": 0.0006132288746392498,
+            "total": 0.5185385787089427
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 51.802256908,
+      "wall_seconds": 27.160446405410767,
+      "rss_peak": 1451764,
+      "nr_throttled_delta": 78,
+      "throttled_usec_delta": 128287
+    },
+    "aba-paused-hybrid": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-paused-hybrid",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": true,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.101564165961463,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          2.03259254101431,
+          2.0330715839518234
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 767.4927308458607,
+          "seconds": 2.03259254101431,
+          "means": {
+            "decode": 0.005500383003471563,
+            "detect": 0.04169060576868315,
+            "embed": 0.028531492228816766,
+            "classify": 0.00020084130049396592,
+            "total": 0.07592762815945137
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 767.3118902029603,
+          "seconds": 2.0330715839518234,
+          "means": {
+            "decode": 0.00528761373537306,
+            "detect": 0.040359946995382555,
+            "embed": 0.028093070577597246,
+            "classify": 0.00018488622243659428,
+            "total": 0.07392971315465939
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.6354109999999995,
+      "wall_seconds": 4.066608905792236,
+      "rss_peak": 1992163328
+    },
+    "aba-paused-mac-cpu": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-paused-mac-cpu",
+        "device": "cpu",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 0.9732938329689205,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "pass_wall_seconds": [
+          2.9215935000102036,
+          3.085458750021644
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 533.9551857554967,
+          "seconds": 2.9215935000102036,
+          "means": {
+            "decode": 0.005203378145009852,
+            "detect": 0.039856145778545536,
+            "embed": 0.06365010099566112,
+            "classify": 0.0002010400818947416,
+            "total": 0.10891549838393424
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 505.59742533879506,
+          "seconds": 3.085458750021644,
+          "means": {
+            "decode": 0.005275754887127102,
+            "detect": 0.04239212334729158,
+            "embed": 0.06768048553763387,
+            "classify": 0.00025659935020555096,
+            "total": 0.11560966823554526
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 6.3165130000000005,
+      "wall_seconds": 6.007885932922363,
+      "rss_peak": 1991557120
+    },
+    "aba-paused-mac-mps": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-paused-mac-mps",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.1116462500067428,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          2.7937737500178628,
+          2.1812222080188803
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 558.3845148484288,
+          "seconds": 2.7937737500178628,
+          "means": {
+            "decode": 0.0059166058109929925,
+            "detect": 0.07314866665491046,
+            "embed": 0.025460100884979162,
+            "classify": 0.00020239738380321517,
+            "total": 0.10473232688337493
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 715.1953589436848,
+          "seconds": 2.1812222080188803,
+          "means": {
+            "decode": 0.0054179150364899,
+            "detect": 0.04836216349548732,
+            "embed": 0.02640501935652887,
+            "classify": 0.0002042066883474875,
+            "total": 0.08039370507377988
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 2.84549,
+      "wall_seconds": 4.975843906402588,
+      "rss_peak": 1985150976
+    },
+    "aba-resumed-hybrid": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-resumed-hybrid",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": true,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.145382915972732,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          2.744653792004101,
+          3.804559040989261
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 568.3776965039054,
+          "seconds": 2.744653792004101,
+          "means": {
+            "decode": 0.005332161804499964,
+            "detect": 0.04183994719418339,
+            "embed": 0.053535958154288195,
+            "classify": 0.0002089823806622567,
+            "total": 0.10092191499335548
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 410.0343780167409,
+          "seconds": 3.804559040989261,
+          "means": {
+            "decode": 0.006876607235216607,
+            "detect": 0.06075988788283072,
+            "embed": 0.07440610423621435,
+            "classify": 0.0003839231503661722,
+            "total": 0.1424331633897964
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 4.401507,
+      "wall_seconds": 6.5505640506744385,
+      "rss_peak": 1991983104
+    },
+    "aba-resumed-mac-cpu": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-resumed-mac-cpu",
+        "device": "cpu",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 0.9731897919555195,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "cpu",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "cpu",
+        "pass_wall_seconds": [
+          3.670649165986106,
+          4.3743024580180645
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 424.9929452413118,
+          "seconds": 3.670649165986106,
+          "means": {
+            "decode": 0.006674326960749637,
+            "detect": 0.05183859618801552,
+            "embed": 0.079258000041591,
+            "classify": 0.00024010576845075076,
+            "total": 0.1380166683834082
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 356.6282887321912,
+          "seconds": 4.3743024580180645,
+          "means": {
+            "decode": 0.007320921453915967,
+            "detect": 0.05992185411518081,
+            "embed": 0.0976631921545889,
+            "classify": 0.00032421488252181845,
+            "total": 0.16523593256715685
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 8.22071,
+      "wall_seconds": 8.046094179153442,
+      "rss_peak": 1991933952
+    },
+    "aba-resumed-mac-mps": {
+      "metadata": {
+        "versions": {
+          "torch": "2.7.0",
+          "torchvision": "0.22.0",
+          "open_clip_torch": "2.26.1",
+          "ultralytics": "8.4.118",
+          "scikit-learn": "1.5.2",
+          "Pillow": "10.4.0"
+        },
+        "source_hashes": {
+          "embedder": "704b13512c2958b078cbdde00e1f469bf2413fecca889183fc06a54dc632699a",
+          "detector": "b14bca999c8483365924638e0a282331ba094869bf131ef3c51b94564c0f9b4b",
+          "classifier": "eb5ddf5bac752340029a96d0c4cf79ba3290990b62b0fc356d730b791b220060",
+          "device": "a9dff7099a9611141aa71f937d506fa1c9fa47051103f893d5f26adedd3ab13e"
+        },
+        "label": "aba-resumed-mac-mps",
+        "device": "mps",
+        "threads_requested": 2,
+        "inflight": 1,
+        "cpu_detector": false,
+        "platform": "macOS-27.2.1-arm64-arm-64bit",
+        "torch": "2.7.0",
+        "numpy": "2.5.4",
+        "classifier_sha256": "99b7570ece61f51168a93d0a085b0b31d78da38bb6fb20aaa09a8da9754b41e2",
+        "manifest_sha256": "e6cf43767103ee1c0f2176f1f477a3595de0e1609b944836e51048fc0c297a95",
+        "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+        "clip_sha256": "5806e77cd80f8b59890b7e101eabd078d9fb84e6937f9e85e4ecb61988df416f",
+        "load_seconds": 1.211420374980662,
+        "yolo_actual_threads": 2,
+        "yolo_parameter_device": "mps:0",
+        "clip_actual_threads": 2,
+        "clip_parameter_device": "mps:0",
+        "pass_wall_seconds": [
+          4.487059124978259,
+          3.835938916017767
+        ],
+        "clip_avg_batch": 1.0,
+        "yolo_avg_batch": 1.0
+      },
+      "passes": [
+        {
+          "pass": 0,
+          "photos": 26,
+          "photos_per_minute": 347.66646851517885,
+          "seconds": 4.487059124978259,
+          "means": {
+            "decode": 0.006006083265394689,
+            "detect": 0.11205779169596589,
+            "embed": 0.05151685719521573,
+            "classify": 0.00022362495880000867,
+            "total": 0.16980989896155035
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        },
+        {
+          "pass": 1,
+          "photos": 26,
+          "photos_per_minute": 406.6800942751963,
+          "seconds": 3.835938916017767,
+          "means": {
+            "decode": 0.007130200383611596,
+            "detect": 0.08484241823764303,
+            "embed": 0.051207846229842216,
+            "classify": 0.00030879334260064823,
+            "total": 0.1434949086553668
+          },
+          "true_positive": 9,
+          "false_positive": 0
+        }
+      ],
+      "cpu_seconds": 3.3109659999999996,
+      "wall_seconds": 8.32404112815857,
+      "rss_peak": 1987428352
+    },
     "mac-cpu-explicit-cache": {
       "metadata": {
         "versions": {
@@ -796,6 +1558,996 @@
   },
   "agreement": [
     {
+      "a": "aba-before-hybrid",
+      "b": "aba-before-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-before-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-control-still-fawn",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-paused-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-paused-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-paused-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-hybrid",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-before-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-control-still-fawn",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-paused-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-paused-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-paused-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-cpu",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-control-still-fawn",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-paused-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-paused-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-paused-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-before-mac-mps",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "aba-paused-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "aba-paused-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "aba-paused-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-control-still-fawn",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "aba-paused-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "aba-paused-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-hybrid",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "aba-paused-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-cpu",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "aba-resumed-hybrid",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-paused-mac-mps",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "aba-resumed-mac-cpu",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-hybrid",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "aba-resumed-mac-mps",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-cpu",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-cpu-explicit-cache",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-cpu-t2-corrected",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-cpu-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-hybrid-cpu-yolo",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-hybrid-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-mps-inflight4",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-mps-main-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-mps-serial-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "mac-mps-unprivileged",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "still-fawn-t2",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "still-fawn-t2-repeat",
+      "compared": 52,
+      "differences": 0
+    },
+    {
+      "a": "aba-resumed-mac-mps",
+      "b": "still-fawn-t2-verified",
+      "compared": 52,
+      "differences": 0
+    },
+    {
       "a": "mac-cpu-explicit-cache",
       "b": "mac-cpu-t2-corrected",
       "compared": 52,
@@ -1192,8 +2944,8 @@
       "differences": 0
     }
   ],
-  "at": "2026-11-27T18:27:34.021256+00:00",
-  "status": "matched comparisons complete; GPU contention intervention awaiting owner approval",
+  "at": "2026-11-28T00:50:00.174302+00:00",
+  "status": "matched comparisons and owner-approved contention ABA complete",
   "runtime_audit": {
     "mac": {
       "python": "3.12.14",
@@ -1243,11 +2995,290 @@
   "limitations": [
     "26 frozen holdouts, not a representative library throughput sample",
     "13 negative controls do not establish population precision",
-    "No timed production workers restarted; independent caption/LLM workloads remained active",
-    "Mac GPU contention pause/resume A/B requires owner approval",
     "Measured stages include preprocessing, postprocessing and synchronization; not GPU kernel time",
     "A serial variant temporarily used one ThreadPool caller; main-thread repeats explicitly recorded",
     "Idle Metal diagnostic model was resident during early CPU tests while awaiting sudo; later main-thread repeats had no waiting test model",
-    "Short batching variant includes new batch-shape warmup costs; no stable throughput win claimed"
-  ]
+    "Short batching variant includes new batch-shape warmup costs; no stable throughput win claimed",
+    "Other caption/LLM workloads remained active during the initial matched trials; the later ABA deliberately paused the identified competitor",
+    "Competing llama-server computation was paused only for the bounded owner-approved ABA; same process resumed and health checked"
+  ],
+  "contention_intervention": {
+    "state": "complete",
+    "protocol": "before/paused/resumed; same26 photos; one process; two threads; two reversed passes per variant",
+    "verification": {
+      "state": "complete",
+      "stopped": 1,
+      "resumed": 1,
+      "same_original_processes": true,
+      "pause_seconds": 39.113843584025744,
+      "watchdog_fired": false,
+      "server_count_before": 1,
+      "server_count_paused": 1
+    },
+    "resume_health_http": [
+      200
+    ],
+    "resume_cpu_seconds_after_health_probe": 0.42074112000045716,
+    "phases": {
+      "before": {
+        "start_host": {
+          "cpu_percent": 14.5,
+          "swap_bytes": 6590038016,
+          "available_bytes": 17221320704,
+          "pressure": 1,
+          "gpu_percent": 99
+        },
+        "end_host": {
+          "cpu_percent": 5.1,
+          "swap_bytes": 6581649408,
+          "available_bytes": 18558812160,
+          "pressure": 1,
+          "gpu_percent": 99
+        },
+        "competing_process_count": 1,
+        "competing_cpu_seconds": 6.843531264003104,
+        "all_competitors_stopped": false,
+        "trials": {
+          "mac-mps": {
+            "photos": 52,
+            "photos_per_minute": 345.45240465173356,
+            "pass_rates": [
+              313.3794755187119,
+              384.83886982853755
+            ],
+            "mean_detect_ms": 104.25951359502506,
+            "mean_embed_ms": 61.760982386588765,
+            "mean_decode_ms": 6.006726002222142,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          },
+          "mac-cpu": {
+            "photos": 52,
+            "photos_per_minute": 501.02614683320667,
+            "pass_rates": [
+              531.2645725551364,
+              474.04455996323793
+            ],
+            "mean_detect_ms": 43.3991329672818,
+            "mean_embed_ms": 66.90483730478893,
+            "mean_decode_ms": 5.516483169720652,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          },
+          "hybrid": {
+            "photos": 52,
+            "photos_per_minute": 482.56425042966936,
+            "pass_rates": [
+              529.6686224051128,
+              443.15379575208385
+            ],
+            "mean_detect_ms": 46.65090632065235,
+            "mean_embed_ms": 67.58868504235019,
+            "mean_decode_ms": 5.515905404955936,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "paused": {
+        "start_host": {
+          "cpu_percent": 9.4,
+          "swap_bytes": 6581649408,
+          "available_bytes": 18342854656,
+          "pressure": 1,
+          "gpu_percent": 0
+        },
+        "end_host": {
+          "cpu_percent": 7.7,
+          "swap_bytes": 6581649408,
+          "available_bytes": 19392790528,
+          "pressure": 1,
+          "gpu_percent": 8
+        },
+        "competing_process_count": 1,
+        "competing_cpu_seconds": 0.0,
+        "all_competitors_stopped": true,
+        "trials": {
+          "mac-mps": {
+            "photos": 52,
+            "photos_per_minute": 627.1361879118449,
+            "pass_rates": [
+              558.3845148484288,
+              715.1953589436848
+            ],
+            "mean_detect_ms": 60.75541507519889,
+            "mean_embed_ms": 25.932560120754015,
+            "mean_decode_ms": 5.667260423741447,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          },
+          "mac-cpu": {
+            "photos": 52,
+            "photos_per_minute": 519.3895225371909,
+            "pass_rates": [
+              533.9551857554967,
+              505.59742533879506
+            ],
+            "mean_detect_ms": 41.124134562918556,
+            "mean_embed_ms": 65.6652932666475,
+            "mean_decode_ms": 5.239566516068477,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          },
+          "hybrid": {
+            "photos": 52,
+            "photos_per_minute": 767.4022998705013,
+            "pass_rates": [
+              767.4927308458607,
+              767.3118902029603
+            ],
+            "mean_detect_ms": 41.02527638203286,
+            "mean_embed_ms": 28.312281403207002,
+            "mean_decode_ms": 5.393998369422311,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "resumed": {
+        "start_host": {
+          "cpu_percent": 23.8,
+          "swap_bytes": 6581649408,
+          "available_bytes": 16225615872,
+          "pressure": 1,
+          "gpu_percent": 97
+        },
+        "end_host": {
+          "cpu_percent": 15.9,
+          "swap_bytes": 6573260800,
+          "available_bytes": 17590960128,
+          "pressure": 1,
+          "gpu_percent": 98
+        },
+        "competing_process_count": 1,
+        "competing_cpu_seconds": 5.041553408002073,
+        "all_competitors_stopped": false,
+        "trials": {
+          "mac-mps": {
+            "photos": 52,
+            "photos_per_minute": 374.8649206249993,
+            "pass_rates": [
+              347.66646851517885,
+              406.6800942751963
+            ],
+            "mean_detect_ms": 98.45010496680445,
+            "mean_embed_ms": 51.36235171252898,
+            "mean_decode_ms": 6.568141824503142,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          },
+          "mac-cpu": {
+            "photos": 52,
+            "photos_per_minute": 387.8208528551846,
+            "pass_rates": [
+              424.9929452413118,
+              356.6282887321912
+            ],
+            "mean_detect_ms": 55.88022515159817,
+            "mean_embed_ms": 88.46059609808995,
+            "mean_decode_ms": 6.997624207332802,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          },
+          "hybrid": {
+            "photos": 52,
+            "photos_per_minute": 476.3931299166503,
+            "pass_rates": [
+              568.3776965039054,
+              410.0343780167409
+            ],
+            "mean_detect_ms": 51.29991753850705,
+            "mean_embed_ms": 63.97103119525127,
+            "mean_decode_ms": 6.104384519858286,
+            "true_positive_per_pass": [
+              9,
+              9
+            ],
+            "false_positive_per_pass": [
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    "binary_decisions_compared_per_trial": 52,
+    "all_binary_decisions_identical": true,
+    "limits": [
+      "One ABA cycle, shared live host; not a precise reconstruction of historical contention",
+      "Pausing removes competing CPU and GPU submission together; CPU-only control measures broader scheduling effects",
+      "Same process memory retained; no exclusive kernel-time or thermal attribution",
+      "13 negative controls do not establish population precision"
+    ],
+    "refreshed_still_fawn_control": {
+      "photos_per_minute": 114.8829476059001,
+      "pass_rates": [
+        114.22410260077962,
+        115.54943714509663
+      ],
+      "true_positive_per_pass": [
+        9,
+        9
+      ],
+      "false_positive_per_pass": [
+        0,
+        0
+      ]
+    },
+    "quiet_metal_vs_still_fawn": 5.45891449497973,
+    "quiet_hybrid_vs_still_fawn": 6.679862554563228
+  }
 }

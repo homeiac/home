@@ -12,8 +12,8 @@ to assume that every similar dog is the same animal.
 The completed study identified **999 unique Waffles assets: 879 photos and 120
 videos**. The original 78,900-asset inventory reached 78,895 processed assets;
 five damaged source assets remain unresolved. All Waffles workers are now off,
-with results, references and the dashboard retained. Recognition recall and the
-per-worker Mac-versus-i5 performance investigation remain incomplete. The final
+with results, references and the dashboard retained. Recognition recall remains incomplete. The subsequent matched-photo and
+pause/resume experiments below explain the observed Mac-versus-i5 performance gap. The final
 results and lessons below distinguish those open questions from completed work.
 
 ## The add-on
@@ -664,9 +664,9 @@ uncertain model decisions alongside this new owner evidence; neither the model
 threshold nor the evaluation labels were changed.
 
 
-## What the still-fawn comparison established—and what remains open
+## Before the matched-photo follow-up: what remained open
 
-The per-worker analysis is **incomplete**. The i5's competitiveness cannot be
+At this point, the per-worker analysis was **incomplete**. The i5's competitiveness could not be
 explained solely from total backend throughput, and the eventual Mac lead does
 not settle that question. A backend combines several processes: the final active
 configuration had one Metal and fifteen CPU workers on the Mac, versus four CPU
@@ -822,12 +822,12 @@ Reusing a connection brought the Mac to 22–30 ms. This is a useful improvement
 but roughly 19 ms of extra transport cannot by itself explain the earlier parity.
 The cached inference comparison removes that transport entirely.
 
-One causal question remains open. A later Metal repeat dropped from 357–369 to
+At this stage, one causal question remained open. A later Metal repeat dropped from 357–369 to
 170–184 photos/min, mainly through slower detection. Other llama-server workloads
 were active, and whole-host GPU activity remained at 100% after Waffles exited.
 That shows competing activity, but does not assign a precise share of GPU time
 or prove a thermal bottleneck. A short pause/resume A/B of that other work requires
-the owner's approval and is pending. The journal keeps every slow pass; it does
+the owner's approval; the approved experiment follows below. The journal keeps every slow pass; it does
 not replace the range with the fastest number. Four-photo batching also produced
 an uneven 220/498 photos/min result, so it is not adopted as a proven speedup.
 
@@ -840,5 +840,60 @@ required a password. No privileged GPU-attribution result is claimed.
 The [matched-worker science journal](../experiments/waffles/2026-11-27-matched-worker-analysis.md)
 records hashes, stage timings, device-placement and connection-reuse interventions,
 failed harness starts, tracing limits and repeatable scripts. The matched-photo
-comparison is measured; attribution of the shared-GPU variability still awaits
-the bounded contention experiment. Production Waffles workers remain shut down.
+comparison was measured; attribution of the shared-GPU variability still required
+the bounded contention experiment. Production Waffles workers remained shut down.
+
+
+## The contention test: pause, measure, resume, measure again
+
+The owner approved a short pause of the competing Mac inference server. We ran
+three phases with the same frozen photos, model weights, classifier and two-thread
+settings: other work running, that exact `llama-server` process paused, then the
+same process resumed. Each phase tested one serial Metal process, one CPU process
+and the CPU-detector/Metal-CLIP hybrid. Each table entry pools two complete passes.
+
+| One Waffles process | Other work running | Other work paused | Other work resumed |
+| --- | ---: | ---: | ---: |
+| Metal detection + Metal CLIP | **346/min** | **627/min** | **375/min** |
+| Mac CPU | 501/min | 519/min | 388/min |
+| CPU detection + Metal CLIP | **483/min** | **767/min** | **476/min** |
+
+Pausing the competitor increased Metal throughput by 81% versus the immediately
+preceding phase, and the slowdown returned after resumption. The hybrid gained
+59% and likewise returned close to its original rate. The CPU control improved
+only about 4% during the pause relative to the preceding phase, although its
+resumed result also varied. That supports a substantial GPU-sharing effect while
+preserving evidence of ordinary shared-host scheduling variability.
+
+The stage timings explain where the time went. Metal detection fell from 104 to
+61 ms/photo while CLIP fell from 62 to 26 ms. In the hybrid, CPU detection changed
+only from 47 to 41 ms while Metal CLIP fell from 68 to 28 ms. Host GPU activity
+between diagnostic jobs fell from 99% to 0% when the competitor paused, then
+returned to 97–98% after it resumed. Its CPU time stayed flat while stopped and
+advanced afterward. These observations complement the native MPS synchronization
+stacks; they do not depend on mistaking whole-host utilization for Waffles' usage.
+
+The competing process was paused for **39 seconds**, retaining its loaded model.
+An independent 90-second watchdog and a `finally` block protected resumption.
+The original process identity was preserved, its health endpoint returned HTTP
+200, and CPU progress was verified afterward. No service was restarted. All
+recognition decisions agreed across the nine new Mac trials: nine of thirteen
+positive controls accepted, zero of thirteen negative controls accepted. The
+small quality set still does not establish population precision.
+
+This completes the missing causal check. The i5 looked competitive because the
+comparison included dispatch and error waits, changing concurrency, and a Mac
+GPU already serving another model. On the same cached work, Mac CPU was already
+substantially faster; freeing the shared GPU raised the Mac much further. The
+small synchronous detector/post-processing path also incurs Metal synchronization
+costs, which is why placing detection on CPU and CLIP on Metal was the fastest
+repeatable option in this particular test. GPU support is not the same as having
+exclusive GPU capacity or an efficient accelerator path for every stage.
+
+This is one controlled pause/resume cycle on a live shared host, not a precise
+reconstruction of every historical graph point. Pausing the other process removes
+both its CPU work and its GPU submissions; the CPU control helps distinguish the
+effects but does not supply exclusive GPU kernel timings or thermal attribution.
+The [completed experiment journal](../experiments/waffles/2026-11-27-matched-worker-analysis.md)
+retains all phases and their limits. The competing server is running again, and
+the production Waffles fleet remains off.
