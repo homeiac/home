@@ -28,7 +28,9 @@ authorized merely by this intake; use the playbook's prerequisites and owner.
 The adapter fences changes to the session, actual host, model, source allowlist,
 analysis version, endpoint and configured ceiling. Desired worker counts may vary
 within the same comparison, but allocation authorization belongs to the supervisor.
-Use a new session directory for changed fixed inputs or a new repetition. Do not
+Use a new comparison/session for changed fixed inputs. Allocation phases retain
+the comparison run identity; separate captures or a new run ID do not establish
+fresh inference. Repetitions need their own evaluation receipts. Do not
 reuse the earlier P01 intake, which lacks the required `analyze` stage.
 
 From `scripts/knowledge-index` on that same host, close a capture into a new path:
@@ -69,3 +71,22 @@ Restart/repeated import preserve the count; changing an imported receipt is refu
 For timed windows, run receipt import at each sampling boundary. Repeated frozen-
 cohort evaluation still needs its separate phase receipt contract; these are
 production completions only.
+
+Each worker execution now has a private `cricket.execution_id` on its `analyze`
+span and fresh `classify` children. A fresh model call records the source ID,
+fingerprint/version, window index and expected count, start/end seconds, analysis
+configuration digest and preparation cache digest. These fields stay in the
+private trace journal and never enter metric labels. They do not change model
+prompts, answer-cache keys or production completion accounting.
+
+Cached windows produce no new classify span. A retry has a different execution ID,
+so a successful retry with one new window and one cached window cannot appear to
+be two freshly inferred windows in that execution. Failed spans retain the SDK
+error status without copying the exception text. Consumers must handle the actual
+OTLP enum encoding, including `STATUS_CODE_ERROR`.
+
+This is evidence collection, not yet an evaluation receipt. The remaining verifier
+must join every expected frozen window to successful inference, reject reused or
+late evidence, and bind it to independently read-back OpenLABEL completion and
+quality evaluation. Aggregate `fresh_inference_items` claims alone remain
+insufficient to admit a capacity trial.

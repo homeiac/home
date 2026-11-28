@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from cricket.jobs import claim
+from cricket.jobs import claim, failed
 from cricket.ledger import Ledger
 from cricket.models import infer
 from cricket.prepare import save_private
@@ -84,6 +84,110 @@ def spans(folder: Path) -> list[dict]:
     ]
 
 
+def test_partial_cache_retry_preserves_distinct_execution_and_window_evidence(
+    run: RunTelemetry, tmp_path: Path
+) -> None:
+    ledger = Ledger(tmp_path / "retry.sqlite3")
+    ledger.add_album("o", "a", "person")
+    ledger.add_asset("o", "a", "v", "video", 20, "source-v1")
+    with ledger.connect(True) as db:
+        db.execute(
+            "INSERT INTO jobs(owner,asset,version,stage) VALUES('o','v','v1','analyze')"
+        )
+    evidence = tmp_path / "evidence"
+    save_private(
+        evidence / "v.json",
+        {
+            "asset": "v",
+            "cache_key": "fixture",
+            "windows": [{"start": 0, "end": 10}, {"start": 10, "end": 20}],
+        },
+    )
+    backend = {"model": "fixture", "api": "openai", "resource": POOL}
+    album = {"id": "a", "default_batter": "person"}
+    with run.stage("ingest", POOL):
+        job = claim(ledger, "o", "a", "v1", evidence, trace_context=run.headers())
+    with (
+        patch(
+            "cricket.worker.analyze_one",
+            side_effect=[{"proposals": []}, RuntimeError("private error detail")],
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        process(ledger, album, job, backend, evidence, tmp_path / "state", None, run)
+    failed(ledger, job, "retry")
+    with run.stage("ingest", POOL):
+        retry = claim(
+            ledger,
+            "o",
+            "a",
+            "v1",
+            evidence,
+            now=time.time() + 120,
+            trace_context=run.headers(),
+        )
+    with patch("cricket.worker.analyze_one", return_value={"proposals": []}) as model:
+        process(ledger, album, retry, backend, evidence, tmp_path / "state", None, run)
+        assert model.call_count == 1
+    capture = tmp_path / "retry-capture"
+    assert run.close_window(capture)["verified_items"] == 0
+    recorded = spans(capture)
+    parents = [s for s in recorded if s["name"] == "cricket.analyze"]
+    assert len(parents) == 2
+
+    def fields(span: dict) -> dict:
+        return {a["key"]: next(iter(a["value"].values())) for a in span["attributes"]}
+
+    assert len({fields(p)["cricket.execution_id"] for p in parents}) == 2
+    successful = next(
+        p
+        for p in parents
+        if p.get("status", {}).get("code") not in (2, "STATUS_CODE_ERROR")
+    )
+    children = [
+        s
+        for s in recorded
+        if s["name"] == "cricket.classify" and s["parentSpanId"] == successful["spanId"]
+    ]
+    assert len(children) == 1
+    assert int(fields(children[0])["cricket.window.index"]) == 1
+    assert int(fields(children[0])["cricket.window.count"]) == 2
+    assert (
+        fields(children[0])["cricket.execution_id"]
+        == fields(successful)["cricket.execution_id"]
+    )
+    assert "private error detail" not in (capture / "traces-and-logs.jsonl").read_text()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"index": True},
+        {"count": 0},
+        {"end_s": float("nan")},
+        {"start_s": 2},
+        {"raw_prompt": "must not enter telemetry"},
+    ],
+)
+def test_invalid_window_provenance_is_rejected(run: RunTelemetry, change: dict) -> None:
+    window = {
+        "index": 0,
+        "count": 1,
+        "start_s": 0,
+        "end_s": 1,
+        "analysis_digest": "a" * 64,
+        "preparation_digest": "b" * 64,
+        **change,
+    }
+    with (
+        pytest.raises(ValueError, match="per-window"),
+        run.stage(
+            "classify", POOL, job={"execution_id": "fixture"}, inference_window=window
+        ),
+    ):
+        pass
+
+
 def test_claim_thread_model_context_and_common_review(
     run: RunTelemetry, tmp_path: Path
 ) -> None:
@@ -96,7 +200,8 @@ def test_claim_thread_model_context_and_common_review(
         )
     evidence = tmp_path / "evidence"
     save_private(
-        evidence / "v.json", {"asset": "v", "cache_key": "fixture", "windows": [{}]}
+        evidence / "v.json",
+        {"asset": "v", "cache_key": "fixture", "windows": [{"start": 0, "end": 20}]},
     )
     with run.stage("ingest", POOL):
         job = claim(ledger, "o", "a", "v1", evidence, trace_context=run.headers())
@@ -141,6 +246,28 @@ def test_claim_thread_model_context_and_common_review(
         == by_name["cricket.analyze"]["spanId"]
     )
     assert headers["traceparent"].split("-")[2] == by_name["cricket.classify"]["spanId"]
+    fields = {
+        a["key"]: next(iter(a["value"].values()))
+        for a in by_name["cricket.classify"]["attributes"]
+    }
+    parent_fields = {
+        a["key"]: next(iter(a["value"].values()))
+        for a in by_name["cricket.analyze"]["attributes"]
+    }
+    assert fields["cricket.execution_id"] == parent_fields["cricket.execution_id"]
+    assert len(fields["cricket.execution_id"]) == 32
+    assert (
+        fields["cricket.asset"] == "v" and fields["cricket.fingerprint"] == "source-v1"
+    )
+    assert (
+        int(fields["cricket.window.index"]) == 0
+        and int(fields["cricket.window.count"]) == 1
+    )
+    assert (
+        int(fields["cricket.window.start_s"]) == 0
+        and int(fields["cricket.window.end_s"]) == 20
+    )
+    assert len(fields["cricket.window.analysis_digest"]) == 64
     response = subprocess.run(
         [
             sys.executable,

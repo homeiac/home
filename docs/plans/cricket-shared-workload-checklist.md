@@ -50,7 +50,7 @@ and append the reason; retain the original receipt.
 | ID | Scope | Actual PR / source | Implemented | Merged | Local verification | Deployment / live verification |
 | --- | --- | --- | --- | --- | --- | --- |
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
-| P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
+| P02 | Run identity and closed telemetry | P02-a [#279](https://github.com/homeiac/home/pull/279); P02-b `codex/cricket-p02-window-provenance` | Analysis and per-window provenance implemented; evaluation receipt integration pending | No | E22: 274 passed, 43 subtests | Pending |
 | P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
 | P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c [#285](https://github.com/homeiac/home/pull/285); P04-d [#286](https://github.com/homeiac/home/pull/286) | Contracts, activity and slot observers implemented; complete window adapters pending | Foundation only | E17: 187 passed, 43 subtests | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | P05-a [#287](https://github.com/homeiac/home/pull/287); P05-b [#288](https://github.com/homeiac/home/pull/288) | Registration and offline qualification/ranking implemented; phase receipt/CLI integration pending | No | E19: 260 passed, 43 subtests after review fixes | Local contract; live use through P09 |
@@ -85,6 +85,9 @@ and append the reason; retain the original receipt.
 - [x] **P02-a-I/V:** SDK spans, durable queue context, all three model transports,
   fixed-session configuration, restart-safe private journal and immutable captures.
   Evidence: E10. Writer handoff and verified counts depend on P03.
+- [x] **P02-b-I/V:** Distinct execution IDs and private source/window provenance on
+  fresh classify spans; partial-cache retries remain distinguishable. Evidence:
+  E22. This collects evidence but does not yet verify evaluation completions.
 
 - [ ] **P02-I:** Add media run intake, caller identity, queue/writer trace propagation,
   declared stages and atomic closed OTLP exports.
@@ -660,6 +663,32 @@ sent these readiness facts and holds CPU inference to avoid duplicate instances
 or overlapping canaries; no Cricket CPU owner/lease or live trial exists. Independent
 source access, model fit, sustained resource/peer measurements and Cricket quality
 checks remain open. Readiness alone closes none of the seventy candidate rows.
+
+### E22 — P02-b per-window inference provenance
+
+Branch: `codex/cricket-p02-window-provenance`, based on
+[#291](https://github.com/homeiac/home/pull/291). Each analysis execution now has a
+distinct private ID, shared with its fresh classify spans. Fresh requests carry
+source/fingerprint/version, window index/expected count, media times and analysis/
+preparation digests. Cache reuse emits no fresh classify span. These fields remain
+private trace attributes; prompts, answer-cache identity and metric labels stay
+unchanged. Production verified counters still require the existing readback receipt.
+
+Focused tests passed **14 in 0.99 s**. The full E02 command passed **274 tests and
+43 subtests in 22.34 s**, no skips; private log
+`/private/tmp/cricket-p02-window-provenance-tests.log`. Ruff and diff checks pass.
+The new retry test fails the second model call, retries with the first answer
+cached, and observes a distinct successful execution with one fresh window out of
+two expected. Error text is absent from captures and verified output remains zero.
+Malformed window timing/index/count and extra prompt fields are rejected. The
+initial assertion treated the SDK error enum as numeric only; it was corrected to
+also recognize the actual `STATUS_CODE_ERROR` JSON encoding before the passing run.
+
+No live inference, deployment or worker setting changed. The next verifier must
+join these traces to frozen windows and independent OpenLABEL evaluation readbacks;
+ordered phase receipts and shared lease execution remain pending. CPU canaries
+continue to be coordinated by the Knowledge Index chat, with no overlapping Cricket
+model instance or trial ownership.
 
 ## Updating evidence
 

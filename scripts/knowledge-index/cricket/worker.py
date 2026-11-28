@@ -15,6 +15,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from .telemetry import RunTelemetry
@@ -115,6 +116,7 @@ def process(
     telemetry: "RunTelemetry | None" = None,
 ) -> dict:
     """Checkpoint each window, then reconcile proposals and complete the lease atomically."""
+    job = {**job, "execution_id": uuid4().hex}
     with (
         telemetry.stage(
             "analyze",
@@ -184,7 +186,19 @@ def _process(
             answer = json.loads(target.read_text())
         else:
             with (
-                telemetry.stage("classify", backend["resource"])
+                telemetry.stage(
+                    "classify",
+                    backend["resource"],
+                    job=job,
+                    inference_window={
+                        "index": index,
+                        "count": len(prepared["windows"]),
+                        "start_s": window["start"],
+                        "end_s": window["end"],
+                        "analysis_digest": config_hash,
+                        "preparation_digest": prepared["cache_key"],
+                    },
+                )
                 if telemetry
                 else nullcontext()
             ):
