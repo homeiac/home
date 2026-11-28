@@ -80,25 +80,42 @@ def main() -> None:
         help="Reviewed conflict resolutions against this exact snapshot",
     )
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument(
+        "--ui-only",
+        action="store_true",
+        help="Update only cricket HTML/CSS/JS; leave analysis workers running",
+    )
     args = parser.parse_args()
     here = Path(__file__).resolve().parent.parent
     snapshot = json.loads(args.snapshot.read_text())
-    files = merged_files(snapshot, here, args.resolved)
+    files = (
+        {
+            str(p.relative_to(here)): p.read_text()
+            for p in sorted((here / "photo_enrichment/static").glob("cricket.*"))
+        }
+        if args.ui_only
+        else merged_files(snapshot, here, args.resolved)
+    )
     private = {}
     with tempfile.TemporaryDirectory() as directory:
         ledger = Path(directory) / "ledger.sqlite3"
-        backup(args.state / "ledger.sqlite3", ledger)
-        private["ledger.sqlite3"] = base64.b64encode(ledger.read_bytes()).decode()
-    for name in ("people.json", "reference.jpg", "policy.json"):
+        if not args.ui_only:
+            backup(args.state / "ledger.sqlite3", ledger)
+            private["ledger.sqlite3"] = base64.b64encode(ledger.read_bytes()).decode()
+    for name in () if args.ui_only else ("people.json", "reference.jpg", "policy.json"):
         private[name] = base64.b64encode((args.state / name).read_bytes()).decode()
-    for path in (args.state / "evidence").iterdir():
+    for path in () if args.ui_only else (args.state / "evidence").iterdir():
         if path.suffix in {".json", ".jpg"}:
             private["evidence/" + path.name] = base64.b64encode(
                 path.read_bytes()
             ).decode()
     release = (
         "cricket-"
-        + hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()[:16]
+        + hashlib.sha256(
+            json.dumps(
+                {"previous": snapshot["release"], "files": files}, sort_keys=True
+            ).encode()
+        ).hexdigest()[:16]
     )
     payload = {
         "previous": snapshot["release"],
@@ -107,6 +124,7 @@ def main() -> None:
         "release": release,
         "files": files,
         "private": private,
+        "ui_only": args.ui_only,
     }
     save_private(args.output, payload)
     if args.apply:

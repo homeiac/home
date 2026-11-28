@@ -32,6 +32,18 @@ def main() -> None:
     """Verify preconditions, back up configuration, bootstrap private state, then health-check UI."""
     os.umask(0o077)
     value = json.load(sys.stdin)
+    if value.get("ui_only"):
+        allowed = {
+            "photo_enrichment/static/cricket." + ext for ext in ("html", "css", "js")
+        }
+        if (
+            set(value["files"]) != allowed
+            or value["private"]
+            or not (STATE / "installed").exists()
+        ):
+            raise ValueError(
+                "UI-only deployment requires an installed feature and only its three static files"
+            )
     previous = (ROOT / "gui").resolve()
     if str(previous) != value["previous"] or UNIT.read_text() != value["unit"]:
         raise RuntimeError("Live release changed; inspect again before deployment")
@@ -136,6 +148,12 @@ def main() -> None:
         run("systemctl", "restart", UNIT.name)
         raise
     (STATE / "installed").write_text(stamp)
+    if value.get("ui_only"):
+        sys.stdout.write(
+            json.dumps({"ui": "healthy", "worker": "unchanged", "backup": str(backup)})
+            + "\n"
+        )
+        return
     authority = (STATE / "ledger.sqlite3").resolve().parent
     worker = UNIT.with_name(
         "cricket-highlights-ssd.service"
