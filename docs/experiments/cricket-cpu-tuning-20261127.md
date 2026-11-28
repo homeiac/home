@@ -230,6 +230,20 @@ smaller profile fails quality, the original model with separate AGE/ACTION calls
 remains a Mac candidate; do not treat the incomplete six-thread joint cohort as
 proof against the separate-call profile.
 
+## Preregistered next profile and sweep
+
+If the small model fails the reviewed quality gate, test the original pinned 27B
+model with the separate production AGE/ACTION calls on the same original image
+bytes. Begin at the revised seven-core allowance, with one context, then descend
+coarsely to four and two cores on a capacity failure. Preserve rejected settings;
+refine adjacent settings around a passing range and reverse-repeat the useful
+candidates. Quality and capacity are separate gates. Do not pool models, joint and
+separate prompts, or partial repetitions. A passing evaluated setting then needs
+the opt-in unique-source queue adapter, native face IDs and independent publication
+readback before counting CPU contribution. The adapter defaults to zero lanes and
+has not been activated. Additional concurrent contexts require a separate bounded
+profile and measured memory allowance.
+
 ## Completion remains open
 
 Both backend rows remain open. Required: measured descending outcomes, complete
