@@ -73,11 +73,14 @@ def test_registered_trial_with_peers_and_media(state):
     peer = "knowledge-index"
     rows = {w: dict(demand=True, unit="items", cohort="matched", verified=10, completed_items=10, p95_s=2, terminal_error_rate=0, quality_ok=True,
                     slo_ok=True, baseline_preserved=True) for w in [WORKLOAD, peer]}
-    rows["immich-pet-tagger"] = dict(demand=False, baseline_preserved=True)
+    rows["immich-pet-tagger"] = dict(demand=False, baseline_preserved=True,
+                                    activity=dict(state="idle", runnable=0, reservation_workers=0,
+                                                  observed_ns=NOW, evidence_ref="fixture/idle"))
     before = dict(start_ns=NOW-WINDOW, end_ns=NOW, warmed=True, max_sample_gap_s=15, environment="fixed",
                   callers={POOL: [WORKLOAD, peer], DEVICE: [WORKLOAD, peer]}, workloads=rows)
     during = json.loads(json.dumps(before))
     during.update(start_ns=NOW, end_ns=NOW+WINDOW)
+    during["workloads"]["immich-pet-tagger"]["activity"]["observed_ns"] = NOW+WINDOW
     during["workloads"][WORKLOAD]["verified"] = 12
     cmp = dict(subject=WORKLOAD, resources=[POOL], action="index_ready_fifo", min_gain=.05,
                max_peer_loss=0, baseline=before, trial=during)

@@ -3,6 +3,8 @@ import json
 import math
 from pathlib import Path
 
+from service_budgets import assess_service, inactive
+
 
 def valid_number(value: object) -> bool:
     return type(value) in (float, int) and math.isfinite(value) and value >= 0
@@ -73,6 +75,23 @@ def assess(topology: dict, comparison: dict, watermark: int) -> dict:
         if not before["demand"]:
             if name == subject or name in discovered:
                 reasons.append(f"{name}: no comparable demand despite subject or caller activity")
+            if cricket and any(not inactive(row, phase) for row, phase in zip(rows, phases)):
+                reasons.append(f"{name}: idle state or scheduled reservation lacks fresh evidence")
+            elif cricket and before["activity"]["reservation_workers"] != trial["activity"]["reservation_workers"]:
+                reasons.append(f"{name}: scheduled reservation changed during comparison")
+            continue
+        kinds = {topology.get(resource, {}).get("measurement_kinds", {}).get(name, "indexer")
+                 for resource in resources if name in topology.get(resource, {}).get("workloads", [])}
+        if kinds - {"indexer", "service"} or len(kinds) > 1:
+            reasons.append(f"{name}: conflicting or unknown measurement kind")
+            continue
+        if kinds == {"service"}:
+            if name == subject:
+                reasons.append(f"{name}: a service budget cannot replace target completion measurement")
+                continue
+            missing, losses = assess_service(name, rows, phases, comparison.get("service_budgets", {}).get(name))
+            reasons.extend(missing)
+            regressions.extend(losses)
             continue
         if cricket:
             if any(type(r.get("completed_items")) is not int or r["completed_items"] < 10 for r in rows):
