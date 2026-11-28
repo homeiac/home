@@ -1,7 +1,7 @@
 """Persist real SDK spans and close private, reproducible shared-workload captures.
 
-This adapter reports analysis timing only. Verified production output remains zero
-until the independent publication receipt is integrated; model success is not it.
+Verified output comes only from durable independent publication receipts. Analysis
+and model success never increment this counter.
 """
 
 import argparse
@@ -127,6 +127,12 @@ class RunTelemetry:
             db.execute(
                 "CREATE TABLE IF NOT EXISTS configuration (singleton INTEGER PRIMARY KEY CHECK(singleton=1), digest TEXT NOT NULL)"
             )
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS verified (id TEXT PRIMARY KEY, digest TEXT NOT NULL, backend TEXT NOT NULL, verified_ns INTEGER NOT NULL, received_ns INTEGER NOT NULL)"
+            )
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS receipt_source (singleton INTEGER PRIMARY KEY CHECK(singleton=1), digest TEXT NOT NULL)"
+            )
         self.exporter = JournalExporter(self.path)
         self.provider = TracerProvider(
             resource=Resource(
@@ -211,6 +217,80 @@ class RunTelemetry:
             in {"traceparent", "tracestate", "x-workload-name", "x-workload-run-id"}
         }
 
+    def sync_verified(self, ledger: Path, schema: Path) -> int:
+        """Import immutable source receipts once, retaining their first observation time."""
+        from check_media_observations import check
+
+        from .ledger import Ledger
+        from .publication import digest
+
+        definition = json.loads(schema.read_text())
+        source = Ledger(ledger, read_only=True)
+        identity = digest([str(source.path), definition])
+        with source.connect() as db:
+            rows = db.execute(
+                "SELECT v.*,p.receipt,p.snapshot,p.owner,p.asset,p.version,p.state,p.digest,p.album,p.revision "
+                "FROM cricket_verified_source v JOIN cricket_publication p ON p.id=v.publication WHERE v.run_id=?",
+                (self.session["run_id"],),
+            ).fetchall()
+        checked = []
+        for row in rows:
+            receipt = json.loads(row["receipt"])
+            ref, readback = receipt["reference"], receipt["readback"]
+            state = json.loads(row["snapshot"])
+            expected = digest(
+                [
+                    row["owner"],
+                    row["asset"],
+                    state["source"]["fingerprint"],
+                    row["version"],
+                    state["analysis_digest"],
+                ]
+            )
+            if (
+                row["state"] != "verified"
+                or receipt.get("host") != self.host
+                or ref["run_id"] != self.session["run_id"]
+                or ref["workload"] != self.session["workload"]
+                or ref["asset"] != row["asset"]
+                or ref["album"] != row["album"]
+                or ref["digest"] != row["digest"]
+                or ref["revision"] != row["revision"]
+                or row["completion_key"] != expected
+                or receipt["verified_ns"] != row["verified_ns"]
+                or row["verified_ns"] > time.time_ns()
+                or row["backend"] not in self.session["resources"]
+            ):
+                raise ValueError("Publication receipt scope, host or identity mismatch")
+            check([ref], [readback], definition)
+            checked.append(
+                (
+                    row["completion_key"],
+                    digest(receipt),
+                    row["backend"],
+                    row["verified_ns"],
+                )
+            )
+        with closing(sqlite3.connect(self.path, timeout=10)) as db, db:
+            db.execute("INSERT OR IGNORE INTO receipt_source VALUES(1,?)", (identity,))
+            if (
+                db.execute("SELECT digest FROM receipt_source").fetchone()[0]
+                != identity
+            ):
+                raise ValueError("Publication receipt source changed")
+            for entry in checked:
+                prior = db.execute(
+                    "SELECT digest,backend,verified_ns FROM verified WHERE id=?",
+                    (entry[0],),
+                ).fetchone()
+                if prior is not None and prior != entry[1:]:
+                    raise ValueError("Previously imported receipt changed")
+                db.execute(
+                    "INSERT OR IGNORE INTO verified VALUES(?,?,?,?,?)",
+                    (*entry, time.time_ns()),
+                )
+        return len(checked)
+
     def close_window(self, output: Path, cutoff_ns: int | None = None) -> dict:
         """Export an immutable capture, including only evidence received by its cutoff."""
         self.provider.force_flush()
@@ -227,6 +307,12 @@ class RunTelemetry:
                 "SELECT start_ns,end_ns,stage,backend,packet FROM spans WHERE end_ns<=? AND received_ns<=? ORDER BY end_ns,id",
                 (cutoff_ns, cutoff_ns),
             ).fetchall()
+            verified = dict(
+                db.execute(
+                    "SELECT backend,count(*) FROM verified WHERE verified_ns<=? AND received_ns<=? GROUP BY backend",
+                    (cutoff_ns, cutoff_ns),
+                ).fetchall()
+            )
         if not rows:
             raise ValueError("No completed spans at cutoff")
         if output.exists():
@@ -234,6 +320,8 @@ class RunTelemetry:
         durations = defaultdict(list)
         for start, end, stage, backend, _ in rows:
             durations[stage, backend].append((end - start) / 1e9)
+        if any(("verify", backend) not in durations for backend in verified):
+            raise ValueError("Verified receipt has no matching verification spans")
         histograms, counters = [], []
         for (stage, backend), values in sorted(durations.items()):
             point = {
@@ -256,9 +344,8 @@ class RunTelemetry:
                     "bucketCounts": [str(len(values))],
                 }
             )
-            # P03 will supply durable publication receipts. Analysis success must
-            # never masquerade as verified end-to-end output in the meantime.
-            counters.append({**point, "asInt": "0"})
+            count = verified.get(backend, 0) if stage == "verify" else 0
+            counters.append({**point, "asInt": str(count)})
         metrics = {
             "resourceMetrics": [
                 {
@@ -314,7 +401,11 @@ class RunTelemetry:
             if output.exists():
                 raise FileExistsError("Closed capture already exists")
             staging.rename(output)
-        return {"spans": len(rows), "cutoff_ns": cutoff_ns, "verified_items": 0}
+        return {
+            "spans": len(rows),
+            "cutoff_ns": cutoff_ns,
+            "verified_items": sum(verified.values()),
+        }
 
     def shutdown(self) -> None:
         """Finish export without changing any workload allocation."""
@@ -327,9 +418,15 @@ def main() -> None:
     parser.add_argument("--session", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--at-ns", type=int)
+    parser.add_argument("--publication-ledger", type=Path)
+    parser.add_argument("--schema", type=Path)
     args = parser.parse_args()
+    if bool(args.publication_ledger) != bool(args.schema):
+        parser.error("--publication-ledger and --schema must be supplied together")
     telemetry = RunTelemetry(args.session)
     try:
+        if args.publication_ledger:
+            telemetry.sync_verified(args.publication_ledger, args.schema)
         report = telemetry.close_window(args.output, args.at_ns)
     finally:
         telemetry.shutdown()

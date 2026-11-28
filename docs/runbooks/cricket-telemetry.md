@@ -3,8 +3,8 @@
 This opt-in adapter joins the existing [shared-workload journey](../guides/shared-workload-agent.md).
 It records real SDK spans in a private durable journal and exports immutable
 captures accepted by the common reviewer. It does not change worker counts.
-Analysis success is not publication: the verified counter stays zero until the
-publication receipt adapter is connected. A capture alone cannot qualify a trial.
+Analysis success is not publication: verified counters require the durable
+[publication receipts](cricket-publication.md). A capture alone cannot qualify a trial.
 
 Install `scripts/knowledge-index/cricket/requirements-telemetry.txt` into the
 worker environment. From the repository root, create a fresh private session:
@@ -36,13 +36,16 @@ From `scripts/knowledge-index` on that same host, close a capture into a new pat
 ```bash
 python3 -m cricket.telemetry \
   --session /private/run-directory/session.json \
-  --output /private/run-directory/closed-baseline
+  --output /private/run-directory/closed-baseline \
+  --publication-ledger /private/cricket/ledger.sqlite3 \
+  --schema /private/openlabel-1.0.0.json
 ```
 
 Run `scripts/perf/workload.py review --session
 /private/run-directory/closed-baseline/session.json` from the repository root.
-Read its decision; exit status zero does not imply eligibility. Missing media
-readback and peer observations should produce a hold at this implementation stage.
+Read its decision; exit status zero does not imply eligibility. Supply the
+publisher’s reference/readback bundle and pinned schema to review media output.
+Missing peer observations or trial registration must still produce a hold.
 
 The exporter includes only completed spans received by the cutoff and writes the
 watermark last before publishing the directory. Captures refuse overwrites.
@@ -51,3 +54,18 @@ marker and blocks captures; repair storage and start a fresh session rather than
 deleting the marker to make incomplete evidence look complete. Model error text,
 prompts and credentials are excluded. Private source IDs remain trace attributes,
 never metric labels. Remote request latency is not reported as GPU compute time.
+
+`--publication-ledger` and `--schema` are optional as a pair. Without them, an
+analysis-only journal has zero verified output. With them, receipt import opens
+the ledger read-only, revalidates saved SQL readbacks and checks run/host/resource
+identity. Only the original durable source completion contributes, at stage
+`verify`; later correction revisions and repeat-run references do not add another
+production item. Receipts from a publisher without host telemetry are not eligible.
+
+The journal binds the receipt source and preserves each receipt's first observed
+time. Import before closing the current cutoff. Late imports cannot alter an
+already closed historical window, even if the database commit happened earlier.
+Restart/repeated import preserve the count; changing an imported receipt is refused.
+For timed windows, run receipt import at each sampling boundary. Repeated frozen-
+cohort evaluation still needs its separate phase receipt contract; these are
+production completions only.

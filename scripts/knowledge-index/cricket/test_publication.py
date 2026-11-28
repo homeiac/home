@@ -16,6 +16,7 @@ import pytest
 from cricket.ledger import Conflict, Ledger, encoded
 from cricket.prepare import save_private
 from cricket.publication import Publisher
+from cricket.telemetry import RunTelemetry
 from cricket.test_openlabel import inputs, schema, shared  # noqa: F401
 from cricket.test_publication_readback import local_pg  # noqa: F401
 from cricket.test_telemetry import (
@@ -241,7 +242,7 @@ def test_writer_trace_handoff_and_common_media_cli(
     )
     assert json.loads(response.stdout)["distinct_scene_revisions_referenced"] == 1
     capture = tmp_path / "capture"
-    run.close_window(capture)
+    assert run.close_window(capture)["verified_items"] == 0
     recorded = spans(capture)
     assert {s["name"] for s in recorded} == {
         "cricket.ingest",
@@ -254,6 +255,57 @@ def test_writer_trace_handoff_and_common_media_cli(
         for s in recorded
         if s["name"] != "cricket.ingest"
     )
+    cutoff = int((capture / "watermark-ns").read_text())
+    for _ in range(2):
+        assert run.sync_verified(publisher.ledger.path, publisher.schema) == 1
+    # A receipt first observed after a closed cutoff cannot rewrite that window.
+    assert run.close_window(tmp_path / "past", cutoff)["verified_items"] == 0
+    out = tmp_path / "with-receipt"
+    assert run.close_window(out)["verified_items"] == 1
+    packet = json.loads((out / "metrics.jsonl").read_text())
+    metric = packet["resourceMetrics"][0]["scopeMetrics"][0]["metrics"][0]
+    counted = [p for p in metric["sum"]["dataPoints"] if int(p["asInt"])]
+    assert len(counted) == 1 and counted[0]["asInt"] == "1"
+    assert {a["key"]: a["value"]["stringValue"] for a in counted[0]["attributes"]} == {
+        "workload": "cricket-indexer",
+        "stage_id": "verify",
+        "backend": args[5],
+    }
+    review = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/perf/workload.py"),
+            "review",
+            "--session",
+            str(out / "session.json"),
+            "--references",
+            str(bundle / "media-observations.jsonl"),
+            "--readback",
+            str(bundle / "scene-readback.jsonl"),
+            "--schema",
+            str(publisher.schema),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    reviewed = json.loads(review.stdout)
+    assert reviewed["media_readback"]["distinct_scene_revisions_referenced"] == 1
+    assert reviewed["fleet_review"]["decision"] != "eligible"
+    restarted = RunTelemetry(run.session_path)
+    try:
+        restarted.sync_verified(publisher.ledger.path, publisher.schema)
+        assert restarted.close_window(tmp_path / "restarted")["verified_items"] == 1
+    finally:
+        restarted.shutdown()
+    with publisher.ledger.connect(True) as db:
+        receipt = json.loads(
+            db.execute("SELECT receipt FROM cricket_publication").fetchone()[0]
+        )
+        receipt["host"] = "different-host"
+        db.execute("UPDATE cricket_publication SET receipt=?", (encoded(receipt),))
+    with pytest.raises(ValueError, match="scope, host or identity"):
+        run.sync_verified(publisher.ledger.path, publisher.schema)
 
 
 def test_failed_independent_validation_never_counts(prepared: tuple) -> None:

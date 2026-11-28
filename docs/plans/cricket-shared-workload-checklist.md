@@ -51,7 +51,7 @@ and append the reason; retain the original receipt.
 | --- | --- | --- | --- | --- | --- | --- |
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
-| P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b `codex/cricket-p03-publication` | Completion/outbox/readback implemented; automatic dispatch/counters pending | Foundation only | E12: 164 passed, 43 subtests | Pending |
+| P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c `codex/cricket-p03-counters` | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
 | P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
@@ -103,6 +103,9 @@ and append the reason; retain the original receipt.
 - [x] **P03-b-I/V:** Backed-up ledger outbox, independent SQL readback, bounded
   retries and durable deduplicated source receipts. Evidence: E12. Opt-in single-
   source CLI; automatic worker publication and receipt-derived OTLP counters pending.
+- [x] **P03-c-I/V:** Import independently verified source receipts into the run
+  journal and emit deduplicated `workload.verified` counters at the verify stage.
+  Evidence: E13; late observations cannot rewrite a closed cutoff.
 - [ ] **P03-I:** Emit manifest/outbox records, independently query committed scenes,
   persist verification receipts and introduce the versioned no-event context.
 - [ ] **P03-V:** Verify schema/run/digest/typed links, crash recovery, retry dedup,
@@ -374,6 +377,22 @@ are refused, not silently treated as verified. The single-source path is ready
 for review; automatic dispatcher integration, receipt-to-metric accounting and
 live evidence remain unchecked. Publication serializes against local edits during
 bounded SQL operations; UI retry behavior still needs the review integration gate.
+
+### E13 — P03-c receipt-derived production telemetry
+
+Branch: `codex/cricket-p03-counters`, based on #281. Closed captures can import the
+publisher's durable receipts through a read-only ledger connection. Each imported
+receipt is revalidated, bound to its actual host/run/resource and immutable source,
+and assigned a first-observed timestamp. Production counters increment only at
+`verify`, once per durable source completion; private IDs stay out of metric labels.
+
+The E02 command passed **164 tests and 43 subtests in 21.54 seconds**. Extended the
+existing real PostgreSQL/SDK test to verify zero before import, one after duplicate
+imports/restart, zero for an earlier cutoff, rejection of a changed host, and common
+`workload.py review` accepting publication while refusing fleet eligibility without
+peer/trial evidence. Ruff and diff checks pass. No live changes; automatic worker
+publication dispatch, repeated evaluation receipts and complete peer measurements
+remain pending.
 
 ## Updating evidence
 

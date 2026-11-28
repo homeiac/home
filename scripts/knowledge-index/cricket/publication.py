@@ -294,6 +294,7 @@ class Publisher:
                     "readback": readback,
                     "check": checked,
                     "verified_ns": now,
+                    "host": self.telemetry.host if self.telemetry else None,
                 }
                 db.execute(
                     "UPDATE cricket_publication SET state='verified',error=NULL,revision=?,receipt=?,verified_ns=? WHERE id=?",
