@@ -1,0 +1,17 @@
+button[data-short-face-id]::after{content:" · face " attr(data-short-face-id);font:0.8em ui-monospace,monospace}
+.journey-photo{position:relative;max-width:100%;margin:0 auto}
+.journey-photo img{display:block;width:100%;height:auto}
+.journey-photo .box{box-sizing:border-box;position:absolute;pointer-events:none;border:3px solid #ffea38;box-shadow:0 0 0 2px black}
+.journey-photo .box.held_person,.journey-photo .box.recipient{border-color:#58deff}
+.photo-action button{font:inherit;text-decoration:underline;color:#145744;background:#eef5ef;border:0;border-radius:.2rem;cursor:pointer}
+.photo-action button:focus-visible{outline:3px solid #705500}
+.photo-action button[aria-pressed=true]{background:#174f41;color:white}
+.photo-action output{display:block;overflow-wrap:anywhere}
+.photo-action .mention button{margin:0 .1em}
+.photo-action .date-conflict{border-left:4px solid #9a5a05;padding:.4rem .65rem;margin:.4rem 0;background:#fff1cf}
+
+.ocr-tags{margin:.5rem 0}
+.ocr-tags summary{cursor:pointer;color:#145744;overflow-wrap:anywhere}
+.ocr-tags summary strong{background:#e5f1eb;border-radius:.25rem;padding:.1em .35em}
+.ocr-tags button{display:block;margin:.2em 0;text-align:left;overflow-wrap:anywhere;max-width:100%}
+.ocr-region{position:absolute;inset:0;pointer-events:none;background:rgba(255,205,40,.55)}

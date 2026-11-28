@@ -438,9 +438,285 @@ def panels():
     all_panels = all_panels[:len(intro)] + completion + all_panels[len(intro):]
     tuning = video_tuning_panels()
     audio = audio_story_panels()
-    return (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
-            + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
-            + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+    processing = photo_processing_panels()
+    bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in all_panels)
+    all_panels += shift(life_stage_tuning_panels(), bottom)
+    # Allocate the backend charts last to keep all existing dashboard links stable.
+    charts_at = next(i for i, panel in enumerate(processing) if panel["type"] == "timeseries")
+    backend_charts = photo_backend_panels(processing[charts_at]["gridPos"]["y"])
+    chart_bottom = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in backend_charts)
+    shift(processing[charts_at:], chart_bottom - processing[charts_at]["gridPos"]["y"])
+    processing[charts_at:charts_at] = backend_charts
+    processing_height = max(panel["gridPos"]["y"] + panel["gridPos"]["h"] for panel in processing)
+    # Move the shared progress row after allocating IDs so existing panel links still work.
+    remaining = (reconciliation + shift(tuning, RECONCILIATION_HEIGHT)
+                 + shift(audio, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT)
+                 + shift(all_panels, RECONCILIATION_HEIGHT + VIDEO_TUNING_HEIGHT + AUDIO_STORY_HEIGHT))
+    return processing + shift(remaining, processing_height)
+
+
+def photo_processing_panels():
+    """Give each processing stage the same operational and live tuning views."""
+    selector = 'instance=~"$instance",stage=~"$photo_stage"'
+
+    def counts(states):
+        return (f'sum by(stage) (max by(stage,state) '
+                f'(knowledge_index_photo_stage_items{{{selector},state=~"{states}"}}))')
+
+    completed = counts("complete|reused")
+    scope = counts(".*")
+    remaining = counts("pending|running")
+    age = f'time() - max by(stage) (knowledge_index_photo_stage_updated_timestamp_seconds{{{selector}}})'
+    saved = f'knowledge_index_photo_stage_items{{{selector},state="complete"}}'
+    counter = f'knowledge_index_photo_stage_completed_total{{{selector}}}'
+    # Estimate slope across actual samples so a newly scraped stage does not
+    # extrapolate a small fraction of its rate across an entire range.
+    pace = (f'max by(stage) (clamp_min(deriv({saved}[15m]), 0) '
+            f'and on(instance,stage) (changes({saved}[15m]) >= 2) '
+            f'and on(instance,stage) (resets({counter}[15m]) == 0))')
+    eta = (f'(({remaining}) / ({pace} > 0) or on(stage) (({remaining}) == 0)) '
+           f'and on(stage) (({age}) < 180)')
+    panel_set = [
+        row("Photo processing · life stage + action per face, OCR and live tuning", 0),
+        stat("Items complete or reused", completed, 0, 1, unit="locale", legend="{{stage}}",
+             description="Each completed library face has a life stage and a visible action linked to its existing Immich face ID. The OCR stage counts photos checked for text, including photos with no text."),
+        stat("Items queued or running", remaining, 4, 1, unit="locale", legend="{{stage}}"),
+        stat("Stage completion", f'({completed}) / ({scope} > 0)', 8, 1,
+             unit="percentunit", decimals=1, legend="{{stage}}",
+             description="Complete and reused divided by the declared scope, including failed and withheld items."),
+        stat("Failed or withheld", counts("failed|withheld"), 12, 1, unit="locale", legend="{{stage}}"),
+        stat("Time to drain queue", eta, 16, 1, unit="s", legend="{{stage}}",
+             description="Remaining work at the observed successful rate over up to 15 minutes. A positive queue needs fresh progress, two advances and a positive rate without a reset."),
+        stat("Last progress report", age, 20, 1, unit="s", legend="{{stage}}",
+             thresholds=[("green", None), ("orange", 180), ("red", 600)]),
+        series("Queue and outcomes by stage",
+               [(f'max by(stage,state) (knowledge_index_photo_stage_items{{{selector}}})',
+                 "{{stage}} · {{state}}")], 0, 5, 12, 7, unit="locale"),
+        series("Successful work per minute", [(f'{pace} * 60', "{{stage}}")],
+               12, 5, 12, 7, decimals=1),
+        series("Bottleneck timing by phase (p95)",
+               [(f'max by(stage,phase) (knowledge_index_photo_stage_phase_p95_seconds{{{selector}}})',
+                 "{{stage}} · {{phase}}")], 0, 12, 24, 7, unit="s",
+               description="Compare queue, throughput and available phase timings before and after a tuning change. Missing phases have no reported timing."),
+    ]
+    for panel in panel_set:
+        if panel["type"] != "row":
+            panel["transformations"] = [{
+                "id": "renameByRegex",
+                "options": {"regex": "^library-face-observations(.*)$", "renamePattern": "Life stage + action per face$1"},
+            }]
+        if panel["type"] == "stat":
+            panel["targets"][0].update(instant=True, range=False)
+            panel["fieldConfig"]["defaults"]["noValue"] = "Awaiting telemetry"
+    return panel_set
+
+
+def photo_backend_panels(y):
+    """Show committed inference results from each backend for the chosen stages."""
+    saved = 'knowledge_index_photo_stage_backend_completed{instance=~"$instance",stage=~"$photo_stage"}'
+    window = f'{saved}[15m]'
+    pace = (f'max by(stage,backend) (clamp_min(deriv({window}), 0) '
+            f'and (resets({window}) == 0)) * 60')
+    legend = "{{stage}} · {{backend}}"
+    face_result = ("Each saved library result links a life stage and a visible action to one existing Immich face ID. "
+                   "For a new face, RTX gets both in one model call. Mac uses two calls. "
+                   "Resumed work can reuse a previously saved stage or action.")
+    panels = [
+        series("Results saved per minute by backend (15 min)", [(pace, legend)], 0, y, 12, 7, decimals=1,
+               description="Rate of new saves over the last 15 minutes. " + face_result),
+        series("Results saved by backend", [(f'max by(stage,backend) ({saved})', legend)],
+               12, y, 12, 7, unit="locale",
+               description="New saves since the start of processing. Fully reused observations are excluded. " + face_result),
+    ]
+    for panel in panels:
+        for backend, display in (("mac-metal", "Mac Metal"), ("rtx3070", "RTX 3070")):
+            panel["fieldConfig"]["overrides"].append({
+                "matcher": {"id": "byName", "options": "library-face-observations · " + backend},
+                "properties": [{"id": "displayName", "value": display + " · life stage + action per face"}],
+            })
+    trial = json.loads((Path(__file__).parent / "library-backfill-tuning.json").read_text())
+    for x, (backend, result) in enumerate(trial["backends"].items()):
+        before, after = result["before"], result["selected"]
+        rates = [(f'vector({arm["per_min"]})', f'{label} · {arm["lanes"]} lanes')
+                 for label, arm in (("Matched before", before), ("Matched after", after))]
+        alternate = result["more_lanes"]
+        rates.append((f'vector({alternate["per_min"]})', f'Trial · {alternate["lanes"]} lanes (rejected)'))
+        rates.extend((f'vector({value})', label) for label, value in
+                     (("Live before", result["live_before"]), ("Live after", result["live_after"])))
+        evidence = (f' Complete: {before["successful"]}/{before["attempts"]} before and '
+                    f'{after["successful"]}/{after["attempts"]} after. Exact agreement with reviewed '
+                    f'life stages: {before["reviewed_stage_exact"]}/{before["reviewed_attempts"]} before and '
+                    f'{after["reviewed_stage_exact"]}/{after["reviewed_attempts"]} after. Visually supported actor/action '
+                    f'readings: {before["supported_actor_actions"]}/{before["attempts"]} before and '
+                    f'{after["supported_actor_actions"]}/{after["attempts"]} after.')
+        durations = before["median_seconds"]
+        timing = (f' Before tuning, median preview preparation took {durations["preview_seconds"]} s, '
+                  f'life stage {durations["age_seconds"]} s and action {durations["action_seconds"]} s.')
+        panels.append(tuning_comparison(
+            f'Two-pass life stage + action per face · {backend} before and after', rates, x * 12, y + 7, 12, 7,
+            "suffix: faces/min", result["decision"] + evidence + timing + " " + trial["method"]))
+    paired = json.loads((Path(__file__).parent / "library-pass-comparison.json").read_text())
+    quality = ["| Backend | Model calls per face | Completed | Exact life stage | Saved with supported action | Both correct |",
+               "|---|---:|---:|---:|---:|---:|"]
+    for x, (backend, result) in enumerate(paired["backends"].items()):
+        rates = []
+        for calls, arm in ((2, result["two_pass"]), (1, result["one_pass"])):
+            rates.append((f'vector({arm["per_min"]})', f'{calls} {"call" if calls == 1 else "calls"} per face'))
+            total = arm["attempts"]
+            reviewed = arm["reviewed_attempts"]
+            quality.append(f'| {backend} | {calls} | {arm["successful"]}/{total} | '
+                           f'{arm["reviewed_stage_exact"]}/{reviewed} | {arm["supported_actions"]}/{total} | '
+                           f'{arm["both_correct"]}/{reviewed} |')
+        panels.append(tuning_comparison(
+            f'Life stage + action per face · {backend} · two calls vs one', rates, x * 12, y + 14, 12, 6,
+            "suffix: faces/min", paired["method"] + " " + result["decision"]))
+    quality.extend(["", paired["method"], "", paired["decision"]])
+    panels.append(_panel("text", "Life stage + action per face · quality comparison", [], 0, y + 20, 24, 8,
+                         extra={"options": {"mode": "markdown", "content": "\n".join(quality)}}))
+    return panels
+
+
+def tuning_story(content):
+    return _panel('text', 'What changed and why', [], 0, 1, 24, 4,
+                  extra={'options': {'mode': 'markdown', 'content': content}})
+
+
+def tuning_comparison(title, data, x, y, w, h, unit, description, maximum=None):
+    panel = _panel('bargauge', title, data, x, y, w, h, unit=unit, decimals=2,
+                   extra={'options': {'orientation': 'horizontal', 'displayMode': 'gradient',
+                                      'reduceOptions': {'calcs': ['lastNotNull']}}},
+                   description=description)
+    for target in panel['targets']:
+        target.update(instant=True, range=False)
+    panel['fieldConfig']['defaults']['min'] = 0
+    if maximum is not None:
+        panel['fieldConfig']['defaults']['max'] = maximum
+    return panel
+
+
+def life_stage_tuning_panels():
+    """Apply the video tuning row pattern to local photo life-stage processing."""
+    trials = json.loads((Path(__file__).parent / "life-stage-tuning-results.json").read_text())
+    slot_trials = trials.get("slot_trials")
+    slot_story = trials["decision"]
+    if slot_trials:
+        passes = slot_trials.get("passes", 1)
+        retained = next(t for t in slot_trials["trials"] if t["slots"] == slot_trials["selected_slots"])
+        slot_story = (
+            f"**Matched capacity trial:** Retained **{retained['slots']} RTX slots** at "
+            f"**{retained['photos_per_minute']} photos/min**. "
+            f"All {retained['valid']} selected responses passed validation. "
+            + " ".join(t["failure"] for t in slot_trials["trials"] if t.get("failure"))
+        )
+        if trials.get("cold_slot_trials"):
+            slot_story += (
+                " The first three- and four-request trials timed out during model startup."
+                f" The timed runs began after a {slot_trials['warmup_seconds']:.0f}-second warm-up."
+            )
+    # This checkpoint reports both GPU backends from the same collector host.
+    scope = 'stage="life-stage"'
+    saved = f'knowledge_index_photo_stage_backend_completed{{{scope}}}'
+
+    def backend_metric(name):
+        return f'{saved[:-1]},backend="{name}"}}'
+
+    def backend_pace(name):
+        metric = backend_metric(name)
+        return (f'max(clamp_min(deriv({metric}[15m]), 0) '
+                f'and on(instance,stage,backend) (changes({metric}[15m]) >= 2) '
+                f'and on(instance,stage,backend) (resets({metric}[15m]) == 0)) * 60')
+
+    mac, rtx = backend_pace("mac-metal"), backend_pace("rtx3070")
+    panels = [row("Life-stage tuning · Mac and RTX", 0)]
+    panels.append(tuning_story(
+        "**Before:** Mac-only life-stage queue sustained 15.9–16.1 photos/min in two 10-minute windows.\n\n"
+        "**After:** The Mac and RTX share the same checkpoint. The RTX request now uses constrained JSON and "
+        "disables thinking. The Mac can pick up rejected responses. Live rates count each completed asset once.\n\n"
+        f"**RTX concurrency:** One request saved {trials['before']['rtx_per_minute']:.1f} photos/min. "
+        f"Two requests saved {trials['after']['rtx_per_minute']:.1f} photos/min in the measured window. "
+        + slot_story
+    ))
+    panels.extend([
+        tuning_comparison("RTX · matched life-stage request latency",
+                          [("vector(7.45)", "Before · generic JSON"), ("vector(4.16)", "After · tuned schema")],
+                          0, 5, 12, 8, "s", "Median wall time for the same five photos. All baseline RTX responses were invalid.", 23),
+        tuning_comparison("Mac · matched life-stage request latency",
+                          [("vector(20.09)", "Saved Mac pilot baseline")],
+                          12, 5, 12, 8, "s", "Median request time from the four-worker Mac pilot. Use the live rate for backend capacity.", 23),
+        stat("Before · Mac-only photos / min", "vector(16)", 0, 13, w=6, decimals=1,
+             description="Mean throughput across the two measured Mac-only 10-minute windows."),
+        stat("After · combined photos / min", f'({mac}) + ({rtx})', 6, 13, w=6, decimals=1,
+             description="Both backends need two observed count advances for a combined live estimate."),
+        stat("RTX · matched valid JSON", "vector(100)", 12, 13, w=6, unit="percent",
+             description="0/5 before and 5/5 after changing the RTX request. Valid JSON supports parsing."),
+        stat("Matched primary life stage", "vector(4)", 18, 13, w=6, unit="locale",
+             description="Four of five matched the Mac's primary stage; the fifth was an adjacent life stage."),
+        series("Life-stage throughput by backend",
+               [(mac, "Mac GPU"), (rtx, "RTX 3070"), (f'({mac}) + ({rtx})', "Combined"), ("vector(16)", "Before · Mac only")],
+               0, 17, 12, 8, decimals=1, description="New records per minute based on observed saved-count changes."),
+        series("Life-stage results saved by backend",
+               [(f'max({backend_metric("mac-metal")})', "Mac GPU"),
+                (f'max({backend_metric("rtx3070")})', "RTX 3070")],
+               12, 17, 12, 8, unit="locale", description="Persisted model results. Reused album results are accounted for separately."),
+        tuning_comparison("Bottleneck · model versus preview preparation",
+                          [("vector(22.44)", "Model request p95"), ("vector(0.132)", "Fetch and prepare preview p95")],
+                          0, 25, 24, 7, "s", "Same 12-photo concurrent Mac sample. The RTX was added after this phase measurement."),
+    ])
+    comparison_note = (
+        f"Two {trials['window_seconds']}-second live windows on the same queue. The Mac ran concurrently "
+        "and both RTX settings used the same prompt and validation."
+    )
+    for title, field, x, y, unit in (
+        ("RTX · one vs two requests", "rtx_per_minute", 0, 32, "suffix: photos/min"),
+        ("Combined · one vs two RTX requests", "combined_per_minute", 12, 32, "suffix: photos/min"),
+        ("RTX · request latency at one and two slots", "rtx_median_seconds", 0, 39, "s"),
+    ):
+        values = [(f'vector({trials[side][field]})', label) for side, label in (
+            ("before", "Before · one RTX request"), ("after", "After · two RTX requests")
+        )]
+        panels.append(tuning_comparison(title, values, x, y, 12 if y == 32 else 24, 7, unit, comparison_note))
+    if slot_trials:
+        note = (f"Identical {slot_trials['sample_size']}-photo target sample, same prompt and validation. "
+                "The release check requires valid results, stage agreement or a reported alternative, and full GPU residency.")
+        if passes == 2:
+            note += " The runs used one warmed runner, with concurrency tested in forward and reverse order."
+            note += " Each setting processed the same sample twice. Slots are concurrent requests sent by the worker."
+
+        def slot_label(trial):
+            slots = trial["slots"]
+            if slots == slot_trials["selected_slots"]:
+                return f"After · {slots} slots · retained"
+            if slots == 2 and trial["passed"]:
+                return "Before · 2 slots"
+            if trial["passed"]:
+                return f"Trial · {slots} slots"
+            return f"{slots} slots · " + ("timed out" if trial.get("failure") else "failed checks")
+
+        for title, field, x, unit in (
+            ("RTX · matched capacity at 2, 3 and 4 slots", "photos_per_minute", 0, "suffix: photos/min"),
+            ("RTX · median latency at 2, 3 and 4 slots", "median_seconds", 12, "s"),
+        ):
+            values = [
+                (f'vector({trial[field]})', slot_label(trial))
+                for trial in slot_trials["trials"]
+                if trial[field] is not None
+            ]
+            panels.append(tuning_comparison(title, values, x, 46, 12, 7, unit, note))
+    for panel in panels:
+        if panel["type"] != "timeseries":
+            continue
+        panel["interval"] = "15s"
+        panel["options"]["legend"]["calcs"] = ["lastNotNull"]
+        panel["fieldConfig"]["overrides"].append({
+            "matcher": {"id": "byName", "options": "RTX 3070"},
+            "properties": [
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}},
+                {"id": "custom.lineWidth", "value": 3},
+                {"id": "custom.showPoints", "value": "always"},
+                {"id": "custom.pointSize", "value": 5},
+            ],
+        })
+    return panels
 
 
 def video_tuning_panels():
@@ -448,8 +724,7 @@ def video_tuning_panels():
     evidence = json.loads((Path(__file__).parent/'video-tuning/results.json').read_text())
     p = [row('Video tuning · preserve the story', 0)]
     narrative = evidence.get('story', 'Matched video trials are in progress.')
-    p.append(_panel('text', 'What changed and why', [], 0, 1, 24, 4,
-                    extra={'options': {'mode': 'markdown', 'content': narrative}}))
+    p.append(tuning_story(narrative))
     trial_max = int(max((r['successful_per_minute'] for r in evidence.get('trials', [])
                          if r.get('successful_per_minute') is not None), default=1) * 1.1) + 1
     for backend, x, title in (('rtx', 0, 'RTX · matched video trials'), ('mac', 12, 'Mac · matched video trials')):
@@ -457,14 +732,9 @@ def video_tuning_panels():
         exprs = [('vector('+str(r['successful_per_minute'])+')', r.get('label', r['profile'])) for r in rows]
         if not exprs:
             exprs = [('vector(0)', 'Trials in progress')]
-        panel = _panel('bargauge', title, exprs, x, 5, 12, 8, unit='suffix: clips/min', decimals=2,
-                       extra={'options': {'orientation': 'horizontal', 'displayMode': 'gradient',
-                                           'reduceOptions': {'calcs': ['lastNotNull']}}},
-                       description='Private matched sample; successful caption-cache-bypassed model requests divided by trial wall time. '
-                       'Each backend is tested separately. '+evidence.get('method', ''))
-        for target in panel['targets']:
-            target.update(instant=True, range=False)
-        panel['fieldConfig']['defaults'].update(min=0, max=trial_max)
+        panel = tuning_comparison(title, exprs, x, 5, 12, 8, 'suffix: clips/min',
+                                  'Private matched sample; successful caption-cache-bypassed model requests divided by trial wall time. '
+                                  'Each backend is tested separately. '+evidence.get('method', ''), trial_max)
         p.append(panel)
     scope = '{instance=~"$instance",enricher=~"$pipeline_enricher"}'
     p += [stat('Live videos / min · 10m average', 'sum(rate(media_pipeline_video_saved_total'+scope+'[10m])) * 60',
@@ -980,6 +1250,10 @@ def dashboard():
                                 {"type": "query", "name": "pipeline_enricher", "label": "Pipeline enricher", "datasource": DS,
                                  "query": 'label_values(media_pipeline_worker_stage{instance=~"$instance"}, enricher)', "refresh": 2,
                                  "multi": True, "includeAll": True, "allValue": ".*", "current": {"text": "All", "value": "$__all"}, "options": []},
+                                {"type": "query", "name": "photo_stage", "label": "Photo processing stage",
+                                 "datasource": DS, "query": 'label_values(knowledge_index_photo_stage_items{instance=~"$instance"}, stage)',
+                                 "refresh": 2, "multi": True, "includeAll": True, "allValue": ".*",
+                                 "current": {"text": "All", "value": "$__all"}, "options": []},
                                 *[_textbox(n, l, v) for n, l, v in TEXTBOXES]]},
         "title": "Knowledge Index", "uid": "knowledge-index", "version": 1,
     }

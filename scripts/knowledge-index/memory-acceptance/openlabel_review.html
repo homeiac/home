@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Album · REVIEW_TITLE</title>
+<style>
+*{box-sizing:border-box}body{margin:2rem auto;max-width:76rem;padding:0 1rem;color:#183128;background:#f8f7f2;font:17px/1.5 system-ui}
+h1,h2{font-family:Georgia,serif}main,#collage-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:1.25rem;align-items:start}
+article{background:white;padding:1rem;border:1px solid #ced8d0;border-radius:.7rem}figure{margin:0;position:relative}img{display:block;width:100%;height:auto}
+.box{position:absolute;pointer-events:none;border:3px solid #ffea38;box-shadow:0 0 0 2px black}
+.box.held_person,.box.recipient{border-color:#58deff}button{font:inherit;color:#145744;border:0;background:#eef5ef;text-decoration:underline;cursor:pointer;border-radius:.2rem}
+button:focus-visible,a:focus-visible{outline:3px solid #705500}button[aria-pressed=true]{background:#174f41;color:white}output{display:block;min-height:1.5em}
+.date-conflict{background:#fff1cf;border-left:4px solid #9a5a05;padding:.6rem .8rem;margin:.5rem 0}
+.mention{margin:0 .22em}.mention button{font-size:.88em;margin:0 .1em}.mention small{color:#5d503d}
+a{color:#175441}h2{margin:.6rem 0}
+SHARED_CARD_STYLES
+</style>
+<h1>REVIEW_TITLE</h1><p>REVIEW_INTRO</p>
+<a id="catalogue-link" href="#collage-catalogue" hidden>Browse the collage catalogue</a>
+<main></main><section id="collage-catalogue" hidden><h2>Collage catalogue</h2><div id="collage-items"></div></section><script id="scenes" type="application/json">PILOT_JSON</script>
+<script>ALBUM_CARD_RENDERER</script></html>

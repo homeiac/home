@@ -33,6 +33,16 @@ class AcceptanceTest(unittest.TestCase):
         measurements = {**answers, "names": {"asset-1": "Ren smiles beside A."},
                         "deadline": 12, "zero": 0, "same_id": ["album-A", "album-A"],
                         "empty": [], "private": "private"}
+        window = dict(start=1, end=2, items_per_minute=60, p95_seconds=0.5,
+                      errors=0, retries=0, duplicates=0)
+        measurements["tuning"] = dict(
+            dashboard_panel="/d/knowledge-index/knowledge-index?viewPanel=900",
+            scope="fixture", workload="same fixture input rate", bottleneck_evidence="timing capture",
+            quality_evidence="reference comparisons", deployed_revision=plan["release"],
+            decision_evidence="comparison across both windows", live_readback=True,
+            decision="retained", queue_observed=False, queue_not_applicable="synchronous request",
+            baseline=window, verification={**window, "start": 3, "end": 4},
+        )
         captures = {}
         for task, rules in check.fields(journey).items():
             captures[task] = {"run_id": "test", "artifacts": {source.name: digest}, "observed": {}}
@@ -87,6 +97,23 @@ class AcceptanceTest(unittest.TestCase):
         self.seed()
         self.modify("context", reviewed_person_action_rows=["other assignment"])
         self.assertEqual(self.result()["status"], "FAIL")
+
+    def test_tuning_required_even_when_product_observations_pass(self):
+        self.seed()
+        for task in check.fields("growing-up"):
+            self.assertIn("grafana_live_tuning", check.fields("growing-up")[task])
+        path = self.directory / "identity.json"
+        capture = check.load_object(path)
+        evidence = capture["observed"].pop("grafana_live_tuning")
+        write(path, capture)
+        self.assertEqual(self.result()["tasks"]["identity"]["status"], "BLOCKED")
+        evidence["verification"]["duplicates"] = 1
+        self.modify("identity", grafana_live_tuning=evidence)
+        self.assertEqual(self.result()["tasks"]["identity"]["failed"], ["grafana_live_tuning"])
+        evidence["verification"]["duplicates"] = 0
+        evidence["deployed_revision"] = "different revision"
+        self.modify("identity", grafana_live_tuning=evidence)
+        self.assertEqual(self.result()["tasks"]["identity"]["failed"], ["grafana_live_tuning"])
 
     def test_missing_or_stale_evidence(self):
         self.seed()

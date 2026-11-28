@@ -137,6 +137,32 @@ q.update(phase="reading", total=1, done=1); q.finish()
 PY
 
 echo "-- dashboard and alerts (as code)"
+"$PYTHON" - "$HERE" "$W" <<'PY' && ok "photo stage metrics use bounded labels and real dispositions" || bad "photo stage metrics"
+import pathlib, runpy, sqlite3, sys
+here, work = map(pathlib.Path, sys.argv[1:])
+database, log = work / "jobs.sqlite3", work / "progress.log"
+with sqlite3.connect(database) as conn:
+    conn.execute("CREATE TABLE jobs(asset TEXT, status TEXT, outcome TEXT)")
+    conn.executemany("INSERT INTO jobs VALUES (?, ?, ?)", [
+        ("private-asset-1", "pending", None),
+        ("private-asset-2", "complete", '{"seconds":12.5}'),
+        ("private-asset-3", "reused", None),
+        ("private-asset-4", "withheld", None),
+        ("private-asset-5", "complete", '{"seconds":8,"backend":"rtx3070"}'),
+    ])
+log.touch()
+render = runpy.run_path(str(here / "photo-stage-metrics.py"))["render"]
+stats = render(database, log)
+assert 'state="pending"} 1' in stats
+assert 'state="failed"} 0' in stats
+assert 'state="running"' not in stats
+assert 'state="reused"} 1' in stats
+assert 'completed_total{stage="life-stage"} 2' in stats
+assert 'backend_completed{stage="life-stage",backend="mac-metal"} 1' in stats
+assert 'backend_completed{stage="life-stage",backend="rtx3070"} 1' in stats
+assert 'phase="model_request"} 12.5' in stats
+assert "private-asset-" not in stats
+PY
 "$PYTHON" "$HERE/gen-dashboard.py" > "$W/dash.yaml"
 D="$REPO/gitops/clusters/homelab/apps/photo-enrichment/knowledge-index-dashboard.yaml"
 diff -q "$W/dash.yaml" "$D" >/dev/null && ok "committed dashboard == generated" || bad "committed dashboard differs (run: gen-dashboard.py > $D)"
@@ -157,6 +183,7 @@ have.update({"immich_sync_available_summaries", "immich_sync_assets"})
 have.add("photo_app_db_duration_seconds_bucket")  # OTel histogram, checked against the live collector.
 have.update("photo_frigate_" + name for name in runpy.run_path(here + "/export-frigate-metrics.py")["HELP"])
 have.update(runpy.run_path(here + "/audio-story/worker.py")["HELP"])
+have.update(runpy.run_path(here + "/photo-stage-metrics.py")["HELP"])
 external = {"node_boot_time_seconds", "nvme_power_cycles_total", "nvme_media_errors_total", "up", "kube_deployment_spec_replicas", "kube_deployment_status_replicas_available"}
 external.update(re.findall(r"f'((?:knowledge_index_luna_)[a-z_]+)(?: |\{)", pathlib.Path(here + "/luna-backfill/host.py").read_text()))
 external.update(re.findall(r"# TYPE (knowledge_index_reconciliation_[a-z_]+) ", pathlib.Path(here + "/luna-backfill/reconciliation.py").read_text()))

@@ -108,6 +108,12 @@ successful. A completed first slice does not mean every north-star journey works
 | Durable operation | Restart and interruption checks preserve work and corrections; malformed responses are isolated; policy and lifecycle follow GitOps |
 | Privacy | Original media and sensitive relationships remain private; any external model receives only the deliberately selected, authorized data |
 | Truthful status | Scoped pending, stale, failed, withheld and accepted exceptions are visible; overall completion requires all required stages, including person context |
+| Grafana for every processing stage | The live Knowledge Index dashboard shows the current scope, progress and dispositions, throughput history, freshness, and the measured bottleneck. ETA is available when the queue and recent rate support it. A stage with synchronous work shows observed request volume, latency and errors, with a documented reason for queue-only fields. Metrics contain aggregate counts and timings. |
+| Live tuning for every processing stage | Measure a representative baseline, identify the limiting phase or resource, record the settings and decision, and verify the deployed result under comparable load. Include quality and correctness checks, errors, retries and duplicate work. A deliberate keep decision needs evidence and a repeat measurement. |
+
+Deploy Grafana and perform live tuning for each active scope as part of running
+it. Use the reviewed growing-up journey and its stable Immich face-ID
+reconstruction as the gate for expanding person-aware processing to all photos.
 
 For the platform as a whole, all three acceptance journeys must pass their agreed
 checks. An automatic life-history writer, universal face-recognition accuracy or a

@@ -1,0 +1,108 @@
+{
+  "before": {
+    "rtx_per_minute": 14,
+    "mac_per_minute": 13,
+    "combined_per_minute": 27,
+    "rtx_median_seconds": 3.26
+  },
+  "after": {
+    "rtx_per_minute": 18,
+    "mac_per_minute": 16,
+    "combined_per_minute": 34,
+    "rtx_median_seconds": 5.39
+  },
+  "window_seconds": 60,
+  "decision": "Keep two RTX requests while the live rate remains higher.",
+  "slot_trials": {
+    "sample_size": 10,
+    "passes": 2,
+    "warmup_seconds": 345.83,
+    "selected_slots": 3,
+    "trials": [
+      {
+        "slots": 2,
+        "photos_per_minute": 22.07,
+        "median_seconds": 5.67,
+        "valid": 20,
+        "exact_matches": 20,
+        "compatible_matches": 20,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null,
+        "per_run_photos_per_minute": [
+          22.53,
+          21.62
+        ]
+      },
+      {
+        "slots": 3,
+        "photos_per_minute": 42.78,
+        "median_seconds": 3.93,
+        "valid": 20,
+        "exact_matches": 19,
+        "compatible_matches": 20,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null,
+        "per_run_photos_per_minute": [
+          50.1,
+          37.34
+        ]
+      },
+      {
+        "slots": 4,
+        "photos_per_minute": 28.12,
+        "median_seconds": 6.3,
+        "valid": 20,
+        "exact_matches": 20,
+        "compatible_matches": 20,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null,
+        "per_run_photos_per_minute": [
+          23.82,
+          34.3
+        ]
+      }
+    ]
+  },
+  "cold_slot_trials": {
+    "sample_size": 10,
+    "selected_slots": 2,
+    "trials": [
+      {
+        "slots": 2,
+        "photos_per_minute": 28.68,
+        "median_seconds": 4.0,
+        "valid": 10,
+        "exact_matches": 10,
+        "compatible_matches": 10,
+        "fully_gpu_resident": true,
+        "passed": true,
+        "failure": null
+      },
+      {
+        "slots": 3,
+        "photos_per_minute": 0.0,
+        "median_seconds": null,
+        "valid": 0,
+        "exact_matches": 0,
+        "compatible_matches": 0,
+        "fully_gpu_resident": true,
+        "passed": false,
+        "failure": "All 3 first concurrent requests timed out after the warm-up timed out."
+      },
+      {
+        "slots": 4,
+        "photos_per_minute": 0,
+        "median_seconds": null,
+        "valid": 0,
+        "exact_matches": 0,
+        "compatible_matches": 0,
+        "fully_gpu_resident": true,
+        "passed": false,
+        "failure": "All four first requests timed out at 35 seconds following the 120-second warm-up timeout."
+      }
+    ]
+  }
+}
