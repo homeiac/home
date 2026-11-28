@@ -100,8 +100,8 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     return self.send({'status':'alive'})
                 if parsed.path == '/api/diagnostics':
                     return self.send(get_telemetry().diagnostics())
-                if parsed.path in ("/", "/app.js", "/style.css"):
-                    name, kind = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css")}[parsed.path]
+                if parsed.path in ("/", "/app.js", "/style.css", "/context", "/context.js", "/context.css"):
+                    name, kind = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css"), "/context": ("context.html", "text/html; charset=utf-8"), "/context.js": ("context.js", "text/javascript"), "/context.css": ("context.css", "text/css")}[parsed.path]
                     return self.send((STATIC / name).read_bytes(), content_type=kind)
                 if parsed.path == "/api/config":
                     import os
@@ -201,7 +201,7 @@ def make_server(store, models: Path, bind: str, port: int, public_origin: str | 
                     with store.request_session(readonly=self.command=='GET' or route=='/api/group-suggestions') as reader:
                         self.request_store=reader
                         self.dispatch()
-                elif self.command=='GET' and (route in ('/','/app.js','/style.css','/healthz','/api/config','/api/diagnostics')
+                elif self.command=='GET' and (route in ('/','/app.js','/style.css','/context','/context.js','/context.css','/healthz','/api/config','/api/diagnostics')
                     or getattr(store,'background_only',False)):
                     # PostgreSQL reads take short per-query locks internally;
                     # independent DuckDB queries and image I/O need no GUI lock.

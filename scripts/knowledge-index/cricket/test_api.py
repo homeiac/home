@@ -47,6 +47,19 @@ class APITests(unittest.TestCase):
         self.base = f"http://127.0.0.1:{self.server.server_port}"
         self.csrf = self.request("/api/config")[2]["csrf"]
 
+    def test_dashboard_and_event_notes_routes(self) -> None:
+        for route, marker in (("/", b"<title>Photo dashboard</title>"),
+                              ("/context", b"<title>Event notes"),
+                              ("/context.js", b"/api/groups/save"),
+                              ("/context.css", b".annotations")):
+            with self.subTest(route=route), urlopen(self.base + route) as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn(marker, response.read())
+        with urlopen(self.base + "/") as response:
+            body=response.read()
+            self.assertNotIn(b"face-workspace", body)
+            self.assertIn(b"https://immich.app.home.panderosystems.com", body)
+
     def close_server(self) -> None:
         self.server.shutdown()
         self.server.server_close()

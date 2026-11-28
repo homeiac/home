@@ -1,6 +1,32 @@
-# Photo enrichment and group review
+# Photo dashboard and enrichment
 
 Implements [#217](https://github.com/homeiac/home/issues/217) alongside the existing media-summary worker. Reads the existing knowledge-index catalog and originals without modifying them. The deployed pipeline uses PostgreSQL for jobs, enrichment facts and review edits; immutable Parquet snapshots and DuckDB serve gallery browsing and analytics. The standalone DuckDB writable mode below remains available for local demos and migration compatibility.
+
+## Photo dashboard
+
+`https://photos.app.home.panderosystems.com/` is the entry point for custom photo
+apps. It links to Immich for browsing, albums, search and people management.
+The homepage reads only status, saved event-note groups and configured cricket
+albums; it never fetches a face-review queue or changes labels. Each status card
+fails independently and missing or old snapshot timestamps are shown explicitly.
+
+- **Cricket highlights** (`/cricket`): review sport-specific moments and export clips.
+- **Event notes** (`/context`): save shared event, venue and story annotations.
+- **Pipeline dashboard**: monitor enrichment, imports and Immich synchronization.
+
+The old face-review interface has been retired. Existing labels, backend APIs,
+automatic-acceptance preferences and background work are retained; the historical
+face-review instructions below describe the previous interface.
+
+Deploy with `deploy-photo-dashboard.py inspect`, then `prepare`, then `apply`,
+passing the same private snapshot and payload files. The script preserves the live
+release with a three-way merge for server and cricket changes, checks release and
+file hashes, backs up the previous release pointer and service unit, and rolls back
+if readiness checks fail. It restarts only the GUI. It does not redeploy Flux
+resources, change the database, or restart the analysis workers.
+
+Validation: `node --test scripts/knowledge-index/test-photo-review.js` and
+`PYTHONPATH=scripts/knowledge-index python -m unittest cricket.test_api`.
 
 ## Deployed gallery queries and incident diagnostics
 
