@@ -97,3 +97,45 @@ def test_live_observer_distinguishes_absent_stale_zero_and_desired(monkeypatch):
     assert snapshot[CRICKET]["observations"]["mac_desired_workers"] == 4
     assert snapshot[CRICKET]["observations"]["queued_jobs_all_backends"] is None
     assert not snapshot[KI]["fresh"] and not snapshot[PET]["fresh"]
+
+
+def test_observer_keeps_face_work_separate_from_caption_progress(monkeypatch):
+    spec = importlib.util.spec_from_file_location("observe_extended", PERF / "observe-shared-workloads.py")
+    observer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(observer)
+    def point(name, value, **labels):
+        return dict(metric=dict(__name__=name, **labels), value=[1000, str(value)])
+    rows = [
+        point("knowledge_index_photo_stage_updated_timestamp_seconds", 999, stage="library-face-observations"),
+        point("knowledge_index_photo_stage_items", 27, stage="library-face-observations", state="pending"),
+        point("knowledge_index_photo_stage_items", 500, stage="library-ocr-tags", state="pending"),
+        point("knowledge_index_photo_stage_backend_completed", 12, stage="library-face-observations", backend="mac-metal"),
+        point("photo_frigate_last_poll_timestamp_seconds", 999),
+        point("photo_frigate_service_up", 1, id="frigate_service"),
+        point("photo_frigate_processing_milliseconds", 7, kind="detector"),
+        point("immich_observer_last_success_timestamp_seconds", 999, source="queues"),
+        point("immich_queue_jobs", 3, queue="face_detection", state="active"),
+        point("immich_queue_jobs", 9, queue="smart_search", state="active"),
+    ]
+    monkeypatch.setattr(observer.subprocess, "check_output", lambda *a, **kw: json.dumps(
+        {"status": "success", "data": {"result": rows}}).encode())
+    snapshot = observer.collect(1000, Path("fixture"))["workloads"]
+    faces = snapshot["knowledge-index/library-face-observations"]["observations"]
+    assert faces["pending_checkpoints"] == 27 and faces["mac_complete_checkpoints"] == 12
+    assert faces["running_checkpoints"] is None
+    assert snapshot["frigate"]["observations"]["detector_rolling_mean_ms"] == 7
+    assert "p95_s" not in snapshot["frigate"]["observations"]
+    assert snapshot["immich"]["observations"]["face_detection_active"] == 3
+    assert snapshot["immich"]["observations"]["facial_recognition_active"] is None
+
+
+def test_observer_never_collapses_distinct_equal_enricher_streams(monkeypatch):
+    spec = importlib.util.spec_from_file_location("observe_streams", PERF / "observe-shared-workloads.py")
+    observer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(observer)
+    rows = [dict(metric=dict(__name__="media_pipeline_heartbeat_timestamp_seconds", enricher=name), value=[1000, "999"])
+            for name in ("first", "second")]
+    monkeypatch.setattr(observer.subprocess, "check_output", lambda *a, **kw: json.dumps(
+        {"status": "success", "data": {"result": rows}}).encode())
+    row = observer.collect(1000, Path("fixture"))["workloads"]["knowledge-index/media-summary"]
+    assert not row["fresh"] and row["observations"] == {}

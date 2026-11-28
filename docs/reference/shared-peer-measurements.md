@@ -66,3 +66,27 @@ holds the comparison; a workload seen among active callers cannot simultaneously
 claim no comparable demand. Idle evidence does not cancel a scheduled reservation.
 Server/device caller census, CPU/decode/storage/database routes and reservations
 still require live collection before maximum-first trials.
+
+## Read-only observation coverage
+
+`observe-shared-workloads.py` now reports the library face pass and media-summary
+pipeline separately from the coarse Knowledge Index status. They are facets of
+Knowledge Index, not extra physical pools or additive throughput units. It also
+reads existing Frigate service stats and Immich face detection/recognition queues.
+Source fields come from the existing exporters; the observer does not deploy or
+reconfigure them. Multiple distinct enricher streams are not collapsed into one
+value merely because they happen to report equal numbers.
+
+Keep these meanings intact when building window adapters:
+
+- Face checkpoint completions are local checkpoint counts, not proof of independent
+  canonical publication; their exported request p95 is historical, not window-specific.
+- Summary counters represent Parquet writes in the current process and separate
+  backend execution from cache reuse; they are not automatically unique-source counts.
+- Frigate's detector statistic is a rolling mean in milliseconds, not p95.
+- Empty Immich face queues do not prove every submitted frame was recognized.
+- Missing fields stay absent. The legacy observer's 180-second freshness flag is
+  activity context and does not satisfy tighter trial measurement requirements.
+
+Server/device caller attribution, complete CPU/storage/database routes, scheduled
+reservations and matched useful-output windows are still needed for a live trial.
