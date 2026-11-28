@@ -23,5 +23,47 @@
     "small_faces_tested": 24,
     "small_faces_below_minimum": 3,
     "minimum_marked_face_px": 12
+  },
+  "guarded_generation_trial": {
+    "decision": "reject",
+    "scope": "RTX 12 pairs, Mac four pairs before early termination after RTX quality failure",
+    "backends": {
+      "rtx3070": {
+        "original": {
+          "pairs": 12,
+          "valid": 12,
+          "reviewed_stages": 10,
+          "exact_stages": 6,
+          "supported_actions": 10,
+          "median_request_s": 10.28
+        },
+        "guarded": {
+          "pairs": 12,
+          "valid": 12,
+          "reviewed_stages": 10,
+          "exact_stages": 5,
+          "supported_actions": 9,
+          "median_request_s": 9.49
+        }
+      },
+      "mac-metal": {
+        "original": {
+          "pairs": 4,
+          "valid": 4,
+          "reviewed_stages": 4,
+          "exact_stages": 3,
+          "supported_actions": 3,
+          "median_request_s": 33.77
+        },
+        "guarded": {
+          "pairs": 4,
+          "valid": 4,
+          "reviewed_stages": 4,
+          "exact_stages": 3,
+          "supported_actions": 2,
+          "median_request_s": 35.19
+        }
+      }
+    }
   }
 }

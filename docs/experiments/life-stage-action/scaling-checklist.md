@@ -80,3 +80,17 @@ Queue wait before admission remains unmeasured. The Mac observation begins at sl
 | Follow-up | Date, outcome, failed gate if any, next smallest task and plan revision |
 
 Retain the CLI run directory privately with the sealed prediction, comparison, traces, metrics, manifest and independent readback. Commit only aggregate results and references that can be shared. [Run file dictionary](https://github.com/homeiac/home/blob/b4a19672cd37301206a5487c8f2e192c34f75bb7/docs/guides/shared-workload-agent.md)
+
+
+## Guarded generated-answer comparison
+
+The follow-up screen kept original prompts, the close-up and serving configuration, alternating original-first and candidate-first by face. One serial test client per backend submitted through existing model slots alongside production. The cohort was the same twelve reviewed faces. An image below the 12 px face floor would keep its original scene. Cricket held inference idle during this test.
+
+| Backend and scope | Reviewed stage matches, original → guarded | Supported whole action, original → guarded | Median client request seconds, original → guarded |
+|---|---|---|---|
+| RTX, 12 paired faces | 6/10 → 5/10 | 10/12 → 9/12 | 10.28 → 9.49 |
+| Mac, first four paired faces | 3/4 → 3/4 | 3/4 → 2/4 | 33.77 → 35.19 |
+
+**Reject the candidate.** The RTX stage score breached the quality gate. Stop the temporary test client early and retain the original input. Mac had completed four pairs and one further original reading, which is excluded. Visual review used each marked scene and its crop and judged the entire phrase, including actor attribution. The Mac candidate wrongly assigned a hand on the pink-shirted child's shoulder to that child. These are small, single paired screenings. They establish a failed promotion gate for this candidate. Request latency includes serving contention and cannot establish fleet throughput. S5 remains open. [Aggregate trial](../../../scripts/knowledge-index/library-server-timing.json)
+
+The private run is guarded-face-quality.DW23pN. Baseline production workers continued. Coordinate a new baseline after the temporary clients finish before any further capacity trial.

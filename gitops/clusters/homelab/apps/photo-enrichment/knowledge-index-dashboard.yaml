@@ -1640,7 +1640,7 @@ data:
               ]
             }
           },
-          "description": "Median seconds per request, 2026-11-28T05:19:26.479979Z to 2026-11-28T05:21:30.713841Z. Mac timing uses 31 observed slot transitions. RTX timing uses 42 complete runner records. Admission wait is unmeasured. Input-size test on 12 reviewed faces with the close-up preserved: 15,448 \u2192 11,032 input tokens across both Mac calls. 3 of 24 separately sampled small faces fell below 12 px in the marked scene. Production keeps the original size."
+          "description": "Median seconds per request, 2026-11-28T05:19:26.479979Z to 2026-11-28T05:21:30.713841Z. Mac timing uses 31 observed slot transitions. RTX timing uses 42 complete runner records. Admission wait is unmeasured. Input-size test on 12 reviewed faces with the close-up preserved: 15,448 \u2192 11,032 input tokens across both Mac calls. 3 of 24 separately sampled small faces fell below 12 px in the marked scene. Production keeps the original size. Generated-answer trial rejected: RTX reviewed stage matches 6/10 \u2192 5/10 and supported actions 10/12 \u2192 9/12, median 10.28 \u2192 9.49 s. Mac stopped after four pairs: stage matches 3/4 \u2192 3/4, actions 3/4 \u2192 2/4, median 33.77 \u2192 35.19 s. A further unpaired Mac reading is excluded. These are queued client request times during production. No production resize was deployed."
         },
         {
           "id": 254,

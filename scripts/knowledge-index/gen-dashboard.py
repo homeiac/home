@@ -650,6 +650,15 @@ def photo_server_timing_panel(y):
         f'{sizes["small_faces_below_minimum"]} of {sizes["small_faces_tested"]} separately sampled small faces '
         f'fell below {sizes["minimum_marked_face_px"]} px in the marked scene. Production keeps the original size.'
     )
+    trial = sample.get("guarded_generation_trial")
+    if trial:
+        description += (
+            " Generated-answer trial rejected: RTX reviewed stage matches 6/10 → 5/10 "
+            "and supported actions 10/12 → 9/12, median 10.28 → 9.49 s. "
+            "Mac stopped after four pairs: stage matches 3/4 → 3/4, actions 3/4 → 2/4, "
+            "median 33.77 → 35.19 s. A further unpaired Mac reading is excluded. "
+            "These are queued client request times during production. No production resize was deployed."
+        )
     return tuning_comparison(
         "Life stage + action · where server time went (Nov 27 sample)",
         [(f"vector({seconds})", label) for label, seconds in phases], 0, y, 24, 7, "s", description,
