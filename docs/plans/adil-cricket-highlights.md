@@ -4,6 +4,13 @@ Date: 2026-11-27
 
 Status: Implementation started; tracked in [#250](https://github.com/homeiac/home/issues/250)
 
+For the remaining integration with the current shared AI playbook, use the
+[implementation plan](cricket-shared-workload-implementation.md),
+[design](../architecture/cricket-shared-workload-design.md), and
+[completion/verification checklist](cricket-shared-workload-checklist.md).
+The checklist distinguishes source, merge, local-test and live-verification status;
+the feature sequence and historical observations below remain product context.
+
 Published PRs: [ledger #251](https://github.com/homeiac/home/pull/251),
 [playback API #252](https://github.com/homeiac/home/pull/252), and
 [correction UI #253](https://github.com/homeiac/home/pull/253),

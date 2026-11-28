@@ -92,3 +92,9 @@ flowchart TD
 ```
 
 Compare each workload in its own units. For media producers, run `verify-media` against an independent PostgreSQL readback and check the reviewed output separately. The review command emits decisions. The owning supervisor changes capacity. [Telemetry fields](../reference/workload-telemetry.md) · [C4 architecture](../architecture/distributed-ai-workloads.md) · [Adapter inputs](../../scripts/perf/otel-diagnosis.md)
+
+For the remaining Cricket integration, use the
+[implementation plan](../plans/cricket-shared-workload-implementation.md),
+[design](../architecture/cricket-shared-workload-design.md), and
+[completion/verification checklist](../plans/cricket-shared-workload-checklist.md).
+The checklist separates merged code, local tests, deployment and live evidence.
