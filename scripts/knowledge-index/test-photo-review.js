@@ -1,233 +1,91 @@
-// Exercise the actual UI handlers using synthetic records and a small DOM stand-in.
-// Run: node --test scripts/knowledge-index/test-photo-review.js
+// Test the actual dashboard and event-note handlers with synthetic records.
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
-
-function harness(){
-  const nodes=new Map();
-  class Element {
+function harness(page='index',overrides={}){
+  const nodes=new Map(),requests=[];
+  class Element{
     constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.value='';this.classList={toggle(){}};}
     append(...children){this.children.push(...children);}
     replaceChildren(...children){this.children=children;}
     setAttribute(){}
+    reset(){}
     showModal(){this.open=true;}
     close(){this.open=false;}
-    querySelector(tag){return this.children.find(child=>child.tag===tag)||this.children.map(child=>child.querySelector?.(tag)).find(Boolean);}
   }
-  const html=fs.readFileSync(path.join(__dirname,'photo_enrichment/static/index.html'),'utf8');
+  const root=path.join(__dirname,'photo_enrichment/static');
+  const html=fs.readFileSync(path.join(root,page+'.html'),'utf8');
   for(const match of html.matchAll(/id="([^"]+)"/g)){
-    assert(!nodes.has(match[1]),'Duplicate HTML id: '+match[1]);nodes.set(match[1],new Element());
+    assert(!nodes.has(match[1]));nodes.set(match[1],new Element());
   }
-  const document={getElementById:id=>{assert(nodes.has(id),'Unknown element '+id);return nodes.get(id);},
-    createElement:tag=>new Element(tag),querySelectorAll:selector=>selector==='.face-tile'?nodes.get('face-grid').children.filter(node=>node.dataset.id):[]};
-  const posts=[];
-  const offered=[];
-  const reviewMeta={};
-  const groupOffered=[];
-  let automatic={enabled:false,threshold:.9,accepted:0};
-  const rows=[{id:'a',revision:'r1',person:null,suggestion:{person:'Synthetic G',score:.8},path:'a.jpg',confidence:.9},
-    {id:'b',revision:'r2',person:null,suggestion:{person:'Synthetic Asha',score:.8},path:'b.jpg',confidence:.9},
-    {id:'c',revision:'r3',person:null,suggestion:null,path:'c.jpg',confidence:.9}];
-  const context=vm.createContext({document,URLSearchParams,AbortSignal,setTimeout,clearTimeout,fetch:async(url,options)=>{
-    let result={};
-    if(options?.body){
-      const body=JSON.parse(options.body);posts.push(body);
-      if(url==='/api/auto-accept'){automatic={...automatic,...body};result=automatic;}
-      else if(url==='/api/faces/reject'){
-        const face=rows.find(face=>face.id===body.id);
-        face.match_details={...face.suggestion,reason:'rejected',qualified:false};face.suggestion=null;result={rejected:true};
-      }
-      else if(url==='/api/group-suggestions')result={location:'Near synthetic landmark',event:'2026-01-02',tags:['Synthetic G','celebration'],photos:body.paths.length,inferred:true};
-      else result={saved:true};
+  const data={
+    '/api/status':{captured_at:Date.now()/1000},
+    '/api/config':{csrf:'synthetic',cricket:true,search_index:true},
+    '/api/groups':[{id:'story',event:'Picnic',photos:3}],
+    '/api/cricket/albums':{albums:[{id:'synthetic-album'}]},
+    '/api/dates':[],
+    '/api/group-suggestions':{event:'Suggested occasion',location:'Suggested place',tags:['picnic'],photos:1,inferred:true},
+    '/api/groups/save':{id:'saved',photos:2},
+    ...overrides
+  };
+  const context=vm.createContext({
+    document:{getElementById:id=>{assert(nodes.has(id),'Unknown element '+id);return nodes.get(id);},createElement:tag=>new Element(tag),querySelectorAll:()=>[]},
+    URLSearchParams,AbortSignal,setTimeout,clearTimeout,
+    fetch:async(url,options)=>{
+      requests.push({url,options});const key=url.split('?')[0];assert(key in data,'Unexpected request '+url);
+      const result=data[key];if(result instanceof Error)throw result;
+      return {ok:true,json:async()=>result};
     }
-    else if(url==='/api/config')result={csrf:'synthetic',auto_accept:true};
-    else if(url==='/api/auto-accept')result=automatic;
-    else if(url.startsWith('/api/photo?'))result={faces:rows,groups:[],latitude:null,people:[]};
-    else if(url.startsWith('/api/suggestions?')){
-      const face=rows.find(face=>face.id===new URLSearchParams(url.split('?')[1]).get('face'));
-      result=face?.suggestion?[face.suggestion]:[];
-    }
-    else if(url.startsWith('/api/faces/group-selection?'))result={faces:groupOffered,total:groupOffered.length};
-    else if(url.startsWith('/api/faces/selection?')){
-      const params=new URLSearchParams(url.split('?')[1]);
-      const faces=offered.filter(face=>face.score>=Number(params.get('threshold'))&&(!params.get('person')||face.person===params.get('person')));
-      result={faces:faces.map(({score,...face})=>face),total:faces.length};
-    }
-    else if(url.startsWith('/api/faces?')){
-      const params=new URLSearchParams(url.split('?')[1]);
-      const faces=rows.filter(face=>(params.get('status')!=='suggested'||face.suggestion)&&(!params.get('person')||face.suggestion?.person===params.get('person')));
-      result={faces,total:faces.length,people:[],counts:{total:3,unreviewed:3,suggested:2},suggested_people:[],...reviewMeta};
-    }
-    return {ok:true,json:async()=>result};
-  }});
-  vm.runInContext(fs.readFileSync(path.join(__dirname,'photo_enrichment/static/app.js'),'utf8'),context);
-  return {nodes,posts,rows,offered,reviewMeta,groupOffered,context,run:code=>vm.runInContext(code,context)};
+  });
+  vm.runInContext(fs.readFileSync(path.join(root,page==='index'?'app.js':'context.js'),'utf8'),context);
+  return {nodes,requests,context,data,run:code=>vm.runInContext(code,context)};
 }
-async function ready(h){await new Promise(resolve=>setImmediate(resolve));assert.equal(h.run('state.busy'),false);}
-
-test('group context autofills from the index without replacing manual edits',async()=>{
-  const h=harness();await ready(h);
-  h.run("state.contextSuggestions=true;state.selected.add('a.jpg');scheduleGroupSuggestions()");
+const ready=()=>new Promise(resolve=>setImmediate(resolve));
+test('dashboard starts with live overview and never requests faces or writes',async()=>{
+  const h=harness();await ready();
+  assert.equal(h.nodes.get('index-status').textContent,'Up to date');
+  assert.equal(h.nodes.get('group-count').textContent,'1');
+  assert.equal(h.nodes.get('cricket-count').textContent,'1');
+  assert(h.requests.every(r=>!r.options.body&&!r.url.includes('faces')));
+});
+test('a failed card does not hide other cards or prevent retry',async()=>{
+  const h=harness('index',{'/api/groups':new Error('offline')});await ready();
+  assert.equal(h.nodes.get('group-count').textContent,'Unavailable');
+  assert.equal(h.nodes.get('cricket-count').textContent,'1');
+  assert.equal(h.nodes.get('refresh').disabled,false);
+  h.data['/api/groups']=[];await h.nodes.get('refresh').onclick();
+  assert.equal(h.nodes.get('group-count').textContent,'0');
+});
+test('missing timestamps and disabled cricket are not presented as healthy',async()=>{
+  const h=harness('index',{'/api/status':{},'/api/config':{cricket:false}});await ready();
+  assert.equal(h.nodes.get('index-status').textContent,'Not published yet');
+  assert.equal(h.nodes.get('cricket-app').hidden,true);
+  assert(!h.requests.some(r=>r.url==='/api/cricket/albums'));
+});
+test('an old snapshot is marked overdue',async()=>{
+  const h=harness('index',{'/api/status':{captured_at:Date.now()/1000-3600}});await ready();
+  assert.equal(h.nodes.get('index-status').textContent,'Update overdue');
+});
+test('event notes load without face review and keep manual context over suggestions',async()=>{
+  const h=harness('context');await ready();
+  h.run("state.selected.add('a.jpg');scheduleGroupSuggestions()");
   await new Promise(resolve=>setTimeout(resolve,350));
-  assert.equal(h.nodes.get('location').value,'Near synthetic landmark');
-  assert.equal(h.nodes.get('tags').value,'Synthetic G, celebration');
-  h.nodes.get('location').value='My confirmed venue';
+  assert.equal(h.nodes.get('location').value,'Suggested place');
+  h.nodes.get('location').value='My venue';
   h.run("state.selected.add('b.jpg');scheduleGroupSuggestions()");
   await new Promise(resolve=>setTimeout(resolve,350));
-  assert.equal(h.nodes.get('location').value,'My confirmed venue');
-  assert.match(h.nodes.get('group-suggestion-note').textContent,/2 selected photos/);
+  assert.equal(h.nodes.get('location').value,'My venue');
+  assert(h.requests.every(r=>!r.url.includes('faces')&&!r.url.includes('auto-accept')));
 });
-
-test('mixed selections survive collections and submit their displayed names',async()=>{
-  const h=harness();await ready(h);
-  await h.run("filterFaces('suggested','Synthetic G')");
-  h.nodes.get('face-select-page').onclick();
-  await h.run("filterFaces('suggested','Synthetic Asha')");
-  h.nodes.get('face-select-page').onclick();
-  assert.equal(h.nodes.get('face-selected').textContent,2);
-  assert.equal(h.nodes.get('bulk-confirm-suggestions').disabled,false);
-  assert.match(h.nodes.get('face-selection-summary').textContent,/Synthetic G.*Synthetic Asha/);
-  // Background refresh must not silently change what the user selected.
-  h.rows[0].suggestion.person='Changed suggestion';
-  await h.nodes.get('bulk-confirm-suggestions').onclick();
-  assert.deepEqual(h.posts,[{faces:[{id:'a',revision:'r1',person:'Synthetic G'},{id:'b',revision:'r2',person:'Synthetic Asha'}]}]);
-  assert.equal(h.run('state.faceSelection.size'),0);
-  assert.equal(h.nodes.get('bulk-confirm-suggestions').disabled,true);
-});
-
-test('unknown faces cannot be bulk-confirmed as suggestions',async()=>{
-  const h=harness();await ready(h);
-  h.run('state.faceItems.forEach(selectFace);faceSelection()');
-  assert.equal(h.nodes.get('bulk-confirm-suggestions').disabled,true);
-  await h.nodes.get('bulk-confirm-suggestions').onclick();
-  assert.equal(h.posts.length,0);
-  assert.equal(h.run('state.faceSelection.size'),3);
-});
-
-test('a failed save retains the selection for correction or refresh',async()=>{
-  const h=harness();await ready(h);
-  h.run('selectFace(state.faceItems[0]);faceSelection()');
-  h.context.fetch=async()=>({ok:false,json:async()=>({error:'Edited elsewhere; refresh before saving'})});
-  await h.nodes.get('bulk-confirm-suggestions').onclick();
-  assert.equal(h.run('state.faceSelection.size'),1);
-  assert.match(h.nodes.get('status').textContent,/Edited elsewhere/);
-});
-
-test('threshold selection spans all pages and confirms hundreds with their own names',async()=>{
-  const h=harness();await ready(h);
-  for(let i=0;i<251;i++)h.offered.push({id:'bulk-'+i,revision:'r'+i,person:i%2?'Synthetic G':'Synthetic Asha',score:i===250?.89:.9});
-  h.nodes.get('minimum-similarity').value='90';
-  await h.nodes.get('face-select-threshold').onclick();
-  assert.equal(h.run('state.faceSelection.size'),250);
-  assert.equal(h.posts.length,0,'Selecting never saves labels');
-  await h.nodes.get('bulk-confirm-suggestions').onclick();
-  assert.deepEqual(h.posts.map(body=>body.faces.length),[100,100,50]);
-  assert.equal(h.posts.flatMap(body=>body.faces).filter(face=>face.person==='Synthetic G').length,125);
-  assert.equal(h.run('state.faceSelection.size'),0);
-  assert.match(h.nodes.get('status').textContent,/Confirmed 250 selected faces/);
-});
-
-test('a later batch conflict preserves pending faces and reports partial progress',async()=>{
-  const h=harness();await ready(h);
-  for(let i=0;i<250;i++)h.offered.push({id:'bulk-'+i,revision:'r'+i,person:'Synthetic G',score:.95});
-  h.nodes.get('minimum-similarity').value='90';
-  await h.nodes.get('face-select-threshold').onclick();
-  const original=h.context.fetch;let writes=0;
-  h.context.fetch=async(url,options)=>options?.body&&++writes===2?
-    {ok:false,json:async()=>({error:'Edited elsewhere'})}:original(url,options);
-  await h.nodes.get('bulk-confirm-suggestions').onclick();
-  assert.equal(h.posts.length,1);
-  assert.equal(h.run('state.faceSelection.size'),150);
-  assert.match(h.nodes.get('status').textContent,/Confirmed 100 of 250 before the request failed/);
-});
-
-test('automatic acceptance starts off, saves a chosen rule and can be paused',async()=>{
-  const h=harness();await ready(h);
-  assert.equal(h.posts.length,0,'Loading the page must not enable the rule');
-  assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Enable auto-accept');
-  h.nodes.get('auto-accept-threshold').value='95';
-  await h.nodes.get('auto-accept-toggle').onclick();
-  assert.deepEqual(h.posts,[{enabled:true,threshold:.95}]);
-  assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Pause auto-accept');
-  await h.nodes.get('auto-accept-toggle').onclick();
-  assert.deepEqual(h.posts[1],{enabled:false,threshold:.95});
-  assert.equal(h.nodes.get('auto-accept-toggle').textContent,'Enable auto-accept');
-});
-
-function textTree(node){return [node.textContent||'',...(node.children||[]).map(textTree)].join(' ');}
-
-test('reject removes the suggestion and selection immediately, retaining the face with its reason',async()=>{
-  const h=harness();await ready(h);
-  h.rows[0].suggestion.reference_id='confirmed-a';
-  await h.run("filterFaces('suggested','Synthetic G')");
-  h.nodes.get('face-select-page').onclick();
-  const card=h.nodes.get('face-grid').children[0];
-  const reject=card.children.flatMap(node=>node.children||[]).find(node=>node.tag==='button'&&node.textContent==='Not this person');
-  await reject.onclick();
-  assert.equal(h.run('state.faceSelection.size'),0);
-  assert.equal(h.run('state.faceItems.length'),0);
-  assert.equal(h.posts[0].reference_id,'confirmed-a');
-  await h.run("filterFaces('all')");
-  const rejected=h.nodes.get('face-grid').children[0];
-  assert.match(textTree(rejected),/Unnamed face.*Rejected candidate.*You rejected this candidate/);
-  assert.doesNotMatch(textTree(rejected),/Qualifies as a suggestion|Not this person/);
-});
-
-test('rejecting in face review closes the obsolete confirmation and refreshes the collection',async()=>{
-  const h=harness();await ready(h);
-  h.rows[0].suggestion.reference_id='confirmed-a';
-  await h.run("filterFaces('suggested','Synthetic G');");
-  await h.run('reviewFace(state.faceItems[0])');
-  await h.nodes.get('review-suggest').onclick();
-  const reject=h.nodes.get('review-suggestions').children[0].children.find(node=>node.textContent==='Reject');
-  await reject.onclick();
-  assert.equal(h.nodes.get('face-review').open,false);
-  assert.equal(h.run('state.faceItems.length'),0);
-  assert.match(h.nodes.get('status').textContent,/removed it from suggested matches/);
-});
-
-test('every card explains its nearest candidate without inventing probabilities',async()=>{
-  const h=harness();await ready(h);
-  h.rows[0].match_details={person:'Synthetic G',score:.42,reason:'below_threshold',threshold:.55,qualified:false};
-  h.rows[0].suggestion=null;
-  h.rows[1].match_details={person:'Synthetic Asha',score:.72,reason:'ambiguous',margin:.02,required_margin:.08,qualified:false};
-  h.rows[1].suggestion=null;
-  h.rows[2].match_details={person:null,score:null,reason:'no_references',qualified:false};
-  await h.run('loadFaces()');
-  const cards=h.nodes.get('face-grid').children;
-  assert.match(textTree(cards[0]),/Closest candidate: Synthetic G.*Similarity 42.0 \/ 100.*Below the suggestion threshold/);
-  assert.match(textTree(cards[1]),/Similarity 72.0 \/ 100.*Ambiguous.*needs 8 points/);
-  assert.match(textTree(cards[2]),/Similarity: unavailable.*No manually confirmed reference/);
-  await h.run('reviewFace(state.faceItems[0])');
-  assert.match(textTree(h.nodes.get('review-suggestions')),/Closest candidate: Synthetic G.*Similarity 42.0/);
-  await h.run("showPhoto('a.jpg')");
-  assert.match(textTree(h.nodes.get('faces')),/Closest candidate: Synthetic G.*Similarity 42.0.*Below the suggestion threshold/);
-  assert.equal(h.posts.length,0);
-});
-
-test('review groups open members and selecting a whole group never saves automatically',async()=>{
-  const h=harness();await ready(h);
-  h.rows[0].review_group={id:'group-a',count:160};
-  Object.assign(h.reviewMeta,{grouped:true,total:3,generation:'g'});
-  await h.run('loadFaces()');
-  assert.match(h.nodes.get('face-count').textContent,/3 review groups/);
-  const card=h.nodes.get('face-grid').children[0];
-  assert.match(textTree(card),/160 faces in this review group/);
-  assert.equal(card.children.find(node=>node.tag==='label').hidden,true);
-  Object.assign(h.reviewMeta,{grouped:false,total:160});
-  delete h.rows[0].review_group;
-  await h.run("filterFaces('unreviewed','','group-a')");
-  assert.equal(h.nodes.get('face-select-group').hidden,false);
-  h.groupOffered.push({id:'a',revision:'r1',person:'Synthetic G'},{id:'b',revision:'r2',person:null});
-  await h.nodes.get('face-select-group').onclick();
-  assert.equal(h.run('state.faceSelection.size'),2);
-  assert.equal(h.posts.length,0);
-  assert.equal(h.nodes.get('bulk-confirm-suggestions').disabled,true);
-  h.nodes.get('bulk-person').value='Explicit chosen name';
-  await h.nodes.get('bulk-assign').onclick();
-  assert.equal(h.posts[0].person,'Explicit chosen name');
-  assert.equal(h.posts[0].faces.length,2);
+test('saving event notes retains the explicit cross-page photo selection',async()=>{
+  const h=harness('context');await ready();
+  h.run("state.selected=new Set(['a.jpg','b.jpg'])");
+  h.nodes.get('event').value='Family picnic';h.nodes.get('notes').value='The story we remember';
+  h.nodes.get('group-form').onsubmit({preventDefault(){}});await ready();
+  const saved=h.requests.find(r=>r.url==='/api/groups/save');
+  const body=JSON.parse(saved.options.body);
+  assert.deepEqual(body.paths,['a.jpg','b.jpg']);assert.equal(body.notes,'The story we remember');
+  assert.equal(saved.options.headers['X-Photo-Token'],'synthetic');
 });

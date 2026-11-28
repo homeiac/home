@@ -11,7 +11,7 @@ import time
 import uuid
 
 CURRENT = contextvars.ContextVar('photo_request',default=None)
-ROUTES = {'/','/app.js','/style.css','/healthz','/metrics','/api/config','/api/status',
+ROUTES = {'/','/app.js','/style.css','/context','/context.js','/context.css','/healthz','/metrics','/api/config','/api/status',
           '/api/faces','/api/faces/selection','/api/faces/label','/api/faces/labels',
           '/api/faces/reject','/api/faces/frigate','/api/auto-accept','/api/dates',
           '/api/photos','/api/search','/api/group-suggestions','/api/photo','/api/thumbnail','/api/groups','/api/group',
