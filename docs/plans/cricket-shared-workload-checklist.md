@@ -772,6 +772,26 @@ four cores follows only after verified zero-CPU recovery. The seven-core older
 baseline comparison passed, which is why both original and fresh references are
 retained. Mac descending outcomes and final selection remain open.
 
+### E26 — Finite selection, cleanup, served readback and private archive
+
+Selected the best supported measured setup: **four Mac Metal, three RTX, zero
+production CPU lanes on either host**. Knowledge Index independently agrees. This
+retains production and claims no global optimum. Four/two-thread separate-call and
+fresh joint-six arms remain unmeasured. The final control has only 290.168 seconds
+of retained samples and is diagnostic, not an equal five-minute qualification.
+
+Both CPU processes/listeners are stopped and Leases released. Authenticated Mac
+readback reports four processing contexts; the photo worker is running with four
+Mac/three RTX lanes. Served Grafana version 88 (#218 `f54c23a`) passed independent
+API and rendered UI checks. Panels 294/298 clearly distinguish GPU performance
+during added Mac CPU from rejection of the CPU addition; RTX remains selected.
+
+The private persistent archive holds 295 files / 7,718,854 bytes with verified
+SHA-256 and permissions. Its manifest digest and location are recorded in the
+[live journal](../experiments/cricket-cpu-tuning-20261127.md). No credential files
+or auth helpers were archived. Future generic-playbook implementation is separate
+from these completed finite measurements and makes no new live-capacity claim.
+
 ## Updating evidence
 
 For each new receipt record date/time, task ID, source/PR, environment, exact

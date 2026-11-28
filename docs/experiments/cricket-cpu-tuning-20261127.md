@@ -1,10 +1,16 @@
 # Cricket and photo CPU tuning — live journal
 
-Status: active; no best configuration selected. The user authorized finishing CPU
-tuning on the Mac and still-fawn, starting at the measured shared allowance and
-descending. Cricket is the sole CPU actuator for both pools. The Knowledge Index
-chat independently reviews quality and publication evidence and owns Grafana/#218.
-Protected photo allocation remains four Mac Metal and three RTX lanes.
+Status: **best supported measured configuration selected**: four Mac Metal photo
+workers, three RTX photo workers, and zero CPU production lanes on Mac and
+still-fawn. Knowledge Index independently agrees. This retains the running
+production configuration; no CPU profile demonstrated reviewed-quality,
+independently verified new-output total gain. It is not a proven global optimum.
+The user asked to consolidate the data already generated; additional inference
+trials are not being launched. All unrun settings remain explicitly unmeasured.
+
+Cricket owned CPU actuation on both pools throughout. Knowledge Index owned
+independent quality/readback review and Grafana publication. Both CPU model
+processes/listeners are stopped and Leases released; the final control is read-only.
 
 ## Contracts and baseline
 
@@ -318,13 +324,75 @@ arm. No replacement model may launch until recovery passes both retained baselin
 Private closed phase: `/private/tmp/cricket-original-two-pass-mac-t7-forward`;
 `owner-final-peer-review.json` preserves the scoped decision and both comparisons.
 
-## Completion remains open
+## Recovery control exposes background variation — hold the next CPU arm
 
-The Mac row remains open; still-fawn retains zero CPU production lanes for the
-finite tested profiles above. Required on a qualifying Mac candidate: measured descending outcomes, complete
-reviewed quality on passing profiles (including separate calls if joint fails),
-independent evaluation/readback, reverse repetition, combined useful throughput,
-chosen setting or tested rejection, cleanup/recovery, pushed receipts and served
-Grafana before/after verification. Source/model/prompt or background-workload changes
-require a new comparable profile/baseline. Readiness and this journal do not establish
-the best configuration.
+The zero-CPU recovery window itself failed the fresh throughput floor: 139 unique
+production completions in 300.259 seconds versus 156 (ratio 0.890945), while combined
+p95 recovered to 34.828 seconds versus 32.028. Metal counts were 38 versus 40 and
+RTX 101 versus 116; RTX p95 was lower, 13.040 versus 14.577 seconds. The original
+130/p95 37.434 baseline still passed. No CPU model was running. Preserve this receipt;
+do not attribute its throughput loss to CPU contention or silently repeat until a
+favorable window appears.
+
+The coordinator held the four-core launch. Collect one additional zero-CPU control,
+check peer state and independently review the comparison scope before resuming.
+Any rebaseline must document changed work mix / window variation and retain the
+original anchor and every prior stop. Private second control:
+`/private/tmp/cricket-original-two-pass-control-after-recovery-drift`.
+
+Fixed-time peer snapshots for the seven-core arm showed fresh idle pet tagging and
+caption enrichment. Media-summary's 33 pending items were independently traced to
+32 decode failures and one duration failure before inference; keep its scheduled
+four-request reservation despite zero in-flight requests. No peer restart or
+repair was performed during this tuning task.
+
+## Selected setup and limits
+
+| Pool / route | Selected allocation | Evidence and limit |
+| --- | --- | --- |
+| Mac Metal photo inference | Four workers; original production image size/model and separate age/action calls | Retained protected configuration; live worker is running and authenticated server readback reports four contexts, all processing |
+| RTX photo inference | Three workers; existing production joint-call profile | Retained protected configuration; no production worker allocation or serving restart was performed |
+| Mac CPU inference | Zero production lanes | Smaller model fails full reviewed quality. Original model has observed latency failures and incomplete quality/new-output evidence. Background variation prevents claiming a causal speed improvement |
+| still-fawn CPU inference | Zero production lanes | Original profile produced no output within its tested diagnostic bound; smaller model fails quality and reproduces a known stage failure on Linux |
+
+Independent final cleanup receipts at `1795851042769533000` ns (Mac) and
+`1795851044342007000` ns (Linux) report zero trial model processes, released Leases
+and a closed Linux listener. Mac serving readback at `1795851081122671000` ns
+reports ready/four processing contexts. LaunchAgent readback confirms the photo
+worker is running with its four-Mac/three-RTX configuration. Private receipts:
+`/private/tmp/cricket-final-mac-serving-contexts.json` and
+`/private/tmp/cricket-final-photo-worker-state.json`.
+
+The four/two-thread separate-call arms and fresh six-thread joint revisit were
+**not run** after recovery exposed variation and the user requested consolidation.
+They are not rejected measurements. The earlier six-thread joint result remains
+an old-baseline aggregate pass with incomplete quality, not a qualified CPU route.
+The opt-in unique-source adapter remains disabled; no replay is counted as new
+production output, and no live CPU publication or full end-to-end CPU gain is
+claimed. Promotion would still require full quality, stable adjacent controls,
+reverse repeats, unique-source queue output and independent native OpenLABEL
+publication readback. The baseline variation prevents a global optimum claim.
+
+The final read-only control ended after 300.158 seconds wall time but retained
+only a 290.168-second sample span (126 GPU checkpoints, p95 34.661 seconds). It is
+incomplete equal-window evidence, not a qualifying five-minute comparison. No
+replacement control or inference was launched.
+
+Grafana source #218 `f54c23a` is independently API-read back at version 88; separate
+rendered Chrome readback verified panels 294 and 298. Panel 294 now says “RTX GPU ·
+before/during added Mac CPU”, retaining 18.59→20.39 faces/min and attributing the
++13.5% latency stop to the added ten-thread Mac CPU route. RTX remains selected.
+Panel 298 shows four Metal/three RTX/CPU zero, with finite-evidence limits explicit.
+
+Closed private evidence is retained under
+`~/Library/Application Support/photo-memory-acceptance/cpu-tuning/2026-11-27-final`:
+295 files, 7,718,854 bytes, no optional receipts missing; every copied file was
+reread against SHA-256 and restrictive file/directory permissions were verified.
+The manifest digest is `3897f12aa5791217e3c9f9ee562fa5455e0836f3d5dc8eda41050c1ed0d3586f`.
+It includes raw private evaluation inputs/responses, independent quality and API
+receipts, and rendered UI readback. Credentials and auth helpers were excluded.
+The archive is evidence, not a replacement canonical annotation/content store.
+
+This closes consolidation of the completed finite tests. A subsequent request to
+generalize the playbook/scripts is tracked separately; it does not authorize or
+imply additional live capacity trials.
