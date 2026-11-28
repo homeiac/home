@@ -2,17 +2,22 @@
 import json
 import math
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from service_budgets import assess_service, inactive
 
+if TYPE_CHECKING:
+    from capacity_qualification import CandidateContext
 
 def valid_number(value: object) -> bool:
     return type(value) in (float, int) and math.isfinite(value) and value >= 0
 
 
-def assess(topology: dict, comparison: dict, watermark: int) -> dict:
+def assess(topology: dict, comparison: dict, watermark: int, capacity: "CandidateContext | None" = None) -> dict:
     """Evaluate aligned before/trial windows from workload adapters in their own output units."""
     subject = comparison["subject"]
+    if capacity is not None:
+        capacity.matches(comparison, topology)
     resources = set()
     pending = list(comparison["resources"])
     while pending:
@@ -35,7 +40,7 @@ def assess(topology: dict, comparison: dict, watermark: int) -> dict:
                 reasons.append(f"incomplete caller census for {resource}")
             else:
                 discovered.update(clients)
-                observed_sets.append(set(clients))
+                observed_sets.append(set(clients) - ({subject} if capacity is not None and capacity.idle_target else set()))
         if len(observed_sets) == 2 and observed_sets[0] != observed_sets[1]:
             reasons.append(f"active caller mix changed on {resource}")
     affected = expected | discovered | {subject}
@@ -54,9 +59,9 @@ def assess(topology: dict, comparison: dict, watermark: int) -> dict:
     if cricket:
         for phase in phases:
             gap = phase.get("max_sample_gap_s")
-            if (not valid_number(gap) or gap > 15 or phase.get("warmed") is not True
+            if (not valid_number(gap) or gap > (capacity.sample_gap_s if capacity else 15) or phase.get("warmed") is not True
                     or type(phase["start_ns"]) is not int or type(phase["end_ns"]) is not int
-                    or phase["end_ns"] - phase["start_ns"] < 300 * 10**9):
+                    or phase["end_ns"] - phase["start_ns"] < (capacity.window_s if capacity else 300) * 10**9):
                 reasons.append("cricket requires five-minute warm windows and 15-second health sampling")
     changes = {}
     for name in sorted(affected):
@@ -69,6 +74,13 @@ def assess(topology: dict, comparison: dict, watermark: int) -> dict:
             regressions.append(f"{name}: baseline allocation was reduced")
         elif trial.get("baseline_preserved") is not True:
             reasons.append(f"{name}: baseline allocation unverified")
+        if capacity is not None and name == subject:
+            missing, losses, change = capacity.target(rows, phases)
+            reasons.extend(f"{name}: {r}" for r in missing)
+            regressions.extend(f"{name}: {r}" for r in losses)
+            if change is not None:
+                changes[name] = round(change, 4)
+            continue
         if before["demand"] != trial["demand"]:
             reasons.append(f"{name}: offered demand changed")
             continue
@@ -94,12 +106,12 @@ def assess(topology: dict, comparison: dict, watermark: int) -> dict:
             regressions.extend(losses)
             continue
         if cricket:
-            if any(type(r.get("completed_items")) is not int or r["completed_items"] < 10 for r in rows):
+            if any(type(r.get("completed_items")) is not int or r["completed_items"] < (capacity.minimum_items if capacity else 10) for r in rows):
                 reasons.append(f"{name}: fewer than ten measured durable completions or count missing")
             if name != subject:
                 if any(not valid_number(r.get(k)) for r in rows for k in ("p95_s", "terminal_error_rate")):
                     reasons.append(f"{name}: missing peer latency or terminal-error rate")
-                elif (trial["p95_s"] > before["p95_s"] * 1.1
+                elif (trial["p95_s"] > before["p95_s"] * (1 + (capacity.max_peer_p95_growth if capacity else .10))
                       or trial["terminal_error_rate"] > before["terminal_error_rate"]):
                     regressions.append(f"{name}: peer latency or terminal-error budget exceeded")
         if any(not r.get("cohort") or not r.get("unit") for r in rows) or any(
@@ -128,7 +140,7 @@ def assess(topology: dict, comparison: dict, watermark: int) -> dict:
                 reasons=sorted(set(reasons + regressions)))
 
 
-def shared_context(checkpoint: dict, watermark: int) -> dict:
+def shared_context(checkpoint: dict, watermark: int, capacity: "CandidateContext | None" = None) -> dict:
     """Attach a separate fleet decision while keeping diagnostic receipts reproducible."""
     topology = checkpoint.get("topology") or json.loads(Path(__file__).with_name("shared-workloads.json").read_text())
     if "comparison" not in checkpoint:
@@ -150,4 +162,4 @@ def shared_context(checkpoint: dict, watermark: int) -> dict:
     for key in ("min_gain", "max_peer_loss"):
         if not valid_number(comparison[key]) or (key == "max_peer_loss" and comparison[key] > 1):
             raise ValueError(f"invalid {key}")
-    return assess(topology, comparison, watermark)
+    return assess(topology, comparison, watermark, capacity)

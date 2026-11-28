@@ -51,8 +51,42 @@ exclusive with file mode `0600`. Revalidation recomputes the contract and reject
 changed scope, policy or measurements. A content digest detects accidental changes;
 it is not a signature or proof of authorization. Do not edit an existing receipt.
 
-Remaining P05/P06 work: validate phase order and matching evidence before the common
-reviewer; support a real idle-target baseline; preserve active peer/service gates;
-separate safe qualification from throughput ranking; require fresh evaluation
-receipts and eligible reverse repetitions; fence actual dispatch with the shared
-lease and observed allocations. Registration alone satisfies none of those gates.
+## Offline candidate qualification
+
+`capacity_qualification.qualify` validates a registration against a candidate's
+fixed inputs, environment, observed allocation vectors and registered throughput
+and service budgets before applying the shared reviewer. Its top-level decision
+is always `not_admitted`. `candidate_review` describes only whether the supplied
+measurements satisfy candidate safety/quality checks. The public CLI still refuses
+capacity review while complete phase and receipt validation is pending.
+
+The comparison carries `capacity_registration_sha256`, the exact `fixed_inputs`
+and `output_accounting`, `min_gain=0` and a `max_peer_loss` no weaker than registered.
+Service budgets must match the registered `service_budgets` exactly. Each phase's
+`allocation` maps every affected workload to its observed total workers. Peer
+vectors cannot change. The first candidate starts at the derived maximum after a
+fresh baseline, within the initial admission deadline. Later candidates and their
+baseline allocations must be registered and fall within the experiment bound.
+
+For an observed-idle target, retain real zero baseline output and fresh empty-queue
+evidence with the protected reservation. Its new caller appearance is allowed;
+other caller changes still hold. The trial needs positive useful output, matching
+`completed_items` and `fresh_inference_items` at least as large as the registered
+minimum, frozen cohort/unit, quality/SLO qualification and no terminal errors.
+An active target needs comparable fresh completions in both windows. Cached
+results cannot satisfy these fields; independent receipts will verify them in the
+remaining integration. Every peer retains the existing progress, latency, error,
+quality and service-budget gates, including tighter registered limits.
+
+Lower target throughput alone does not cause rollback in a capacity comparison.
+`rank_repeatable` ranks already-qualified samples by the lower rate across at least
+two repetitions, then chooses the fewest workers within 5% of the fastest such
+rate. Units and fixed inputs must match. Its result is `ranking_only`, not an
+admission decision. It does not prove that repetition receipts are independent or
+in the required order; do not use hand-entered rates to promote an allocation.
+
+Remaining P05/P06 work: validate phase order and previous-receipt chains; require
+independent fresh evaluation readback and eligible reverse repetitions; validate
+allocation/lease execution evidence; connect these checks to CLI review and fence
+actual supervisor dispatch. Registration or offline qualification alone does not
+satisfy those gates.
