@@ -78,19 +78,95 @@ request-boundary tests pass, including stop/lost-owner/changed-input refusal and
 valid low-confidence/null-action semantics. Stage helper source is the peer's
 `cdd03bc` refactor; subsequent trial configs bind its source digest.
 
-## still-fawn 75% arm — running
+## Mac six-thread arm — rejected
+
+After confirmed cleanup, recovery passed a closed 300.198-second window: Metal
+39 completions versus the original 37, p95 36.982 versus 39.866 seconds; RTX 96
+versus 93, p95 14.725 versus 14.363 seconds. Independent review confirmed recovery.
+The six-thread/600% quota arm used the same frozen model/inputs and a bound on
+the production validator source. Its closed 300.154-second window also failed:
+Metal completed 32 versus the original 37 (ratio 0.864819), while p95 38.774 s
+stayed within the 39.866 s baseline budget. RTX completed 105 versus 93, p95
+11.694 versus 14.363 s. Independent review confirmed the losing Metal peer.
+
+The automatic watcher wrote the owner stop signal at the closed-window failure.
+The current request finished, four completed evaluations were retained, and no new
+request was admitted. Independent partial quality: 2/4 exact stages, 3/4 supported
+whole actions, 2/4 both correct. At `1795848197998316000` ns, independent inspection
+confirmed no model process/listener and released ownership. Private arm:
+`/private/tmp/cricket-mac-cpu-t6-forward`. No six-thread production setting was
+promoted. Lower settings and the alternative profile remain open.
+
+The ten-thread rejection is visible in Grafana panel 294, dashboard
+`knowledge-index`. Independent browser readback confirmed the served title and
+7.40 → 6.20 Metal faces/min, 18.59 → 20.39 RTX faces/min. The owner separately
+records dashboard version 84 and source #218 commit `49b3db3`; the browser UI
+observation did not expose the version. Private readback:
+`/private/tmp/cricket-grafana-panel294-ui-readback.json`.
+
+## still-fawn 75% arm — failed tested diagnostic deadline
 
 Independent cgroup readback reports `CPUQuotaPerSecUSec=750ms`, MemoryHigh 10 GiB,
-MemoryMax 12 GiB. The first frozen input is still warming within its explicit
-900-second CPU diagnostic deadline. It has no qualifying completion or quality
-claim yet. This longer diagnostic deadline does not silently change production's
+MemoryMax 12 GiB. The first frozen input failed the explicit 900-second CPU
+diagnostic deadline (901.916 seconds including transport). At 810.5 seconds it had
+processed 658 of 767 prompt tokens. It has no qualifying completion or quality
+claim. This is a tested safety bound, not a user-mandated latency SLO or a blanket
+CPU rejection. This diagnostic deadline does not silently change production's
 existing 100-second Metal/150-second RTX request timeouts. Any useful CPU production
 route needs its own bounded adapter and verified publication path.
 
 Private arm: `/private/tmp/cricket-still-fawn-q75-forward`; host/guest resource and
-peer samples: `/private/tmp/cricket-still-fawn-q75-resources.jsonl`. Next: close the
-arm by measured acceptance or rejection, verify cleanup/recovery, descend under
-the same bounds, and reverse-repeat eligible settings. No other CPU owner is active.
+peer samples: `/private/tmp/cricket-still-fawn-q75-resources.jsonl`. Cleanup reports
+inactive/dead and a closed listener; independent unit readback confirmed inactivity.
+Preserve this failure and evaluate a concrete useful-gain hypothesis below rather
+than treating the arbitrary diagnostic timeout as proof against every CPU profile.
+
+## Smaller CPU quality profile — artifacts ready, no inference yet
+
+The outcome researcher checked publisher primary sources for a smaller vision
+model with implemented CPU kernels. The next bounded quality hypothesis is
+[Prism Bonsai 2 2B](https://huggingface.co/prism-ml/Ternary-Bonsai-2-2B-gguf),
+using PQ2_0 language weights and the Q8_0 vision projector. The publisher documents
+vision, native CPU/OpenAI-compatible image requests and Apache 2.0 licensing.
+Artifact sizes are about 517 MB and 365 MB, not measured resident memory. The Q8
+projector avoids the publisher's documented concurrent-request BF16 issue. These
+facts establish a candidate, not accuracy on the marked-person cohort or speed on
+either machine.
+
+| Component | Immutable pin / SHA-256 |
+| --- | --- |
+| Model repository revision | `a6032a5089ac27e96be3a80c7b42d1ad0bd89887` |
+| PQ2_0 model | `d5f01a4ecaf49239653308ee732ad1a0c5f802c0ddb997549fc7b694c8b45928` |
+| Q8_0 projector | `ac9934e8d7966d0d62442c202ec8fdad99a045dea79366c1a4a246a46f5c0533` |
+| Runtime source | `41c86f7d6d0ab27c5d0529958d7ee7aa3091309f` |
+| macOS ARM64 runtime archive | `0281adb71a1d4000181aa3e9a0acbfec4189b1dc67dfb8091847b1c42aa0b10d` |
+| Ubuntu x64 CPU runtime archive | `daa1b6e0ddc169fed0dcccdde7499ef5e10f0533b76554d6e26e3bb2db5a7a9b` |
+
+Published pins were checked against the publisher's
+[checksums](https://huggingface.co/prism-ml/Ternary-Bonsai-2-2B-gguf/blob/a6032a5089ac27e96be3a80c7b42d1ad0bd89887/SHA256SUMS)
+and [runtime assets](https://github.com/PrismML-Eng/llama.cpp/releases/expanded_assets/prism-b12220-41c86f7).
+Both hosts now have locally hash-verified files in isolated directories, and
+the pinned runtime's version command succeeds on each without loading a model.
+Linux exposes AVX2 but no AVX-512 VBMI; do not claim the optional AVX-512 speedup.
+Preparation used bounded CPU and did not replace a production runtime/model.
+Private receipts: `/private/tmp/cricket-bonsai2-mac/prepared.json` and guest
+`/var/tmp/cricket-bonsai2-profile/prepared.json`. Prepare in isolated
+directories after an existing immutable measurement closes; do not replace a
+production runtime/model or alter a running trial.
+
+Start with the existing separate AGE/ACTION prompts, exactly the original frozen
+images, original temperature/output limits and production normalizers. Historical
+matched Mac two-call quality was 21/40 exact reviewed stages, 35/48 supported whole
+actions and 16/40 both correct, with 48/48 completed over four repetitions of the
+twelve faces. This is a reference, not a new CPU qualification. Include low-confidence
+and null-action abstentions in the declared denominators.
+
+At a fresh maximum shared allowance, first screen one case with both calls, using
+explicit applicable production request bounds. If ready, complete the twelve-face
+quality pass, independently review/read back outputs, and repeat promising quality
+comparisons. Only a qualifying profile proceeds to descending/reverse capacity
+selection with unchanged peer gates. A new model is a new profile; never pool its
+measurements with the 27B arm. No new model inference has started at this receipt.
 
 ## Completion remains open
 
