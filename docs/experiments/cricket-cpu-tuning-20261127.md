@@ -214,7 +214,15 @@ The evaluator now records invalid outputs as failed cases and continues the froz
 cohort; seven synthetic request-boundary tests pass. Independent cleanup confirmed
 zero trial model processes and a released Lease before the retry.
 
-The retry uses the same immutable profile at seven threads / 700% aggregate quota,
+Independent full first-pass review subsequently found 2/10 exact known stages,
+8/12 supported whole actions, 1/10 both correct, one invalid action and no stage
+abstentions. It fails the applicable historical reference. The owner stopped
+further repetitions on quality evidence; any partial second pass is excluded.
+Cleanup at `1795849697000714000` ns confirmed zero trial models and released Lease.
+This is a quality rejection, with no complete capacity verdict from the shortened
+window. Private review: `independent-quality-review.json` beside the phase.
+
+The retry used the same immutable profile at seven threads / 700% aggregate quota,
 with evaluation caller `library-face-observations-evaluation`. Complete the first
 12-face pass and score it separately from any partial timing repetition. Frozen
 replays remain excluded from production progress. Private receipt:
@@ -229,6 +237,26 @@ safety bound is 150 seconds; a bound failure describes this profile only. If the
 smaller profile fails quality, the original model with separate AGE/ACTION calls
 remains a Mac candidate; do not treat the incomplete six-thread joint cohort as
 proof against the separate-call profile.
+
+## Linux compatibility and revised original-model baseline
+
+At 75% of one core, the smaller profile's first age/action pair completed in
+125.426 and 131.462 seconds. Independent review found the expected school-age stage
+and supported smile. It is one compatibility case and does not overcome the failed
+Mac quality profile. Independent cleanup at `1795850043925795000` ns confirmed no
+model process, closed listener and released Lease. A bounded diagnostic on reviewed
+case 02 follows to check whether Linux changes a known-failing result; it is not an
+accuracy estimate or production progress. No full smaller-model capacity sweep is
+justified without a materially different, reviewed-quality hypothesis.
+
+The fresh original-model Mac baseline recorded 31 samples over 300.231 seconds:
+40 Metal plus 116 RTX unique production completions, combined p95 32.028 seconds.
+The original 130-completion/p95 37.434 reference is also retained. The next arm uses
+the original 27B model with separate AGE/ACTION calls at seven threads / 700% quota
+and one context. Existing runtime, language model and projector bytes were locally
+hashed before the trial and checked again at launch; raw pins remain private.
+Request safety bound is 300 seconds, not a newly declared user/service SLO.
+Private arm: `/private/tmp/cricket-original-two-pass-mac-t7-forward`.
 
 ## Preregistered next profile and sweep
 

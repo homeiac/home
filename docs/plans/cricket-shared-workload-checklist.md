@@ -695,14 +695,16 @@ model instance or trial ownership.
 See the [live CPU journal](../experiments/cricket-cpu-tuning-20261127.md) for the
 ownership handoff, measured ceilings, immutable private receipts and remaining
 completion gates. The Mac10-thread/1000% quota arm failed a closed warmed window:
-Metal throughput ratio 0.837716, p95 39.866 → 44.680 seconds. Independent peer review
-reproduced both losses. The isolated model was stopped; process/listener cleanup and
+Combined workload p95 was 37.434 → 42.503 seconds. Independent peer review
+reproduced the aggregate latency loss. The isolated model was stopped; process/listener cleanup and
 released ownership were verified at `1795847358556469000` ns. Five completed cases
 have partial reviewed quality only. Recovery precedes the next lower setting.
 
 Still-fawn's measured maximum is 75% of one core after existing host demand and
 system margin. A separate Lease and transient cgroup enforce that bound; its first
-request is running within an explicit diagnostic deadline. Neither backend is
+request exceeded its 900-second diagnostic bound without a completed output.
+Cleanup and released ownership were verified. This bounds that tested profile; it
+does not establish a user latency requirement or reject every CPU candidate. Neither backend is
 selected or production-qualified. Protected four Mac/three RTX photo lanes and
 current Cricket corrections remain intact. The knowledge chat owns independent
 quality/readback verification and Grafana publication; Cricket owns CPU actuation.
@@ -724,9 +726,30 @@ misattributed face-evaluation traces or inflated production counts. The full E02
 command passed **275 tests and 43 subtests in 23.57 seconds**, no skips, at
 `/private/tmp/cricket-cpu-caller-identity-tests.log`; scoped Ruff and diff checks pass.
 New tests cover caller mismatch, actual resource/header identity and zero production
-counts/refused receipt import. Smaller-model readiness passed one reviewed case and
-isolated readback; full cohort, workload totals, real canary and final config remain
-unchecked. Integrated #289's aggregate-workload clarification before the next arm.
+counts/refused receipt import. Integrated #289's aggregate-workload clarification
+before the next arm.
+
+### E24 — Smaller CPU profile fails the full reviewed quality pass
+
+The pinned Bonsai 2 2B two-call profile at the revised maximum Mac allowance
+(seven threads, aggregate 700% quota, one context) completed all twelve paired
+cases. Independent first-pass review found **2/10 exact known stages, 8/12 supported
+whole actions, 1/10 both correct, one invalid action and zero stage abstentions**.
+This fails the historical reference of 21/40 stages, 35/48 actions and 16/40 both.
+Do not promote the smaller model on speed. Partial timing repetitions are excluded
+from this quality denominator. The invalid action was preserved as a failed case;
+the evaluator continued without counting it as supported output.
+
+Independent cleanup at `1795849697000714000` ns confirmed zero trial model processes
+and released ownership. Private quality receipt:
+`/private/tmp/cricket-bonsai2-mac-t7-quality-forward-v2/independent-quality-review.json`.
+Seven request-boundary tests, four guest-boundary tests and three workload-aggregate
+gate regressions pass with synthetic inputs and no actuation. Linux compatibility
+is being checked under its 75% cgroup allowance; a correct readiness case does not
+reopen the failed profile. The original 27B separate AGE/ACTION profile, fresh
+baseline, descending/reverse outcomes, genuine queue canary and final configuration
+remain open. The Knowledge Index queue adapter is prepared in #294 with CPU lanes
+zero by default; no unique-source CPU claim or production publication is asserted.
 
 ## Updating evidence
 
