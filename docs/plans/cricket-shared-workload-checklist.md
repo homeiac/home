@@ -49,7 +49,7 @@ and append the reason; retain the original receipt.
 
 | ID | Scope | Actual PR / source | Implemented | Merged | Local verification | Deployment / live verification |
 | --- | --- | --- | --- | --- | --- | --- |
-| P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b `codex/cricket-p01-inference` | Identity/inventory and inference slices reconciled; dispatcher/UI pending | No | E07/E08: 121 passed, 43 subtests | Fresh GUI release and peer activity inspected; full state/cohort pending |
+| P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b `codex/cricket-p01-inference`; P01-c `codex/cricket-p01-worker` | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | To create | No | No | Pending | Pending |
 | P03 | Manifest, readback, receipt and no-event output | Adapter exists in #271/#273; extension PR to create | Partial foundation | Foundation only | E02 covers synthetic writer, not production adapter | Pending |
 | P04 | Complete resource/peer measurement | Common observer/reviewer exist; adapter PR to create | Partial foundation | Foundation only | E02 covers common gates | Complete live peer windows pending |
@@ -69,13 +69,16 @@ and append the reason; retain the original receipt.
 - [x] **P01-b-I/V:** Reconcile existing model transports, transcript outcome guards
   and matched evaluation helper. Evidence: E08. All model requests in these tests
   are mocked; this does not qualify live inference or automatically admit a trial.
+- [x] **P01-c-I/V:** Reconcile the existing dispatcher, renewable leases, proposal
+  reconciliation, versioned operations and their regression tests. Evidence: E09.
 - [ ] **P01-I:** Reconcile required open feature modules with master, preserving
   #273's contracts and PostgreSQL test; record exact PR/source/merge state and
   regression evidence for each existing small PR, rather than one bulk import.
 - [ ] **P01-V:** Run correction/playback/retry regressions and freeze the reviewed
   cohort, input versions, quality rubric and thresholds.
-- [ ] **P01-D:** Record current deployed release, authoritative ledger, policy and
+- [x] **P01-D:** Record current deployed release, authoritative ledger, policy and
   rollback location without replacing or resetting live state.
+  Evidence: E09. Backup locations are inventoried, not restore-tested here.
 
 ### P02 — Trace and export
 
@@ -293,6 +296,27 @@ receipt is `/private/tmp/cricket-p01-intake/session.json`, run
 or queued jobs and four desired workers; Waffles had no active Mac workers. The
 Knowledge Index summary enricher was active with a fresh successful exporter
 observation. These are activity observations, not complete matched peer windows.
+
+### E09 — P01-c worker reconciliation and authority inventory
+
+Branch: `codex/cricket-p01-worker`. Restored dispatcher/lease/reconciliation modules
+from `d5eeda7`, preserving the current master's OpenLABEL and shared-workload
+modules. Original feature provenance is #257, #258, #260 and #265. The E02 command
+passed **136 tests and 43 subtests in 4.10 seconds**. This covers stale-lease
+fencing, bounded failed-job retries, checkpoint reuse, preserving corrections and
+versioned reanalysis. These worker tests mock inference and do not launch a backfill.
+
+Added the reusable read-only `python -m cricket.inspect_state --host HOST --output
+PRIVATE.json` command. The private receipt is
+`/private/tmp/cricket-p01-state-20261127.json`. It opens SQLite with `mode=ro` and
+`query_only`, and reads the live policy without invoking its mutation commands.
+Observed: authoritative ledger `/var/lib/photo-enrichment/cricket/ledger.sqlite3`,
+1,500 completed jobs (633 videos, 867 photos), four saved correction revisions,
+Mac desired/hard limit 4/4, RTX 0/2, all four inspected services active. The GUI
+release remains `dashboard-1795836747906611473`; the inspected GUI release does not
+contain `cricket/openlabel.py`. Thus canonical publication is not deployed there.
+Five retained deployment-backup directories were inventoried under
+`/opt/photo-enrichment/backups`; no backup restore was attempted.
 
 ## Updating evidence
 
