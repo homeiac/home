@@ -40,7 +40,7 @@ python3 "$cli" start --session "$run/session.json" --live \
   --resource mac-m5/bonsai-slots --stage ingest --stage classify --stage publish
 ```
 
-**Execute.** For Cricket, use the existing [local validation and publication adapter](https://github.com/homeiac/home/blob/d5eeda7bca28d238d828d120c38339f7846a6ede/docs/runbooks/cricket-highlights.md#openlabel-publication-adapter). Validate before publication. A validated scene file alone cannot serve as a database readback. Submit through the existing workload supervisor. Its adapter writes the following files beside `session.json`. Baseline workers keep claiming. For capacity changes, compare one additional lane against equal-duration windows for every affected caller.
+**Execute.** For Cricket, use the existing [local validation and publication adapter](../runbooks/cricket-highlights.md#openlabel-publication-adapter). Validate before publication. A validated scene file alone cannot serve as a database readback. Submit through the existing workload supervisor. Its adapter writes the following files beside `session.json`. Baseline workers keep claiming. For capacity changes, compare one additional lane against equal-duration windows for every affected caller.
 
 | Run file | Supplied by |
 |---|---|
@@ -57,3 +57,9 @@ python3 "$cli" review --session "$run/session.json"
 ```
 
 Read `fleet_review.decision` before changing capacity. Exit 0 means the review ran, including a hold or rollback. Input or contract errors return nonzero. The CLI has no production actuator. Closing the final run requires the workload’s own quality evaluation and ledger reconciliation. [Workflow](../methodology/distributed-ai-performance.md) · [Telemetry fields](../reference/workload-telemetry.md) · [Comparison format](../../scripts/perf/otel-diagnosis.md)
+
+## Verify the publisher on this checkout
+
+Use the shared module in `scripts/knowledge-index/memory-acceptance` for the publisher's `--shared-module` argument. The full ingest, UI and deployment tools follow the [Cricket feature stack](https://github.com/homeiac/home/pull/269).
+
+With PostgreSQL's `initdb` and `pg_ctl` on PATH, a Python environment with the test dependencies and psycopg 3, and `ASAM_OPENLABEL_1_0_SCHEMA` set, run `scripts/perf/verify-cricket-publication.sh`. It publishes a synthetic correction twice, reads both revisions back, checks their references, and verifies that another producer's scene survives a rejected write. The database lives in a temporary directory and accepts only local Unix-socket connections.

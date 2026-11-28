@@ -52,7 +52,7 @@ flowchart TD
     H -->|Fail| J["Keep existing placement; journal result"]
 ```
 
-`start` discovers registered peers. Add `--live` for current exporter observations. For a workload with a capacity adapter, the planner selects a pool from ready backlog and free worker equivalents. For Cricket, reserve scheduled and active demand, test the highest measured shared allowance, then sweep down one pool at a time. Repeat in reverse order and choose the fewest workers within 5% of the fastest repeatable qualifying rate. A caption controller that can actuate only one extra lane tests that increment against the same peer budgets. [Cricket operating policy](https://github.com/homeiac/home/blob/1587fbc1b7722c7ed2530deae46540cdc19e730f/docs/runbooks/shared-indexer-tuning.md) · [Agent commands](../guides/shared-workload-agent.md)
+`start` discovers registered peers. Add `--live` for current exporter observations. For a workload with a capacity adapter, the planner selects a pool from ready backlog and free worker equivalents. For Cricket, reserve scheduled and active demand, test the highest measured shared allowance, then sweep down one pool at a time. Repeat in reverse order and choose the fewest workers within 5% of the fastest repeatable qualifying rate. A caption controller that can actuate only one extra lane tests that increment against the same peer budgets. [Cricket operating policy](../runbooks/shared-indexer-tuning.md) · [Agent commands](../guides/shared-workload-agent.md)
 
 ## 3. Trace the bottleneck
 
