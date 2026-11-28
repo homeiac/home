@@ -4,6 +4,16 @@ The private review page is `https://photos.app.home.panderosystems.com/cricket`.
 Suggestions are best effort. Corrections and dismissals are authoritative and
 survive reanalysis. Original photos and videos are never modified.
 
+**Play whole video**, directly below a card's player, switches to the complete
+original in the same player. It starts at the beginning and removes the highlight
+stopping point. **Back to highlight** restores the saved interval without editing
+its boundaries. Use the complete aftermath to decide whether an appeal succeeded.
+
+**Attempted run-out — not out** is a separate result and saved filter. It remains
+available under batting/bowling, but is excluded from Batter out and Bowling
+wickets. A spectator shouting “out” alone no longer creates a dismissal; the
+model must consider the aftermath, including the batter continuing to play.
+
 ## Durable locations
 
 - Host: pumped-piglet, resolved from `proxmox/inventory.txt` before SSH.
@@ -26,6 +36,10 @@ health. `cricket.move_ledger` is a one-time, guarded migration for the observed 
 commit stall, not a general retry command. Export opens the ledger read-only and
 does not perform migrations. Never reactivate the original worker alongside the
 SSD worker or restore the old ZFS ledger over newer corrections.
+
+The exporter also needs the ledger directory in its systemd `ReadWritePaths`
+allowance for SQLite WAL coordination files, even with a read-only SQL connection.
+The deployer installs the scoped `cricket-ledger.conf` override and backs it up.
 
 ## Live controls
 

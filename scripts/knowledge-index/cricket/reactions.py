@@ -8,17 +8,30 @@ from .analyze import proposal
 def outcome(text: str) -> str | None:
     """Prefer explicit reactions and ignore obvious instructions, questions, and negations."""
     text = text.casefold()
+    runout = bool(re.search(r"\brun[ -]?out\b", text))
+    if (
+        runout
+        and "?" not in text
+        and not re.search(r"\b(not|no) (a |an )?(failed|unsuccessful|missed)\b", text)
+        and re.search(
+            r"\bnot out\b|\b(failed|unsuccessful|missed) run[ -]?out\b|\brun[ -]?out attempt (failed|missed)\b",
+            text,
+        )
+    ):
+        return "attempted_run_out"
     if re.search(
         r"\b(go for|hit (a|another)|need|want|almost|nearly|not|no|is (he|that)|howzat|appeal)\b|\?",
         text,
     ):
         return None
-    if re.search(r"\brun[ -]?out\b", text):
-        return "run_out"
+    # Spectators can be appealing or describing an attempt. Audio alone cannot
+    # establish whether the featured batter was actually dismissed.
+    if runout:
+        return None
     if re.search(
         r"\b(bowled (him|her)|caught (him|her)|he'?s out|he is out|wicket)\b", text
     ):
-        return "dismissal"
+        return None
     four = bool(re.search(r"\b(four|4)\b|चौका", text))
     six = bool(re.search(r"\b(six|6)\b|छक्का", text))
     return (

@@ -155,6 +155,16 @@ def main() -> None:
         )
         return
     authority = (STATE / "ledger.sqlite3").resolve().parent
+    # Even mode=ro SQLite readers may need to create WAL coordination files when
+    # the last writer has closed. Keep SQL read-only while permitting that directory.
+    if authority != STATE:
+        export_override = (
+            UNIT.parent / "photo-enrichment-export.service.d/cricket-ledger.conf"
+        )
+        export_override.parent.mkdir(parents=True, exist_ok=True)
+        if export_override.exists():
+            shutil.copy2(export_override, backup / "cricket-export-ledger.conf")
+        export_override.write_text("[Service]\nReadWritePaths=" + str(authority) + "\n")
     worker = UNIT.with_name(
         "cricket-highlights-ssd.service"
         if authority != STATE

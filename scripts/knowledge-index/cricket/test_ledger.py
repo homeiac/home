@@ -26,6 +26,15 @@ def delivery(**changes: object) -> dict:
 
 
 class LedgerTests(unittest.TestCase):
+    def test_attempted_runout_correction_survives_a_new_dismissal_proposal(
+        self,
+    ) -> None:
+        self.revise(patch={"outcome": "attempted_run_out", "wicket_credit": "unknown"})
+        self.propose(outcome="dismissal")
+        result = Ledger(self.path).get("owner", self.event)
+        self.assertEqual(result["data"]["outcome"], "attempted_run_out")
+        self.assertEqual(result["data"]["wicket_credit"], "unknown")
+
     def test_read_only_snapshot_sees_wal_and_rejects_writes(self) -> None:
         with self.db.connect() as held:
             held.execute("SELECT count(*) FROM events").fetchone()

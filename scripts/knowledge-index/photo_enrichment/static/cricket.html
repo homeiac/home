@@ -7,7 +7,7 @@
 <section class="toolbar" aria-label="Highlight filters">
 <label>Album<select id="album"></select></label>
 <label>Search moments<input id="search" type="search" maxlength="200" placeholder="Person, result or description"></label>
-<label>Show<select id="filter"><option value="all">All moments</option><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="four">Fours</option><option value="six">Sixes</option><option value="batting_out">Batter out</option><option value="bowling_wicket">Bowling wickets</option><option value="boundary_unclear">Boundary unclear</option></select></label>
+<label>Show<select id="filter"><option value="all">All moments</option><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="four">Fours</option><option value="six">Sixes</option><option value="batting_out">Batter out</option><option value="bowling_wicket">Bowling wickets</option><option value="attempted_run_out">Attempted run-out — not out</option><option value="boundary_unclear">Boundary unclear</option></select></label>
 <label class="checkbox"><input id="show-dismissed" type="checkbox">Include dismissed suggestions</label>
 <button id="refresh">Refresh</button>
 </section>
@@ -15,7 +15,7 @@
 <p id="progress" class="details"></p>
 <aside class="review-guide"><strong>What am I confirming?</strong><p>Watch the clip, then check the player, activity, result and start/end shown on its card. For a photo, check only the player and activity.</p><p><strong>Confirm shown details</strong> keeps those details. <strong>Edit details</strong> fixes anything wrong or adds a result you can see. <strong>Hide this moment</strong> removes an unwanted suggestion; the original stays safe. Unsure? Leave the card for later — no confirmation is required.</p></aside>
 <p class="details">Bowling views include unidentified players. Correct the person when needed.</p>
-<nav class="actions" aria-label="Saved cricket searches"><a href="/cricket?filter=four">Fours</a><a href="/cricket?filter=six">Sixes</a><a href="/cricket?filter=batting_out">Batter out</a><a href="/cricket?filter=bowling_wicket">Bowling wickets</a><a href="/cricket">All moments</a></nav>
+<nav class="actions" aria-label="Saved cricket searches"><a href="/cricket?filter=four">Fours</a><a href="/cricket?filter=six">Sixes</a><a href="/cricket?filter=batting_out">Batter out</a><a href="/cricket?filter=bowling_wicket">Bowling wickets</a><a href="/cricket?filter=attempted_run_out">Attempted run-outs — not out</a><a href="/cricket">All moments</a></nav>
 <section id="cards" aria-label="Highlights"></section>
 <button id="more" hidden>Show more moments</button>
 <section class="add"><h2>Missing a moment?</h2><p>Open an original, find the delivery, and add a highlight.</p><label>Original<select id="original"></select></label><button id="add">Add highlight</button></section>
@@ -25,7 +25,7 @@
 <p id="edit-help" class="details"></p>
 <video id="edit-video" controls preload="metadata"></video><img id="edit-image" alt="Original cricket photo" hidden>
 <div class="fields"><label>Person<select id="person"></select></label><label>Activity<select id="role"><option value="batting">Batting</option><option value="bowling">Bowling</option><option value="other">Other</option><option value="unknown">Unclear</option></select></label>
-<label>Result<select id="outcome"><option value="four">Four</option><option value="six">Six</option><option value="boundary_unclear">Boundary unclear</option><option value="dismissal">Dismissal</option><option value="run_out">Run-out</option><option value="other">No highlight / other</option><option value="unknown">Unclear</option></select></label>
+<label>Result<select id="outcome"><option value="four">Four</option><option value="six">Six</option><option value="boundary_unclear">Boundary unclear</option><option value="dismissal">Dismissal</option><option value="run_out">Run-out — out</option><option value="attempted_run_out">Attempted run-out — not out</option><option value="other">No highlight / other</option><option value="unknown">Unclear</option></select></label>
 <label>Wicket credit<select id="credit"><option value="unknown">Unclear / not applicable</option><option value="bowler">Credited to bowler</option><option value="run_out">Run-out</option></select></label></div>
 <div id="timing" class="fields"><label>Start in seconds<input id="start" type="number" min="0" step="0.1" required><button id="start-now" type="button">Use current position for start</button></label><label>End in seconds<input id="end" type="number" min="0" step="0.1" required><button id="end-now" type="button">Use current position for end</button></label></div>
 <p id="save-status" role="status" aria-live="polite"></p><button id="save" type="submit">Save correction</button>

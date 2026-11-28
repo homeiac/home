@@ -68,6 +68,16 @@ class SearchTests(unittest.TestCase):
                 search(ledger, people, "o", "a", "x" * 201)
 
     def test_actor_and_wicket_credit_filters_and_disabled_index(self) -> None:
+        self.assertEqual(
+            categories(delivery(outcome="attempted_run_out"), "person-a"),
+            ["batting", "attempted_run_out"],
+        )
+        self.assertEqual(
+            categories(
+                delivery(role="bowling", outcome="attempted_run_out"), "person-a"
+            ),
+            ["bowling", "attempted_run_out"],
+        )
         self.assertEqual(categories(delivery(actor="other"), "person-a"), [])
         self.assertEqual(
             categories(
