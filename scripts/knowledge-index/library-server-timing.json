@@ -107,7 +107,8 @@
         "both_correct": 2
       },
       "recovery_verified": true,
-      "decision_reason": "Aggregate GPU production rose 130 to 133 faces, but combined p95 rose 37.434 to 42.503 s, exceeding the 10% workload budget. Five CPU replays are excluded from new library output. No CPU allocation selected."
+      "decision_reason": "Aggregate GPU production rose 130 to 133 faces, but combined p95 rose 37.434 to 42.503 s, exceeding the 10% workload budget. Five CPU replays are excluded from new library output. No CPU allocation selected.",
+      "panel_id": 294
     },
     {
       "backend": "Mac CPU",
@@ -136,7 +137,38 @@
         "both_correct": 2
       },
       "recovery_verified": false,
-      "decision_reason": "The original backend-only rejection was withdrawn. Aggregate production rose 130 to 137 faces and combined p95 improved 37.434 to 36.111 s. Partial CPU replay quality cannot qualify a production lane. No CPU allocation selected."
+      "decision_reason": "The original backend-only rejection was withdrawn. Aggregate production rose 130 to 137 faces and combined p95 improved 37.434 to 36.111 s. Partial CPU replay quality cannot qualify a production lane. No CPU allocation selected.",
+      "panel_id": 295
+    },
+    {
+      "panel_id": 297,
+      "backend": "Mac CPU \u00b7 original 27B two calls",
+      "threads": 7,
+      "quota_percent": 700,
+      "decision": "Stopped \u00b7 fresh workload latency failed",
+      "scope": "Closed 300.236 s peer window; partial two-case quality review",
+      "peer_rates": {
+        "mac-metal": {
+          "before_per_min": 7.993833104159575,
+          "trial_per_min": 6.594802196735273,
+          "before_p95": 34.993,
+          "trial_p95": 41.201
+        },
+        "rtx3070": {
+          "before_per_min": 23.182116002062767,
+          "trial_per_min": 22.78204395235822,
+          "before_p95": 14.577,
+          "trial_p95": 11.734
+        }
+      },
+      "quality": {
+        "reviewed": 2,
+        "stage_correct": 2,
+        "supported_actions": 1,
+        "both_correct": 1
+      },
+      "recovery_verified": false,
+      "decision_reason": "Fresh baseline: 156 to 147 unique production face checkpoints; combined p95 32.028 to 38.220 s exceeds the 10% budget. Older baseline would pass, so both anchors are required. CPU replay answers are excluded. Trial drained and cleanup verified; lower settings await recovery."
     }
   ],
   "cpu_quality_screen": {
@@ -171,7 +203,10 @@
     "action_s": 131.462032,
     "stage_correct": 1,
     "supported_actions": 1,
-    "decision": "Compatibility only \u00b7 broader quality unqualified",
-    "production_outputs": 0
+    "decision": "Keep zero CPU lanes for tested profiles",
+    "production_outputs": 0,
+    "diagnostic_case02_stage_correct": false,
+    "diagnostic_case02_action_supported": true,
+    "cleanup_verified": true
   }
 }

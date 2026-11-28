@@ -70,3 +70,5 @@ The enabled CPU canary also requires the existing registered photo RunTelemetry 
 ## Close CPU quality and compatibility evidence
 
 Publish each closed CPU comparison with its actual denominator and scope. Add the six-thread aggregate reassessment beside the ten-thread result, the complete Bonsai2 Mac quality screen, and the paired Linux readiness timings. Separate replay speed from new library output. Keep CPU production lanes at zero until reviewed quality, aggregate workload budgets, unique queue claims and independent publication/readback qualify. Preserve the original per-backend stop receipts as history and show their corrected interpretation. Continue the original-model two-call Mac profile under the acknowledged owner before selecting capacity.
+
+Append closed original-model two-pass CPU arms to the same before/after panel pattern. Preserve existing panel IDs while adding arms, and keep the independent model-quality panel separate. Include the fresh baseline alongside the original anchor so later system drift cannot make a slower configuration appear qualified.

@@ -130,3 +130,11 @@ The trial process and listener were confirmed stopped and the lease released. Re
 - [ ] Independently read the served Grafana revision containing all closed results.
 
 The earlier ten-thread rejection paragraph is the historical backend-only stop reason. Its current decision comes from aggregate workload latency. The six-thread backend-only rejection was withdrawn. Frozen CPU answers never count as newly completed production faces. CPU production remains disabled pending the gates above.
+
+### Original 27B two-call Mac ceiling
+
+Seven CPU threads at 700% quota failed the closed 300.236 s fresh-baseline latency gate. Aggregate GPU checkpoints fell 156→147 (31.176→29.377/min), and combined p95 rose 32.028→38.220 s. The older original baseline would pass; both anchors are required. Independent recomputation from raw samples matched the receipt. Two completed replay pairs gave stages 2/2, whole supported actions 1/2 and both 1/2; the first action attributed the adult's hand to the marked child. These two replays are excluded from production progress. Cleanup was verified before the recovery window and lower-thread trials.
+
+Linux's second diagnostic reproduced the smaller model's known school-age-versus-preschool error, with high confidence. Its action was supported. Input digests and production normalization were independently checked. Model processes and listener were absent and the lease released. Keep zero still-fawn CPU lanes for these tested profiles; a future different allowance/runtime/profile needs a reviewed quality hypothesis. This does not establish that all CPU models are unsuitable.
+
+The served Grafana API independently returned version 86 and the expected contents for panels 294–296 after Flux applied 38fcc2c. The next source revision adds the seven-thread comparison as panel 297 and retains those links.
