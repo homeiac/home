@@ -1,6 +1,7 @@
 """Production finish time excludes evaluation work and cannot bypass readback."""
 
 import json
+import runpy
 import subprocess
 import sys
 from copy import deepcopy
@@ -90,3 +91,29 @@ def test_cli_replay_is_byte_identical_without_live_sampling(tmp_path: Path) -> N
 
 def test_missing_objective_holds() -> None:
     assert project(None, CUTOFF)["decision"] == "hold"
+
+
+def test_no_progress_or_no_remaining_work_cannot_qualify() -> None:
+    row = objective()
+    row["baseline"].update(unique_production_completed=0, verified_production_completed=0,
+                           backend_unique_production_completed={"gpu": 0, "cpu": 0},
+                           backend_verified_production_completed={"gpu": 0, "cpu": 0})
+    assert project(row, CUTOFF)["phases"]["baseline"]["projected_remaining_s"] is None
+    row = objective()
+    row["remaining"]["amount"] = 0
+    assert project(row, CUTOFF)["decision"] == "hold"
+
+
+def test_cli_valid_and_private_malformed_input_paths(tmp_path, monkeypatch, capsys) -> None:
+    script = Path(__file__).resolve().parents[1] / "completion_objective.py"
+    source = tmp_path / "objective.json"
+    source.write_text(json.dumps(objective()))
+    monkeypatch.setattr(sys, "argv", [str(script), str(source), "--at-ns", str(CUTOFF)])
+    runpy.run_path(str(script), run_name="__main__")
+    assert json.loads(capsys.readouterr().out)["decision"] == "evidence_ready_not_admitted"
+    source.write_text('{"private_payload":"must-not-be-echoed"}')
+    with pytest.raises(SystemExit) as error:
+        runpy.run_path(str(script), run_name="__main__")
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "must-not-be-echoed" not in captured.out + captured.err

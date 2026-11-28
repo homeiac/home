@@ -11,7 +11,8 @@ import sys
 import time
 from pathlib import Path
 
-from capacity_trials import ACTION as CAPACITY_ACTION, register as register_capacity
+from capacity_trials import ACTION as CAPACITY_ACTION
+from capacity_trials import register as register_capacity
 from otel_diagnosis import attributes, digest, predict
 from shared_workloads import shared_context
 
@@ -49,6 +50,23 @@ def start(args: argparse.Namespace) -> dict:
     session = dict(version=1, workload=args.workload, run_id=args.run_id, output_kind=args.output_kind,
                    stages=sorted(set(args.stage)), requested=sorted(set(args.resource)),
                    resources=sorted(resources), peers=sorted(peers - {args.workload}), topology=topology)
+    if getattr(args, "native_adapter", None):
+        from native_output import validate_adapter
+        adapter = json.loads(args.native_adapter.read_text())
+        validate_adapter(adapter, args.workload, args.output_kind)
+        session.update(native_adapter=adapter, native_adapter_sha256=digest(adapter))
+    if args.output_kind == "service":
+        kinds = {topology[r].get("measurement_kinds", {}).get(args.workload, "indexer")
+                 for r in resources if args.workload in topology[r]["workloads"]}
+        if kinds != {"service"}:
+            raise ValueError("service-only intake requires a registered service measurement kind")
+        if not getattr(args, "service_objective", None):
+            raise ValueError("service intake needs its existing service objective contract")
+        objective = json.loads(args.service_objective.read_text())
+        if any(not isinstance(objective.get(k), str) or not objective[k].strip()
+               for k in ("metric", "contract_ref")):
+            raise ValueError("declare the existing service metric and architecture/SLO contract")
+        session["service_objective"] = objective
     if args.live:
         result = subprocess.check_output([sys.executable, str(HERE / "observe-shared-workloads.py")], text=True)
         session["activity"] = json.loads(result)
@@ -172,8 +190,10 @@ def review(args: argparse.Namespace, session: dict) -> dict:
     directory = args.session.parent
     begin, traces, diagnosis = capture_window(args, session)
     args.metrics = args.metrics or directory / "metrics.jsonl"
-    for option, name in (("comparison", "comparison.json"), ("references", "observations.jsonl"),
-                         ("readback", "scene-readback.jsonl")):
+    native = session["output_kind"] != "media"
+    for option, name in (("comparison", "comparison.json"),
+                         ("references", "native-observations.jsonl" if native else "observations.jsonl"),
+                         ("readback", "native-readback.jsonl" if native else "scene-readback.jsonl")):
         if getattr(args, option) is None and (directory / name).is_file():
             setattr(args, option, directory / name)
     if args.schema is None and os.environ.get("ASAM_OPENLABEL_1_0_SCHEMA"):
@@ -209,8 +229,38 @@ def review(args: argparse.Namespace, session: dict) -> dict:
             if fleet["decision"] != "rollback":
                 fleet["decision"] = "hold"
             fleet["reasons"].append("media publication needs run references, independent readback and OpenLABEL schema")
+    elif session["output_kind"] == "service":
+        kinds = {session["topology"][r].get("measurement_kinds", {}).get(session["workload"], "indexer")
+                 for r in session["resources"] if session["workload"] in session["topology"][r]["workloads"]}
+        if (kinds != {"service"} or not session.get("service_objective")
+                or not args.comparison or comparison.get("service_objective") != session["service_objective"]):
+            if fleet["decision"] != "rollback":
+                fleet["decision"] = "hold"
+            fleet["reasons"].append("service objective differs from its frozen intake")
+    else:
+        if session.get("native_adapter") and args.references and args.readback:
+            native_window = (comparison["trial"]["start_ns"], comparison["trial"]["end_ns"]) if args.comparison else (begin, args.at_ns)
+            publication = verify_native(args, session, native_window)
+            if args.comparison and publication["new_verified_amount"] != comparison["trial"]["workloads"][session["workload"]]["verified"]:
+                raise ValueError("native readback does not substantiate claimed verified output")
+        else:
+            if fleet["decision"] != "rollback":
+                fleet["decision"] = "hold"
+            fleet["reasons"].append("native output needs a frozen architecture adapter and independent readback")
     return dict(telemetry=dict(traces=traces, metrics=metrics), diagnosis=diagnosis, fleet_review=fleet,
-                media_readback=publication, registered_prediction=registered)
+                media_readback=publication if not native else None,
+                native_readback=publication if native else None, registered_prediction=registered)
+
+
+def verify_native(args: argparse.Namespace, session: dict, window: tuple | None = None) -> dict:
+    """Keep nonmedia schemas/stores native while verifying their immutable export."""
+    from native_output import check_native
+    adapter = session.get("native_adapter")
+    if not adapter or digest(adapter) != session.get("native_adapter_sha256"):
+        raise ValueError("native adapter missing or changed after intake")
+    start, end = window or (args.at_ns - args.window * 10**9, args.at_ns)
+    return check_native(list(packets(args.references)), list(packets(args.readback)),
+                        adapter, session, start, end, args.at_ns)
 
 
 def verify_media(args: argparse.Namespace, session: dict) -> dict:
@@ -236,15 +286,38 @@ def main() -> None:
     init = sub.add_parser("start", help="resolve the affected resources and create a run contract")
     init.add_argument("--workload", required=True)
     init.add_argument("--run-id", required=True)
-    init.add_argument("--output-kind", required=True, choices=["media", "other"])
+    init.add_argument("--output-kind", required=True, choices=["media", "other", "service"])
     init.add_argument("--stage", required=True, action="append")
     init.add_argument("--resource", required=True, action="append")
     init.add_argument("--topology", type=Path, default=TOPOLOGY)
     init.add_argument("--live", action="store_true", help="also collect current Prometheus activity")
+    init.add_argument("--native-adapter", type=Path, help="freeze a workload-owned nonmedia schema/store contract")
+    init.add_argument("--service-objective", type=Path, help="existing SLO metric/contract for a service-only target")
     audit = sub.add_parser("review", help="validate OTLP and compute the diagnostic and fleet decisions")
     probe = sub.add_parser("diagnose", help="request the next probe or seal a pre-change prediction")
     capacity = sub.add_parser("register-capacity", help="seal a bounded experiment without admitting or changing capacity")
     capacity.add_argument("--spec", type=Path, required=True)
+    qualify = sub.add_parser("qualify-capacity", help="offline qualification and finish-time evidence; never actuates")
+    qualify.add_argument("--registration", type=Path, required=True)
+    qualify.add_argument("--comparison", type=Path, required=True)
+    qualify.add_argument("--at-ns", type=int, required=True)
+    qualify.add_argument("--references", type=Path, help="native production refs; no claimed accounting summaries")
+    qualify.add_argument("--readback", type=Path, help="independent native reader export")
+    projection = sub.add_parser("project-completion", help="replay fixed-remaining-work ETA; never admits capacity")
+    projection.add_argument("--objective", type=Path, required=True)
+    projection.add_argument("--at-ns", type=int, required=True)
+    summary = sub.add_parser("summarize-outputs", help="offline workload-neutral deduplication and combined raw latency")
+    summary.add_argument("--records", type=Path, required=True)
+    summary.add_argument("--session", type=Path, help="frozen native adapter for independent verification")
+    summary.add_argument("--references", type=Path)
+    summary.add_argument("--readback", type=Path)
+    summary.add_argument("--at-ns", type=int, help="readback cutoff; defaults to window end")
+    summary.add_argument("--workload", required=True)
+    summary.add_argument("--run-id", required=True)
+    summary.add_argument("--unit", required=True)
+    summary.add_argument("--profile-sha256", required=True)
+    summary.add_argument("--start-ns", type=int, required=True)
+    summary.add_argument("--end-ns", type=int, required=True)
     audit.add_argument("--metrics", type=Path, help="defaults to metrics.jsonl beside session")
     for command in (audit, probe):
         command.add_argument("--capture", type=Path, help="defaults to traces-and-logs.jsonl beside session")
@@ -252,22 +325,63 @@ def main() -> None:
         command.add_argument("--window", type=int, default=600, help="window in seconds")
     audit.add_argument("--comparison", type=Path)
     media = sub.add_parser("verify-media", help="check this run's references against independently exported scenes")
+    native_check = sub.add_parser("verify-native", help="verify native data without converting it to OpenLABEL")
+    native_check.add_argument("--at-ns", type=int, required=True)
+    native_check.add_argument("--window", type=int, default=600)
+    native_check.add_argument("--references", type=Path, required=True)
+    native_check.add_argument("--readback", type=Path, required=True)
     for field in ("references", "readback", "schema"):
         media.add_argument("--" + field, required=True, type=Path)
         audit.add_argument("--" + field, type=Path)
-    for parser in (init, audit, probe, media, capacity):
+    for parser in (init, audit, probe, media, capacity, qualify, native_check):
         parser.add_argument("--session", required=True, type=Path)
     args = cli.parse_args()
     try:
-        if args.command == "start":
+        if args.command == "project-completion":
+            from completion_objective import project
+            result = project(json.loads(args.objective.read_text()), args.at_ns)
+        elif args.command == "summarize-outputs":
+            from workload_measurements import summarize
+            proof = None
+            if any((args.session, args.references, args.readback)):
+                if not all((args.session, args.references, args.readback)):
+                    raise ValueError("native summary needs session, references and independent readback together")
+                from native_output import output_proof
+                session = json.loads(args.session.read_text())
+                adapter = session.get("native_adapter")
+                if not adapter or digest(adapter) != session.get("native_adapter_sha256"):
+                    raise ValueError("native adapter missing or changed")
+                proof = output_proof(list(packets(args.references)), list(packets(args.readback)),
+                                     adapter, session, args.start_ns, args.end_ns,
+                                     args.at_ns if args.at_ns is not None else args.end_ns)
+            result = summarize(list(packets(args.records)), proof,
+                               workload=args.workload, run_id=args.run_id, unit=args.unit, profile_sha256=args.profile_sha256,
+                               start_ns=args.start_ns, end_ns=args.end_ns)
+        elif args.command == "start":
             result = start(args)
         else:
             session = json.loads(args.session.read_text())
             if args.command == "register-capacity":
                 result = register_capacity(session, json.loads(args.spec.read_text()), time.time_ns(),
                                            args.session.parent / "capacity-trial.json")
+            elif args.command == "qualify-capacity":
+                from capacity_qualification import qualify as qualify_candidate
+                comparison = json.loads(args.comparison.read_text())
+                proofs = None
+                if args.references and args.readback and session.get("native_adapter"):
+                    from native_output import accounting_proof
+                    adapter = session["native_adapter"]
+                    if digest(adapter) != session.get("native_adapter_sha256"):
+                        raise ValueError("native adapter changed after intake")
+                    refs, saved = list(packets(args.references)), list(packets(args.readback))
+                    proofs = {name: accounting_proof(refs, saved, adapter, session,
+                                                     comparison[name]["start_ns"], comparison[name]["end_ns"],
+                                                     args.at_ns) for name in ("baseline", "trial")}
+                result = qualify_candidate(session, json.loads(args.registration.read_text()),
+                                           comparison, args.at_ns, production_proofs=proofs)
             else:
-                result = {"diagnose": diagnose, "review": review, "verify-media": verify_media}[args.command](args, session)
+                result = {"diagnose": diagnose, "review": review, "verify-media": verify_media,
+                          "verify-native": verify_native}[args.command](args, session)
     except (OSError, KeyError, ValueError, TypeError, subprocess.SubprocessError) as error:
         cli.exit(2, f"Workload check failed: {error}\n")
     print(json.dumps(result, sort_keys=True, indent=2))

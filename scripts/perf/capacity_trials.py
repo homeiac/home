@@ -261,6 +261,10 @@ def validate_spec(session: dict, spec: dict, at_ns: int) -> dict:
         spec.get("output_accounting") == "fresh-evaluation-separate-from-production",
         "cached or duplicate production outputs cannot count as fresh evaluations",
     )
+    if "increment_backends" in spec:
+        names = spec["increment_backends"]
+        require(isinstance(names, list) and all(text(n) for n in names)
+                and len(names) == len(set(names)), "invalid frozen added-backend identities")
 
     lease = spec["lease"]
     require(
@@ -313,6 +317,10 @@ def validator_hash() -> str:
         "capacity_qualification.py",
         "shared_workloads.py",
         "service_budgets.py",
+        "completion_objective.py",
+        "native_output.py",
+        "workload_measurements.py",
+        "workload.py",
     )
     return digest(
         {
