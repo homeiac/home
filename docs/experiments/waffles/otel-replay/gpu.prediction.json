@@ -1,0 +1,39 @@
+{
+  "as_of_unix_ns": "1795804055000000000",
+  "decision": {
+    "action": "isolate_accelerator_cotenant",
+    "evidence": {
+      "accelerator_stage_fraction_range": [
+        0.975,
+        0.9752
+      ],
+      "cycle_gap_seconds": [],
+      "order_keys": [],
+      "sorted_input_rows": [],
+      "successful_plan_ms": [],
+      "worker_absent_gpu_pct": [
+        100,
+        100
+      ]
+    },
+    "gate": {
+      "min_isolated_over_before": 1.1,
+      "min_isolated_over_restored": 1.1,
+      "require_decision_agreement": true,
+      "require_original_process_and_health_restored": true,
+      "require_smaller_cpu_gain": true
+    },
+    "state": "trial_proposed",
+    "trial": "Inventory other device clients. Isolate one candidate briefly, replay matched warmed inputs with a CPU control, then restore it and repeat."
+  },
+  "evidence_sha256": "40a5c606a7686cfd87e007b51be85723bc7d76162dbff82eea4ab9f37c2ad9fb",
+  "policy_sha256": "292a836c95f6b7d5aa27948aadfac4c21562d1b45bc14f5694d310146a34be19",
+  "receipt_sha256": "01ff192955ff689153ba36e6bbba62a4004b14724a7f4479b96938daa9a1512e",
+  "schema": 1,
+  "scope": [
+    "immich-pet-tagger",
+    "mac",
+    "device-window"
+  ],
+  "window_s": 600
+}

@@ -1,0 +1,26 @@
+{
+  "mac-mps-serial-repeat": [
+    {
+      "observed_at_unix_s": 1795803812.168899,
+      "gpu_percent": 100,
+      "worker_present": false
+    },
+    {
+      "observed_at_unix_s": 1795803822.218057,
+      "gpu_percent": 100,
+      "worker_present": false
+    }
+  ],
+  "mac-mps-main-repeat": [
+    {
+      "observed_at_unix_s": 1795803848.119194,
+      "gpu_percent": 100,
+      "worker_present": true
+    },
+    {
+      "observed_at_unix_s": 1795803858.171391,
+      "gpu_percent": 99,
+      "worker_present": true
+    }
+  ]
+}

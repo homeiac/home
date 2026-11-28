@@ -1,0 +1,38 @@
+{
+  "as_of_unix_ns": "1795762580000000000",
+  "decision": {
+    "action": "index_ready_fifo",
+    "evidence": {
+      "accelerator_stage_fraction_range": [],
+      "cycle_gap_seconds": [
+        2.2202
+      ],
+      "order_keys": [
+        "r.created_at, j.ordinal"
+      ],
+      "sorted_input_rows": [
+        54406
+      ],
+      "successful_plan_ms": [
+        1661.587
+      ],
+      "worker_absent_gpu_pct": []
+    },
+    "gate": {
+      "max_after_before_claim_ratio": 0.5,
+      "max_after_sorted_rows": 0
+    },
+    "state": "trial_proposed",
+    "trial": "Canary an indexed, eligible-ready FIFO claim preserving the observed order and a stable tie-breaker. Keep leases, retry eligibility and baseline workers."
+  },
+  "evidence_sha256": "5b4d366098024c400b629384f789e1c379b3aaef136bfbc5552eac408a8c6a5c",
+  "policy_sha256": "292a836c95f6b7d5aa27948aadfac4c21562d1b45bc14f5694d310146a34be19",
+  "receipt_sha256": "eb03c1a0e398d1cb8e7765028aa0fc9e5c1103861cdff1edf22b9ac319892c34",
+  "schema": 1,
+  "scope": [
+    "immich-pet-tagger",
+    "mac",
+    "queue-window"
+  ],
+  "window_s": 600
+}

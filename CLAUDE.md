@@ -356,6 +356,12 @@ When memory helps: `openmemory_reinforce(id="...", boost=0.1)`
 ### Namespace
 Always use `namespace="home"` for this repo.
 
+## AI worker placement and scaling
+
+For a shared AI workload use the [shared-workload skill](.agents/skills/shared-workload/SKILL.md) and [workflow diagrams](docs/methodology/distributed-ai-performance.md). For capacity reviews run the compute trial planner with the workload inventory, including CPU pools on accelerator hosts.
+
+Media producers, including Cricket Indexer, Knowledge Index and Waffles, follow the [shared media workload contract](docs/architecture/media-workload-contract.md). Use the existing OpenLABEL scene writer, versioned concept registry and PostgreSQL revision model. Join private output evidence to its producing OTel workload and run. Check all callers sharing the model server and physical device before promoting a tuning trial.
+
 ## Performance Diagnosis - USE Method
 
 **TRIGGER**: When user reports: slow, latency, performance degraded, timeout, lag, unresponsive
