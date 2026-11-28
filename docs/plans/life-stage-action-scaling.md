@@ -51,3 +51,8 @@ Readiness found the prior loopback CPU endpoint stopped and no reusable runtime 
 ## Shared stage normalization during CPU evaluation
 
 Extract the existing allowed-stage/confidence check and low-confidence-to-unknown mapping into a pure helper in the existing library worker. Reuse it in production inference and the CPU evaluator, retaining the current prompts, validation errors, checkpoint fields and abstention behavior. Add a regression check for invalid fields and low-confidence normalization. Bind the helper source revision to subsequent trials. Earlier immutable trial results keep their original profile and are scored using the same production semantics.
+
+
+## Correct the unit of throughput qualification
+
+The first CPU arms were stopped using per-backend rate floors. Those backend measurements remain valid, but Metal and CPU serve the same face workload. Reopen their aggregate qualification under the user's total-throughput objective. Preserve reserved GPU worker counts, combine newly verified face outcomes and workload latency/errors across backends, and protect distinct peer workloads separately. A per-backend slowdown alone cannot close a candidate. Keep the original stopped-trial receipts and label the policy correction and missing production-output evidence. The dashboard must show the scope of that reassessment.
