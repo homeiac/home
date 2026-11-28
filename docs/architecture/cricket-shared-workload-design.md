@@ -238,15 +238,23 @@ worker scaling. Likewise, the caption controller's one-extra-lane policy does no
 implement cricket's maximum-first sweep. The new contract registers an explicit
 capacity experiment while retaining diagnostic evidence and all peer gates.
 
-P06 introduces shared trial ownership. Proposed coordination uses an operational
-PostgreSQL lease keyed by affected physical resource, an owner/run, fencing
-generation, expiry and policy hash. Acquire the resource closure in a stable order
-and atomically check all leases. Baseline work does not require a trial lease.
+P06 introduces shared trial ownership. The agreed cross-workload proposal uses an
+expiring Kubernetes `coordination.k8s.io/v1` Lease per affected physical pool,
+bound to owner/run and policy hash. Use conditional updates with `resourceVersion`
+and fence dispatch against the current ownership generation. Acquire the resource
+closure in stable order; admission stays closed until all required leases are held,
+and partial acquisition must release/drain without submitting trial work. Separate
+Lease objects do not provide an atomic multi-pool transaction. Baseline work does
+not require a trial lease.
 Every actuator competing for the same headroom must honor it before automatic
 promotion is enabled; otherwise use an explicitly recorded single-operator trial
 and hold on concurrent change. Do not assume an unmodified caption controller
-already participates. DB time and fencing prevent a restarted stale owner from
-promoting after another owner acquires the pool.
+already participates. A Lease does not itself stop external model requests: the
+owner must stop new submissions on renewal loss or expiry and account for draining
+requests before replacement admission. P06 must test clock uncertainty, conditional
+update conflicts and restarted stale owners. This proposal is not yet deployed or
+acquired. See the [Kubernetes Lease contract](https://kubernetes.io/docs/concepts/architecture/leases/)
+and [conditional update semantics](https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions).
 
 Only the cricket supervisor changes its own desired dispatch. At a claim boundary
 it checks the current lease and policy generation. Existing leased requests finish
@@ -269,6 +277,25 @@ baseline allocations for cricket and peers; compare whole-workload progress, not
 just a fast extra worker. Choose the fewest workers within 5% of the fastest
 repeatable qualifying rate. Model/prompt changes require a new cohort/configuration
 record and cannot be pooled with prior capacity measurements.
+
+An idle target needs a real peer-only baseline, fresh evidence of its empty queue
+and explicit protected reservations. Do not fabricate target completions to satisfy
+the existing active-target comparison. A registered capacity review must qualify
+the first maximum phase using fresh inference, ten durable evaluated items and
+positive useful output while retaining every peer gate. Subsequent safe candidates
+may be slower than the maximum: qualification and selection are separate. Select
+the fewest workers within 5% only after eligible reverse-order repetitions. Neither
+an untrusted comparison mode nor a queue/isolation prediction may bypass these
+requirements. Implement this extension before using the registration live.
+
+The November 27 read-only Mac observation found four serving contexts, all busy.
+The photo owner confirms four protected Mac lanes and three RTX lanes, with zero
+trial increment. Thus the currently configured Mac context allowance has no
+unreserved slot for Cricket. Configured Cricket `max_workers=4` is not evidence of
+four spare slots. A later positive allowance needs fresh reservations and measured
+constraints; do not restart a shared model merely to manufacture headroom. The
+peer's guarded resize screen ended without qualification and deployed no changes.
+Reacquire the baseline after its temporary evaluation traffic drains.
 
 Apply the existing cricket gates: equal warmed windows of at least five minutes,
 sampling gaps no longer than 15 seconds, ten durable completions per backlogged

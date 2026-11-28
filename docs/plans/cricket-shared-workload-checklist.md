@@ -52,7 +52,7 @@ and append the reason; retain the original receipt.
 | P01 | Reconcile feature stack; freeze acceptance cohort | P01-a [#276](https://github.com/homeiac/home/pull/276); P01-b [#277](https://github.com/homeiac/home/pull/277); P01-c [#278](https://github.com/homeiac/home/pull/278) | Backend reconciled; UI/cohort pending | No | E09: 136 passed, 43 subtests | Authority/policy/rollback inventory captured; no new deployment |
 | P02 | Run identity and closed telemetry | [#279](https://github.com/homeiac/home/pull/279) | Analysis adapter complete; writer handoff in P03 | No | E10: 144 passed, 43 subtests | Pending |
 | P03 | Manifest, readback, receipt and no-event output | P03-a [#280](https://github.com/homeiac/home/pull/280); P03-b [#281](https://github.com/homeiac/home/pull/281); P03-c [#282](https://github.com/homeiac/home/pull/282) | Completion/outbox/readback/counters implemented; automatic dispatch pending | Foundation only | E13: 164 passed, 43 subtests | Pending |
-| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c `codex/cricket-p04-face-contract` | Contracts and expanded activity observer implemented; complete window adapters pending | Foundation only | E16: 182 passed, 43 subtests | Complete live peer windows pending |
+| P04 | Complete resource/peer measurement | P04-a [#283](https://github.com/homeiac/home/pull/283); P04-b [#284](https://github.com/homeiac/home/pull/284); P04-c [#285](https://github.com/homeiac/home/pull/285); P04-d `codex/cricket-p04-capacity-inspection` | Contracts, activity and slot observers implemented; complete window adapters pending | Foundation only | E17: 187 passed, 43 subtests | Complete live peer windows pending |
 | P05 | Maximum-first trial registration | To create | No | No | Pending | Local contract; live use through P09 |
 | P06 | Owning supervisor and pool lease | To create | No | No | Pending | Pending |
 | P07 | Reviewed identity/outcome evidence | Existing #264/#266/#269; follow-up PR to create | Partial | Existing feature PRs open | E03 contains unresolved pilot results | Fresh quality pilot pending |
@@ -475,6 +475,31 @@ The E02 command passed **182 tests and 43 subtests in 22.34 seconds**. The
 integrated tests require the photo peer in Cricket review, retain missing/backend
 zero distinctions, and preserve both the original CLI coverage and newer
 service/idle contracts. Compile and diff checks pass.
+
+### E17 — P04-d read-only serving capacity
+
+Branch: `codex/cricket-p04-capacity-inspection`, based on #285. Added
+`scripts/perf/inspect-bonsai-capacity.py`: authenticated GETs to health/slots,
+redirect refusal, private atomic aggregate receipt, no retained prompt/request
+identifiers and no inference. Unknown processing states remain unknown.
+
+The E02 command passed **187 tests and 43 subtests in 21.59 seconds**; the retained
+local log is `/private/tmp/cricket-p04-capacity-tests.log`. New inspector tests
+cover privacy, missing/nonboolean processing states, GET-only use and redirect
+refusal. No production settings changed. The test suite uses disposable local
+PostgreSQL, not the live publication database.
+
+Private read-only receipt: `/private/tmp/cricket-p04-bonsai-contexts-20261127.json`,
+observation `1795843906657368000` ns: ready, four serving contexts, four processing,
+zero idle. Combined with the peer owner's four protected Mac lanes, the current
+unreserved Mac context allowance is zero. This does not establish CPU/memory/I/O
+headroom, caller attribution or admission delay. Three RTX lanes also remain
+reserved. The peer reports its guarded resize trial ended without qualification;
+no resize/concurrency setting was deployed. Reacquire a fresh baseline after drain.
+
+Aligned the design with the proposed per-pool Kubernetes Lease and documented the
+required idle-target and qualification-versus-selection reviewer extension. Those
+are design requirements, not implemented ownership or live admission evidence.
 
 ## Updating evidence
 
