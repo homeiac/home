@@ -52,8 +52,8 @@ Its final `publication-summary.json` marks bundle completion. A partial bundle i
 incomplete; retry the export to a new path. Saved historical receipts remain
 append-only, but an export omits snapshots invalidated by local edits or new inputs.
 The production counter is historical completed work, not a count of currently
-unchanged annotations. Connecting these receipts to OTLP counters and automatic
-worker dispatch is the next integration slice.
+unchanged annotations. The [telemetry capture command](cricket-telemetry.md) imports these receipts into
+OTLP counters. Automatic worker publication dispatch remains an integration gate.
 
 The publisher holds a ledger write transaction across each source's SQL write and
 readback to prevent a concurrent correction from being overwritten. PostgreSQL
