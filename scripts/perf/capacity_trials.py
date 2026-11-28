@@ -111,6 +111,11 @@ def validate_spec(session: dict, spec: dict, at_ns: int) -> dict:
         "idle target must have zero observed workers",
     )
     fresh(spec["allocation_evidence"], at_ns)
+    require(
+        isinstance(spec.get("peer_baseline_sha256"), str)
+        and HASH.fullmatch(spec["peer_baseline_sha256"]),
+        "bind the original protected peer baseline",
+    )
 
     fixed = spec["fixed_inputs"]
     require(
@@ -142,7 +147,12 @@ def validate_spec(session: dict, spec: dict, at_ns: int) -> dict:
         integer(limits.get("minimum_completed_items"), 10),
         "capacity requires ten durable completions",
     )
-    for key in ("no_progress_s", "request_deadline_s", "drain_deadline_s"):
+    for key in (
+        "no_progress_s",
+        "request_deadline_s",
+        "drain_deadline_s",
+        "warmup_deadline_s",
+    ):
         require(
             integer(limits.get(key), 1),
             "missing bounded progress/request/drain deadline",
@@ -234,7 +244,8 @@ def validate_spec(session: dict, spec: dict, at_ns: int) -> dict:
         "sweep must start at the derived ceiling and strictly descend",
     )
     minimum_duration = (
-        2 * len(candidates) * limits["window_s"] + limits["drain_deadline_s"]
+        2 * len(candidates) * (limits["window_s"] + limits["warmup_deadline_s"])
+        + limits["drain_deadline_s"]
     )
     require(
         spec["completion_deadline_ns"] - spec["admission_deadline_ns"]
@@ -296,8 +307,21 @@ def fresh(evidence: dict, at_ns: int) -> None:
 
 
 def validator_hash() -> str:
-    """Fence receipts against changes to these validation rules."""
-    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    """Fence receipts against changes to registration and every qualification rule."""
+    sources = (
+        "capacity_trials.py",
+        "capacity_qualification.py",
+        "shared_workloads.py",
+        "service_budgets.py",
+    )
+    return digest(
+        {
+            name: hashlib.sha256(
+                Path(__file__).with_name(name).read_bytes()
+            ).hexdigest()
+            for name in sources
+        }
+    )
 
 
 def register(session: dict, spec: dict, at_ns: int, destination: Path) -> dict:
