@@ -222,7 +222,7 @@ def normalized_action(action):
     return verb, text
 
 
-def normalized_stage(age):
+def normalized_stage(age: dict) -> tuple[str, str]:
     """Validate a stage reading and retain low confidence as an abstention."""
     if age.get("stage") not in STAGES or age.get("confidence") not in {
         "high",
@@ -234,7 +234,8 @@ def normalized_stage(age):
     return stage, age["confidence"]
 
 
-def infer(row, backend, endpoint, saved, checkpoint, *, joint=False):
+def infer(row, backend, endpoint, saved, checkpoint, *, joint=False, observer=None):
+    model_call = observer or observe
     start = time.monotonic()
     pics = frames(row)
     if not pics:
@@ -242,12 +243,12 @@ def infer(row, backend, endpoint, saved, checkpoint, *, joint=False):
     combined = None
     reused_age = "stage" in saved
     if joint and "stage" not in saved and not saved.get("reviewed_action"):
-        combined = observe(backend, endpoint, pics, JOINT_PROMPT, JOINT_SCHEMA)
+        combined = model_call(backend, endpoint, pics, JOINT_PROMPT, JOINT_SCHEMA)
     if "stage" not in saved:
         age = (
             combined
             if combined is not None
-            else observe(backend, endpoint, pics, AGE_PROMPT, AGE_SCHEMA)
+            else model_call(backend, endpoint, pics, AGE_PROMPT, AGE_SCHEMA)
         )
         stage, confidence = normalized_stage(age)
         saved.update(stage=stage, confidence=confidence)
@@ -256,7 +257,7 @@ def infer(row, backend, endpoint, saved, checkpoint, *, joint=False):
         action = (
             combined
             if combined is not None
-            else observe(backend, endpoint, pics, ACTION_PROMPT, ACTION_SCHEMA)
+            else model_call(backend, endpoint, pics, ACTION_PROMPT, ACTION_SCHEMA)
         )
         verb, text = normalized_action(action)
         saved.update(verb=verb, action=text, code=VERBS.get(verb))

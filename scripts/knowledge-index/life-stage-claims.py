@@ -1,5 +1,6 @@
 """Reserve the tail of the local life-stage queue for an additional worker."""
 
+from collections.abc import Callable
 import sqlite3
 
 
@@ -18,7 +19,7 @@ def active(conn: sqlite3.Connection) -> list[tuple[str, str]]:
     ).fetchall()
 
 
-def claim(conn: sqlite3.Connection, mac_batch: int = 16, *, resume=True) -> tuple[str, str] | None:
+def claim(conn: sqlite3.Connection, mac_batch: int = 16, *, resume=True, on_claim: Callable[[str, str], None] | None = None) -> tuple[str, str] | None:
     """Reserve one tail item beyond the Mac's maximum in-flight head batch."""
     conn.execute("BEGIN IMMEDIATE")
     with conn:
@@ -42,18 +43,20 @@ def claim(conn: sqlite3.Connection, mac_batch: int = 16, *, resume=True) -> tupl
         asset, _ = row
         conn.execute("UPDATE jobs SET status='running' WHERE asset=?", (asset,))
         conn.execute("INSERT INTO rtx_life_stage_claims VALUES (?, 'active')", (asset,))
+        if on_claim is not None:
+            on_claim(asset, row[1])
         return row
 
 
-def finish(conn: sqlite3.Connection, asset: str, status: str, outcome: str | None) -> None:
+def finish(conn: sqlite3.Connection, asset: str, status: str, outcome: str | None, *, expected_state: str = "active") -> None:
     """Commit an RTX result or release the item for the Mac without re-claiming it."""
     if status not in {"pending", "complete", "withheld"}:
         raise ValueError("Unexpected RTX disposition")
     with conn:
         updated = conn.execute(
             "UPDATE jobs SET status=?, outcome=? WHERE asset=? AND status='running' "
-            "AND EXISTS (SELECT 1 FROM rtx_life_stage_claims WHERE asset=? AND state='active')",
-            (status, outcome, asset, asset),
+            "AND EXISTS (SELECT 1 FROM rtx_life_stage_claims WHERE asset=? AND state=?)",
+            (status, outcome, asset, asset, expected_state),
         )
         if updated.rowcount != 1:
             raise RuntimeError("RTX reservation changed")
