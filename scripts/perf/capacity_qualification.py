@@ -80,6 +80,10 @@ class CandidateContext:
             0 if self.idle_target else before["terminal_error_rate"]
         ):
             losses.append("target terminal-error rate increased")
+        if any(not number(r.get("p95_s")) for r in measured):
+            missing.append("target workload latency is missing")
+        elif not self.idle_target and trial["p95_s"] > before["p95_s"] * (1 + self.max_peer_p95_growth):
+            losses.append("target workload latency budget exceeded")
         change = None
         if (
             not self.idle_target
@@ -238,8 +242,11 @@ def context(session: dict, receipt: dict, comparison: dict) -> CandidateContext:
     )
 
 
-def qualify(session: dict, receipt: dict, comparison: dict, watermark: int) -> dict:
+def qualify(session: dict, receipt: dict, comparison: dict, watermark: int,
+            production_proofs: dict | None = None) -> dict:
     """Run peer-preserving candidate checks without authorizing execution or selection."""
+    from completion_objective import project
+    from native_output import AccountingProof
     from shared_workloads import shared_context
 
     validated = context(session, receipt, comparison)
@@ -267,15 +274,60 @@ def qualify(session: dict, receipt: dict, comparison: dict, watermark: int) -> d
     result["reasons"] += [
         "protected baseline: " + reason for reason in protected["reasons"]
     ]
+    objective = comparison.get("completion_objective")
+    completion = project(objective, watermark)
+    if objective is not None:
+        require(objective["workload"] == session["workload"],
+                "completion objective belongs to another workload")
+        basis = objective.get("baseline_scope", "comparison")
+        require(basis in {"comparison", "protected"}, "unknown completion baseline scope")
+        for name in ("baseline", "trial"):
+            phase = comparison["peer_baseline"] if name == "baseline" and basis == "protected" else comparison[name]
+            require(all(objective[name][k] == phase[k] for k in ("start_ns", "end_ns"))
+                    and objective["unit"] == phase["workloads"][session["workload"]]["unit"],
+                    "completion objective window or output unit differs from comparison")
+            verified = objective[name].get("verified_production_completed")
+            require(verified is None or verified == phase["workloads"][session["workload"]]["verified"],
+                    "completion objective differs from measured verified production")
+        bound_backends = receipt["spec"].get("increment_backends")
+        if bound_backends is None or bound_backends != objective["increment_backends"]:
+            completion["decision"] = "hold"
+            completion["reasons"].append("added backend identities were not frozen in registration")
+        proofs = production_proofs or {}
+        for name in ("baseline", "trial"):
+            proof = proofs.get(name)
+            data = objective[name]
+            if (not isinstance(proof, AccountingProof)
+                    or proof.session_sha256 != digest(session)
+                    or (proof.workload, proof.run_id, proof.unit, proof.start_ns, proof.end_ns) !=
+                    (session["workload"], session["run_id"], objective["unit"], data["start_ns"], data["end_ns"])):
+                completion["decision"] = "hold"
+                completion["reasons"].append(name + ": authoritative output accounting was not independently checked")
+            else:
+                supplied = data["backend_verified_production_completed"] or {}
+                actual = dict(proof.backend_amounts)
+                require(proof.amount == data["verified_production_completed"]
+                        and all(supplied.get(k, 0) == actual.get(k, 0) for k in supplied.keys() | actual.keys()),
+                        "claimed backend contribution differs from authoritative readback")
+    pending = [
+        "phase_order_and_repetition",
+        "fresh_evaluation_receipt_readback",
+        "allocation_and_lease_execution_evidence",
+    ]
+    capacity_budgets = {**result, "reasons": list(result["reasons"])}
+    if completion["decision"] != "evidence_ready_not_admitted":
+        pending.append("verified_production_completion_objective")
+        if result["decision"] != "rollback":
+            result["decision"] = "hold"
+        result["reasons"] += ["completion objective: " + reason for reason in completion["reasons"]]
     return {
         "decision": "not_admitted",
+        "proceed": False,
         "candidate_review": result,
+        "capacity_budget_review": capacity_budgets,
         "protected_baseline_review": protected,
-        "pending": [
-            "phase_order_and_repetition",
-            "fresh_evaluation_receipt_readback",
-            "allocation_and_lease_execution_evidence",
-        ],
+        "completion_review": completion,
+        "pending": pending,
     }
 
 
@@ -289,7 +341,7 @@ def rank_repeatable(samples: list[dict]) -> dict:
         workers = sample["workers"]
         rates = sample["rates"]
         require(
-            integer(workers, 1) and workers not in candidates,
+            integer(workers, 0) and workers not in candidates,
             "duplicate or invalid worker count",
         )
         require(

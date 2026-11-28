@@ -75,6 +75,7 @@ def sample(tmp_path: Path) -> tuple[dict, dict, dict]:
         completed_items=10,
         fresh_inference_items=10,
         terminal_error_rate=0,
+        p95_s=2,
     )
     spec["peer_baseline_sha256"] = digest(before)
     register(session, spec, NOW, tmp_path / "receipt")
@@ -101,7 +102,10 @@ def test_idle_target_qualifies_without_fabricated_baseline_completions(
     session, receipt, comparison = sample(tmp_path)
     result = qualify(session, receipt, comparison, NOW + WINDOW)
     assert result["decision"] == "not_admitted"
-    assert result["candidate_review"]["decision"] == "eligible"
+    assert result["capacity_budget_review"]["decision"] == "eligible"
+    assert result["candidate_review"]["decision"] == "hold"
+    assert result["completion_review"]["decision"] == "hold"
+    assert not result["proceed"]
     assert TARGET not in result["candidate_review"]["verified_change_percent"]
     assert "fresh_evaluation_receipt_readback" in result["pending"]
     # An untrusted JSON flag cannot opt ordinary reviews into the special baseline.
@@ -208,7 +212,7 @@ def test_lower_rate_can_qualify_and_mutation_cannot_reuse_context(
     )
     comparison["trial"]["allocation"][TARGET] = 2
     comparison["trial"]["workloads"][TARGET]["verified"] = 97
-    result = qualify(session, receipt, comparison, NOW + 2 * WINDOW)["candidate_review"]
+    result = qualify(session, receipt, comparison, NOW + 2 * WINDOW)["capacity_budget_review"]
     assert result["decision"] == "eligible"
     assert result["verified_change_percent"][TARGET] == -3
     validated = context(session, receipt, comparison)
@@ -281,7 +285,7 @@ def test_service_peer_budgets_remain_binding(
         receipt = json.loads((tmp_path / "service-measured").read_text())
         comparison["capacity_registration_sha256"] = receipt["receipt_sha256"]
     assert (
-        qualify(session, receipt, comparison, NOW + WINDOW)["candidate_review"][
+        qualify(session, receipt, comparison, NOW + WINDOW)["capacity_budget_review"][
             "decision"
         ]
         == decision
@@ -328,7 +332,7 @@ def test_delayed_warmup_is_separate_from_fresh_admission(tmp_path: Path) -> None
         warmup_end_ns=warmed, start_ns=warmed, end_ns=warmed + WINDOW
     )
     assert (
-        qualify(session, receipt, comparison, warmed + WINDOW)["candidate_review"][
+        qualify(session, receipt, comparison, warmed + WINDOW)["capacity_budget_review"][
             "decision"
         ]
         == "eligible"
@@ -337,6 +341,125 @@ def test_delayed_warmup_is_separate_from_fresh_admission(tmp_path: Path) -> None
     comparison["trial"]["warmup_start_ns"] = NOW + 2 * 10**9
     with pytest.raises(ValueError, match="first candidate"):
         qualify(session, receipt, comparison, warmed + WINDOW)
+
+
+def test_completion_objective_controls_candidate_not_only_peer_budgets(tmp_path: Path) -> None:
+    from native_output import AccountingProof
+
+    session, receipt, comparison = sample(tmp_path)
+    comparison["baseline"] = deepcopy(comparison["trial"])
+    comparison["trial"].update(start_ns=NOW + WINDOW, end_ns=NOW + 2 * WINDOW,
+                               admitted_ns=NOW + WINDOW, warmup_start_ns=NOW + WINDOW,
+                               warmup_end_ns=NOW + WINDOW)
+    comparison["trial"]["allocation"][TARGET] = 2
+    comparison["trial"]["workloads"][TARGET]["verified"] = 120
+    phases = {}
+    for name, cpu in (("baseline", 0), ("trial", 20)):
+        phases[name] = {k: comparison[name][k] for k in ("start_ns", "end_ns")}
+        phases[name].update(unique_production_completed=100 + cpu,
+                            verified_production_completed=100 + cpu,
+                            backend_unique_production_completed={"gpu": 100, "cpu": cpu},
+                            backend_verified_production_completed={"gpu": 100, "cpu": cpu},
+                            evaluation_completed=10000, readback_ref="fixture/native-reader",
+                            evidence_ref="fixture/native-output")
+    comparison["completion_objective"] = {
+        "version": 1, "workload": TARGET, "unit": "reviewed-source-minutes",
+        "increment_backends": ["cpu"],
+        "remaining": {"amount": 1000, "observed_ns": NOW,
+                      "evidence_ref": "fixture/fixed-remaining"}, **phases}
+    spec = deepcopy(receipt["spec"])
+    spec["increment_backends"] = ["cpu"]
+    register(session, spec, NOW, tmp_path / "objective-bound")
+    receipt = json.loads((tmp_path / "objective-bound").read_text())
+    comparison["capacity_registration_sha256"] = receipt["receipt_sha256"]
+    proofs = {name: AccountingProof(TARGET, "fixture", "reviewed-source-minutes",
+                                    phases[name]["start_ns"], phases[name]["end_ns"],
+                                    phases[name]["verified_production_completed"],
+                                    tuple(phases[name]["backend_verified_production_completed"].items()),
+                                    "f" * 64, digest(session)) for name in ("baseline", "trial")}
+    assert qualify(session, receipt, comparison, NOW + 2 * WINDOW)["candidate_review"]["decision"] == "hold"
+    valid = qualify(session, receipt, comparison, NOW + 2 * WINDOW, proofs)
+    assert valid["candidate_review"]["decision"] == "eligible"
+    assert valid["completion_review"]["projected_finish_delta_s"] < 0
+    assert valid["decision"] == "not_admitted" and not valid["proceed"]
+    bad_latency = deepcopy(comparison)
+    bad_latency["trial"]["workloads"][TARGET]["p95_s"] = 3
+    assert qualify(session, receipt, bad_latency, NOW + 2 * WINDOW, proofs)["candidate_review"]["decision"] == "rollback"
+    spoofed = deepcopy(comparison)
+    spoofed["completion_objective"]["trial"]["backend_verified_production_completed"] = {"gpu": 120, "cpu": 0}
+    spoofed["completion_objective"]["trial"]["backend_unique_production_completed"] = {"gpu": 120, "cpu": 0}
+    with pytest.raises(ValueError, match="backend contribution"):
+        qualify(session, receipt, spoofed, NOW + 2 * WINDOW, proofs)
+    # A faster replay or GPU rate cannot substitute for production CPU readback.
+    comparison["completion_objective"]["trial"].update(
+        verified_production_completed=None, backend_verified_production_completed=None,
+        readback_ref=None)
+    missing = qualify(session, receipt, comparison, NOW + 2 * WINDOW)
+    assert missing["capacity_budget_review"]["decision"] == "eligible"
+    assert missing["candidate_review"]["decision"] == "hold"
+    assert "verified_production_completion_objective" in missing["pending"]
+    comparison["trial"]["workloads"][PEER]["p95_s"] = 3
+    assert qualify(session, receipt, comparison, NOW + 2 * WINDOW)["candidate_review"]["decision"] == "rollback"
+
+
+def test_idle_target_still_requires_measured_latency(tmp_path: Path) -> None:
+    session, receipt, comparison = sample(tmp_path)
+    comparison["trial"]["workloads"][TARGET].pop("p95_s")
+    result = qualify(session, receipt, comparison, NOW + WINDOW)
+    assert result["capacity_budget_review"]["decision"] == "hold"
+
+
+def test_zero_increment_control_can_win_five_percent_ranking() -> None:
+    samples = [{"workers": workers, "rates": [rate, rate], "qualified": True,
+                "unit": "faces/min", "fixed_inputs_sha256": "a" * 64}
+               for workers, rate in ((0, 30), (1, 31))]
+    assert rank_repeatable(samples)["workers"] == 0
+
+
+def test_descending_candidate_can_use_protected_completion_control(tmp_path: Path) -> None:
+    from native_output import AccountingProof
+    session, old, comparison = sample(tmp_path)
+    spec = deepcopy(old["spec"])
+    original = comparison["peer_baseline"]
+    original["allocation"][TARGET] = 1
+    original["workloads"][TARGET].update(demand=True, verified=100, fresh_inference_items=10,
+                                         completed_items=10, terminal_error_rate=0, p95_s=2)
+    original["workloads"][TARGET].pop("activity")
+    for names in original["callers"].values():
+        names.append(TARGET)
+    for key in ("baseline_allocation", "protected_allocation", "rollback_allocation"):
+        spec[key][TARGET] = 1
+    for row in spec["constraints"]:
+        row["reserved"][TARGET], row["capacity"] = 1, 9
+    spec.update(baseline_mode="active", candidates=[5, 4, 3, 2], increment_backends=["cpu"],
+                peer_baseline_sha256=digest(original))
+    register(session, spec, NOW, tmp_path / "active")
+    receipt = json.loads((tmp_path / "active").read_text())
+    comparison["capacity_registration_sha256"] = receipt["receipt_sha256"]
+    for name, workers, amount, start in (("baseline", 5, 130, NOW), ("trial", 2, 125, NOW + WINDOW)):
+        comparison[name] = deepcopy(original)
+        comparison[name].update(start_ns=start, end_ns=start + WINDOW, admitted_ns=start,
+                                warmup_start_ns=start, warmup_end_ns=start)
+        comparison[name]["allocation"][TARGET] = workers
+        comparison[name]["workloads"][TARGET]["verified"] = amount
+    phases, proofs = {}, {}
+    for name, phase, cpu in (("baseline", original, 0), ("trial", comparison["trial"], 25)):
+        phases[name] = {k: phase[k] for k in ("start_ns", "end_ns")}
+        phases[name].update(unique_production_completed=100 + cpu, verified_production_completed=100 + cpu,
+                            backend_unique_production_completed={"gpu": 100, "cpu": cpu},
+                            backend_verified_production_completed={"gpu": 100, "cpu": cpu},
+                            evaluation_completed=0, readback_ref="fixture/native-reader", evidence_ref="fixture/production")
+        proofs[name] = AccountingProof(TARGET, "fixture", "reviewed-source-minutes", phase["start_ns"],
+                                       phase["end_ns"], 100 + cpu, (("gpu", 100), ("cpu", cpu)),
+                                       "f" * 64, digest(session))
+    comparison["completion_objective"] = {"version": 1, "baseline_scope": "protected", "workload": TARGET,
+        "unit": "reviewed-source-minutes", "increment_backends": ["cpu"],
+        "remaining": {"amount": 1000, "observed_ns": NOW, "evidence_ref": "fixture/queue"}, **phases}
+    result = qualify(session, receipt, comparison, NOW + 2 * WINDOW, proofs)
+    assert result["candidate_review"]["decision"] == "eligible"
+    assert result["candidate_review"]["verified_change_percent"][TARGET] < 0  # Below previous fastest.
+    assert result["completion_review"]["projected_finish_delta_s"] < 0  # Still beats protected control.
+    assert not result["proceed"]
 
 
 def test_original_baseline_cannot_be_replaced_mid_sweep(tmp_path: Path) -> None:
