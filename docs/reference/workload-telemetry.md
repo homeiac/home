@@ -42,6 +42,8 @@ On these metric resources, the checker allows only `service.name` and `host.name
 | `db.claim.plan` | `latency_ms`, `returned`, `sort_input_rows`, `order_keys` | Cost and shape of the eligible lookup |
 | `worker.profile` | `samples`, `accelerator_stage_fraction` | Fraction of elapsed time in accelerator stages, 0–1 |
 | `device.sample` | `utilization_pct`, `worker_present` | Device percent, 0–100, paired with worker presence |
+| `knowledge_index_photo_stage_backend_completed` | `stage="library-face-observations"`, backend `mac-metal` or `rtx3070` | Unique newly saved face results in the library checkpoint. Compare deltas per backend. Publication and readback have a separate verification gate. |
+| `knowledge_index_photo_stage_items` | Same stage, state pending/running/reused/withheld | Face occurrences. Use the stage-specific progress timestamp for freshness. A missing or stale series means unknown. |
 | `cricket_workers` | `backend="mac", kind="active"` or `kind="desired"` | Current requests or configured lanes |
 | `knowledge_index_caption_recovery_saved_per_minute` | `backend="Mac Metal"` | Published captions/min for the recovery stage |
 | `waffles_worker_active_instances` | `worker="mac"` | Active worker processes |
