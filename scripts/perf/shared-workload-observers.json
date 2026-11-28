@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "workloads": {
+    "library-face-observations": {
+      "heartbeat": [
+        "knowledge_index_photo_stage_updated_timestamp_seconds",
+        "stage=\"library-face-observations\""
+      ],
+      "pending_faces": [
+        "knowledge_index_photo_stage_items",
+        "stage=\"library-face-observations\",state=\"pending\""
+      ],
+      "running_faces": [
+        "knowledge_index_photo_stage_items",
+        "stage=\"library-face-observations\",state=\"running\""
+      ],
+      "reused_faces": [
+        "knowledge_index_photo_stage_items",
+        "stage=\"library-face-observations\",state=\"reused\""
+      ],
+      "withheld_faces": [
+        "knowledge_index_photo_stage_items",
+        "stage=\"library-face-observations\",state=\"withheld\""
+      ],
+      "mac_saved_faces": [
+        "knowledge_index_photo_stage_backend_completed",
+        "stage=\"library-face-observations\",backend=\"mac-metal\""
+      ],
+      "rtx_saved_faces": [
+        "knowledge_index_photo_stage_backend_completed",
+        "stage=\"library-face-observations\",backend=\"rtx3070\""
+      ],
+      "complete_checkpoints": [
+        "knowledge_index_photo_stage_items",
+        "stage=\"library-face-observations\",state=\"complete\""
+      ],
+      "failed_checkpoints": [
+        "knowledge_index_photo_stage_items",
+        "stage=\"library-face-observations\",state=\"failed\""
+      ],
+      "historical_model_request_p95_s": [
+        "knowledge_index_photo_stage_phase_p95_seconds",
+        "stage=\"library-face-observations\",phase=\"model_request\""
+      ]
+    },
+    "cricket-indexer": {
+      "heartbeat": [
+        "cricket_heartbeat_timestamp_seconds",
+        ""
+      ],
+      "mac_active_workers": [
+        "cricket_workers",
+        "backend=\"mac\",kind=\"active\""
+      ],
+      "mac_desired_workers": [
+        "cricket_workers",
+        "backend=\"mac\",kind=\"desired\""
+      ],
+      "queued_jobs_all_backends": [
+        "cricket_jobs",
+        "state=\"queued\""
+      ]
+    },
+    "knowledge-index": {
+      "heartbeat": [
+        "knowledge_index_last_run_timestamp_seconds",
+        ""
+      ],
+      "export_ok": [
+        "knowledge_index_exporter_success",
+        ""
+      ],
+      "summary_enricher_active": [
+        "knowledge_index_enrich_active",
+        ""
+      ],
+      "saved_captions_last_ten_min_all_backends": [
+        "knowledge_index_caption_first_saved_last_ten_minutes",
+        ""
+      ]
+    },
+    "knowledge-index/caption-recovery": {
+      "heartbeat": [
+        "knowledge_index_caption_recovery_snapshot_seconds",
+        ""
+      ],
+      "mac_saved_captions_per_min": [
+        "knowledge_index_caption_recovery_saved_per_minute",
+        "backend=\"Mac Metal\""
+      ],
+      "pending_recovery_assets_all_backends": [
+        "knowledge_index_caption_recovery_assets",
+        "state=\"pending\""
+      ]
+    },
+    "immich-pet-tagger": {
+      "heartbeat": [
+        "waffles_queue_report_timestamp_seconds",
+        ""
+      ],
+      "mac_active_workers": [
+        "waffles_worker_active_instances",
+        "worker=\"mac\""
+      ]
+    },
+    "knowledge-index/media-summary": {
+      "heartbeat": [
+        "media_pipeline_heartbeat_timestamp_seconds",
+        ""
+      ],
+      "running": [
+        "media_pipeline_running",
+        ""
+      ],
+      "pending_from_worker_scan": [
+        "media_pipeline_queue",
+        ""
+      ],
+      "mac_in_flight": [
+        "media_pipeline_backend_in_flight",
+        "backend=\"metal\""
+      ],
+      "primary_in_flight": [
+        "media_pipeline_backend_in_flight",
+        "backend=\"primary\""
+      ],
+      "mac_parquet_writes_process_total": [
+        "media_pipeline_backend_saved_total",
+        "backend=\"metal\""
+      ],
+      "primary_parquet_writes_process_total": [
+        "media_pipeline_backend_saved_total",
+        "backend=\"primary\""
+      ],
+      "cache_parquet_writes_process_total": [
+        "media_pipeline_backend_saved_total",
+        "backend=\"cache\""
+      ],
+      "mac_offered_requests": [
+        "media_pipeline_mac_request_limit",
+        ""
+      ]
+    },
+    "frigate": {
+      "heartbeat": [
+        "photo_frigate_last_poll_timestamp_seconds",
+        ""
+      ],
+      "stats_endpoint_up": [
+        "photo_frigate_service_up",
+        "id=\"frigate_service\""
+      ],
+      "detector_rolling_mean_ms": [
+        "photo_frigate_processing_milliseconds",
+        "kind=\"detector\""
+      ],
+      "object_detection_fps": [
+        "photo_frigate_frames_per_second",
+        "kind=\"objects\""
+      ],
+      "face_recognition_fps": [
+        "photo_frigate_frames_per_second",
+        "kind=\"faces\""
+      ]
+    },
+    "immich": {
+      "heartbeat": [
+        "immich_observer_last_success_timestamp_seconds",
+        "source=\"queues\""
+      ],
+      "queue_observer_up": [
+        "immich_observer_source_up",
+        "source=\"queues\""
+      ],
+      "face_detection_waiting": [
+        "immich_queue_jobs",
+        "queue=\"face_detection\",state=\"waiting\""
+      ],
+      "face_detection_active": [
+        "immich_queue_jobs",
+        "queue=\"face_detection\",state=\"active\""
+      ],
+      "face_detection_delayed": [
+        "immich_queue_jobs",
+        "queue=\"face_detection\",state=\"delayed\""
+      ],
+      "face_detection_prioritized": [
+        "immich_queue_jobs",
+        "queue=\"face_detection\",state=\"prioritized\""
+      ],
+      "face_detection_failed": [
+        "immich_queue_jobs",
+        "queue=\"face_detection\",state=\"failed\""
+      ],
+      "face_detection_paused": [
+        "immich_queue_jobs",
+        "queue=\"face_detection\",state=\"paused\""
+      ],
+      "facial_recognition_waiting": [
+        "immich_queue_jobs",
+        "queue=\"facial_recognition\",state=\"waiting\""
+      ],
+      "facial_recognition_active": [
+        "immich_queue_jobs",
+        "queue=\"facial_recognition\",state=\"active\""
+      ],
+      "facial_recognition_delayed": [
+        "immich_queue_jobs",
+        "queue=\"facial_recognition\",state=\"delayed\""
+      ],
+      "facial_recognition_prioritized": [
+        "immich_queue_jobs",
+        "queue=\"facial_recognition\",state=\"prioritized\""
+      ],
+      "facial_recognition_failed": [
+        "immich_queue_jobs",
+        "queue=\"facial_recognition\",state=\"failed\""
+      ],
+      "facial_recognition_paused": [
+        "immich_queue_jobs",
+        "queue=\"facial_recognition\",state=\"paused\""
+      ]
+    }
+  }
+}
