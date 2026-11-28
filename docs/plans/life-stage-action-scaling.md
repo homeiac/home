@@ -46,3 +46,8 @@ Use the existing trial directory and CLI. The owner supplies the comparison, tim
 ## Still-fawn CPU canary
 
 Readiness found the prior loopback CPU endpoint stopped and no reusable runtime or weights in the guest's standard storage roots. VM 108 has roughly 20 GiB available memory. Use a temporary, time-bounded loopback-only CPU server with the same pinned Bonsai weights and projector, one lane and at most two CPU threads. Verify downloads by digest and prevent duplicate servers with an exclusive lock. Keep startup/download time separate. Probe the same reviewed full scene and crop with the unchanged joint prompt and validator. Record stage, actor-action support, latency and peer progress. A temporary canary cannot qualify ongoing allocation. Persist any selected worker through GitOps after quality and peer checks.
+
+
+## Shared stage normalization during CPU evaluation
+
+Extract the existing allowed-stage/confidence check and low-confidence-to-unknown mapping into a pure helper in the existing library worker. Reuse it in production inference and the CPU evaluator, retaining the current prompts, validation errors, checkpoint fields and abstention behavior. Add a regression check for invalid fields and low-confidence normalization. Bind the helper source revision to subsequent trials. Earlier immutable trial results keep their original profile and are scored using the same production semantics.
