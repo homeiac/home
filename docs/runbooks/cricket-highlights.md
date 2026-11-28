@@ -139,3 +139,62 @@ The worker also exports aggregate Prometheus metrics in
 `/var/lib/prometheus/node-exporter/cricket_highlights.prom`: heartbeat, queued /
 running / complete / error jobs, desired and active workers, completed source
 minutes, and memory-pressure pause state. Labels contain no names or media IDs.
+
+## OpenLABEL publication adapter
+
+`cricket.openlabel` imports effective cricket corrections and native face
+checkpoints into the existing life-stage ASAM OpenLABEL 1.0.0 contract. It calls
+the existing `openlabel_album.bind_face`, `validate_scenes`, and `persist`
+implementation; it does not create a parallel annotation table. The shared module
+must come from the [life-stage implementation](https://github.com/homeiac/home/blob/codex/photo-memory-album-231/scripts/knowledge-index/memory-acceptance/openlabel_album.py).
+Supply its directory explicitly and install its `jsonschema` dependency in the
+existing runtime; PostgreSQL publication also uses the existing `psycopg` runtime.
+
+Validate a private snapshot first, from `scripts/knowledge-index`:
+
+```bash
+python3 -m cricket.openlabel \
+  --ledger "$CRICKET_LEDGER" --evidence "$CRICKET_EVIDENCE" \
+  --shared-module "$LIFE_STAGE_OPENLABEL_MODULE" \
+  --schema "$OPENLABEL_SCHEMA" --output "$CRICKET_OPENLABEL_OUTPUT"
+```
+
+The ledger is opened read-only. Only current album members with native-frame
+checkpoints are included in this snapshot. Every returned native face is retained,
+including unnamed/unassigned faces. Checkpoint absence is not proof of no faces.
+Incomplete detection stays explicit. A missing legacy frame dimension can be
+recovered from the exact checksum-matched local JPEG without another upload.
+
+`frames` indexes ordered samples; `frame_properties.timestamp` carries exact
+original-video seconds. Each sample names its Immich frame asset and oriented
+image dimensions. Face boxes use OpenLABEL center-x/center-y/width/height pixels.
+Native face ID and person ID remain separate; OpenLABEL occurrence UUIDs never
+substitute for native IDs. Action/outcome codes and their definitions are versioned
+in [vocabulary.py](../../scripts/knowledge-index/cricket/vocabulary.py).
+
+Human overrides, effective event revision, review state, exact source times, age
+context and evidence travel with the scene. Dismissed or superseded actions are
+removed from the next scene revision while their face detections remain. An actor
+relation requires a current unambiguous localized face; the album batting rule
+alone stays a separate editable person assertion. Unassociated faces retain an
+explicit `action_withheld` reason.
+
+After validation and publication readiness checks, the same command's `--publish`
+flag uses the existing private libpq configuration and shared PostgreSQL
+`openlabel_album_scene` revision writer. It refuses to replace another producer's
+scene; combine such annotations explicitly before publication. Changed scenes
+append revisions and identical scenes use the shared writer's existing digest
+behavior. No SQLite or frame JSON file becomes a second canonical scene store.
+
+The current change supplies the adapter and tests. It does not install a new
+publication timer, switch the live UI to PostgreSQL, or claim a completed face
+backfill. The existing SQLite event API remains the correction/import surface.
+
+For integration checks set `CRICKET_OPENLABEL_SHARED_MODULE` and
+`CRICKET_OPENLABEL_SCHEMA`, then run `python3 -m pytest cricket/test_openlabel.py`.
+Without those paths, tests requiring the external shared implementation are
+explicitly skipped. Use a pinned 1.0.0 schema; the shared validator rejects 0.3.0.
+The local validation used the VCD project's
+[OpenLABEL schema source](https://github.com/Vicomtech/video-content-description-VCD/blob/master/vcd/schema.py)
+after the ASAM schema host timed out. The extracted schema SHA-256 is
+`201c360d3807c6108fe2b23634ed658caf43dcc9cc63068f91ebe99303b47011`.
