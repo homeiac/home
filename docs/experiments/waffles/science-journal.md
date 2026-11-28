@@ -181,3 +181,30 @@ A production batch also exposed a missing telemetry counter for saved-caption re
 - 2026-11-27T09:50-08:00 · 1,226 read back from Immich, 505 submitted, 0 independently filled, 456 pending, 5 unresolved.
 
 - 2026-11-27T10:07-08:00 · 1,310 read back from Immich, 541 submitted, 0 independently filled, 336 pending, 5 unresolved.
+
+- 2026-11-27T10:28-08:00 · 1,418 read back from Immich, 553 submitted, 0 independently filled, 216 pending, 5 unresolved.
+
+- 2026-11-27T10:49-08:00 · 1,490 read back from Immich, 601 submitted, 0 independently filled, 96 pending, 5 unresolved.
+
+- 2026-11-27T11:02-08:00 · 1,562 read back from Immich, 625 submitted, 0 independently filled, 0 pending, 5 unresolved.
+
+#### End-of-batch readback · 2026-11-27T12:02-08:00
+
+| Status | Assets |
+|---|---:|
+| error | 5 |
+| queued | 613 |
+| verified | 1,574 |
+
+0 records qualified for a bounded retry after a change to decoding or inference. The private ledger retains per-asset reasons for any unresolved records.
+
+
+#### Publisher repair · November 27
+
+The noon ledger showed 613 submitted assets without a matching Immich caption. All 613 still had a saved, unapplied publisher payload. Catalog discovery had marked these recovery-owned jobs as removed. Two competing jobs had saved captions for the correct assets; three reset requests had no saved answer in either the ledger or the source catalog. Preserve recovery ownership across discovery, restore the affected queue states, then compare every original asset with its caption in Immich.
+
+At 5:01 p.m. Pacific, a single read-only Immich database snapshot found a nonempty Knowledge Index caption on **2,192 of 2,192 original asset IDs**. All **613** formerly queued captions matched the saved pre-repair text. Of the five original errors, the two competing jobs exactly matched their earlier publisher payloads. The three connection resets had neither a saved catalog caption nor a recovery cache hit; each received a new local Bonsai caption and passed readback.
+
+Across the entire cohort, 2,188 captions matched their local recovery ledger text and four had other saved captions. Those four comprise the two competing publisher payloads and two previously described assets. Every caption was in the owned Immich metadata key. The native description field was empty on all 2,192 assets.
+
+The 4:57 p.m. catalog sweep processed 121,769 source rows. The recovery publisher subsequently reported 2,149 applied external jobs, zero pending and zero conflicts. The external job count excludes direct publication to uploaded assets. The Grafana row now shows coverage, exact text matches, other preserved captions, and live publisher conflicts. [Recovery coverage](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&viewPanel=282) · [Source-removed conflicts](https://grafana.app.home.panderosystems.com/d/knowledge-index/knowledge-index?orgId=1&viewPanel=291) · [Readback query](../../../scripts/knowledge-index/caption-recovery/audit.py)
