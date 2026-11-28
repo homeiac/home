@@ -72,7 +72,7 @@ runner revisions import the production decoder/normalizer directly. Saved-respon
 parity checks passed seven responses without new inference.
 
 The repeated arm warmed before measurement. Its first closed 300.182-second peer
-window failed both Metal gates:
+window triggered the original, incorrectly scoped Metal gates:
 
 | Backend | Baseline → trial completions | Throughput ratio | Baseline → trial p95 |
 | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ window failed both Metal gates:
 | RTX | 93 → 102 | 1.096615 | 14.363 → 12.388 s |
 
 Independent Knowledge Index review reproduced the counts, rates and latency loss.
-Faster RTX output does not offset the losing Metal peer. Five completed CPU cases
+The combined latency check independently fails, as recorded above. Five completed CPU cases
 received partial independent quality review: 2/5 exact stages, 4/5 supported whole
 actions, 2/5 both correct. This is a partial cohort, not a full quality score.
 
@@ -101,7 +101,7 @@ request-boundary tests pass, including stop/lost-owner/changed-input refusal and
 valid low-confidence/null-action semantics. Stage helper source is the peer's
 `cdd03bc` refactor; subsequent trial configs bind its source digest.
 
-## Mac six-thread arm — stopped; aggregate verdict still open
+## Mac six-thread arm — stopped; aggregate budgets pass, quality open
 
 After confirmed cleanup, recovery passed a closed 300.198-second window: Metal
 39 completions versus the original 37, p95 36.982 versus 39.866 seconds; RTX 96
@@ -114,7 +114,7 @@ stayed within the 39.866 s baseline budget. RTX completed 105 versus 93, p95
 11.694 versus 14.363 s. These backend diagnostics do not establish a whole-workload
 loss; the aggregate correction above supersedes that interpretation.
 
-The automatic watcher wrote the owner stop signal at the closed-window failure.
+The original watcher wrote the owner stop signal at its backend-only failure.
 The current request finished, four completed evaluations were retained, and no new
 request was admitted. Independent partial quality: 2/4 exact stages, 3/4 supported
 whole actions, 2/4 both correct. At `1795848197998316000` ns, independent inspection
@@ -122,12 +122,15 @@ confirmed no model process/listener and released ownership. Private arm:
 `/private/tmp/cricket-mac-cpu-t6-forward`. No six-thread production setting was
 promoted. Lower settings and the alternative profile remain open.
 
-The ten-thread rejection is visible in Grafana panel 294, dashboard
+The historical ten-thread stop was visible in Grafana panel 294, dashboard
 `knowledge-index`. Independent browser readback confirmed the served title and
 7.40 → 6.20 Metal faces/min, 18.59 → 20.39 RTX faces/min. The owner separately
 records dashboard version 84 and source #218 commit `49b3db3`; the browser UI
 observation did not expose the version. Private readback:
-`/private/tmp/cricket-grafana-panel294-ui-readback.json`.
+`/private/tmp/cricket-grafana-panel294-ui-readback.json`. This readback predates the
+correction. Knowledge Index subsequently pushed #218 `bdf1a34` and independently
+reported served version 85, title “Stopped · aggregate review open”; final served
+readback is still required after the complete tuning result.
 
 ## still-fawn 75% arm — failed tested diagnostic deadline
 
@@ -146,7 +149,7 @@ inactive/dead and a closed listener; independent unit readback confirmed inactiv
 Preserve this failure and evaluate a concrete useful-gain hypothesis below rather
 than treating the arbitrary diagnostic timeout as proof against every CPU profile.
 
-## Smaller CPU quality profile — artifacts ready, no inference yet
+## Smaller CPU quality profile — bounded evaluation in progress
 
 The outcome researcher checked publisher primary sources for a smaller vision
 model with implemented CPU kernels. The next bounded quality hypothesis is
@@ -191,7 +194,41 @@ explicit applicable production request bounds. If ready, complete the twelve-fac
 quality pass, independently review/read back outputs, and repeat promising quality
 comparisons. Only a qualifying profile proceeds to descending/reverse capacity
 selection with unchanged peer gates. A new model is a new profile; never pool its
-measurements with the 27B arm. No new model inference has started at this receipt.
+measurements with the 27B arm. The following receipts supersede the preparation-only status.
+
+## Smaller-profile readiness and first quality pass
+
+The Mac ceiling remains seven aggregate CPU cores, one context and seven threads,
+after retaining the earlier observed protected CPU burst plus returning pet/system
+reservations. Both AGE/ACTION readiness calls passed canonical normalization and
+independent whole-action review. Each took about 7–8 seconds with zero cached input;
+independent isolated OpenLABEL readback passed. This one case is readiness only.
+The fresh clean baseline recorded 168 unique production face completions in
+300.260 seconds, combined p95 29.730 seconds. Compare subsequent arms against this
+and the original 130-completion/p95 37.434 baseline.
+
+The first full-cohort attempt stopped after case 03 returned an invalid action.
+The raw answer was retained before the production validator rejected it. This is
+an invalid model output, not a successful action or a parser-compatibility issue.
+The evaluator now records invalid outputs as failed cases and continues the frozen
+cohort; seven synthetic request-boundary tests pass. Independent cleanup confirmed
+zero trial model processes and a released Lease before the retry.
+
+The retry uses the same immutable profile at seven threads / 700% aggregate quota,
+with evaluation caller `library-face-observations-evaluation`. Complete the first
+12-face pass and score it separately from any partial timing repetition. Frozen
+replays remain excluded from production progress. Private receipt:
+`/private/tmp/cricket-bonsai2-mac-t7-quality-forward-v2`.
+
+The prepared Linux two-pass adapter uses the same frozen bodies and production
+normalizers, a 75% one-core cgroup ceiling, one thread/context, explicit evaluation
+caller, zero-cache evidence, saved guest exit codes and bounded cleanup. Four
+synthetic boundary tests pass without remote inference. After this Mac arm closes,
+start Linux readiness and its quality pass at that measured ceiling. The request
+safety bound is 150 seconds; a bound failure describes this profile only. If the
+smaller profile fails quality, the original model with separate AGE/ACTION calls
+remains a Mac candidate; do not treat the incomplete six-thread joint cohort as
+proof against the separate-call profile.
 
 ## Completion remains open
 
